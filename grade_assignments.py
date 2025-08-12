@@ -9,8 +9,8 @@ import tempfile
 import yaml
 
 from lms_interface.canvas_interface import CanvasInterface, CanvasCourse, CanvasAssignment
-from TeachingTools.grading_assistant.assignment import AssignmentRegistry
-from TeachingTools.grading_assistant.grader import GraderRegistry
+from Autograder.assignment import AssignmentRegistry
+from Autograder.grader import GraderRegistry
 
 import logging
 

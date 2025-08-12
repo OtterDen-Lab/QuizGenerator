@@ -27,7 +27,7 @@ import os
 
 import pandas as pd
 
-import TeachingTools.grading_assistant.ai_helper as ai_helper
+import Autograder.ai_helper as ai_helper
 from lms_interface.canvas_interface import CanvasCourse, CanvasAssignment
 from lms_interface.classes import Student, Submission, Feedback
 
@@ -132,7 +132,7 @@ class AssignmentRegistry:
   
   @classmethod
   def load_premade_questions(cls):
-    package_name = "TeachingTools.grading_assistant"  # Fully qualified package name
+    package_name = "Autograder"  # Fully qualified package name
     package_path = pathlib.Path(__file__).parent / "grader"
     log.debug(f"package_path: {package_path}")
     

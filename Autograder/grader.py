@@ -21,7 +21,7 @@ import pandas as pd
 
 from typing import List, Tuple, Optional
 
-from TeachingTools.grading_assistant.assignment import Assignment
+from Autograder.assignment import Assignment
 from lms_interface.classes import Feedback, Submission
 
 docker = None
@@ -68,7 +68,7 @@ class GraderRegistry:
   
   @classmethod
   def load_premade_graders(cls):
-    package_name = "TeachingTools.grading_assistant"  # Fully qualified package name
+    package_name = "Autograder"  # Fully qualified package name
     package_path = pathlib.Path(__file__).parent / "grader"
     log.debug(f"package_path: {package_path}")
     

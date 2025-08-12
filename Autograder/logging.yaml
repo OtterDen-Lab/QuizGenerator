@@ -35,12 +35,12 @@ handlers:
     mode: a
 
 loggers:
-  TeachingTools:
+  Autograder:
     level: INFO
     handlers: [console, file]
     propagate: false
 
-  TeachingTools.grading_assistant:
+  Autograder:
     level: INFO
     handlers: [console, file]
     propagate: false
@@ -49,12 +49,7 @@ loggers:
     level: INFO
     handlers: [console, file]
     propagate: false
-
-  TeachingTools.quiz_generation:
-    level: INFO
-    handlers: [console, file]
-    propagate: false
-
+    
   canvasapi:
     level: WARNING
     handlers: [console]
