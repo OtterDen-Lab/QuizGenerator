@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from lms_interface.canvas_interface import CanvasInterface, CanvasCourse
 
-from TeachingTools.quiz_generation.quiz import Quiz
+from QuizGenerator.quiz import Quiz
 
 
 import logging

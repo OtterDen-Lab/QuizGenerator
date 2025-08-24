@@ -35,21 +35,16 @@ handlers:
     mode: a
 
 loggers:
-  Autograder:
-    level: INFO
-    handlers: [console, file]
-    propagate: false
-
-  Autograder:
-    level: INFO
-    handlers: [console, file]
-    propagate: false
-
-  lms_interface:
+  QuizGeneration:
     level: INFO
     handlers: [console, file]
     propagate: false
     
+  lms_interface:
+    level: DEBUG
+    handlers: [console, file]
+    propagate: false
+
   canvasapi:
     level: WARNING
     handlers: [console]
