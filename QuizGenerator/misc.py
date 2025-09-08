@@ -171,6 +171,90 @@ class Answer:
         })
     
     return canvas_answers
+  
+  # Factory methods for common answer types
+  @classmethod
+  def binary_hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'Answer':
+    """Create an answer that accepts binary or hex format"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.BINARY_OR_HEX,
+      length=length,
+      **kwargs
+    )
+  
+  @classmethod
+  def auto_float(cls, key: str, value: float, **kwargs) -> 'Answer':
+    """Create an answer that accepts multiple float formats (decimal, fraction, mixed)"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.AUTOFLOAT,
+      **kwargs
+    )
+  
+  @classmethod
+  def integer(cls, key: str, value: int, **kwargs) -> 'Answer':
+    """Create an integer answer"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.INT,
+      **kwargs
+    )
+  
+  @classmethod
+  def string(cls, key: str, value: str, **kwargs) -> 'Answer':
+    """Create a string answer"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.STR,
+      **kwargs
+    )
+  
+  @classmethod
+  def binary(cls, key: str, value: int, length: int = None, **kwargs) -> 'Answer':
+    """Create a binary-only answer"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.BINARY,
+      length=length,
+      **kwargs
+    )
+  
+  @classmethod
+  def hex_value(cls, key: str, value: int, length: int = None, **kwargs) -> 'Answer':
+    """Create a hex-only answer"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.HEX,
+      length=length,
+      **kwargs
+    )
+  
+  @classmethod
+  def float_value(cls, key: str, value: float, **kwargs) -> 'Answer':
+    """Create a simple float answer (no fraction conversion)"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.FLOAT,
+      **kwargs
+    )
+  
+  @classmethod
+  def list_value(cls, key: str, value: list, **kwargs) -> 'Answer':
+    """Create a list answer (comma-separated values)"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.LIST,
+      **kwargs
+    )
 
 
 class ContentAST:
