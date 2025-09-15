@@ -34,9 +34,15 @@ class SchedulingQuestion(ProcessQuestion):
     ShortestDuration = enum.auto()
     ShortestTimeRemaining = enum.auto()
     RoundRobin = enum.auto()
-    
+
     def __str__(self):
-      return self.name
+      display_names = {
+        self.FIFO: "First In First Out",
+        self.ShortestDuration: "Shortest Job First",
+        self.ShortestTimeRemaining: "Shortest Time To Completion",
+        self.RoundRobin: "Round Robin"
+      }
+      return display_names.get(self, self.name)
   
   @staticmethod
   def get_kind_from_string(kind_str: str) -> SchedulingQuestion.Kind:
@@ -274,15 +280,22 @@ class SchedulingQuestion(ProcessQuestion):
   def __init__(self, num_jobs=3, scheduler_kind=None, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.num_jobs = num_jobs
-    
+    self.fixed_scheduler_kind = scheduler_kind  # Store the original choice
+
     if scheduler_kind is None:
       self.scheduler_algorithm = self.rng.choice(list(SchedulingQuestion.Kind))
+    else:
+      self.scheduler_algorithm = self.get_kind_from_string(scheduler_kind)
     
   def refresh(self, *args, **kwargs):
     if not kwargs.get("hard_refresh", True):
       self.rng_seed_offset += 1
     else:
-      self.scheduler_algorithm = self.rng.choice(list(SchedulingQuestion.Kind))
+      # Preserve the fixed scheduler kind if one was specified
+      if self.fixed_scheduler_kind is None:
+        self.scheduler_algorithm = self.rng.choice(list(SchedulingQuestion.Kind))
+      else:
+        self.scheduler_algorithm = self.get_kind_from_string(self.fixed_scheduler_kind)
     
     super().refresh(*args, **kwargs)
     
