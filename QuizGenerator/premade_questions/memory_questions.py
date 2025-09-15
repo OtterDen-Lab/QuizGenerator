@@ -11,6 +11,7 @@ from typing import List, Optional
 
 from QuizGenerator.misc import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
+from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
 
@@ -320,7 +321,7 @@ class MemoryAccessQuestion(MemoryQuestion, abc.ABC):
 
 
 @QuestionRegistry.register()
-class BaseAndBounds(MemoryAccessQuestion):
+class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   MAX_BITS = 32
   MIN_BOUNDS_BIT = 5
   MAX_BOUNDS_BITS = 16
@@ -336,44 +337,37 @@ class BaseAndBounds(MemoryAccessQuestion):
     self.virtual_address = self.rng.randint(1, int(self.bounds / self.PROBABILITY_OF_VALID))
     
     if self.virtual_address < self.bounds:
-      self.answers["answer"] = Answer(
-        key="answer__physical_address",
-        value=(self.base + self.virtual_address),
-        variable_kind=Answer.VariableKind.BINARY_OR_HEX,
+      self.answers["answer"] = Answer.binary_hex(
+        "answer__physical_address",
+        self.base + self.virtual_address,
         length=math.ceil(math.log2(self.base + self.virtual_address))
       )
     else :
-      self.answers["answer"] = Answer(
-        key="answer__physical_address",
-        value="INVALID",
-        variable_kind=Answer.VariableKind.STR
-      )
+      self.answers["answer"] = Answer.string("answer__physical_address", "INVALID")
   
   def get_body(self) -> ContentAST.Section:
-    body = ContentAST.Section()
-    
-    body.add_element(
-      ContentAST.Paragraph([
+    # Use mixin to create parameter table with answer
+    parameter_info = {
+      "Base": f"0x{self.base:X}",
+      "Bounds": f"0x{self.bounds:X}",
+      "Virtual Address": f"0x{self.virtual_address:X}"
+    }
+
+    table = self.create_parameter_answer_table(
+      parameter_info=parameter_info,
+      answer_label="Physical Address",
+      answer_key="answer",
+      transpose=True
+    )
+
+    return self.create_parameter_calculation_body(
+      intro_text=(
         "Given the information in the below table, "
-        "please calcuate the physical address associated with the given virtual address.",
+        "please calcuate the physical address associated with the given virtual address. "
         "If the virtual address is invalid please simply write ***INVALID***."
-      ])
+      ),
+      parameter_table=table
     )
-    
-    body.add_element(
-      ContentAST.Table(
-        headers=["Base", "Bounds", "Virtual Address", "Physical Address"],
-        data=[[
-          f"0x{self.base:X}",
-          f"0x{self.bounds:X}",
-          f"0x{self.virtual_address:X}",
-          ContentAST.Answer(self.answers["answer"])
-        ]],
-        transpose=True
-      )
-    )
-    
-    return body
   
   def get_explanation(self) -> ContentAST.Section:
     explanation = ContentAST.Section()

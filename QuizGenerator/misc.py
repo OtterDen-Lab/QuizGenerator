@@ -256,6 +256,38 @@ class Answer:
       **kwargs
     )
 
+  @classmethod
+  def dropdown(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'Answer':
+    """Create a dropdown answer with wrong answer choices (baffles)"""
+    return cls(
+      key=key,
+      value=value,
+      kind=cls.AnswerKind.MULTIPLE_DROPDOWN,
+      baffles=baffles,
+      **kwargs
+    )
+
+  @classmethod
+  def multiple_choice(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'Answer':
+    """Create a multiple choice answer with wrong answer choices (baffles)"""
+    return cls(
+      key=key,
+      value=value,
+      kind=cls.AnswerKind.MULTIPLE_ANSWER,
+      baffles=baffles,
+      **kwargs
+    )
+
+  @classmethod
+  def essay(cls, key: str, **kwargs) -> 'Answer':
+    """Create an essay question (no specific correct answer)"""
+    return cls(
+      key=key,
+      value="",  # Essays don't have predetermined answers
+      kind=cls.AnswerKind.ESSAY,
+      **kwargs
+    )
+
 
 class ContentAST:
   
