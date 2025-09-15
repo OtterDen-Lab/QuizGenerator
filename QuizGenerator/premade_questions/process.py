@@ -380,8 +380,9 @@ class SchedulingQuestion(ProcessQuestion):
     
     body.add_element(
       ContentAST.Text(
-        "Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of 4 digits.  "
-        "Examples of appropriately formatted answers would be `0`, `3/2`, `1 1/3`, `1.6667`, and `1.25`.",
+        f"Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of {Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal. "
+        "Examples of appropriately formatted answers would be `0`, `3/2`, `1 1/3`, `1.6667`, and `1.25`. "
+        "Note that answers that can be rounded to whole numbers should be, rather than being left in fractional form.",
         hide_from_latex=True
       )
     )
@@ -404,7 +405,7 @@ class SchedulingQuestion(ProcessQuestion):
     
     body.add_element(
       ContentAST.AnswerBlock([
-        ContentAST.Answer(self.answers["answer__average_response_time"], label="Overall avereage response time"),
+        ContentAST.Answer(self.answers["answer__average_response_time"], label="Overall average response time"),
         ContentAST.Answer(self.answers["answer__average_turnaround_time"], label="Overall average TAT")
       ])
     )
