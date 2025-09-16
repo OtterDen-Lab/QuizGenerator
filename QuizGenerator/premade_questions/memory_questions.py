@@ -408,7 +408,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
 
 
 @QuestionRegistry.register()
-class Segmentation(MemoryAccessQuestion):
+class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   MAX_BITS = 20
   MIN_VIRTUAL_BITS = 5
   MAX_VIRTUAL_BITS = 10
@@ -491,22 +491,18 @@ class Segmentation(MemoryAccessQuestion):
     
     # Set answers based on whether it's in bounds or not
     if self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
-      self.answers["answer__physical_address"] = Answer(
-        key="answer__physical_address",
-        value=self.physical_address,
-        variable_kind=Answer.VariableKind.BINARY_OR_HEX,
+      self.answers["answer__physical_address"] = Answer.binary_hex(
+        "answer__physical_address",
+        self.physical_address,
         length=self.physical_bits
       )
     else :
-      self.answers["answer__physical_address"] = Answer(
-        key="answer__physical_address",
-        value="INVALID",
-        variable_kind=Answer.VariableKind.STR
+      self.answers["answer__physical_address"] = Answer.string(
+        "answer__physical_address",
+        "INVALID"
       )
     
-    self.answers["answer__segment"] = Answer(
-      key="answer__segment", value=self.segment, variable_kind=Answer.VariableKind.STR
-    )
+    self.answers["answer__segment"] = Answer.string("answer__segment", self.segment)
   
   def get_body(self) -> ContentAST.Section:
     body = ContentAST.Section()
@@ -522,16 +518,20 @@ class Segmentation(MemoryAccessQuestion):
       ])
     )
     
-    body.add_element(
-      ContentAST.Table(
-        headers=["", "base", "bounds"],
-        data=[
-          ["code", f"0b{self.base['code']:0{self.physical_bits}b}", f"0b{self.bounds['code']:0b}"],
-          ["heap", f"0b{self.base['heap']:0{self.physical_bits}b}", f"0b{self.bounds['heap']:0b}"],
-          ["stack", f"0b{self.base['stack']:0{self.physical_bits}b}", f"0b{self.bounds['stack']:0b}"]
-        ]
-      )
+    # Create segment table using mixin
+    segment_rows = [
+      {"": "code", "base": f"0b{self.base['code']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['code']:0b}"},
+      {"": "heap", "base": f"0b{self.base['heap']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['heap']:0b}"},
+      {"": "stack", "base": f"0b{self.base['stack']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['stack']:0b}"}
+    ]
+
+    segment_table = self.create_answer_table(
+      headers=["", "base", "bounds"],
+      data_rows=segment_rows,
+      answer_columns=[]  # No answer columns in this table
     )
+
+    body.add_element(segment_table)
     
     body.add_element(
       ContentAST.AnswerBlock([
@@ -630,7 +630,7 @@ class Segmentation(MemoryAccessQuestion):
 
 
 @QuestionRegistry.register()
-class Paging(MemoryAccessQuestion):
+class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   
   MIN_OFFSET_BITS = 3
   MIN_VPN_BITS = 3
@@ -675,22 +675,22 @@ class Paging(MemoryAccessQuestion):
     # self.pte_var = VariableHex("PTE", self.pte, num_bits=(self.num_pfn_bits+1), default_presentation=VariableHex.PRESENTATION.BINARY)
     
     self.answers.update({
-      "answer__vpn": Answer("answer__vpn",     self.vpn,     variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=self.num_vpn_bits),
-      "answer__offset": Answer("answer__offset",  self.offset,  variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=self.num_offset_bits),
-      "answer__pte": Answer("answer__pte",     self.pte,     variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=(self.num_pfn_bits + 1)),
+      "answer__vpn": Answer.binary_hex("answer__vpn", self.vpn, length=self.num_vpn_bits),
+      "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_offset_bits),
+      "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_pfn_bits + 1)),
     })
     
     if self.is_valid:
       self.answers.update({
-        "answer__is_valid":         Answer("answer__is_valid",          "VALID"),
-        "answer__pfn":              Answer("answer__pfn",               self.pfn,               variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=self.num_pfn_bits),
-        "answer__physical_address": Answer("answer__physical_address",  self.physical_address,  variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=(self.num_pfn_bits + self.num_offset_bits)),
+        "answer__is_valid":         Answer.string("answer__is_valid", "VALID"),
+        "answer__pfn":              Answer.binary_hex("answer__pfn", self.pfn, length=self.num_pfn_bits),
+        "answer__physical_address": Answer.binary_hex("answer__physical_address", self.physical_address, length=(self.num_pfn_bits + self.num_offset_bits)),
       })
     else:
       self.answers.update({
-        "answer__is_valid":         Answer("answer__is_valid",          "INVALID"),
-        "answer__pfn":              Answer("answer__pfn",               "INVALID"),
-        "answer__physical_address": Answer("answer__physical_address",  "INVALID"),
+        "answer__is_valid":         Answer.string("answer__is_valid", "INVALID"),
+        "answer__pfn":              Answer.string("answer__pfn", "INVALID"),
+        "answer__physical_address": Answer.string("answer__physical_address", "INVALID"),
       })
   
   def get_body(self, *args, **kwargs) -> ContentAST.Section:
@@ -703,15 +703,14 @@ class Paging(MemoryAccessQuestion):
       ])
     )
     
-    body.add_element(
-      ContentAST.Table(
-        data=[
-          ["Virtual Address", f"0b{self.virtual_address:0{self.num_vpn_bits + self.num_offset_bits}b}"],
-          ["# VPN bits", f"{self.num_vpn_bits}"],
-          ["# PFN bits", f"{self.num_pfn_bits}"],
-        ]
-      )
-    )
+    # Create parameter info table using mixin
+    parameter_info = {
+      "Virtual Address": f"0b{self.virtual_address:0{self.num_vpn_bits + self.num_offset_bits}b}",
+      "# VPN bits": f"{self.num_vpn_bits}",
+      "# PFN bits": f"{self.num_pfn_bits}"
+    }
+
+    body.add_element(self.create_info_table(parameter_info))
     
     
     # Make values for Page Table
