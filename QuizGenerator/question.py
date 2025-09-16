@@ -122,11 +122,21 @@ class QuestionRegistry:
     # If we haven't already loaded our premades, do so now
     if not cls._scanned:
       cls.load_premade_questions()
+
     # Check to see if it's in the registry
-    if question_type.lower() not in cls._registry:
-      raise ValueError(f"Unknown question type: {question_type}")
-    
-    new_question : Question = cls._registry[question_type.lower()](**kwargs)
+    question_key = question_type.lower()
+    if question_key not in cls._registry:
+      # Try stripping common course prefixes for backward compatibility
+      for prefix in ['cst334.', 'cst463.']:
+        if question_key.startswith(prefix):
+          stripped_name = question_key[len(prefix):]
+          if stripped_name in cls._registry:
+            question_key = stripped_name
+            break
+      else:
+        raise ValueError(f"Unknown question type: {question_type}")
+
+    new_question : Question = cls._registry[question_key](**kwargs)
     new_question.refresh()
     return new_question
     
@@ -135,10 +145,21 @@ class QuestionRegistry:
   def load_premade_questions(cls):
     package_name = "QuizGenerator.premade_questions"  # Fully qualified package name
     package_path = pathlib.Path(__file__).parent / "premade_questions"
-    
+
+    # Load modules from the root directory
     for _, module_name, _ in pkgutil.iter_modules([str(package_path)]):
       # Import the module
       module = importlib.import_module(f"{package_name}.{module_name}")
+
+    # Recursively load modules from subdirectories
+    for subdir in package_path.iterdir():
+      if subdir.is_dir() and not subdir.name.startswith('_'):
+        subpackage_name = f"{package_name}.{subdir.name}"
+        for _, module_name, _ in pkgutil.iter_modules([str(subdir)]):
+          # Import the module
+          module = importlib.import_module(f"{subpackage_name}.{module_name}")
+
+    cls._scanned = True
 
 
 class Question(abc.ABC):
