@@ -130,12 +130,18 @@ class Answer:
         f"{value_fraction:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
         f"{value_fraction.numerator / value_fraction.denominator:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
       ]
-      
+
+      # Always include exact fraction representation and mixed number format
+      # even for whole numbers, since students should be able to enter improper fractions
+      answer_strings.extend([
+        f"{value_fraction.numerator / value_fraction.denominator}",
+      ])
+
       if not value_fraction.is_integer():
-        answer_strings.extend([
-          f"{value_fraction.numerator / value_fraction.denominator}",
-          f"{value_fraction.numerator // value_fraction.denominator} {value_fraction.numerator % value_fraction.denominator}/{value_fraction.denominator}",
-        ])
+        # Add mixed number format only for non-integers
+        answer_strings.append(
+          f"{value_fraction.numerator // value_fraction.denominator} {value_fraction.numerator % value_fraction.denominator}/{value_fraction.denominator}"
+        )
         
       canvas_answers = [
         {

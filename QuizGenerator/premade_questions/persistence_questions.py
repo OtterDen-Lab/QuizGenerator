@@ -6,6 +6,7 @@ import logging
 
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from QuizGenerator.misc import ContentAST
+from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class IOQuestion(Question, abc.ABC):
   
 
 @QuestionRegistry.register()
-class HardDriveAccessTime(IOQuestion):
+class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
   
   def refresh(self, *args, **kwargs):
     super().refresh(*args, **kwargs)
@@ -34,65 +35,66 @@ class HardDriveAccessTime(IOQuestion):
     self.disk_access_delay = self.access_delay * self.number_of_reads + self.transfer_delay
     
     self.answers.update({
-      "answer__rotational_delay": Answer(
+      "answer__rotational_delay": Answer.float_value(
         "answer__rotational_delay",
-        self.rotational_delay,
-        variable_kind=Answer.VariableKind.FLOAT
+        self.rotational_delay
       ),
-      "answer__access_delay": Answer(
+      "answer__access_delay": Answer.float_value(
         "answer__access_delay",
-        self.access_delay,
-        variable_kind=Answer.VariableKind.FLOAT
+        self.access_delay
       ),
-      "answer__transfer_delay": Answer(
+      "answer__transfer_delay": Answer.float_value(
         "answer__transfer_delay",
-        self.transfer_delay,
-        variable_kind=Answer.VariableKind.FLOAT
+        self.transfer_delay
       ),
-      "answer__disk_access_delay": Answer(
+      "answer__disk_access_delay": Answer.float_value(
         "answer__disk_access_delay",
-        self.disk_access_delay,
-        variable_kind=Answer.VariableKind.FLOAT
+        self.disk_access_delay
       ),
     })
   
   def get_body(self, *args, **kwargs) -> ContentAST.Section:
-    body = ContentAST.Section()
-    
-    body.add_elements([
-      ContentAST.Text("Given the information below, please calculate the following values."),
-      ContentAST.Text(
-        f"Make sure your answers are rounded to {Answer.DEFAULT_ROUNDING_DIGITS} decimal points "
-        f"(even if they are whole numbers), and do so after you finish all your calculations! "
-        f"(i.e. don't use your rounded answers to calculate your overall answer)",
-        hide_from_latex=True
-      )
-    ])
-    
-    body.add_element(
-      ContentAST.Table(
-        data=[
-          [f"Hard Drive Rotation Speed", f"{self.hard_drive_rotation_speed}RPM"],
-          [f"Seek Delay", f"{self.seek_delay}ms"],
-          [f"Transfer Rate", f"{self.transfer_rate}MB/s"],
-          [f"Number of Reads", f"{self.number_of_reads}"],
-          [f"Size of Reads", f"{self.size_of_reads}KB"],
-        ]
-      )
+    # Create parameter info table using mixin
+    parameter_info = {
+      "Hard Drive Rotation Speed": f"{self.hard_drive_rotation_speed}RPM",
+      "Seek Delay": f"{self.seek_delay}ms",
+      "Transfer Rate": f"{self.transfer_rate}MB/s",
+      "Number of Reads": f"{self.number_of_reads}",
+      "Size of Reads": f"{self.size_of_reads}KB"
+    }
+
+    parameter_table = self.create_info_table(parameter_info)
+
+    # Create answer table with multiple rows using mixin
+    answer_rows = [
+      {"Variable": "Rotational Delay", "Value": "answer__rotational_delay"},
+      {"Variable": "Access Delay", "Value": "answer__access_delay"},
+      {"Variable": "Transfer Delay", "Value": "answer__transfer_delay"},
+      {"Variable": "Total Disk Access Delay", "Value": "answer__disk_access_delay"}
+    ]
+
+    answer_table = self.create_answer_table(
+      headers=["Variable", "Value"],
+      data_rows=answer_rows,
+      answer_columns=["Value"]
     )
-    
-    body.add_element(
-      ContentAST.Table(
-        headers=["Variable", "Value"],
-        data=[
-          ["Rotational Delay", ContentAST.Answer(self.answers["answer__rotational_delay"])],
-          ["Access Delay", ContentAST.Answer(self.answers["answer__access_delay"])],
-          ["Transfer Delay", ContentAST.Answer(self.answers["answer__transfer_delay"])],
-          ["Total Disk Access Delay", ContentAST.Answer(self.answers["answer__disk_access_delay"])],
-        ]
-      )
+
+    # Use mixin to create complete body with both tables
+    intro_text = "Given the information below, please calculate the following values."
+
+    instructions = (
+      f"Make sure your answers are rounded to {Answer.DEFAULT_ROUNDING_DIGITS} decimal points "
+      f"(even if they are whole numbers), and do so after you finish all your calculations! "
+      f"(i.e. don't use your rounded answers to calculate your overall answer)"
     )
-    
+
+    body = self.create_parameter_calculation_body(
+      intro_text=intro_text,
+      parameter_table=parameter_table,
+      answer_table=answer_table,
+      additional_instructions=instructions
+    )
+
     return body
   
   def get_explanation(self) -> ContentAST.Section:
@@ -132,10 +134,10 @@ class HardDriveAccessTime(IOQuestion):
     explanation.add_elements([
       ContentAST.Paragraph([r"Next we need to calculate our transfer delay, $t_{transfer}$, which we do as:"]),
       ContentAST.Equation(
-        "ft_{{transfer}} "
-        "= \\frac{{{self.number_of_reads} \\cdot {self.size_of_reads}KB}}{{1}} \\cdot \\frac{{1MB}}{{1024KB}} "
-        "\\cdot \\frac{{1 second}}{{{self.transfer_rate}MB}} \\cdot \\frac{{1000ms}}{{1second}} "
-        "= {self.transfer_delay:0.2}ms"
+        f"t_{{transfer}} "
+        f"= \\frac{{{self.number_of_reads} \\cdot {self.size_of_reads}KB}}{{1}} \\cdot \\frac{{1MB}}{{1024KB}} "
+        f"\\cdot \\frac{{1 second}}{{{self.transfer_rate}MB}} \\cdot \\frac{{1000ms}}{{1second}} "
+        f"= {self.transfer_delay:0.2}ms"
       )
     ])
     
