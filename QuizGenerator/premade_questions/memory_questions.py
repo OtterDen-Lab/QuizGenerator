@@ -11,6 +11,7 @@ from typing import List, Optional
 
 from QuizGenerator.misc import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
+from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
 
@@ -22,7 +23,7 @@ class MemoryQuestion(Question, abc.ABC):
 
 
 @QuestionRegistry.register("VirtualAddressParts")
-class VirtualAddressParts(MemoryQuestion):
+class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
   MAX_BITS = 64
   
   class Target(enum.Enum):
@@ -39,9 +40,9 @@ class VirtualAddressParts(MemoryQuestion):
     self.num_vpn_bits = self.num_va_bits - self.num_offset_bits
     
     self.possible_answers = {
-      self.Target.VA_BITS : Answer("answer__num_va_bits", self.num_va_bits, variable_kind=Answer.VariableKind.INT),
-      self.Target.OFFSET_BITS : Answer("answer__num_offset_bits", self.num_offset_bits, variable_kind=Answer.VariableKind.INT),
-      self.Target.VPN_BITS : Answer("answer__num_vpn_bits", self.num_vpn_bits, variable_kind=Answer.VariableKind.INT)
+      self.Target.VA_BITS : Answer.integer("answer__num_va_bits", self.num_va_bits),
+      self.Target.OFFSET_BITS : Answer.integer("answer__num_offset_bits", self.num_offset_bits),
+      self.Target.VPN_BITS : Answer.integer("answer__num_vpn_bits", self.num_vpn_bits)
     }
     
     # Select what kind of question we are going to be
@@ -52,28 +53,28 @@ class VirtualAddressParts(MemoryQuestion):
     return
   
   def get_body(self, **kwargs) -> ContentAST.Section:
+    # Create table data with one blank cell
+    table_data = [{}]
+    for target in list(self.Target):
+      if target == self.blank_kind:
+        # This cell should be an answer blank
+        table_data[0][target.value] = ContentAST.Answer(self.possible_answers[target], " bits")
+      else:
+        # This cell shows the value
+        table_data[0][target.value] = f"{self.possible_answers[target].display} bits"
+
+    table = self.create_fill_in_table(
+      headers=[t.value for t in list(self.Target)],
+      template_rows=table_data
+    )
+
     body = ContentAST.Section()
-    
     body.add_element(
       ContentAST.Paragraph([
         "Given the information in the below table, please complete the table as appropriate."
       ])
     )
-    
-    body.add_element(
-      ContentAST.Table(
-        headers=[t.value for t in list(self.Target)],
-        data=[[
-          f"{self.possible_answers[t].display} bits"
-          if t != self.blank_kind
-          else ContentAST.Element([
-            ContentAST.Answer(self.possible_answers[t], " bits")
-          ])
-          for t in list(self.Target)
-        ]]
-      )
-    )
-    
+    body.add_element(table)
     return body
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
@@ -102,7 +103,7 @@ class VirtualAddressParts(MemoryQuestion):
     
 
 @QuestionRegistry.register()
-class CachingQuestion(MemoryQuestion):
+class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
   
   class Kind(enum.Enum):
     FIFO = enum.auto()
@@ -219,63 +220,60 @@ class CachingQuestion(MemoryQuestion):
       }
       
       self.answers.update({
-        f"answer__hit-{request_number}":          Answer(f"answer__hit-{request_number}",         ('hit' if was_hit else 'miss'),          Answer.AnswerKind.BLANK),
-        f"answer__evicted-{request_number}":      Answer(f"answer__evicted-{request_number}",     ('-' if evicted is None else f"{evicted}"),      Answer.AnswerKind.BLANK),
-        f"answer__cache_state-{request_number}":  Answer(f"answer__cache_state-{request_number}", copy.copy(cache_state), variable_kind=Answer.VariableKind.LIST),
+        f"answer__hit-{request_number}":          Answer.string(f"answer__hit-{request_number}", ('hit' if was_hit else 'miss')),
+        f"answer__evicted-{request_number}":      Answer.string(f"answer__evicted-{request_number}", ('-' if evicted is None else f"{evicted}")),
+        f"answer__cache_state-{request_number}":  Answer.list_value(f"answer__cache_state-{request_number}", copy.copy(cache_state)),
       })
       
     self.hit_rate = 100 * number_of_hits / (self.num_requests)
     self.answers.update({
-      "answer__hit_rate": Answer("answer__hit_rate", self.hit_rate, variable_kind=Answer.VariableKind.AUTOFLOAT)
+      "answer__hit_rate": Answer.auto_float("answer__hit_rate", self.hit_rate)
     })
   
   def get_body(self, **kwargs) -> ContentAST.Section:
-    body = ContentAST.Section()
-    
-    body.add_element(
-      ContentAST.Paragraph([
-        f"Assume we are using a <b>{self.cache_policy}</b> caching policy and a cache size of <b>{self.cache_size}</b>."
-        "",
-        "Given the below series of requests please fill in the table.",
-        "For the hit/miss column, please write either \"hit\" or \"miss\".",
-        "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
-      ])
+    # Create table data for cache simulation
+    table_rows = []
+    for request_number in sorted(self.request_results.keys()):
+      table_rows.append({
+        "Page Requested": f"{self.requests[request_number]}",
+        "Hit/Miss": f"answer__hit-{request_number}",  # Answer key
+        "Evicted": f"answer__evicted-{request_number}",  # Answer key
+        "Cache State": f"answer__cache_state-{request_number}"  # Answer key
+      })
+
+    # Create table using mixin - automatically handles answer conversion
+    cache_table = self.create_answer_table(
+      headers=["Page Requested", "Hit/Miss", "Evicted", "Cache State"],
+      data_rows=table_rows,
+      answer_columns=["Hit/Miss", "Evicted", "Cache State"]
     )
-    
-    body.add_element(
-      ContentAST.TextHTML(
-        "For the cache state, please enter the cache contents in the order suggested in class, "
-        "which means separated by commas with no spaces (e.g. \"1,2,3\")"
-        "and with the left-most being the next to be evicted. "
-        "In the case where there is a tie, order by increasing number."
+
+    # Create hit rate answer block
+    hit_rate_block = ContentAST.AnswerBlock(
+      ContentAST.Answer(
+        answer=self.answers["answer__hit_rate"],
+        label=f"Hit rate, excluding compulsory misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
+        unit="%"
       )
     )
-    
-    body.add_element(
-      ContentAST.Table(
-        headers=["Page Requested", "Hit/Miss", "Evicted", "Cache State"],
-        data=[
-          [
-            f"{self.requests[request_number]}",
-            ContentAST.Answer(self.answers[f"answer__hit-{request_number}"], blank_length=2),
-            ContentAST.Answer(self.answers[f"answer__evicted-{request_number}"], blank_length=2),
-            ContentAST.Answer(self.answers[f"answer__cache_state-{request_number}"], blank_length=2)
-          ]
-          for request_number in sorted(self.request_results.keys())
-        ]
-      )
+
+    # Use mixin to create complete body
+    intro_text = (
+      f"Assume we are using a <b>{self.cache_policy}</b> caching policy and a cache size of <b>{self.cache_size}</b>. "
+      "Given the below series of requests please fill in the table. "
+      "For the hit/miss column, please write either \"hit\" or \"miss\". "
+      "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
     )
-    
-    body.add_element(
-      ContentAST.AnswerBlock(
-        ContentAST.Answer(
-          answer=self.answers["answer__hit_rate"],
-          label=f"Hit rate, excluding compulsory misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
-          unit="%"
-        )
-      )
+
+    instructions = (
+      "For the cache state, please enter the cache contents in the order suggested in class, "
+      "which means separated by commas with no spaces (e.g. \"1,2,3\") "
+      "and with the left-most being the next to be evicted. "
+      "In the case where there is a tie, order by increasing number."
     )
-    
+
+    body = self.create_fill_in_table_body(intro_text, instructions, cache_table)
+    body.add_element(hit_rate_block)
     return body
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
@@ -320,7 +318,7 @@ class MemoryAccessQuestion(MemoryQuestion, abc.ABC):
 
 
 @QuestionRegistry.register()
-class BaseAndBounds(MemoryAccessQuestion):
+class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   MAX_BITS = 32
   MIN_BOUNDS_BIT = 5
   MAX_BOUNDS_BITS = 16
@@ -336,44 +334,37 @@ class BaseAndBounds(MemoryAccessQuestion):
     self.virtual_address = self.rng.randint(1, int(self.bounds / self.PROBABILITY_OF_VALID))
     
     if self.virtual_address < self.bounds:
-      self.answers["answer"] = Answer(
-        key="answer__physical_address",
-        value=(self.base + self.virtual_address),
-        variable_kind=Answer.VariableKind.BINARY_OR_HEX,
+      self.answers["answer"] = Answer.binary_hex(
+        "answer__physical_address",
+        self.base + self.virtual_address,
         length=math.ceil(math.log2(self.base + self.virtual_address))
       )
     else :
-      self.answers["answer"] = Answer(
-        key="answer__physical_address",
-        value="INVALID",
-        variable_kind=Answer.VariableKind.STR
-      )
+      self.answers["answer"] = Answer.string("answer__physical_address", "INVALID")
   
   def get_body(self) -> ContentAST.Section:
-    body = ContentAST.Section()
-    
-    body.add_element(
-      ContentAST.Paragraph([
+    # Use mixin to create parameter table with answer
+    parameter_info = {
+      "Base": f"0x{self.base:X}",
+      "Bounds": f"0x{self.bounds:X}",
+      "Virtual Address": f"0x{self.virtual_address:X}"
+    }
+
+    table = self.create_parameter_answer_table(
+      parameter_info=parameter_info,
+      answer_label="Physical Address",
+      answer_key="answer",
+      transpose=True
+    )
+
+    return self.create_parameter_calculation_body(
+      intro_text=(
         "Given the information in the below table, "
-        "please calcuate the physical address associated with the given virtual address.",
+        "please calcuate the physical address associated with the given virtual address. "
         "If the virtual address is invalid please simply write ***INVALID***."
-      ])
+      ),
+      parameter_table=table
     )
-    
-    body.add_element(
-      ContentAST.Table(
-        headers=["Base", "Bounds", "Virtual Address", "Physical Address"],
-        data=[[
-          f"0x{self.base:X}",
-          f"0x{self.bounds:X}",
-          f"0x{self.virtual_address:X}",
-          ContentAST.Answer(self.answers["answer"])
-        ]],
-        transpose=True
-      )
-    )
-    
-    return body
   
   def get_explanation(self) -> ContentAST.Section:
     explanation = ContentAST.Section()
@@ -417,7 +408,7 @@ class BaseAndBounds(MemoryAccessQuestion):
 
 
 @QuestionRegistry.register()
-class Segmentation(MemoryAccessQuestion):
+class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   MAX_BITS = 20
   MIN_VIRTUAL_BITS = 5
   MAX_VIRTUAL_BITS = 10
@@ -500,22 +491,18 @@ class Segmentation(MemoryAccessQuestion):
     
     # Set answers based on whether it's in bounds or not
     if self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
-      self.answers["answer__physical_address"] = Answer(
-        key="answer__physical_address",
-        value=self.physical_address,
-        variable_kind=Answer.VariableKind.BINARY_OR_HEX,
+      self.answers["answer__physical_address"] = Answer.binary_hex(
+        "answer__physical_address",
+        self.physical_address,
         length=self.physical_bits
       )
     else :
-      self.answers["answer__physical_address"] = Answer(
-        key="answer__physical_address",
-        value="INVALID",
-        variable_kind=Answer.VariableKind.STR
+      self.answers["answer__physical_address"] = Answer.string(
+        "answer__physical_address",
+        "INVALID"
       )
     
-    self.answers["answer__segment"] = Answer(
-      key="answer__segment", value=self.segment, variable_kind=Answer.VariableKind.STR
-    )
+    self.answers["answer__segment"] = Answer.string("answer__segment", self.segment)
   
   def get_body(self) -> ContentAST.Section:
     body = ContentAST.Section()
@@ -531,16 +518,20 @@ class Segmentation(MemoryAccessQuestion):
       ])
     )
     
-    body.add_element(
-      ContentAST.Table(
-        headers=["", "base", "bounds"],
-        data=[
-          ["code", f"0b{self.base['code']:0{self.physical_bits}b}", f"0b{self.bounds['code']:0b}"],
-          ["heap", f"0b{self.base['heap']:0{self.physical_bits}b}", f"0b{self.bounds['heap']:0b}"],
-          ["stack", f"0b{self.base['stack']:0{self.physical_bits}b}", f"0b{self.bounds['stack']:0b}"]
-        ]
-      )
+    # Create segment table using mixin
+    segment_rows = [
+      {"": "code", "base": f"0b{self.base['code']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['code']:0b}"},
+      {"": "heap", "base": f"0b{self.base['heap']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['heap']:0b}"},
+      {"": "stack", "base": f"0b{self.base['stack']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['stack']:0b}"}
+    ]
+
+    segment_table = self.create_answer_table(
+      headers=["", "base", "bounds"],
+      data_rows=segment_rows,
+      answer_columns=[]  # No answer columns in this table
     )
+
+    body.add_element(segment_table)
     
     body.add_element(
       ContentAST.AnswerBlock([
@@ -639,7 +630,7 @@ class Segmentation(MemoryAccessQuestion):
 
 
 @QuestionRegistry.register()
-class Paging(MemoryAccessQuestion):
+class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   
   MIN_OFFSET_BITS = 3
   MIN_VPN_BITS = 3
@@ -684,22 +675,22 @@ class Paging(MemoryAccessQuestion):
     # self.pte_var = VariableHex("PTE", self.pte, num_bits=(self.num_pfn_bits+1), default_presentation=VariableHex.PRESENTATION.BINARY)
     
     self.answers.update({
-      "answer__vpn": Answer("answer__vpn",     self.vpn,     variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=self.num_vpn_bits),
-      "answer__offset": Answer("answer__offset",  self.offset,  variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=self.num_offset_bits),
-      "answer__pte": Answer("answer__pte",     self.pte,     variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=(self.num_pfn_bits + 1)),
+      "answer__vpn": Answer.binary_hex("answer__vpn", self.vpn, length=self.num_vpn_bits),
+      "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_offset_bits),
+      "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_pfn_bits + 1)),
     })
     
     if self.is_valid:
       self.answers.update({
-        "answer__is_valid":         Answer("answer__is_valid",          "VALID"),
-        "answer__pfn":              Answer("answer__pfn",               self.pfn,               variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=self.num_pfn_bits),
-        "answer__physical_address": Answer("answer__physical_address",  self.physical_address,  variable_kind=Answer.VariableKind.BINARY_OR_HEX, length=(self.num_pfn_bits + self.num_offset_bits)),
+        "answer__is_valid":         Answer.string("answer__is_valid", "VALID"),
+        "answer__pfn":              Answer.binary_hex("answer__pfn", self.pfn, length=self.num_pfn_bits),
+        "answer__physical_address": Answer.binary_hex("answer__physical_address", self.physical_address, length=(self.num_pfn_bits + self.num_offset_bits)),
       })
     else:
       self.answers.update({
-        "answer__is_valid":         Answer("answer__is_valid",          "INVALID"),
-        "answer__pfn":              Answer("answer__pfn",               "INVALID"),
-        "answer__physical_address": Answer("answer__physical_address",  "INVALID"),
+        "answer__is_valid":         Answer.string("answer__is_valid", "INVALID"),
+        "answer__pfn":              Answer.string("answer__pfn", "INVALID"),
+        "answer__physical_address": Answer.string("answer__physical_address", "INVALID"),
       })
   
   def get_body(self, *args, **kwargs) -> ContentAST.Section:
@@ -712,15 +703,14 @@ class Paging(MemoryAccessQuestion):
       ])
     )
     
-    body.add_element(
-      ContentAST.Table(
-        data=[
-          ["Virtual Address", f"0b{self.virtual_address:0{self.num_vpn_bits + self.num_offset_bits}b}"],
-          ["# VPN bits", f"{self.num_vpn_bits}"],
-          ["# PFN bits", f"{self.num_pfn_bits}"],
-        ]
-      )
-    )
+    # Create parameter info table using mixin
+    parameter_info = {
+      "Virtual Address": f"0b{self.virtual_address:0{self.num_vpn_bits + self.num_offset_bits}b}",
+      "# VPN bits": f"{self.num_vpn_bits}",
+      "# PFN bits": f"{self.num_pfn_bits}"
+    }
+
+    body.add_element(self.create_info_table(parameter_info))
     
     
     # Make values for Page Table
