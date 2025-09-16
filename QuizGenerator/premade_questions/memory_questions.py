@@ -23,7 +23,7 @@ class MemoryQuestion(Question, abc.ABC):
 
 
 @QuestionRegistry.register("VirtualAddressParts")
-class VirtualAddressParts(MemoryQuestion):
+class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
   MAX_BITS = 64
   
   class Target(enum.Enum):
@@ -40,9 +40,9 @@ class VirtualAddressParts(MemoryQuestion):
     self.num_vpn_bits = self.num_va_bits - self.num_offset_bits
     
     self.possible_answers = {
-      self.Target.VA_BITS : Answer("answer__num_va_bits", self.num_va_bits, variable_kind=Answer.VariableKind.INT),
-      self.Target.OFFSET_BITS : Answer("answer__num_offset_bits", self.num_offset_bits, variable_kind=Answer.VariableKind.INT),
-      self.Target.VPN_BITS : Answer("answer__num_vpn_bits", self.num_vpn_bits, variable_kind=Answer.VariableKind.INT)
+      self.Target.VA_BITS : Answer.integer("answer__num_va_bits", self.num_va_bits),
+      self.Target.OFFSET_BITS : Answer.integer("answer__num_offset_bits", self.num_offset_bits),
+      self.Target.VPN_BITS : Answer.integer("answer__num_vpn_bits", self.num_vpn_bits)
     }
     
     # Select what kind of question we are going to be
@@ -53,28 +53,28 @@ class VirtualAddressParts(MemoryQuestion):
     return
   
   def get_body(self, **kwargs) -> ContentAST.Section:
+    # Create table data with one blank cell
+    table_data = [{}]
+    for target in list(self.Target):
+      if target == self.blank_kind:
+        # This cell should be an answer blank
+        table_data[0][target.value] = ContentAST.Answer(self.possible_answers[target], " bits")
+      else:
+        # This cell shows the value
+        table_data[0][target.value] = f"{self.possible_answers[target].display} bits"
+
+    table = self.create_fill_in_table(
+      headers=[t.value for t in list(self.Target)],
+      template_rows=table_data
+    )
+
     body = ContentAST.Section()
-    
     body.add_element(
       ContentAST.Paragraph([
         "Given the information in the below table, please complete the table as appropriate."
       ])
     )
-    
-    body.add_element(
-      ContentAST.Table(
-        headers=[t.value for t in list(self.Target)],
-        data=[[
-          f"{self.possible_answers[t].display} bits"
-          if t != self.blank_kind
-          else ContentAST.Element([
-            ContentAST.Answer(self.possible_answers[t], " bits")
-          ])
-          for t in list(self.Target)
-        ]]
-      )
-    )
-    
+    body.add_element(table)
     return body
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
@@ -103,7 +103,7 @@ class VirtualAddressParts(MemoryQuestion):
     
 
 @QuestionRegistry.register()
-class CachingQuestion(MemoryQuestion):
+class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
   
   class Kind(enum.Enum):
     FIFO = enum.auto()
@@ -220,63 +220,60 @@ class CachingQuestion(MemoryQuestion):
       }
       
       self.answers.update({
-        f"answer__hit-{request_number}":          Answer(f"answer__hit-{request_number}",         ('hit' if was_hit else 'miss'),          Answer.AnswerKind.BLANK),
-        f"answer__evicted-{request_number}":      Answer(f"answer__evicted-{request_number}",     ('-' if evicted is None else f"{evicted}"),      Answer.AnswerKind.BLANK),
-        f"answer__cache_state-{request_number}":  Answer(f"answer__cache_state-{request_number}", copy.copy(cache_state), variable_kind=Answer.VariableKind.LIST),
+        f"answer__hit-{request_number}":          Answer.string(f"answer__hit-{request_number}", ('hit' if was_hit else 'miss')),
+        f"answer__evicted-{request_number}":      Answer.string(f"answer__evicted-{request_number}", ('-' if evicted is None else f"{evicted}")),
+        f"answer__cache_state-{request_number}":  Answer.list_value(f"answer__cache_state-{request_number}", copy.copy(cache_state)),
       })
       
     self.hit_rate = 100 * number_of_hits / (self.num_requests)
     self.answers.update({
-      "answer__hit_rate": Answer("answer__hit_rate", self.hit_rate, variable_kind=Answer.VariableKind.AUTOFLOAT)
+      "answer__hit_rate": Answer.auto_float("answer__hit_rate", self.hit_rate)
     })
   
   def get_body(self, **kwargs) -> ContentAST.Section:
-    body = ContentAST.Section()
-    
-    body.add_element(
-      ContentAST.Paragraph([
-        f"Assume we are using a <b>{self.cache_policy}</b> caching policy and a cache size of <b>{self.cache_size}</b>."
-        "",
-        "Given the below series of requests please fill in the table.",
-        "For the hit/miss column, please write either \"hit\" or \"miss\".",
-        "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
-      ])
+    # Create table data for cache simulation
+    table_rows = []
+    for request_number in sorted(self.request_results.keys()):
+      table_rows.append({
+        "Page Requested": f"{self.requests[request_number]}",
+        "Hit/Miss": f"answer__hit-{request_number}",  # Answer key
+        "Evicted": f"answer__evicted-{request_number}",  # Answer key
+        "Cache State": f"answer__cache_state-{request_number}"  # Answer key
+      })
+
+    # Create table using mixin - automatically handles answer conversion
+    cache_table = self.create_answer_table(
+      headers=["Page Requested", "Hit/Miss", "Evicted", "Cache State"],
+      data_rows=table_rows,
+      answer_columns=["Hit/Miss", "Evicted", "Cache State"]
     )
-    
-    body.add_element(
-      ContentAST.TextHTML(
-        "For the cache state, please enter the cache contents in the order suggested in class, "
-        "which means separated by commas with no spaces (e.g. \"1,2,3\")"
-        "and with the left-most being the next to be evicted. "
-        "In the case where there is a tie, order by increasing number."
+
+    # Create hit rate answer block
+    hit_rate_block = ContentAST.AnswerBlock(
+      ContentAST.Answer(
+        answer=self.answers["answer__hit_rate"],
+        label=f"Hit rate, excluding compulsory misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
+        unit="%"
       )
     )
-    
-    body.add_element(
-      ContentAST.Table(
-        headers=["Page Requested", "Hit/Miss", "Evicted", "Cache State"],
-        data=[
-          [
-            f"{self.requests[request_number]}",
-            ContentAST.Answer(self.answers[f"answer__hit-{request_number}"], blank_length=2),
-            ContentAST.Answer(self.answers[f"answer__evicted-{request_number}"], blank_length=2),
-            ContentAST.Answer(self.answers[f"answer__cache_state-{request_number}"], blank_length=2)
-          ]
-          for request_number in sorted(self.request_results.keys())
-        ]
-      )
+
+    # Use mixin to create complete body
+    intro_text = (
+      f"Assume we are using a <b>{self.cache_policy}</b> caching policy and a cache size of <b>{self.cache_size}</b>. "
+      "Given the below series of requests please fill in the table. "
+      "For the hit/miss column, please write either \"hit\" or \"miss\". "
+      "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
     )
-    
-    body.add_element(
-      ContentAST.AnswerBlock(
-        ContentAST.Answer(
-          answer=self.answers["answer__hit_rate"],
-          label=f"Hit rate, excluding compulsory misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
-          unit="%"
-        )
-      )
+
+    instructions = (
+      "For the cache state, please enter the cache contents in the order suggested in class, "
+      "which means separated by commas with no spaces (e.g. \"1,2,3\") "
+      "and with the left-most being the next to be evicted. "
+      "In the case where there is a tie, order by increasing number."
     )
-    
+
+    body = self.create_fill_in_table_body(intro_text, instructions, cache_table)
+    body.add_element(hit_rate_block)
     return body
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
