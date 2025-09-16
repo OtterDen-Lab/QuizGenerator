@@ -5,6 +5,7 @@ import math
 
 from QuizGenerator.question import Question, QuestionRegistry, Answer
 from QuizGenerator.misc import ContentAST
+from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)
 
@@ -18,8 +19,8 @@ class MathQuestion(Question, abc.ABC):
 @QuestionRegistry.register()
 class BitsAndBytes(MathQuestion):
   
-  MIN_BITS = 3
-  MAX_BITS = 49
+  MIN_BITS = MathRanges.DEFAULT_MIN_MATH_BITS
+  MAX_BITS = MathRanges.DEFAULT_MAX_MATH_BITS
   
   def refresh(self, *args, **kwargs):
     super().refresh(*args, **kwargs)
@@ -30,9 +31,9 @@ class BitsAndBytes(MathQuestion):
     self.num_bytes = int(math.pow(2, self.num_bits))
     
     if self.from_binary:
-      self.answers = {"answer" : Answer("num_bytes", self.num_bytes, Answer.AnswerKind.BLANK)}
+      self.answers = {"answer" : Answer.integer("num_bytes", self.num_bytes)}
     else:
-      self.answers = {"answer" : Answer("num_bits", self.num_bits, Answer.AnswerKind.BLANK)}
+      self.answers = {"answer" : Answer.integer("num_bits", self.num_bits)}
   
   def get_body(self, **kwargs) -> ContentAST.Section:
     body = ContentAST.Section()
@@ -114,9 +115,9 @@ class HexAndBinary(MathQuestion):
     self.binary_val = f"0b{self.value:0{4*self.number_of_hexits}b}"
     
     if self.from_binary:
-      self.answers['answer'] = Answer("hex_val", self.hex_val, Answer.AnswerKind.BLANK)
+      self.answers['answer'] = Answer.string("hex_val", self.hex_val)
     else:
-      self.answers['answer'] = Answer("binary_val", self.binary_val, Answer.AnswerKind.BLANK)
+      self.answers['answer'] = Answer.string("binary_val", self.binary_val)
   
   def get_body(self, **kwargs) -> ContentAST.Section:
     body = ContentAST.Section()
@@ -218,7 +219,7 @@ class AverageMemoryAccessTime(MathQuestion):
     self.amat = self.hit_rate * self.hit_latency + (1 - self.hit_rate) * self.miss_latency
     
     self.answers = {
-      "amat": Answer("answer__amat", self.amat, Answer.AnswerKind.BLANK, variable_kind=Answer.VariableKind.FLOAT)
+      "amat": Answer.float_value("answer__amat", self.amat)
     }
     
     # Finally, do the self.rngizing of the question, to avoid these being non-deterministic

@@ -130,12 +130,18 @@ class Answer:
         f"{value_fraction:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
         f"{value_fraction.numerator / value_fraction.denominator:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
       ]
-      
+
+      # Always include exact fraction representation and mixed number format
+      # even for whole numbers, since students should be able to enter improper fractions
+      answer_strings.extend([
+        f"{value_fraction.numerator / value_fraction.denominator}",
+      ])
+
       if not value_fraction.is_integer():
-        answer_strings.extend([
-          f"{value_fraction.numerator / value_fraction.denominator}",
-          f"{value_fraction.numerator // value_fraction.denominator} {value_fraction.numerator % value_fraction.denominator}/{value_fraction.denominator}",
-        ])
+        # Add mixed number format only for non-integers
+        answer_strings.append(
+          f"{value_fraction.numerator // value_fraction.denominator} {value_fraction.numerator % value_fraction.denominator}/{value_fraction.denominator}"
+        )
         
       canvas_answers = [
         {
@@ -171,6 +177,122 @@ class Answer:
         })
     
     return canvas_answers
+  
+  # Factory methods for common answer types
+  @classmethod
+  def binary_hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'Answer':
+    """Create an answer that accepts binary or hex format"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.BINARY_OR_HEX,
+      length=length,
+      **kwargs
+    )
+  
+  @classmethod
+  def auto_float(cls, key: str, value: float, **kwargs) -> 'Answer':
+    """Create an answer that accepts multiple float formats (decimal, fraction, mixed)"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.AUTOFLOAT,
+      **kwargs
+    )
+  
+  @classmethod
+  def integer(cls, key: str, value: int, **kwargs) -> 'Answer':
+    """Create an integer answer"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.INT,
+      **kwargs
+    )
+  
+  @classmethod
+  def string(cls, key: str, value: str, **kwargs) -> 'Answer':
+    """Create a string answer"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.STR,
+      **kwargs
+    )
+  
+  @classmethod
+  def binary(cls, key: str, value: int, length: int = None, **kwargs) -> 'Answer':
+    """Create a binary-only answer"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.BINARY,
+      length=length,
+      **kwargs
+    )
+  
+  @classmethod
+  def hex_value(cls, key: str, value: int, length: int = None, **kwargs) -> 'Answer':
+    """Create a hex-only answer"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.HEX,
+      length=length,
+      **kwargs
+    )
+  
+  @classmethod
+  def float_value(cls, key: str, value: float, **kwargs) -> 'Answer':
+    """Create a simple float answer (no fraction conversion)"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.FLOAT,
+      **kwargs
+    )
+  
+  @classmethod
+  def list_value(cls, key: str, value: list, **kwargs) -> 'Answer':
+    """Create a list answer (comma-separated values)"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.LIST,
+      **kwargs
+    )
+
+  @classmethod
+  def dropdown(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'Answer':
+    """Create a dropdown answer with wrong answer choices (baffles)"""
+    return cls(
+      key=key,
+      value=value,
+      kind=cls.AnswerKind.MULTIPLE_DROPDOWN,
+      baffles=baffles,
+      **kwargs
+    )
+
+  @classmethod
+  def multiple_choice(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'Answer':
+    """Create a multiple choice answer with wrong answer choices (baffles)"""
+    return cls(
+      key=key,
+      value=value,
+      kind=cls.AnswerKind.MULTIPLE_ANSWER,
+      baffles=baffles,
+      **kwargs
+    )
+
+  @classmethod
+  def essay(cls, key: str, **kwargs) -> 'Answer':
+    """Create an essay question (no specific correct answer)"""
+    return cls(
+      key=key,
+      value="",  # Essays don't have predetermined answers
+      kind=cls.AnswerKind.ESSAY,
+      **kwargs
+    )
 
 
 class ContentAST:
