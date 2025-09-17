@@ -61,14 +61,46 @@ questions:
       _config:
         repeat: 5
 ---
-name: "(Ungraded) Scheduling"
-practice: True
+name: "Lab: Scheduling"
+practice: False
 questions:
-  1:
-    Scheduling:
+  3:
+    Scheduling (Grabbag x3):
       class: SchedulingQuestion
       _config:
-        repeat: 5
+        repeat: 1
+      num_jobs: 3
+  1.5:
+    Scheduling (FIFO):
+      class: SchedulingQuestion
+      _config:
+        repeat: 1
+      scheduler_kind: FIFO
+      num_jobs: 4
+    Scheduling (SJF):
+      class: SchedulingQuestion
+      _config:
+        repeat: 1
+      scheduler_kind: ShortestDuration
+      num_jobs: 4
+    Scheduling (STCF):
+      class: SchedulingQuestion
+      _config:
+        repeat: 1
+      scheduler_kind: ShortestTimeRemaining
+      num_jobs: 4
+    Scheduling (RR):
+      class: SchedulingQuestion
+      _config:
+        repeat: 1
+      scheduler_kind: RoundRobin
+      num_jobs: 4
+  1:
+    Scheduling (Grabbag x5):
+      class: SchedulingQuestion
+      _config:
+        repeat: 1
+      num_jobs: 5
 ---
 name: "(Ungraded) Caching"
 practice: True
