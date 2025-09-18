@@ -82,13 +82,16 @@ def generate_quiz(
     use_prod=False,
     course_id=None
 ):
-  
+
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
   for quiz in quizzes:
-    
+
     for i in range(num_pdfs):
       log.debug(f"Generating PDF {i+1}/{num_pdfs}")
-      latex_text = quiz.get_quiz().render_latex()
+      # Use a different seed for each PDF to ensure different workloads across PDFs
+      # but consistent workloads within the same PDF
+      pdf_seed = i * 1000  # Large gap to avoid overlap with rng_seed_offset
+      latex_text = quiz.get_quiz(rng_seed=pdf_seed).render_latex()
       generate_latex(latex_text, remove_previous=(i==0))
     
     if num_canvas > 0:

@@ -69,7 +69,7 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
   @dataclasses.dataclass
   class Job:
     job_id: int
-    arrival: float
+    arrival_time: float
     duration: float
     elapsed_time: float = 0
     response_time: float = None
@@ -100,11 +100,11 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
     
     def mark_start(self, curr_time) -> None:
       self.start_time = curr_time
-      self.response_time = curr_time - self.arrival + self.SCHEDULER_EPSILON
+      self.response_time = curr_time - self.arrival_time + self.SCHEDULER_EPSILON
     
     def mark_end(self, curr_time) -> None:
       self.end_time = curr_time
-      self.turnaround_time = curr_time - self.arrival + self.SCHEDULER_EPSILON
+      self.turnaround_time = curr_time - self.arrival_time + self.SCHEDULER_EPSILON
     
     def time_remaining(self, curr_time) -> float:
       time_remaining = self.duration
@@ -124,10 +124,10 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
     1. First job to arrive is the longest
     2. At least 2 other jobs arrive in its runtime
     3. Those jobs arrive in reverse length order, with the smaller arriving 2nd
-    
+
     This will clearly show when jobs arrive how they are handled, since FIFO will be different than SJF, and STCF will cause interruptions
     """
-    
+
     workload = []
     
     # First create a job that is relatively long-running and arrives first.
@@ -190,7 +190,7 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
       workload.append(
         SchedulingQuestion.Job(
           job_id=i,
-          arrival=arr,
+          arrival_time=arr,
           duration=dur
         )
       )
@@ -204,20 +204,20 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
     self.timeline = collections.defaultdict(list)
     self.timeline[curr_time].append("Simulation Start")
     for job in jobs_to_run:
-      self.timeline[job.arrival].append(f"Job{job.job_id} arrived")
+      self.timeline[job.arrival_time].append(f"Job{job.job_id} arrived")
     
     while len(jobs_to_run) > 0:
       possible_time_slices = []
       
       # Get the jobs currently in the system
       available_jobs = list(filter(
-        (lambda j: j.arrival <= curr_time),
+        (lambda j: j.arrival_time <= curr_time),
         jobs_to_run
       ))
       
       # Get the jobs that will enter the system in the future
       future_jobs : List[SchedulingQuestion.Job] = list(filter(
-        (lambda j: j.arrival > curr_time),
+        (lambda j: j.arrival_time > curr_time),
         jobs_to_run
       ))
       
@@ -229,7 +229,7 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
           key=(lambda j: selector(j, curr_time))
         )
         if selected_job.has_started():
-          self.timeline[curr_time].append(f"Starting Job{selected_job.job_id} (resp = {curr_time - selected_job.arrival:0.{self.ROUNDING_DIGITS}f}s)")
+          self.timeline[curr_time].append(f"Starting Job{selected_job.job_id} (resp = {curr_time - selected_job.arrival_time:0.{self.ROUNDING_DIGITS}f}s)")
         # We start the job that we selected
         selected_job.run(curr_time, (self.scheduler_algorithm == self.Kind.RoundRobin))
         
@@ -242,9 +242,9 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
         if len(future_jobs) != 0:
           next_arrival : SchedulingQuestion.Job = min(
             future_jobs,
-            key=(lambda j: j.arrival)
+            key=(lambda j: j.arrival_time)
           )
-          possible_time_slices.append( (next_arrival.arrival - curr_time))
+          possible_time_slices.append( (next_arrival.arrival_time - curr_time))
       
       if time_quantum is not None:
         possible_time_slices.append(time_quantum)
@@ -331,7 +331,7 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
       case _:
         self.run_simulation(
           jobs_to_run=jobs,
-          selector=(lambda j, curr_time: (j.arrival, j.job_id)),
+          selector=(lambda j, curr_time: (j.arrival_time, j.job_id)),
           preemptable=False,
           time_quantum=None
         )
@@ -339,11 +339,11 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
     # Collate stats
     self.job_stats = {
       i : {
-        "arrival" : job.arrival,            # input
+        "arrival_time" : job.arrival_time,            # input
         "duration" : job.duration,          # input
         "Response" : job.response_time,     # output
         "TAT" : job.turnaround_time,         # output
-        "state_changes" : [job.arrival] + job.state_change_times + [job.arrival + job.turnaround_time],
+        "state_changes" : [job.arrival_time] + job.state_change_times + [job.arrival_time + job.turnaround_time],
       }
       for (i, job) in enumerate(jobs)
     }
@@ -384,7 +384,7 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
     for job_id in sorted(self.job_stats.keys()):
       table_rows.append({
         "Job ID": f"Job{job_id}",
-        "Arrival": self.job_stats[job_id]["arrival"],
+        "Arrival": self.job_stats[job_id]["arrival_time"],
         "Duration": self.job_stats[job_id]["duration"],
         "Response Time": f"answer__response_time_job{job_id}",  # Answer key
         "TAT": f"answer__turnaround_time_job{job_id}"  # Answer key
@@ -409,11 +409,11 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
       f"Break any ties using the job number."
     )
 
-    instructions = (
+    instructions = ContentAST.OnlyHtml([ContentAST.Paragraph([
       f"Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of {Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal. "
       "Examples of appropriately formatted answers would be `0`, `3/2`, `1 1/3`, `1.6667`, and `1.25`. "
       "Note that answers that can be rounded to whole numbers should be, rather than being left in fractional form."
-    )
+    ])])
 
     body = self.create_fill_in_table_body(intro_text, instructions, scheduling_table)
     body.add_element(average_block)
@@ -433,8 +433,8 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
       ContentAST.Paragraph([
         "We do this by subtracting arrival time from either the completion time or the start time.  That is:"
         ]),
-      ContentAST.Equation("Job_{TAT} = Job_{completion} - Job_{arrival}"),
-      ContentAST.Equation("Job_{response} = Job_{start} - Job_{arrival}"),
+      ContentAST.Equation("Job_{TAT} = Job_{completion} - Job_{arrival\_time}"),
+      ContentAST.Equation("Job_{response} = Job_{start} - Job_{arrival\_time}"),
     ])
     
     explanation.add_element(
@@ -449,8 +449,8 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
         "For turnaround time (TAT) this would be:"
       ] + [
         f"Job{job_id}_TAT "
-        f"= {self.job_stats[job_id]['arrival'] + self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f} "
-        f"- {self.job_stats[job_id]['arrival']:0.{self.ROUNDING_DIGITS}f} "
+        f"= {self.job_stats[job_id]['arrival_time'] + self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f} "
+        f"- {self.job_stats[job_id]['arrival_time']:0.{self.ROUNDING_DIGITS}f} "
         f"= {self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f}"
         for job_id in sorted(self.job_stats.keys())
       ])
@@ -474,8 +474,8 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
         "For response time this would be:"
       ] + [
       f"Job{job_id}_response "
-      f"= {self.job_stats[job_id]['arrival'] + self.job_stats[job_id]['Response']:0.{self.ROUNDING_DIGITS}f} "
-      f"- {self.job_stats[job_id]['arrival']:0.{self.ROUNDING_DIGITS}f} "
+      f"= {self.job_stats[job_id]['arrival_time'] + self.job_stats[job_id]['Response']:0.{self.ROUNDING_DIGITS}f} "
+      f"- {self.job_stats[job_id]['arrival_time']:0.{self.ROUNDING_DIGITS}f} "
       f"= {self.job_stats[job_id]['Response']:0.{self.ROUNDING_DIGITS}f}"
       for job_id in sorted(self.job_stats.keys())
     ])
@@ -566,7 +566,7 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
     # Plot the overall TAT
     ax.barh(
       y = [i for i in range(len(self.job_stats))][::-1],
-      left = [self.job_stats[job_id]["arrival"] for job_id in sorted(self.job_stats.keys())],
+      left = [self.job_stats[job_id]["arrival_time"] for job_id in sorted(self.job_stats.keys())],
       width = [self.job_stats[job_id]["TAT"] for job_id in sorted(self.job_stats.keys())],
       tick_label = [f"Job{job_id}" for job_id in sorted(self.job_stats.keys())],
       color=(0,0,0,0),
@@ -607,7 +607,7 @@ class MLFQ_Question(ProcessQuestion):
   
   @dataclasses.dataclass
   class Job():
-    arrival: float
+    arrival_time: float
     duration: float
     elapsed_time: float = 0.0
     response_time: float = None
@@ -636,7 +636,7 @@ class MLFQ_Question(ProcessQuestion):
     # Set up jobs that we'll be using
     jobs = [
       MLFQ_Question.Job(
-        arrival=self.rng.randint(self.MIN_ARRIVAL, self.MAX_ARRIVAL),
+        arrival_time=self.rng.randint(self.MIN_ARRIVAL, self.MAX_ARRIVAL),
         duration=self.rng.randint(self.MIN_DURATION, self.MAX_DURATION),
         
       )

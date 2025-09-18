@@ -142,12 +142,12 @@ class Quiz:
   
   def get_quiz(self, **kwargs) -> ContentAST.Document:
     quiz = ContentAST.Document(title=self.name)
-    
+
     quiz.add_elements(
       question.get_question(**kwargs)
       for question in sorted(self.questions, key=lambda q: (-q.points_value, self.question_sort_order.index(q.topic)))
     )
-    
+
     return quiz
   
   def describe(self):

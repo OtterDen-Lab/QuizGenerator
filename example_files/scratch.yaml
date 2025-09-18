@@ -1,0 +1,52 @@
+name: "CST 334 Exam 1 (Spring 25)"
+sort order:
+  - processes
+  - programming
+  - misc
+questions:
+  8:
+    FIFO:
+      class: SchedulingQuestion
+      kwargs:
+        spacing: 10
+        num_jobs: 3
+        scheduler_kind: FIFO
+    ShortestDuration:
+      class: SchedulingQuestion
+      kwargs:
+        spacing: 10
+        num_jobs: 3
+        scheduler_kind: ShortestDuration
+    ShortestTimeRemaining:
+      class: SchedulingQuestion
+      kwargs:
+        spacing: 10
+        num_jobs: 3
+        scheduler_kind: ShortestTimeRemaining
+    RoundRobin:
+      class: SchedulingQuestion
+      kwargs:
+        spacing: 10
+        num_jobs: 3
+        scheduler_kind: RoundRobin
+        
+  4:
+    MLFQ Diagram:
+      kind: processes
+      class: FromGenerator
+      kwargs:
+        spacing: 10
+        generator: |
+
+          return Section([
+            Text(f"Assume we are using MLFQ.  If we have {random.randint(2,4)} queues and 10ms time slices for every queue."),
+            Text(f"Given the below jobs, draw a diagram similar to the one we considered in class showing what scheduling these may look like."),
+            Text("Note that this will probably have rows for each queue, and is not the one we use for tracking TAT and Response Times."),
+            Table(
+              headers=["", "Arrival (ms)", "Duration (ms)"],
+              data=[
+                [f"Job{job_id}"] + [10 * random.randint(0,3), 10 * random.randint(1,3)]
+                for job_id in range(3)
+              ]
+            )
+          ])
