@@ -42,12 +42,15 @@ class FromGenerator(FromText):
     
     def attach_function_to_object(obj, function_code, function_name='get_body_lines'):
       function_code = "import random\n" + function_code
-      
+
+      # Create a local namespace for exec
+      local_namespace = {}
+
       # Define the function dynamically using exec
-      exec(f"def {function_name}(self):\n" + "\n".join(f"    {line}" for line in function_code.splitlines()), globals(), locals())
-      
+      exec(f"def {function_name}(self):\n" + "\n".join(f"    {line}" for line in function_code.splitlines()), globals(), local_namespace)
+
       # Get the function and bind it to the object
-      function = locals()[function_name]
+      function = local_namespace[function_name]
       setattr(obj, function_name, function.__get__(obj))
     
     self.generator_text = generator
