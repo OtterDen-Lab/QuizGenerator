@@ -35,14 +35,14 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
     
     # Generate baselines, if not given
-    self.num_va_bits = kwargs.get("num_va_bits", self.rng.randint(2, self.MAX_BITS))
-    self.num_offset_bits = self.rng.randint(1, self.num_va_bits-1)
-    self.num_vpn_bits = self.num_va_bits - self.num_offset_bits
+    self.num_bits_va = kwargs.get("num_bits_va", self.rng.randint(2, self.MAX_BITS))
+    self.num_bits_offset = self.rng.randint(1, self.num_bits_va-1)
+    self.num_bits_vpn = self.num_bits_va - self.num_bits_offset
     
     self.possible_answers = {
-      self.Target.VA_BITS : Answer.integer("answer__num_va_bits", self.num_va_bits),
-      self.Target.OFFSET_BITS : Answer.integer("answer__num_offset_bits", self.num_offset_bits),
-      self.Target.VPN_BITS : Answer.integer("answer__num_vpn_bits", self.num_vpn_bits)
+      self.Target.VA_BITS : Answer.integer("answer__num_bits_va", self.num_bits_va),
+      self.Target.OFFSET_BITS : Answer.integer("answer__num_bits_offset", self.num_bits_offset),
+      self.Target.VPN_BITS : Answer.integer("answer__num_bits_vpn", self.num_bits_vpn)
     }
     
     # Select what kind of question we are going to be
@@ -91,11 +91,11 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     
     explanation.add_element(
       ContentAST.Paragraph([
-        ContentAST.Text(f"{self.num_va_bits}", emphasis=(self.blank_kind == self.Target.VA_BITS)),
+        ContentAST.Text(f"{self.num_bits_va}", emphasis=(self.blank_kind == self.Target.VA_BITS)),
         ContentAST.Text(" = "),
-        ContentAST.Text(f"{self.num_vpn_bits}", emphasis=(self.blank_kind == self.Target.VPN_BITS)),
+        ContentAST.Text(f"{self.num_bits_vpn}", emphasis=(self.blank_kind == self.Target.VPN_BITS)),
         ContentAST.Text(" + "),
-        ContentAST.Text(f"{self.num_offset_bits}", emphasis=(self.blank_kind == self.Target.OFFSET_BITS))
+        ContentAST.Text(f"{self.num_bits_offset}", emphasis=(self.blank_kind == self.Target.OFFSET_BITS))
       ])
     )
     
@@ -643,26 +643,26 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   def refresh(self, rng_seed=None, *args, **kwargs):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
     
-    self.num_offset_bits = self.rng.randint(self.MIN_OFFSET_BITS, self.MAX_OFFSET_BITS)
-    self.num_vpn_bits = self.rng.randint(self.MIN_VPN_BITS, self.MAX_VPN_BITS)
-    self.num_pfn_bits = self.rng.randint(max([self.MIN_PFN_BITS, self.num_vpn_bits]), self.MAX_PFN_BITS)
+    self.num_bits_offset = self.rng.randint(self.MIN_OFFSET_BITS, self.MAX_OFFSET_BITS)
+    self.num_bits_vpn = self.rng.randint(self.MIN_VPN_BITS, self.MAX_VPN_BITS)
+    self.num_bits_pfn = self.rng.randint(max([self.MIN_PFN_BITS, self.num_bits_vpn]), self.MAX_PFN_BITS)
     
-    self.virtual_address = self.rng.randint(1, 2**(self.num_vpn_bits + self.num_offset_bits))
-    
+    self.virtual_address = self.rng.randint(1, 2**(self.num_bits_vpn + self.num_bits_offset))
+
     # Calculate these two
-    self.offset = self.virtual_address % (2**(self.num_offset_bits))
-    self.vpn = self.virtual_address // (2**(self.num_offset_bits))
-    
+    self.offset = self.virtual_address % (2**(self.num_bits_offset))
+    self.vpn = self.virtual_address // (2**(self.num_bits_offset))
+
     # Generate this randomly
-    self.pfn = self.rng.randint(0, 2**(self.num_pfn_bits))
-    
+    self.pfn = self.rng.randint(0, 2**(self.num_bits_pfn))
+
     # Calculate this
-    self.physical_address = self.pfn * (2**self.num_offset_bits) + self.offset
+    self.physical_address = self.pfn * (2**self.num_bits_offset) + self.offset
     
     if self.rng.choices([True, False], weights=[(self.PROBABILITY_OF_VALID), (1-self.PROBABILITY_OF_VALID)], k=1)[0]:
       self.is_valid = True
       # Set our actual entry to be in the table and valid
-      self.pte = self.pfn + (2**(self.num_pfn_bits))
+      self.pte = self.pfn + (2**(self.num_bits_pfn))
       # self.physical_address_var = VariableHex("Physical Address", self.physical_address, num_bits=(self.num_pfn_bits+self.num_offset_bits), default_presentation=VariableHex.PRESENTATION.BINARY)
       # self.pfn_var = VariableHex("PFN", self.pfn, num_bits=self.num_pfn_bits, default_presentation=VariableHex.PRESENTATION.BINARY)
     else:
@@ -675,16 +675,16 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     # self.pte_var = VariableHex("PTE", self.pte, num_bits=(self.num_pfn_bits+1), default_presentation=VariableHex.PRESENTATION.BINARY)
     
     self.answers.update({
-      "answer__vpn": Answer.binary_hex("answer__vpn", self.vpn, length=self.num_vpn_bits),
-      "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_offset_bits),
-      "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_pfn_bits + 1)),
+      "answer__vpn": Answer.binary_hex("answer__vpn", self.vpn, length=self.num_bits_vpn),
+      "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset),
+      "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1)),
     })
     
     if self.is_valid:
       self.answers.update({
         "answer__is_valid":         Answer.string("answer__is_valid", "VALID"),
-        "answer__pfn":              Answer.binary_hex("answer__pfn", self.pfn, length=self.num_pfn_bits),
-        "answer__physical_address": Answer.binary_hex("answer__physical_address", self.physical_address, length=(self.num_pfn_bits + self.num_offset_bits)),
+        "answer__pfn":              Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn),
+        "answer__physical_address": Answer.binary_hex("answer__physical_address", self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset)),
       })
     else:
       self.answers.update({
@@ -705,9 +705,9 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     
     # Create parameter info table using mixin
     parameter_info = {
-      "Virtual Address": f"0b{self.virtual_address:0{self.num_vpn_bits + self.num_offset_bits}b}",
-      "# VPN bits": f"{self.num_vpn_bits}",
-      "# PFN bits": f"{self.num_pfn_bits}"
+      "Virtual Address": f"0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}",
+      "# VPN bits": f"{self.num_bits_vpn}",
+      "# PFN bits": f"{self.num_bits_pfn}"
     }
 
     body.add_element(self.create_info_table(parameter_info))
@@ -717,7 +717,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     table_size = self.rng.randint(5,8)
     
     lowest_possible_bottom = max([0, self.vpn - table_size])
-    highest_possible_bottom = min([2**self.num_vpn_bits - table_size, self.vpn])
+    highest_possible_bottom = min([2**self.num_bits_vpn - table_size, self.vpn])
     
     table_bottom = self.rng.randint(lowest_possible_bottom, highest_possible_bottom)
     table_top = table_bottom + table_size
@@ -731,10 +731,10 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       if vpn == self.vpn: continue
       pte = page_table[self.vpn]
       while pte in page_table.values():
-        pte = self.rng.randint(0, 2**self.num_pfn_bits-1)
+        pte = self.rng.randint(0, 2**self.num_bits_pfn-1)
         if self.rng.choices([True, False], weights=[(1-self.PROBABILITY_OF_VALID), self.PROBABILITY_OF_VALID], k=1)[0]:
           # Randomly set it to be valid
-          pte += (2**(self.num_pfn_bits))
+          pte += (2**(self.num_bits_pfn))
       # Once we have a unique random entry, put it into the Page Table
       page_table[vpn] = pte
     
@@ -745,11 +745,11 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       value_matrix.append(["...", "..."])
     
     value_matrix.extend([
-      [f"0b{vpn:0{self.num_vpn_bits}b}", f"0b{pte:0{(self.num_pfn_bits+1)}b}"]
+      [f"0b{vpn:0{self.num_bits_vpn}b}", f"0b{pte:0{(self.num_bits_pfn+1)}b}"]
       for vpn, pte in sorted(page_table.items())
     ])
-    
-    if (max(page_table.keys()) + 1) != 2**self.num_vpn_bits:
+
+    if (max(page_table.keys()) + 1) != 2**self.num_bits_vpn:
       value_matrix.append(["...", "..."])
     
     body.add_element(
@@ -793,8 +793,8 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     explanation.add_element(
       ContentAST.Paragraph([
         f"Virtual Address = VPN | offset",
-        f"<tt>0b{self.virtual_address:0{self.num_vpn_bits+self.num_offset_bits}b}</tt> "
-        f"= <tt>0b{self.vpn:0{self.num_vpn_bits}b}</tt> | <tt>0b{self.offset:0{self.num_offset_bits}b}</tt>",
+        f"<tt>0b{self.virtual_address:0{self.num_bits_vpn+self.num_bits_offset}b}</tt> "
+        f"= <tt>0b{self.vpn:0{self.num_bits_vpn}b}</tt> | <tt>0b{self.offset:0{self.num_bits_offset}b}</tt>",
       ])
     )
     
@@ -802,7 +802,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ContentAST.Paragraph([
         "We next use our VPN to index into our page table and find the corresponding entry."
         f"Our Page Table Entry is ",
-        f"<tt>0b{self.pte:0{(self.num_pfn_bits+1)}b}</tt>"
+        f"<tt>0b{self.pte:0{(self.num_bits_pfn+1)}b}</tt>"
         f"which we found by looking for our VPN in the page table.",
       ])
     )
@@ -810,13 +810,13 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     if self.is_valid:
       explanation.add_element(
         ContentAST.Paragraph([
-          f"In our PTE we see that the first bit is <b>{self.pte // (2**self.num_pfn_bits)}</b> meaning that the translation is <b>VALID</b>"
+          f"In our PTE we see that the first bit is <b>{self.pte // (2**self.num_bits_pfn)}</b> meaning that the translation is <b>VALID</b>"
         ])
       )
     else:
       explanation.add_element(
         ContentAST.Paragraph([
-          f"In our PTE we see that the first bit is <b>{self.pte // (2**self.num_pfn_bits)}</b> meaning that the translation is <b>INVALID</b>.",
+          f"In our PTE we see that the first bit is <b>{self.pte // (2**self.num_bits_pfn)}</b> meaning that the translation is <b>INVALID</b>.",
           "Therefore, we just write \"INVALID\" as our answer.",
           "If it were valid we would complete the below steps.",
           "<hr>"
@@ -832,9 +832,9 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ])
     )
     explanation.add_element(ContentAST.Equation(
-        f"<tt>{self.pfn:0{self.num_pfn_bits}b}</tt> "
-        f"= <tt>0b{self.pte:0{self.num_pfn_bits+1}b}</tt> "
-        f"& <tt>0b{(2**self.num_pfn_bits)-1:0{self.num_pfn_bits+1}b}</tt>"
+        f"<tt>{self.pfn:0{self.num_bits_pfn}b}</tt> "
+        f"= <tt>0b{self.pte:0{self.num_bits_pfn+1}b}</tt> "
+        f"& <tt>0b{(2**self.num_bits_pfn)-1:0{self.num_bits_pfn+1}b}</tt>"
       )
     )
     
@@ -844,7 +844,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           "Physical Address = PFN | offset",
         ]),
       ContentAST.Equation(
-        f"{'<tt><b>' if self.is_valid else ''}0b{self.physical_address:0{self.num_pfn_bits+self.num_offset_bits}b}{'</b></tt>' if self.is_valid else ''} = <tt>0b{self.pfn:0{self.num_pfn_bits}b}</tt> | <tt>0b{self.offset:0{self.num_vpn_bits}b}</tt>",
+        f"{'<tt><b>' if self.is_valid else ''}0b{self.physical_address:0{self.num_bits_pfn+self.num_bits_offset}b}{'</b></tt>' if self.is_valid else ''} = <tt>0b{self.pfn:0{self.num_bits_pfn}b}</tt> | <tt>0b{self.offset:0{self.num_bits_offset}b}</tt>",
       )
       ]
     )
@@ -855,7 +855,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     explanation.add_elements([
       ContentAST.Paragraph(["Note: Strictly speaking, this calculation is:",]),
       ContentAST.Equation(
-        f"{'<tt><b>' if self.is_valid else ''}0b{self.physical_address:0{self.num_pfn_bits+self.num_offset_bits}b}{'</b></tt>' if self.is_valid else ''} = <tt>0b{self.pfn:0{self.num_pfn_bits}b}{0:0{self.num_offset_bits}}</tt> + <tt>0b{self.offset:0{self.num_offset_bits}b}</tt>",
+        f"{'<tt><b>' if self.is_valid else ''}0b{self.physical_address:0{self.num_bits_pfn+self.num_bits_offset}b}{'</b></tt>' if self.is_valid else ''} = <tt>0b{self.pfn:0{self.num_bits_pfn}b}{0:0{self.num_bits_offset}}</tt> + <tt>0b{self.offset:0{self.num_bits_offset}b}</tt>",
       ),
       ContentAST.Paragraph(["But that's a lot of extra 0s, so I'm splitting them up for succinctness"])
     ])
