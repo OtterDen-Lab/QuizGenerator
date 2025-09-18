@@ -124,10 +124,10 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
     1. First job to arrive is the longest
     2. At least 2 other jobs arrive in its runtime
     3. Those jobs arrive in reverse length order, with the smaller arriving 2nd
-    
+
     This will clearly show when jobs arrive how they are handled, since FIFO will be different than SJF, and STCF will cause interruptions
     """
-    
+
     workload = []
     
     # First create a job that is relatively long-running and arrives first.
@@ -409,11 +409,11 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
       f"Break any ties using the job number."
     )
 
-    instructions = (
+    instructions = ContentAST.OnlyHtml([ContentAST.Paragraph([
       f"Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of {Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal. "
       "Examples of appropriately formatted answers would be `0`, `3/2`, `1 1/3`, `1.6667`, and `1.25`. "
       "Note that answers that can be rounded to whole numbers should be, rather than being left in fractional form."
-    )
+    ])])
 
     body = self.create_fill_in_table_body(intro_text, instructions, scheduling_table)
     body.add_element(average_block)
