@@ -159,7 +159,7 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
         # Answer table (HTML only - PDFs get blank space)
         body.add_element(
             ContentAST.OnlyHtml([
-                ContentAST.Paragraph([f"Result ({self.scalar} × Matrix):"]),
+                ContentAST.Paragraph([f"Result ({self.scalar} · Matrix):"]),
                 self._create_answer_table(self.rows, self.cols, self.answers)
             ])
         )
@@ -279,7 +279,7 @@ class MatrixMultiplication(MatrixMathQuestion):
         # Create single equation with both matrices
         matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "b")
         matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
-        body.add_element(ContentAST.Equation(f"{matrix_a_latex} \\times {matrix_b_latex} = "))
+        body.add_element(ContentAST.Equation(f"{matrix_a_latex} \\cdot {matrix_b_latex} = "))
         body.add_element(
             ContentAST.OnlyHtml([
                 ContentAST.Paragraph([
@@ -307,7 +307,7 @@ class MatrixMultiplication(MatrixMathQuestion):
         # Answer table (HTML only - PDFs get blank space)
         body.add_element(
             ContentAST.OnlyHtml([
-                ContentAST.Paragraph(["Result matrix (A × B):"]),
+                ContentAST.Paragraph(["Result matrix (A · B):"]),
                 self._create_answer_table(self.max_dim, self.max_dim, self.answers)
             ])
         )
@@ -318,6 +318,12 @@ class MatrixMultiplication(MatrixMathQuestion):
         explanation = ContentAST.Section()
 
         if self.multiplication_possible:
+            # Restate the original matrices
+            explanation.add_element(ContentAST.Paragraph(["Given matrices:"]))
+            matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "b")
+            matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
+            explanation.add_element(ContentAST.Equation(f"A = {matrix_a_latex}, \\quad B = {matrix_b_latex}"))
+
             explanation.add_element(
                 ContentAST.Paragraph([
                     f"Matrix multiplication is possible because the number of columns in Matrix A ({self.cols_a}) "
@@ -329,15 +335,25 @@ class MatrixMultiplication(MatrixMathQuestion):
             # Comprehensive matrix multiplication walkthrough
             explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation:"]))
 
-            # Show detailed multiplication process
-            explanation.add_element(ContentAST.Paragraph(["Element-by-element calculation:"]))
+            # Show detailed multiplication process using row×column visualization
+            explanation.add_element(ContentAST.Paragraph(["Each element is calculated as the dot product of a row from Matrix A and a column from Matrix B:"]))
 
-            # Show calculation for first few elements
+            # Show calculation for first few elements with row×column visualization
             for i in range(min(2, self.result_rows)):
                 for j in range(min(2, self.result_cols)):
-                    element_calc = " + ".join([f"{self.matrix_a[i][k]} \\times {self.matrix_b[k][j]}" for k in range(self.cols_a)])
+                    # Get the row from matrix A and column from matrix B
+                    row_a = [str(self.matrix_a[i][k]) for k in range(self.cols_a)]
+                    col_b = [str(self.matrix_b[k][j]) for k in range(self.cols_a)]
+
+                    # Create row and column vectors in LaTeX
+                    row_latex = f"\\begin{{bmatrix}} {' & '.join(row_a)} \\end{{bmatrix}}"
+                    col_latex = f"\\begin{{bmatrix}} {' \\\\\\\\ '.join(col_b)} \\end{{bmatrix}}"
+
+                    # Show the calculation
+                    element_calc = " + ".join([f"{self.matrix_a[i][k]} \\cdot {self.matrix_b[k][j]}" for k in range(self.cols_a)])
+
                     explanation.add_element(
-                        ContentAST.Equation(f"({i+1},{j+1}): {element_calc} = {self.result[i][j]}", inline=True)
+                        ContentAST.Equation(f"({i+1},{j+1}): {row_latex} \\cdot {col_latex} = {element_calc} = {self.result[i][j]}")
                     )
 
             explanation.add_element(ContentAST.Paragraph(["Final result:"]))
