@@ -630,10 +630,10 @@ class ContentAST:
       self.inline = inline
     
     def render_markdown(self, **kwargs):
-      return r"$$ \displaystyle " + f"{self.latex}" + r"$$"
+      return r"$$ \displaystyle " + f"{self.latex}" + r" \phantom{{}}$$"
 
     def render_html(self, **kwargs):
-      return f"<div class='math'>$$ \\displaystyle {self.latex} $$</div>"
+      return f"<div class='math'>$$ \\displaystyle {self.latex} \\phantom{{{{}}}}$$</div>"
     
     def render_latex(self, **kwargs):
       return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
