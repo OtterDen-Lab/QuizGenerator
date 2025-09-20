@@ -1,140 +1,112 @@
-name: "(Ungraded) BitsAndBytes"
-practice: True
-questions:
-  1:
-    BitsAndBytes1:
-      class: BitsAndBytes
-      _config:
-        repeat: 5
----
-name: "(Ungraded) VirtualAddressParts"
-practice: True
-questions:
-  1:
-    VirtualAddressParts:
-      class: VirtualAddressParts
-      _config:
-        repeat: 5
----
-name: "(Ungraded) HexAndBinary"
-practice: True
-questions:
-  1:
-    HexAndBinary:
-      class: HexAndBinary
-      _config:
-        repeat: 5
----
-name: "(Ungraded) AverageMemoryAccessTime"
-practice: True
-questions:
-  1:
-    AverageMemoryAccessTime:
-      class: AverageMemoryAccessTime
-      _config:
-        repeat: 5
----
-name: "(Ungraded) Paging"
-practice: True
-questions:
-  1:
-    Paging:
-      class: Paging
-      _config:
-        repeat: 5
----
-name: "(Ungraded) BaseAndBounds"
-practice: True
-questions:
-  1:
-    BaseAndBounds:
-      class: BaseAndBounds
-      _config:
-        repeat: 5
----
-name: "(Ungraded) Segmentation"
-practice: True
-questions:
-  1:
-    Segmentation:
-      class: Segmentation
-      _config:
-        repeat: 5
----
-name: "Lab: Scheduling"
+name: "All Question Classes Catalog"
 practice: False
 questions:
-  3:
-    Scheduling (Grabbag x3):
-      class: SchedulingQuestion
-      _config:
-        repeat: 1
-      num_jobs: 3
-  1.5:
-    Scheduling (FIFO):
-      class: SchedulingQuestion
-      _config:
-        repeat: 1
-      scheduler_kind: FIFO
-      num_jobs: 4
-    Scheduling (SJF):
-      class: SchedulingQuestion
-      _config:
-        repeat: 1
-      scheduler_kind: ShortestDuration
-      num_jobs: 4
-    Scheduling (STCF):
-      class: SchedulingQuestion
-      _config:
-        repeat: 1
-      scheduler_kind: ShortestTimeRemaining
-      num_jobs: 4
-    Scheduling (RR):
-      class: SchedulingQuestion
-      _config:
-        repeat: 1
-      scheduler_kind: RoundRobin
-      num_jobs: 4
   1:
-    Scheduling (Grabbag x5):
-      class: SchedulingQuestion
-      _config:
-        repeat: 1
-      num_jobs: 5
----
-name: "(Ungraded) Caching"
-practice: True
-questions:
-  1:
-    Caching:
-      class: CachingQuestion
-      _config:
-        repeat: 5
----
-name: "(Ungraded) HardDriveAccessTime"
-practice: True
-questions:
-  1:
+    # Basic Questions
+    FromText:
+      class: FromText
+      topic: MISC # Question.Topic enum
+      spacing: 0 # int
+
+    FromGenerator:
+      class: FromGenerator
+      text: null # str
+      generator: null # str - Python code to generate content
+      possible_variations: .inf # int or float
+      topic: MISC # Question.Topic enum
+      spacing: 0 # int
+
+    TrueFalse:
+      class: TrueFalse
+      topic: MISC # Question.Topic enum
+      spacing: 0 # int
+
+    # CST334 Math Questions
+    BitsAndBytes:
+      class: cst334.BitsAndBytes
+      topic: MATH # Question.Topic enum (auto-set by MathQuestion)
+      spacing: 0 # int
+
+    HexAndBinary:
+      class: cst334.HexAndBinary
+      topic: MATH # Question.Topic enum (auto-set by MathQuestion)
+      spacing: 0 # int
+
+    AverageMemoryAccessTime:
+      class: cst334.AverageMemoryAccessTime
+      topic: MATH # Question.Topic enum (auto-set by MathQuestion)
+      spacing: 0 # int
+
+    # CST334 Memory Questions
+    VirtualAddressParts:
+      class: cst334.VirtualAddressParts
+      topic: MEMORY # Question.Topic enum (auto-set by MemoryQuestion)
+      spacing: 0 # int
+
+    CachingQuestion:
+      class: cst334.CachingQuestion
+      num_elements: 5 # int
+      cache_size: 3 # int
+      num_requests: 10 # int
+      policy: null # str - "FIFO", "LRU", "BELADY"
+      algo: null # str - alias for policy
+      topic: MEMORY # Question.Topic enum (auto-set by MemoryQuestion)
+      spacing: 0 # int
+
+    BaseAndBounds:
+      class: cst334.BaseAndBounds
+      topic: MEMORY # Question.Topic enum (auto-set by MemoryQuestion)
+      spacing: 0 # int
+
+    Segmentation:
+      class: cst334.Segmentation
+      topic: MEMORY # Question.Topic enum (auto-set by MemoryQuestion)
+      spacing: 0 # int
+
+    Paging:
+      class: cst334.Paging
+      topic: MEMORY # Question.Topic enum (auto-set by MemoryQuestion)
+      spacing: 0 # int
+
+    # CST334 Process Questions
+    SchedulingQuestion:
+      class: cst334.SchedulingQuestion
+      num_jobs: 3 # int
+      scheduler_kind: null # str - "FIFO", "ShortestDuration", "ShortestTimeRemaining", "RoundRobin"
+      topic: PROCESS # Question.Topic enum (auto-set by ProcessQuestion)
+      spacing: 0 # int
+
+    MLFQ_Question:
+      class: cst334.MLFQ_Question
+      topic: PROCESS # Question.Topic enum (auto-set by ProcessQuestion)
+      spacing: 0 # int
+      # Note: Implementation appears incomplete
+
+    # CST334 Language Questions
+    ValidStringsInLanguageQuestion:
+      class: cst334.ValidStringsInLanguageQuestion
+      grammar_str_good: null # str - BNF grammar string
+      grammar_str_bad: null # str - BNF grammar string
+      include_spaces: false # bool
+      max_length: 30 # int
+      num_answer_options: 4 # int
+      num_answer_blanks: 4 # int
+      topic: LANGUAGES # Question.Topic enum (auto-set by LanguageQuestion)
+      spacing: 0 # int
+
+    # CST334 Persistence Questions
     HardDriveAccessTime:
-      class: HardDriveAccessTime
-      _config:
-        repeat: 5
----
-name: "(Ungraded) INodeAccesses"
-practice: True
-questions:
-  1:
+      class: cst334.HardDriveAccessTime
+      topic: IO # Question.Topic enum (auto-set by IOQuestion)
+      spacing: 0 # int
+
     INodeAccesses:
-      class: INodeAccesses
-      _config:
-        repeat: 5
----
-name: "(Ungraded) VSFS_states"
-practice: True
-questions:
-  1:
+      class: cst334.INodeAccesses
+      topic: IO # Question.Topic enum (auto-set by IOQuestion)
+      spacing: 0 # int
+
     VSFS_states:
-      class: VSFS_states
-      _config:
-        repeat: 5
-# ---
+      class: cst334.VSFS_states
+      num_steps: 10 # int
+      topic: IO # Question.Topic enum (auto-set by IOQuestion)
+      spacing: 0 # int
