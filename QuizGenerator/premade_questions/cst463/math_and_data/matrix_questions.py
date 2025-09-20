@@ -64,19 +64,13 @@ class MatrixAddition(MatrixMathQuestion):
     def get_body(self, **kwargs) -> ContentAST.Section:
         body = ContentAST.Section()
 
-        body.add_element(
-            ContentAST.Paragraph([
-                "Calculate the sum of the following two matrices. Fill in each cell of the result matrix."
-            ])
-        )
+        # Concise question with matrices in single equation
+        body.add_element(ContentAST.Paragraph(["Calculate:"]))
 
-        # Display Matrix A
-        body.add_element(ContentAST.Paragraph(["Matrix A:"]))
-        body.add_element(ContentAST.Table(data=self._matrix_to_table(self.matrix_a), padding=True))
-
-        # Display Matrix B
-        body.add_element(ContentAST.Paragraph(["Matrix B:"]))
-        body.add_element(ContentAST.Table(data=self._matrix_to_table(self.matrix_b), padding=True))
+        # Create single equation with both matrices
+        matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "p")
+        matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "p")
+        body.add_element(ContentAST.Equation(f"{matrix_a_latex} + {matrix_b_latex} = "))
 
         # Answer table
         body.add_element(ContentAST.Paragraph(["Result (A + B):"]))
@@ -94,8 +88,26 @@ class MatrixAddition(MatrixMathQuestion):
             ])
         )
 
-        explanation.add_element(ContentAST.Paragraph(["Result:"]))
-        explanation.add_element(ContentAST.Table(data=self._matrix_to_table(self.result), padding=True))
+        # Comprehensive step-by-step walkthrough
+        explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation:"]))
+
+        # Show matrix addition with symbolic representation
+        # Create properly formatted matrix strings
+        matrix_a_str = r" \\ ".join([" & ".join([str(self.matrix_a[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+        matrix_b_str = r" \\ ".join([" & ".join([str(self.matrix_b[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+        addition_str = r" \\ ".join([" & ".join([f"{self.matrix_a[i][j]}+{self.matrix_b[i][j]}" for j in range(self.cols)]) for i in range(self.rows)])
+        result_str = r" \\ ".join([" & ".join([str(self.result[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+
+        explanation.add_element(
+            ContentAST.Equation.make_block_equation__multiline_equals(
+                lhs="A + B",
+                rhs=[
+                    f"\\begin{{bmatrix}} {matrix_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {matrix_b_str} \\end{{bmatrix}}",
+                    f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
+                    f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                ]
+            )
+        )
 
         return explanation
 
@@ -133,15 +145,12 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
     def get_body(self, **kwargs) -> ContentAST.Section:
         body = ContentAST.Section()
 
-        body.add_element(
-            ContentAST.Paragraph([
-                f"Calculate {self.scalar} times the following matrix. Fill in each cell of the result matrix."
-            ])
-        )
+        # Concise question with scalar and matrix using Matrix AST
+        body.add_element(ContentAST.Paragraph(["Calculate:"]))
 
-        # Display original matrix
-        body.add_element(ContentAST.Paragraph(["Matrix:"]))
-        body.add_element(ContentAST.Table(data=self._matrix_to_table(self.matrix), padding=True))
+        # Create single equation with scalar and matrix
+        matrix_latex = ContentAST.Matrix.to_latex(self.matrix, "p")
+        body.add_element(ContentAST.Equation(f"{self.scalar} \\cdot {matrix_latex} = "))
 
         # Answer table
         body.add_element(ContentAST.Paragraph([f"Result ({self.scalar} × Matrix):"]))
@@ -158,8 +167,25 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
             ])
         )
 
-        explanation.add_element(ContentAST.Paragraph(["Result:"]))
-        explanation.add_element(ContentAST.Table(data=self._matrix_to_table(self.result), padding=True))
+        # Comprehensive step-by-step walkthrough
+        explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation:"]))
+
+        # Show scalar multiplication with symbolic representation
+        # Create properly formatted matrix strings
+        matrix_str = r" \\ ".join([" & ".join([str(self.matrix[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+        multiplication_str = r" \\ ".join([" & ".join([f"{self.scalar} \\cdot {self.matrix[i][j]}" for j in range(self.cols)]) for i in range(self.rows)])
+        result_str = r" \\ ".join([" & ".join([str(self.result[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+
+        explanation.add_element(
+            ContentAST.Equation.make_block_equation__multiline_equals(
+                lhs=f"{self.scalar} \\cdot A",
+                rhs=[
+                    f"{self.scalar} \\cdot \\begin{{bmatrix}} {matrix_str} \\end{{bmatrix}}",
+                    f"\\begin{{bmatrix}} {multiplication_str} \\end{{bmatrix}}",
+                    f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                ]
+            )
+        )
 
         return explanation
 
@@ -228,20 +254,18 @@ class MatrixMultiplication(MatrixMathQuestion):
     def get_body(self, **kwargs) -> ContentAST.Section:
         body = ContentAST.Section()
 
+        # Concise question with matrices in single equation
+        body.add_element(ContentAST.Paragraph(["Calculate:"]))
+
+        # Create single equation with both matrices
+        matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "p")
+        matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "p")
+        body.add_element(ContentAST.Equation(f"{matrix_a_latex} \\times {matrix_b_latex} = "))
         body.add_element(
             ContentAST.Paragraph([
-                f"Calculate the product of Matrix A × Matrix B. First determine if multiplication is possible, "
-                f"then fill in the result matrix. Use '-' for cells that don't exist in the result."
+                "(Use '-' for cells that don't exist in the result if multiplication is not possible.)"
             ])
         )
-
-        # Display Matrix A
-        body.add_element(ContentAST.Paragraph([f"Matrix A ({self.rows_a}×{self.cols_a}):"]))
-        body.add_element(ContentAST.Table(data=self._matrix_to_table(self.matrix_a), padding=True))
-
-        # Display Matrix B
-        body.add_element(ContentAST.Paragraph([f"Matrix B ({self.rows_b}×{self.cols_b}):"]))
-        body.add_element(ContentAST.Table(data=self._matrix_to_table(self.matrix_b), padding=True))
 
         # Questions about possibility and dimensions
         if self.multiplication_possible:
@@ -267,8 +291,8 @@ class MatrixMultiplication(MatrixMathQuestion):
                 ])
             )
 
-        # Answer table (always max dimensions)
-        body.add_element(ContentAST.Paragraph([f"Result matrix (A × B) - {self.max_dim}×{self.max_dim} grid:"]))
+        # Answer table (always max dimensions) - removing confusing grid size mention
+        body.add_element(ContentAST.Paragraph(["Result matrix (A × B):"]))
         body.add_element(self._create_answer_table(self.max_dim, self.max_dim, self.answers))
 
         return body
@@ -285,8 +309,22 @@ class MatrixMultiplication(MatrixMathQuestion):
                 ])
             )
 
-            explanation.add_element(ContentAST.Paragraph(["Result:"]))
-            explanation.add_element(ContentAST.Table(data=self._matrix_to_table(self.result), padding=True))
+            # Comprehensive matrix multiplication walkthrough
+            explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation:"]))
+
+            # Show detailed multiplication process
+            explanation.add_element(ContentAST.Paragraph(["Element-by-element calculation:"]))
+
+            # Show calculation for first few elements
+            for i in range(min(2, self.result_rows)):
+                for j in range(min(2, self.result_cols)):
+                    element_calc = " + ".join([f"{self.matrix_a[i][k]} \\times {self.matrix_b[k][j]}" for k in range(self.cols_a)])
+                    explanation.add_element(
+                        ContentAST.Equation(f"({i+1},{j+1}): {element_calc} = {self.result[i][j]}", inline=True)
+                    )
+
+            explanation.add_element(ContentAST.Paragraph(["Final result:"]))
+            explanation.add_element(ContentAST.Matrix(data=self.result, bracket_type="p"))
         else:
             explanation.add_element(
                 ContentAST.Paragraph([

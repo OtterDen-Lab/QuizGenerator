@@ -649,7 +649,65 @@ class ContentAST:
       ])
       
       return cls('\n'.join(equation_lines))
-    
+
+  class Matrix(Element):
+    def __init__(self, data, bracket_type="p", inline=False):
+      """
+      Generates a ContentAST.Matrix element for mathematical matrices
+      :param data: matrix data as List[List[numbers/strings]]
+      :param bracket_type: 'p' for parentheses, 'b' for brackets, 'v' for bars, 'B' for braces, 'V' for double bars
+      :param inline: whether this is an inline matrix (uses smallmatrix)
+      """
+      super().__init__()
+      self.data = data
+      self.bracket_type = bracket_type
+      self.inline = inline
+
+    @staticmethod
+    def to_latex(data, bracket_type="p"):
+      """Convert matrix data to LaTeX string without equation wrapper"""
+      rows = []
+      for row in data:
+        rows.append(" & ".join(str(cell) for cell in row))
+      matrix_content = r" \\ ".join(rows)
+      return f"\\begin{{{bracket_type}matrix}} {matrix_content} \\end{{{bracket_type}matrix}}"
+
+    def render_markdown(self, **kwargs):
+      matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
+      rows = []
+      for row in self.data:
+        rows.append(" & ".join(str(cell) for cell in row))
+      matrix_content = r" \\ ".join(rows)
+
+      if self.inline and self.bracket_type == "p":
+        return f"$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$"
+      else:
+        return f"$$\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}$$"
+
+    def render_html(self, **kwargs):
+      matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
+      rows = []
+      for row in self.data:
+        rows.append(" & ".join(str(cell) for cell in row))
+      matrix_content = r" \\ ".join(rows)
+
+      if self.inline:
+        return f"<span class='math'>$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$</span>"
+      else:
+        return f"<div class='math'>$$\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}$$</div>"
+
+    def render_latex(self, **kwargs):
+      matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
+      rows = []
+      for row in self.data:
+        rows.append(" & ".join(str(cell) for cell in row))
+      matrix_content = r" \\ ".join(rows)
+
+      if self.inline and self.bracket_type == "p":
+        return f"$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$"
+      else:
+        return f"\\begin{{equation}}\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\end{{equation}}"
+
   class Table(Element):
     def __init__(self, data, headers=None, alignments=None, padding=False, transpose=False, hide_rules=False):
       """
