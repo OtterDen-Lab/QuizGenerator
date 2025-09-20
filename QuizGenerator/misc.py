@@ -633,7 +633,7 @@ class ContentAST:
       return r"$$ \displaystyle " + f"{self.latex}" + r" \phantom{{}}$$"
 
     def render_html(self, **kwargs):
-      return f"<div class='math'>$$ \\displaystyle {self.latex} \\phantom{{{{}}}}$$</div>"
+      return f"<div class='math'>$$ \\displaystyle {self.latex} \\phantom{{}} $$</div>"
     
     def render_latex(self, **kwargs):
       return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"

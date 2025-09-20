@@ -283,12 +283,14 @@ class AverageMemoryAccessTime(MathQuestion):
     )
     
     # Add in equations
-    ContentAST.Equation.make_block_equation__multiline_equals(
-      lhs="AMAT",
-      rhs=[
-        r"(hit\_rate)*(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
-        f"$({self.hit_rate: 0.4f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.4f})*({self.miss_latency}) = {self.amat: {Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}$"
-      ]
+    explanation.add_element(
+      ContentAST.Equation.make_block_equation__multiline_equals(
+        lhs="AMAT",
+        rhs=[
+          r"(hit\_rate)*(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
+          f"({self.hit_rate: 0.4f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.4f})*({self.miss_latency}) = {self.amat: 0.{Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
+        ]
+      )
     )
     
     return explanation

@@ -773,7 +773,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     
     return body
   
-  def get_explanation_lines(self, *args, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
     explanation = ContentAST.Section()
     
     explanation.add_element(
@@ -832,9 +832,9 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ])
     )
     explanation.add_element(ContentAST.Equation(
-        f"<tt>{self.pfn:0{self.num_bits_pfn}b}</tt> "
-        f"= <tt>0b{self.pte:0{self.num_bits_pfn+1}b}</tt> "
-        f"& <tt>0b{(2**self.num_bits_pfn)-1:0{self.num_bits_pfn+1}b}</tt>"
+        f"\\texttt{{{self.pfn:0{self.num_bits_pfn}b}}} "
+        f"= \\texttt{{0b{self.pte:0{self.num_bits_pfn+1}b}}} "
+        f"\\& \\texttt{{0b{(2**self.num_bits_pfn)-1:0{self.num_bits_pfn+1}b}}}"
       )
     )
     
@@ -844,18 +844,15 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           "Physical Address = PFN | offset",
         ]),
       ContentAST.Equation(
-        f"{'<tt><b>' if self.is_valid else ''}0b{self.physical_address:0{self.num_bits_pfn+self.num_bits_offset}b}{'</b></tt>' if self.is_valid else ''} = <tt>0b{self.pfn:0{self.num_bits_pfn}b}</tt> | <tt>0b{self.offset:0{self.num_bits_offset}b}</tt>",
+        f"{'\\mathbf{' if self.is_valid else ''}\\texttt{{0b{self.physical_address:0{self.num_bits_pfn+self.num_bits_offset}b}}}{'}}' if self.is_valid else ''} = \\texttt{{0b{self.pfn:0{self.num_bits_pfn}b}}} | \\texttt{{0b{self.offset:0{self.num_bits_offset}b}}}",
       )
       ]
     )
-    
-    explanation.add_element(
-    )
-    
+
     explanation.add_elements([
       ContentAST.Paragraph(["Note: Strictly speaking, this calculation is:",]),
       ContentAST.Equation(
-        f"{'<tt><b>' if self.is_valid else ''}0b{self.physical_address:0{self.num_bits_pfn+self.num_bits_offset}b}{'</b></tt>' if self.is_valid else ''} = <tt>0b{self.pfn:0{self.num_bits_pfn}b}{0:0{self.num_bits_offset}}</tt> + <tt>0b{self.offset:0{self.num_bits_offset}b}</tt>",
+        f"{'\\mathbf{' if self.is_valid else ''}\\texttt{{0b{self.physical_address:0{self.num_bits_pfn+self.num_bits_offset}b}}}{'}}' if self.is_valid else ''} = \\texttt{{0b{self.pfn:0{self.num_bits_pfn}b}{0:0{self.num_bits_offset}}}} + \\texttt{{0b{self.offset:0{self.num_bits_offset}b}}}",
       ),
       ContentAST.Paragraph(["But that's a lot of extra 0s, so I'm splitting them up for succinctness"])
     ])
