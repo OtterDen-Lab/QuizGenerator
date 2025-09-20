@@ -72,9 +72,13 @@ class MatrixAddition(MatrixMathQuestion):
         matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
         body.add_element(ContentAST.Equation(f"{matrix_a_latex} + {matrix_b_latex} = "))
 
-        # Answer table
-        body.add_element(ContentAST.Paragraph(["Result (A + B):"]))
-        body.add_element(self._create_answer_table(self.rows, self.cols, self.answers))
+        # Answer table (HTML only - PDFs get blank space)
+        body.add_element(
+            ContentAST.OnlyHtml([
+                ContentAST.Paragraph(["Result (A + B):"]),
+                self._create_answer_table(self.rows, self.cols, self.answers)
+            ])
+        )
 
         return body
 
@@ -152,9 +156,13 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
         matrix_latex = ContentAST.Matrix.to_latex(self.matrix, "b")
         body.add_element(ContentAST.Equation(f"{self.scalar} \\cdot {matrix_latex} = "))
 
-        # Answer table
-        body.add_element(ContentAST.Paragraph([f"Result ({self.scalar} × Matrix):"]))
-        body.add_element(self._create_answer_table(self.rows, self.cols, self.answers))
+        # Answer table (HTML only - PDFs get blank space)
+        body.add_element(
+            ContentAST.OnlyHtml([
+                ContentAST.Paragraph([f"Result ({self.scalar} × Matrix):"]),
+                self._create_answer_table(self.rows, self.cols, self.answers)
+            ])
+        )
 
         return body
 
@@ -259,28 +267,36 @@ class MatrixMultiplication(MatrixMathQuestion):
         matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
         body.add_element(ContentAST.Equation(f"{matrix_a_latex} \\times {matrix_b_latex} = "))
         body.add_element(
-            ContentAST.Paragraph([
-                "(Use '-' for cells that don't exist in the result if multiplication is not possible.)"
+            ContentAST.OnlyHtml([
+                ContentAST.Paragraph([
+                    "(Use '-' for cells that don't exist in the result if multiplication is not possible.)"
+                ])
             ])
         )
 
-        # Always ask for result dimensions
+        # Always ask for result dimensions (HTML only)
         body.add_element(
-            ContentAST.AnswerBlock([
-                ContentAST.Answer(
-                    answer=self.answers["result_rows"],
-                    label="Number of rows in result (use '-' if not possible)"
-                ),
-                ContentAST.Answer(
-                    answer=self.answers["result_cols"],
-                    label="Number of columns in result (use '-' if not possible)"
-                )
+            ContentAST.OnlyHtml([
+                ContentAST.AnswerBlock([
+                    ContentAST.Answer(
+                        answer=self.answers["result_rows"],
+                        label="Number of rows in result (use '-' if not possible)"
+                    ),
+                    ContentAST.Answer(
+                        answer=self.answers["result_cols"],
+                        label="Number of columns in result (use '-' if not possible)"
+                    )
+                ])
             ])
         )
 
-        # Answer table (always max dimensions) - removing confusing grid size mention
-        body.add_element(ContentAST.Paragraph(["Result matrix (A × B):"]))
-        body.add_element(self._create_answer_table(self.max_dim, self.max_dim, self.answers))
+        # Answer table (HTML only - PDFs get blank space)
+        body.add_element(
+            ContentAST.OnlyHtml([
+                ContentAST.Paragraph(["Result matrix (A × B):"]),
+                self._create_answer_table(self.max_dim, self.max_dim, self.answers)
+            ])
+        )
 
         return body
 

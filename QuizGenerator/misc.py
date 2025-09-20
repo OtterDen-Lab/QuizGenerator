@@ -369,7 +369,12 @@ class ContentAST:
 
     % Page layout
     \usepackage[a4paper, margin=1.5cm]{geometry}
-    
+
+    % Math packages
+    \usepackage{amsmath}        % For advanced math environments (matrices, equations)
+    \usepackage{amsfonts}       % For additional math fonts
+    \usepackage{amssymb}        % For additional math symbols
+
     % Tables and formatting
     \usepackage{booktabs}       % For clean table rules
     \usepackage{array}          % For extra column formatting options
@@ -631,7 +636,7 @@ class ContentAST:
       return f"<div class='math'>$$ \\displaystyle {self.latex} \\frac{{}}{{}}$$</div>"
     
     def render_latex(self, **kwargs):
-      return f"\\begin{{equation}}\n{self.latex}\n\\end{{equation}}"
+      return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
   
     @classmethod
     def make_block_equation__multiline_equals(cls, lhs : str, rhs : List[str]):
@@ -706,7 +711,7 @@ class ContentAST:
       if self.inline and self.bracket_type == "p":
         return f"$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$"
       else:
-        return f"\\begin{{equation}}\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\end{{equation}}"
+        return f"\\[\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\]"
 
   class Table(Element):
     def __init__(self, data, headers=None, alignments=None, padding=False, transpose=False, hide_rules=False):
