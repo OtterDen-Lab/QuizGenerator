@@ -37,6 +37,22 @@ questions:
       topic: MATH # Question.Topic enum (auto-set by MathQuestion)
       spacing: 0 # int
 
+    # CST463 Matrix Questions
+    MatrixAddition:
+      class: cst463.MatrixAddition
+      topic: MATH # Question.Topic enum (auto-set by MatrixMathQuestion)
+      spacing: 0 # int
+
+    MatrixScalarMultiplication:
+      class: cst463.MatrixScalarMultiplication
+      topic: MATH # Question.Topic enum (auto-set by MatrixMathQuestion)
+      spacing: 0 # int
+
+    MatrixMultiplication:
+      class: cst463.MatrixMultiplication
+      topic: MATH # Question.Topic enum (auto-set by MatrixMathQuestion)
+      spacing: 0 # int
+
     # CST334 Memory Questions
     VirtualAddressParts:
       class: cst334.VirtualAddressParts
