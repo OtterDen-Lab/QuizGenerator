@@ -68,8 +68,8 @@ class MatrixAddition(MatrixMathQuestion):
         body.add_element(ContentAST.Paragraph(["Calculate:"]))
 
         # Create single equation with both matrices
-        matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "p")
-        matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "p")
+        matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "b")
+        matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
         body.add_element(ContentAST.Equation(f"{matrix_a_latex} + {matrix_b_latex} = "))
 
         # Answer table
@@ -149,7 +149,7 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
         body.add_element(ContentAST.Paragraph(["Calculate:"]))
 
         # Create single equation with scalar and matrix
-        matrix_latex = ContentAST.Matrix.to_latex(self.matrix, "p")
+        matrix_latex = ContentAST.Matrix.to_latex(self.matrix, "b")
         body.add_element(ContentAST.Equation(f"{self.scalar} \\cdot {matrix_latex} = "))
 
         # Answer table
@@ -230,16 +230,13 @@ class MatrixMultiplication(MatrixMathQuestion):
         # Create answers dictionary
         self.answers = {}
 
-        # Dimension answers
+        # Dimension answers - always ask for dimensions
         if self.multiplication_possible:
             self.answers["result_rows"] = Answer.integer("result_rows", self.result_rows)
             self.answers["result_cols"] = Answer.integer("result_cols", self.result_cols)
         else:
-            self.answers["multiplication_possible"] = Answer.multiple_choice(
-                "multiplication_possible",
-                "No, multiplication is not possible",
-                ["Yes, multiplication is possible", "No, multiplication is not possible"]
-            )
+            self.answers["result_rows"] = Answer.string("result_rows", "-")
+            self.answers["result_cols"] = Answer.string("result_cols", "-")
 
         # Matrix element answers
         for i in range(self.max_dim):
@@ -258,8 +255,8 @@ class MatrixMultiplication(MatrixMathQuestion):
         body.add_element(ContentAST.Paragraph(["Calculate:"]))
 
         # Create single equation with both matrices
-        matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "p")
-        matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "p")
+        matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "b")
+        matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
         body.add_element(ContentAST.Equation(f"{matrix_a_latex} \\times {matrix_b_latex} = "))
         body.add_element(
             ContentAST.Paragraph([
@@ -267,29 +264,19 @@ class MatrixMultiplication(MatrixMathQuestion):
             ])
         )
 
-        # Questions about possibility and dimensions
-        if self.multiplication_possible:
-            body.add_element(
-                ContentAST.AnswerBlock([
-                    ContentAST.Answer(
-                        answer=self.answers["result_rows"],
-                        label="Number of rows in result"
-                    ),
-                    ContentAST.Answer(
-                        answer=self.answers["result_cols"],
-                        label="Number of columns in result"
-                    )
-                ])
-            )
-        else:
-            body.add_element(
-                ContentAST.AnswerBlock([
-                    ContentAST.Answer(
-                        answer=self.answers["multiplication_possible"],
-                        label="Is matrix multiplication possible?"
-                    )
-                ])
-            )
+        # Always ask for result dimensions
+        body.add_element(
+            ContentAST.AnswerBlock([
+                ContentAST.Answer(
+                    answer=self.answers["result_rows"],
+                    label="Number of rows in result (use '-' if not possible)"
+                ),
+                ContentAST.Answer(
+                    answer=self.answers["result_cols"],
+                    label="Number of columns in result (use '-' if not possible)"
+                )
+            ])
+        )
 
         # Answer table (always max dimensions) - removing confusing grid size mention
         body.add_element(ContentAST.Paragraph(["Result matrix (A × B):"]))
@@ -324,7 +311,7 @@ class MatrixMultiplication(MatrixMathQuestion):
                     )
 
             explanation.add_element(ContentAST.Paragraph(["Final result:"]))
-            explanation.add_element(ContentAST.Matrix(data=self.result, bracket_type="p"))
+            explanation.add_element(ContentAST.Matrix(data=self.result, bracket_type="b"))
         else:
             explanation.add_element(
                 ContentAST.Paragraph([
