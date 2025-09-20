@@ -203,15 +203,29 @@ class MatrixMultiplication(MatrixMathQuestion):
 
     MIN_SIZE = 2
     MAX_SIZE = 4
+    PROBABILITY_OF_VALID = 0.875  # 7/8 chance of success, 1/8 chance of failure
 
     def refresh(self, *args, **kwargs):
         super().refresh(*args, **kwargs)
 
-        # Generate matrix dimensions
-        self.rows_a = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
-        self.cols_a = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
-        self.rows_b = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
-        self.cols_b = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+        # Use controlled probability to determine if multiplication should be possible
+        should_be_valid = self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1-self.PROBABILITY_OF_VALID], k=1)[0]
+
+        if should_be_valid:
+            # Generate dimensions that allow multiplication
+            self.rows_a = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+            self.cols_a = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+            self.rows_b = self.cols_a  # Ensure multiplication is possible
+            self.cols_b = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+        else:
+            # Generate dimensions that don't allow multiplication
+            self.rows_a = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+            self.cols_a = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+            self.rows_b = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+            self.cols_b = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+            # Ensure they don't match by chance
+            while self.cols_a == self.rows_b:
+                self.rows_b = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
 
         # Determine if multiplication is possible
         self.multiplication_possible = (self.cols_a == self.rows_b)
