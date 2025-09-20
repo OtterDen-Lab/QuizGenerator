@@ -126,15 +126,29 @@ class QuestionRegistry:
     # Check to see if it's in the registry
     question_key = question_type.lower()
     if question_key not in cls._registry:
-      # Try stripping common course prefixes for backward compatibility
+      # Try stripping common course prefixes and module paths for backward compatibility
       for prefix in ['cst334.', 'cst463.']:
         if question_key.startswith(prefix):
           stripped_name = question_key[len(prefix):]
           if stripped_name in cls._registry:
             question_key = stripped_name
             break
+          # Also try extracting just the final class name after dots
+          if '.' in stripped_name:
+            final_name = stripped_name.split('.')[-1]
+            if final_name in cls._registry:
+              question_key = final_name
+              break
       else:
-        raise ValueError(f"Unknown question type: {question_type}")
+        # As a final fallback, try just the last part after dots
+        if '.' in question_key:
+          final_name = question_key.split('.')[-1]
+          if final_name in cls._registry:
+            question_key = final_name
+          else:
+            raise ValueError(f"Unknown question type: {question_type}")
+        else:
+          raise ValueError(f"Unknown question type: {question_type}")
 
     new_question : Question = cls._registry[question_key](**kwargs)
     new_question.refresh()
@@ -146,19 +160,19 @@ class QuestionRegistry:
     package_name = "QuizGenerator.premade_questions"  # Fully qualified package name
     package_path = pathlib.Path(__file__).parent / "premade_questions"
 
-    # Load modules from the root directory
-    for _, module_name, _ in pkgutil.iter_modules([str(package_path)]):
-      # Import the module
-      module = importlib.import_module(f"{package_name}.{module_name}")
+    def load_modules_recursively(path, package_prefix):
+      # Load modules from the current directory
+      for _, module_name, _ in pkgutil.iter_modules([str(path)]):
+        # Import the module
+        module = importlib.import_module(f"{package_prefix}.{module_name}")
 
-    # Recursively load modules from subdirectories
-    for subdir in package_path.iterdir():
-      if subdir.is_dir() and not subdir.name.startswith('_'):
-        subpackage_name = f"{package_name}.{subdir.name}"
-        for _, module_name, _ in pkgutil.iter_modules([str(subdir)]):
-          # Import the module
-          module = importlib.import_module(f"{subpackage_name}.{module_name}")
+      # Recursively load modules from subdirectories
+      for subdir in path.iterdir():
+        if subdir.is_dir() and not subdir.name.startswith('_'):
+          subpackage_name = f"{package_prefix}.{subdir.name}"
+          load_modules_recursively(subdir, subpackage_name)
 
+    load_modules_recursively(package_path, package_name)
     cls._scanned = True
 
 
