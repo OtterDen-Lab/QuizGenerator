@@ -182,26 +182,63 @@ class Question(abc.ABC):
   """
   
   class Topic(enum.Enum):
-    PROCESS = enum.auto()
-    MEMORY = enum.auto()
-    CONCURRENCY = enum.auto()
-    IO = enum.auto()
-    PROGRAMMING = enum.auto()
-    MATH = enum.auto()
-    LANGUAGES = enum.auto()
-    SECURITY = enum.auto()
-    MISC = enum.auto()
-    
+    # CST334 (Operating Systems) Topics
+    SYSTEM_MEMORY = enum.auto()      # Virtual memory, paging, segmentation, caching
+    SYSTEM_PROCESSES = enum.auto()   # Process management, scheduling
+    SYSTEM_CONCURRENCY = enum.auto() # Threads, synchronization, locks
+    SYSTEM_IO = enum.auto()          # File systems, persistence, I/O operations
+    SYSTEM_SECURITY = enum.auto()    # Access control, protection mechanisms
+
+    # CST463 (Machine Learning/Data Science) Topics
+    ML_OPTIMIZATION = enum.auto()    # Gradient descent, optimization algorithms
+    ML_LINEAR_ALGEBRA = enum.auto()  # Matrix operations, vector mathematics
+    ML_STATISTICS = enum.auto()      # Probability, distributions, statistical inference
+    ML_ALGORITHMS = enum.auto()      # Classification, regression, clustering
+    DATA_PREPROCESSING = enum.auto() # Data cleaning, transformation, feature engineering
+
+    # General/Shared Topics
+    MATH_GENERAL = enum.auto()       # Basic mathematics, calculus, algebra
+    PROGRAMMING = enum.auto()        # General programming concepts
+    LANGUAGES = enum.auto()          # Programming languages specifics
+    MISC = enum.auto()              # Uncategorized questions
+
+    # Legacy aliases for backward compatibility
+    PROCESS = SYSTEM_PROCESSES
+    MEMORY = SYSTEM_MEMORY
+    CONCURRENCY = SYSTEM_CONCURRENCY
+    IO = SYSTEM_IO
+    SECURITY = SYSTEM_SECURITY
+    MATH = MATH_GENERAL
+
     @classmethod
     def from_string(cls, string) -> Question.Topic:
       mappings = {
         member.name.lower() : member for member in cls
       }
       mappings.update({
-        "processes": cls.PROCESS,
-        "threads": cls.CONCURRENCY,
-        "persistance": cls.IO,
-        "persistence": cls.IO,
+        # Legacy mappings
+        "processes": cls.SYSTEM_PROCESSES,
+        "process": cls.SYSTEM_PROCESSES,
+        "threads": cls.SYSTEM_CONCURRENCY,
+        "concurrency": cls.SYSTEM_CONCURRENCY,
+        "persistance": cls.SYSTEM_IO,
+        "persistence": cls.SYSTEM_IO,
+        "io": cls.SYSTEM_IO,
+        "memory": cls.SYSTEM_MEMORY,
+        "security": cls.SYSTEM_SECURITY,
+        "math": cls.MATH_GENERAL,
+        "mathematics": cls.MATH_GENERAL,
+
+        # New mappings
+        "optimization": cls.ML_OPTIMIZATION,
+        "gradient_descent": cls.ML_OPTIMIZATION,
+        "machine_learning": cls.ML_ALGORITHMS,
+        "ml": cls.ML_ALGORITHMS,
+        "linear_algebra": cls.ML_LINEAR_ALGEBRA,
+        "matrix": cls.ML_LINEAR_ALGEBRA,
+        "statistics": cls.ML_STATISTICS,
+        "stats": cls.ML_STATISTICS,
+        "data": cls.DATA_PREPROCESSING,
         "programming" : cls.PROGRAMMING,
         "misc": cls.MISC,
       })

@@ -628,15 +628,26 @@ class ContentAST:
       super().__init__()
       self.latex = latex
       self.inline = inline
+      log.debug(f"Equation: {self.inline} {self.latex}")
     
     def render_markdown(self, **kwargs):
-      return r"$$ \displaystyle " + f"{self.latex}" + r" \phantom{{}}$$"
+      if self.inline:
+        return f"${self.latex}$"
+      else:
+        return r"$$ \displaystyle " + f"{self.latex}" + r" \phantom{{}}$$"
 
     def render_html(self, **kwargs):
-      return f"<div class='math'>$$ \\displaystyle {self.latex} \\phantom{{}} $$</div>"
-    
+      if self.inline:
+        return f"<span class='math'>${self.latex}$</span>"
+      else:
+        return f"<div class='math'>$$ \\displaystyle {self.latex} \\phantom{{}} $$</div>"
+
     def render_latex(self, **kwargs):
-      return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
+      log.debug(f"render_latex: {self.inline} {self.latex}")
+      if self.inline:
+        return f"${self.latex}$"
+      else:
+        return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
   
     @classmethod
     def make_block_equation__multiline_equals(cls, lhs : str, rhs : List[str]):
@@ -726,8 +737,29 @@ class ContentAST:
       # todo: fix alignments
       # todo: implement transpose
       super().__init__()
-      self.data = data
-      self.headers = headers
+
+      # Normalize data to ContentAST elements
+      self.data = []
+      for row in data:
+        normalized_row = []
+        for cell in row:
+          if isinstance(cell, ContentAST.Element):
+            normalized_row.append(cell)
+          else:
+            normalized_row.append(ContentAST.Text(str(cell)))
+        self.data.append(normalized_row)
+
+      # Normalize headers to ContentAST elements
+      if headers:
+        self.headers = []
+        for header in headers:
+          if isinstance(header, ContentAST.Element):
+            self.headers.append(header)
+          else:
+            self.headers.append(ContentAST.Text(str(header)))
+      else:
+        self.headers = None
+
       self.alignments = alignments
       self.padding = padding,
       self.hide_rules = hide_rules
@@ -795,27 +827,25 @@ class ContentAST:
                            for a in self.alignments)
       else:
         col_spec = '|'.join(["l"] * (len(self.headers) if self.headers else len(self.data[0])))
-      
+
       result = [f"\\begin{{tabular}}{{{col_spec}}}"]
       if not self.hide_rules: result.append("\\toprule")
-      
+
       if self.headers:
-        result.append(" & ".join(pylatex.escape_latex(str(h)) for h in self.headers) + " \\\\")
+        # Now all headers are ContentAST elements, so render them consistently
+        rendered_headers = [header.render(output_format="latex") for header in self.headers]
+        result.append(" & ".join(rendered_headers) + " \\\\")
         if not self.hide_rules: result.append("\\midrule")
-      
+
       for row in self.data:
-        rendered_row = [
-          cell.render(output_format="latex")
-          if isinstance(cell, ContentAST.Element)
-          else pylatex.escape_latex(cell)
-          for cell in row
-        ]
+        # All data cells are now ContentAST elements, so render them consistently
+        rendered_row = [cell.render(output_format="latex") for cell in row]
         result.append(" & ".join(rendered_row) + " \\\\")
-      
+
       if len(self.data) > 1 and not self.hide_rules:
         result.append("\\bottomrule")
       result.append("\\end{tabular}")
-      
+
       return "\n\n" + "\n".join(result)
   
   class Picture(Element):
