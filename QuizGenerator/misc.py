@@ -339,7 +339,7 @@ class ContentAST:
       return "".join(element.render("markdown", **kwargs) for element in self.elements)
     
     def render_html(self, **kwargs):
-      html = "".join(element.render("html", **kwargs) for element in self.elements)
+      html = " ".join(element.render("html", **kwargs) for element in self.elements)
       return f"{'<br>' if self.add_spacing_before else ''}{html}"
     
     def render_latex(self, **kwargs):
@@ -453,7 +453,7 @@ class ContentAST:
       
       return latex
     
-  
+  ## Below here are smaller elements generally
   class Question(Element):
     def __init__(
         self,
@@ -513,7 +513,11 @@ class ContentAST:
       if self.hide_from_html:
         return ""
       # If the super function returns None then we just return content as is
-      return super().convert_markdown(self.content, "html") or self.content
+      conversion_results = super().convert_markdown(self.content, "html").strip()
+      if conversion_results is not None:
+        if conversion_results.startswith("<p>") and conversion_results.endswith("</p>"):
+          conversion_results = conversion_results[3:-4]
+      return conversion_results or self.content
     
     def render_latex(self, **kwargs):
       if self.hide_from_latex:
@@ -556,24 +560,7 @@ class ContentAST:
           self.elements.append(line)
       
     def render(self, output_format, **kwargs):
-      # Merge all Text nodes before we render
-      # todo: if equations are inlined then we can merge (as of right now at least)
-      merged_elements = []
-      previous_node = ContentAST.Text("")
-      for elem in self.elements:
-        if not previous_node.is_mergeable(elem):
-          # Then we can't merge, so we should move on
-          merged_elements.append(previous_node)
-          previous_node = elem
-          continue
-        
-        # Otherwise, we can merge
-        previous_node.merge(elem)
-      merged_elements.append(previous_node)
-      
-      self.elements = merged_elements
-      
-      # todo: double new lines like this are not sustainable and should be removed -- these should be in the individual renders
+      # Add in new lines to break these up visually
       return "\n\n" + super().render(output_format, **kwargs)
   
     def add_line(self, line: str):
@@ -628,7 +615,6 @@ class ContentAST:
       super().__init__()
       self.latex = latex
       self.inline = inline
-      log.debug(f"Equation: {self.inline} {self.latex}")
     
     def render_markdown(self, **kwargs):
       if self.inline:
@@ -638,12 +624,11 @@ class ContentAST:
 
     def render_html(self, **kwargs):
       if self.inline:
-        return f"<span class='math'>${self.latex}$</span>"
+        return fr"\({self.latex}\)"
       else:
         return f"<div class='math'>$$ \\displaystyle {self.latex} \\phantom{{}} $$</div>"
 
     def render_latex(self, **kwargs):
-      log.debug(f"render_latex: {self.inline} {self.latex}")
       if self.inline:
         return f"${self.latex}$"
       else:
