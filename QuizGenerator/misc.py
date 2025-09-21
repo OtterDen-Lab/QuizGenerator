@@ -7,7 +7,7 @@ import logging
 import math
 import textwrap
 from io import BytesIO
-from typing import List, Dict, Callable
+from typing import List, Dict, Callable, Tuple
 
 import pylatex
 import pypandoc
@@ -38,6 +38,7 @@ class Answer:
     BINARY_OR_HEX = enum.auto()
     AUTOFLOAT = enum.auto()
     LIST = enum.auto()
+    POINT = enum.auto()
     
     
   def __init__(
@@ -152,6 +153,41 @@ class Answer:
         for answer_string in set(answer_strings)
       ]
       
+    elif self.variable_kind == Answer.VariableKind.POINT:
+      # Convert self.value tuple to strings, rounded to an appropriate number of digits
+      answer_as_a_string_w_spaces = ', '.join(
+        map(
+          lambda v: f"{v:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
+          self.value
+        )
+      )
+      answer_as_a_string_wo_spaces = ','.join(
+        map(
+          lambda v: f"{v:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
+          self.value
+        )
+      )
+      
+      canvas_answers = [
+        {
+          "blank_id": self.key,
+          "answer_text": f"({answer_as_a_string_w_spaces})",
+          "answer_weight": 100 if self.correct else 0,
+        },{
+          "blank_id": self.key,
+          "answer_text": f"({answer_as_a_string_wo_spaces})",
+          "answer_weight": 100 if self.correct else 0,
+        }
+      ]
+      if len(self.value) == 1:
+        # Then we'll also accept if it doesn't have parentheses
+        canvas_answers.extend([
+          {
+            "blank_id": self.key,
+            "answer_text": f"{answer_as_a_string_w_spaces}",
+            "answer_weight": 100 if self.correct else 0,
+          }
+        ])
     elif self.variable_kind == Answer.VariableKind.LIST:
       canvas_answers = [
         {
@@ -243,7 +279,7 @@ class Answer:
     )
   
   @classmethod
-  def float_value(cls, key: str, value: float, **kwargs) -> 'Answer':
+  def float_value(cls, key: str, value: Tuple[float], **kwargs) -> 'Answer':
     """Create a simple float answer (no fraction conversion)"""
     return cls(
       key=key,
@@ -259,6 +295,16 @@ class Answer:
       key=key,
       value=value,
       variable_kind=cls.VariableKind.LIST,
+      **kwargs
+    )
+
+  @classmethod
+  def point_value(cls, key: str, value: float, **kwargs) -> 'Answer':
+    """Create a simple float answer (no fraction conversion)"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.POINT,
       **kwargs
     )
 
@@ -632,7 +678,7 @@ class ContentAST:
 
     def render_latex(self, **kwargs):
       if self.inline:
-        return f"${self.latex}$"
+        return f"${self.latex}$~"
       else:
         return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
   
