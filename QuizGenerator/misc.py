@@ -492,6 +492,8 @@ class ContentAST:
         ]
         content = '\n'.join(latex_lines)
       
+      log.debug(f"content: \n{content}")
+      
       return content
   
   class Section(Element):
@@ -513,7 +515,7 @@ class ContentAST:
       if self.hide_from_html:
         return ""
       # If the super function returns None then we just return content as is
-      conversion_results = super().convert_markdown(self.content, "html").strip()
+      conversion_results = super().convert_markdown(self.content.replace("#", r"\#"), "html").strip()
       if conversion_results is not None:
         if conversion_results.startswith("<p>") and conversion_results.endswith("</p>"):
           conversion_results = conversion_results[3:-4]
@@ -620,13 +622,13 @@ class ContentAST:
       if self.inline:
         return f"${self.latex}$"
       else:
-        return r"$$ \displaystyle " + f"{self.latex}" + r" \phantom{{}}$$"
+        return r"$$ \displaystyle " + f"{self.latex}" + r" \; $$"
 
     def render_html(self, **kwargs):
       if self.inline:
         return fr"\({self.latex}\)"
       else:
-        return f"<div class='math'>$$ \\displaystyle {self.latex} \\phantom{{}} $$</div>"
+        return f"<div class='math'>$$ \\displaystyle {self.latex} \\; $$</div>"
 
     def render_latex(self, **kwargs):
       if self.inline:
@@ -777,19 +779,22 @@ class ContentAST:
     def render_html(self, **kwargs):
       # HTML table implementation
       result = ["<table border=\"1\" style=\"border-collapse: collapse; width: 100%;\">"]
-      
+
+      result.append("  <tbody>")
+
+      # Render headers as bold first row instead of <th> tags for Canvas compatibility
       if self.headers:
-        result.append("  <thead>")
         result.append("    <tr>")
         for i, header in enumerate(self.headers):
           align_attr = ""
           if self.alignments and i < len(self.alignments):
             align_attr = f' align="{self.alignments[i]}"'
-          result.append(f"      <th{align_attr}>{header}</th>")
+          # Render header as bold content in regular <td> tag
+          rendered_header = header.render(output_format="html")
+          result.append(f"      <td style=\"padding: {'5px' if self.padding else '0x'}; font-weight: bold; {align_attr};\"><b>{rendered_header}</b></td>")
         result.append("    </tr>")
-        result.append("  </thead>")
-      
-      result.append("  <tbody>")
+
+      # Render data rows
       for row in self.data:
         result.append("    <tr>")
         for i, cell in enumerate(row):
@@ -802,7 +807,7 @@ class ContentAST:
         result.append("    </tr>")
       result.append("  </tbody>")
       result.append("</table>")
-      
+
       return "\n".join(result)
     
     def render_latex(self, **kwargs):
