@@ -100,12 +100,12 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
     return results
   
-  def _format_vector(self, vec: List[float], decimal_places: int = 4) -> str:
+  def _format_vector(self, vec: List[float]) -> str:
     """Format a vector for display, handling single vs multi-variable cases."""
     if len(vec) == 1:
-      return f"{vec[0]:.{decimal_places}f}"
+      return f"{vec[0]:.{Answer.DEFAULT_ROUNDING_DIGITS}f}"
     else:
-      formatted_elements = [f"{x:.{decimal_places}f}" for x in vec]
+      formatted_elements = [f"{x:.{Answer.DEFAULT_ROUNDING_DIGITS}f}" for x in vec]
       return f"[{', '.join(formatted_elements)}]"
   
   def refresh(self, rng_seed=None, *args, **kwargs):
