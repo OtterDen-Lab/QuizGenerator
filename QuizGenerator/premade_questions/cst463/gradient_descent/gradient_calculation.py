@@ -48,9 +48,39 @@ class DerivativeQuestion(Question, abc.ABC):
         gradient_value = float(partial_value)
       except TypeError:
         # If direct float conversion fails, try numerical evaluation
-        gradient_value = float(partial_value.evalf())
+        try:
+          gradient_value = float(partial_value.evalf())
+        except (TypeError, ValueError):
+          # For complex expressions, use N() for numerical evaluation
+          gradient_value = float(sp.N(partial_value))
 
-      self.answers[answer_key] = Answer.float_value(answer_key, gradient_value)
+      # Use auto_float for Canvas compatibility with integers and decimals
+      self.answers[answer_key] = Answer.auto_float(answer_key, gradient_value)
+
+  def _create_gradient_vector_answer(self) -> None:
+    """Create a single gradient vector answer for PDF format."""
+    # Format gradient as vector notation
+    subs_map = dict(zip(self.variables, self.evaluation_point))
+    gradient_values = []
+
+    for i in range(self.num_variables):
+      partial_value = self.gradient_function[i].subs(subs_map)
+      try:
+        gradient_value = float(partial_value)
+      except TypeError:
+        try:
+          gradient_value = float(partial_value.evalf())
+        except (TypeError, ValueError):
+          gradient_value = float(sp.N(partial_value))
+      gradient_values.append(gradient_value)
+
+    # Format as vector for display
+    if self.num_variables == 1:
+      vector_str = str(gradient_values[0])
+    else:
+      vector_str = f"({', '.join(map(str, gradient_values))})"
+
+    self.answers["gradient_vector"] = Answer.string("gradient_vector", vector_str)
 
   def get_body(self, **kwargs) -> ContentAST.Section:
     body = ContentAST.Section()
@@ -66,13 +96,33 @@ class DerivativeQuestion(Question, abc.ABC):
       ])
     )
 
-    # Create answer fields for each partial derivative
+    # Format evaluation point for LaTeX
+    eval_point_str = ", ".join([f"x_{i} = {self.evaluation_point[i]}" for i in range(self.num_variables)])
+
+    # For PDF: Use OnlyLatex to show gradient vector format
+    body.add_element(
+      ContentAST.OnlyLatex([
+        ContentAST.Paragraph([
+          ContentAST.Equation(
+            f"\\left. \\nabla f \\right|_{{{eval_point_str}}} = ",
+            inline=True
+          ),
+          ContentAST.Answer(self.answers["gradient_vector"])
+        ])
+      ])
+    )
+
+    # For Canvas: Use OnlyHtml to show individual partial derivatives
     for i in range(self.num_variables):
       body.add_element(
-        ContentAST.Paragraph([
-          ContentAST.Equation(self._format_partial_derivative(i), inline=True),
-          f" evaluated at ({', '.join(map(str, self.evaluation_point))}) = ",
-          ContentAST.Answer(self.answers[f"partial_derivative_{i}"])
+        ContentAST.OnlyHtml([
+          ContentAST.Paragraph([
+            ContentAST.Equation(
+              f"\\left. {self._format_partial_derivative(i)} \\right|_{{{eval_point_str}}} = ",
+              inline=True
+            ),
+            ContentAST.Answer(self.answers[f"partial_derivative_{i}"])
+          ])
         ])
       )
 
@@ -138,6 +188,9 @@ class DerivativeBasic(DerivativeQuestion):
     # Create answers
     self._create_derivative_answers(self.evaluation_point)
 
+    # For PDF: Create single gradient vector answer
+    self._create_gradient_vector_answer()
+
 
 @QuestionRegistry.register("DerivativeChain")
 class DerivativeChain(DerivativeQuestion):
@@ -154,6 +207,9 @@ class DerivativeChain(DerivativeQuestion):
 
     # Create answers
     self._create_derivative_answers(self.evaluation_point)
+
+    # For PDF: Create single gradient vector answer
+    self._create_gradient_vector_answer()
 
   def _generate_composed_function(self) -> None:
     """Generate a composed function f(g(x)) for chain rule practice."""
