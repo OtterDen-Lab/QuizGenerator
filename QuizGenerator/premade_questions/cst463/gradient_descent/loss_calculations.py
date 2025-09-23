@@ -23,6 +23,10 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     self.num_samples = kwargs.get("num_samples", 5)
     self.num_samples = max(3, min(10, self.num_samples))  # Constrain to 3-10 range
 
+    self.num_input_features = kwargs.get("num_input_features", 2)
+    self.num_input_features = max(1, min(5, self.num_input_features))  # Constrain to 1-5 features
+    self.vector_inputs = kwargs.get("vector_inputs", False)  # Whether to show inputs as vectors
+
     # Generate sample data
     self.data = []
     self.individual_losses = []
@@ -151,8 +155,8 @@ class LossQuestion_Linear(LossQuestion):
     for i in range(self.num_samples):
       sample = {}
 
-      # Generate input features (x_0, x_1, etc.)
-      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(2)]
+      # Generate input features
+      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(self.num_input_features)]
 
       # Generate true values (y) - multiple outputs if specified
       if self.num_output_vars == 1:
@@ -204,7 +208,7 @@ class LossQuestion_Linear(LossQuestion):
 
   def _create_data_table(self) -> ContentAST.Element:
     """Create table with input features, true values, predictions, and loss fields."""
-    headers = ["x_0", "x_1"]
+    headers = ["x"]
 
     if self.num_output_vars == 1:
       headers.extend(["y", "p", "loss"])
@@ -220,9 +224,9 @@ class LossQuestion_Linear(LossQuestion):
     for i, sample in enumerate(self.data):
       row = {}
 
-      # Input features
-      row["x_0"] = f"{sample['inputs'][0]:.2f}"
-      row["x_1"] = f"{sample['inputs'][1]:.2f}"
+      # Input features as vector
+      x_vector = "[" + ", ".join([f"{x:.2f}" for x in sample['inputs']]) + "]"
+      row["x"] = x_vector
 
       # True values
       if self.num_output_vars == 1:
@@ -344,7 +348,7 @@ class LossQuestion_Logistic(LossQuestion):
       sample = {}
 
       # Generate input features
-      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(2)]
+      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(self.num_input_features)]
 
       # Generate binary true values (0 or 1)
       sample['true_values'] = self.rng.choice([0, 1])
@@ -386,15 +390,15 @@ class LossQuestion_Logistic(LossQuestion):
 
   def _create_data_table(self) -> ContentAST.Element:
     """Create table with features, true labels, predicted probabilities, and loss fields."""
-    headers = ["x_0", "x_1", "y", "p", "loss"]
+    headers = ["x", "y", "p", "loss"]
 
     rows = []
     for i, sample in enumerate(self.data):
       row = {}
 
-      # Input features
-      row["x_0"] = f"{sample['inputs'][0]:.2f}"
-      row["x_1"] = f"{sample['inputs'][1]:.2f}"
+      # Input features as vector
+      x_vector = "[" + ", ".join([f"{x:.2f}" for x in sample['inputs']]) + "]"
+      row["x"] = x_vector
 
       # True label
       row["y"] = str(sample['true_values'])
@@ -487,7 +491,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
       sample = {}
 
       # Generate input features
-      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(2)]
+      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(self.num_input_features)]
 
       # Generate true class (one-hot encoded) - ensure exactly one class is 1
       true_class_idx = self.rng.randint(0, self.num_classes - 1)
@@ -530,15 +534,15 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
 
   def _create_data_table(self) -> ContentAST.Element:
     """Create table with features, true class vectors, predicted probabilities, and loss fields."""
-    headers = ["x_0", "x_1", "y", "p", "loss"]
+    headers = ["x", "y", "p", "loss"]
 
     rows = []
     for i, sample in enumerate(self.data):
       row = {}
 
-      # Input features
-      row["x_0"] = f"{sample['inputs'][0]:.2f}"
-      row["x_1"] = f"{sample['inputs'][1]:.2f}"
+      # Input features as vector
+      x_vector = "[" + ", ".join([f"{x:.2f}" for x in sample['inputs']]) + "]"
+      row["x"] = x_vector
 
       # True values (one-hot vector)
       y_vector = "[" + ", ".join([str(y) for y in sample['true_values']]) + "]"
