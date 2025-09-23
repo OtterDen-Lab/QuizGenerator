@@ -40,7 +40,41 @@ def parse_args():
 
 def test():
   log.info("Running test...")
-  pass
+
+  # Load the default quiz configuration
+  quiz_yaml = os.path.join(os.path.dirname(os.path.abspath(__file__)), "example_files/scratch.yaml")
+
+  # Generate a quiz
+  quizzes = Quiz.from_yaml(quiz_yaml)
+  quiz = quizzes[0]  # Take the first quiz
+  quiz_document = quiz.get_quiz(rng_seed=1)
+
+  # Get the first question from the quiz
+  if not quiz_document.elements:
+    print("No questions generated!")
+    return
+
+  question = quiz_document.elements[0]
+
+  print("="*60)
+  print("QUESTION TEST OUTPUT")
+  print("="*60)
+
+  print("\n" + "="*20 + " HTML (Canvas) Output " + "="*20)
+  html_output = question.body.render("html")
+  print(html_output)
+
+  print("\n" + "="*20 + " LaTeX (PDF) Output " + "="*20)
+  latex_output = question.body.render("latex")
+  print(latex_output)
+
+  print("\n" + "="*20 + " Markdown Output " + "="*20)
+  markdown_output = question.body.render("markdown")
+  print(markdown_output)
+
+  print("\n" + "="*60)
+  print("TEST COMPLETE")
+  print("="*60)
   
   
 def generate_latex(latex_text, remove_previous=False):
