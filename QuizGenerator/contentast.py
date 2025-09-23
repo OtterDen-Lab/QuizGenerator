@@ -42,6 +42,34 @@ class ContentAST:
   """
   
   class Element:
+    """
+    Base class for all ContentAST elements providing cross-format rendering.
+
+    This is the foundation class that all ContentAST elements inherit from.
+    It provides the core rendering infrastructure that enables consistent
+    output across LaTeX/PDF, HTML/Canvas, and Markdown formats.
+
+    Key Features:
+    - Cross-format rendering (markdown, html, latex)
+    - Automatic format conversion via pypandoc
+    - Element composition and nesting
+    - Consistent spacing and formatting
+
+    When to inherit from Element:
+    - Creating new content types that need multi-format output
+    - Building container elements that hold other elements
+    - Implementing custom rendering logic for specific content types
+
+    Example usage:
+        # Most elements inherit from this automatically
+        section = ContentAST.Section()
+        section.add_element(ContentAST.Text("Hello world"))
+        section.add_element(ContentAST.Equation("x = 5"))
+
+        # Renders to any format
+        latex_output = section.render("latex")
+        html_output = section.render("html")
+    """
     def __init__(self, elements=None, add_spacing_before=False):
       self.elements : List[ContentAST.Element] = elements or []
       self.add_spacing_before = add_spacing_before
@@ -94,19 +122,84 @@ class ContentAST:
       return False
   
   class OnlyLatex(Element):
+    """
+    Container element that only renders content in LaTeX/PDF output format.
+
+    Use this when you need LaTeX-specific content that should not appear
+    in HTML/Canvas or Markdown outputs. Content is completely hidden
+    from non-LaTeX formats.
+
+    When to use:
+    - LaTeX-specific formatting that has no HTML equivalent
+    - PDF-only instructions or content
+    - Complex LaTeX commands that break HTML rendering
+
+    Example:
+        # LaTeX-only spacing or formatting
+        latex_only = ContentAST.OnlyLatex()
+        latex_only.add_element(ContentAST.Text("\\newpage"))
+
+        # Add to main content - only appears in PDF
+        body.add_element(latex_only)
+    """
     def render(self, output_format, **kwargs):
       if output_format != "latex":
         return ""
       return super().render(output_format, **kwargs)
-  
+
   class OnlyHtml(Element):
+    """
+    Container element that only renders content in HTML/Canvas output format.
+
+    Use this when you need HTML-specific content that should not appear
+    in LaTeX/PDF or Markdown outputs. Content is completely hidden
+    from non-HTML formats.
+
+    When to use:
+    - Canvas-specific instructions or formatting
+    - HTML-only interactive elements
+    - Content that doesn't translate well to PDF
+
+    Example:
+        # HTML-only instructions
+        html_only = ContentAST.OnlyHtml()
+        html_only.add_element(ContentAST.Text("Click submit when done"))
+
+        # Add to main content - only appears in Canvas
+        body.add_element(html_only)
+    """
     def render(self, output_format, **kwargs):
       if output_format != "html":
         return ""
       return super().render(output_format, **kwargs)
   
   class Document(Element):
-    """Root document class that adds document-level rendering"""
+    """
+    Root document container for complete quiz documents with proper headers and structure.
+
+    This class provides document-level rendering with appropriate headers, packages,
+    and formatting for complete LaTeX documents. It's primarily used internally
+    by the quiz generation system.
+
+    When to use:
+    - Creating standalone PDF documents (handled automatically by quiz system)
+    - Need complete LaTeX document structure with packages and headers
+    - Root container for entire quiz content
+
+    Note: Most question developers should NOT use this directly.
+    Use ContentAST.Section for question bodies and explanations instead.
+
+    Features:
+    - Complete LaTeX document headers with all necessary packages
+    - Automatic title handling across all formats
+    - PDF-ready formatting with proper spacing and layout
+
+    Example (internal use):
+        # Usually created automatically by quiz system
+        doc = ContentAST.Document(title="Midterm Exam")
+        doc.add_element(question_section)
+        pdf_content = doc.render("latex")
+    """
     
     LATEX_HEADER = textwrap.dedent(r"""
     \documentclass[12pt]{article}
@@ -199,6 +292,31 @@ class ContentAST:
     
   ## Below here are smaller elements generally
   class Question(Element):
+    """
+    Complete question container with body, explanation, and metadata.
+
+    This class represents a full question with both the question content
+    and its explanation/solution. It handles question-level formatting
+    like point values, spacing, and PDF layout.
+
+    Note: Most question developers should NOT use this directly.
+    It's created automatically by the quiz generation system.
+    Focus on building ContentAST.Section objects for get_body() and get_explanation().
+
+    When to use:
+    - Creating complete question objects (handled by quiz system)
+    - Custom question wrappers (advanced use)
+
+    Example (internal use):
+        # Usually created by quiz system from your question classes
+        body = ContentAST.Section()
+        body.add_element(ContentAST.Paragraph(["What is 2+2?"]))
+
+        explanation = ContentAST.Section()
+        explanation.add_element(ContentAST.Paragraph(["2+2=4"]))
+
+        question = ContentAST.Question(body=body, explanation=explanation, value=5)
+    """
     def __init__(
         self,
         body: ContentAST.Section,
@@ -241,10 +359,64 @@ class ContentAST:
       return content
   
   class Section(Element):
-    """A child class representing a specific section of a question"""
+    """
+    Primary container for question content - USE THIS for get_body() and get_explanation().
+
+    This is the most important ContentAST class for question developers.
+    It serves as the main container for organizing question content
+    and should be the return type for your get_body() and get_explanation() methods.
+
+    CRITICAL: Always use ContentAST.Section as the container for:
+    - Question body content (return from get_body())
+    - Question explanation/solution content (return from get_explanation())
+    - Any grouped content that needs to render together
+
+    When to use:
+    - As the root container in get_body() and get_explanation() methods
+    - Grouping related content elements
+    - Organizing complex question content
+
+    Example:
+        def get_body(self):
+            body = ContentAST.Section()
+            body.add_element(ContentAST.Paragraph(["Calculate the determinant:"]))
+
+            matrix_data = [[1, 2], [3, 4]]
+            body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="v"))
+
+            body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
+            return body
+    """
     pass
   
   class Text(Element):
+    """
+    Basic text content with automatic format conversion and selective visibility.
+
+    This is the fundamental text element that handles plain text content
+    with automatic markdown-to-format conversion. It supports emphasis
+    and format-specific hiding.
+
+    When to use:
+    - Plain text content that needs cross-format rendering
+    - Text that should be hidden from specific output formats
+    - Simple text with optional emphasis
+
+    DON'T use for:
+    - Mathematical content (use ContentAST.Equation instead)
+    - Code (use ContentAST.Code instead)
+    - Structured content (use ContentAST.Paragraph for grouping)
+
+    Example:
+        # Basic text
+        text = ContentAST.Text("This is plain text")
+
+        # Emphasized text
+        important = ContentAST.Text("Important note", emphasis=True)
+
+        # HTML-only text (hidden from PDF)
+        web_note = ContentAST.Text("Click submit", hide_from_latex=True)
+    """
     def __init__(self, content : str, *, hide_from_latex=False, hide_from_html=False, emphasis=False):
       super().__init__()
       self.content = content
@@ -283,20 +455,73 @@ class ContentAST:
       self.emphasis = False
   
   class TextHTML(Text):
+    """
+    Convenience class for HTML-only text content.
+
+    Identical to ContentAST.Text with hide_from_latex=True.
+    Use when you need text that only appears in Canvas/HTML output.
+
+    Example:
+        # Text that only appears in Canvas
+        canvas_instruction = ContentAST.TextHTML("Submit your answer above")
+    """
     def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
       self.hide_from_html = False
       self.hide_from_latex = True
-      
+
   class TextLatex(Text):
+    """
+    Convenience class for LaTeX-only text content.
+
+    Identical to ContentAST.Text with hide_from_html=True.
+    Use when you need text that only appears in PDF output.
+
+    Example:
+        # Text that only appears in PDF
+        pdf_instruction = ContentAST.TextLatex("Write your answer in the space below")
+    """
     def __init__(self, *args, **kwargs):
       super().__init__(*args, **kwargs)
       self.hide_from_html = True
       self.hide_from_latex = False
   
   class Paragraph(Element):
-    """A block of text that will combine all child elements together."""
-    
+    """
+    Text block container with proper spacing and paragraph formatting.
+
+    IMPORTANT: Use this for grouping text content, especially in question bodies.
+    Automatically handles spacing between paragraphs and combines multiple
+    lines/elements into a cohesive text block.
+
+    When to use:
+    - Question instructions or problem statements
+    - Multi-line text content
+    - Grouping related text elements
+    - Any text that should be visually separated as a paragraph
+
+    When NOT to use:
+    - Single words or short phrases (use ContentAST.Text)
+    - Mathematical content (use ContentAST.Equation)
+    - Structured data (use ContentAST.Table)
+
+    Example:
+        # Multi-line question text
+        body.add_element(ContentAST.Paragraph([
+            "Consider the following system:",
+            "- Process A requires 4MB memory",
+            "- Process B requires 2MB memory",
+            "How much total memory is needed?"
+        ]))
+
+        # Mixed content paragraph
+        para = ContentAST.Paragraph([
+            "The equation ",
+            ContentAST.Equation("x^2 + 1 = 0", inline=True),
+            " has no real solutions."
+        ])
+    """
+
     def __init__(self, lines_or_elements: List[str|ContentAST.Element] = None):
       super().__init__(add_spacing_before=True)
       for line in lines_or_elements:
@@ -313,6 +538,33 @@ class ContentAST:
       self.elements.append(ContentAST.Text(line))
   
   class Answer(Element):
+    """
+    Answer input field that renders as blanks in PDF and shows answers in HTML.
+
+    CRITICAL: Use this for ALL answer inputs in questions.
+    Creates appropriate input fields that work across both PDF and Canvas formats.
+    In PDF, renders as blank lines for students to fill in.
+    In HTML/Canvas, can display the answer for checking.
+
+    When to use:
+    - Any place where students need to input an answer
+    - Numerical answers, short text answers, etc.
+    - Questions requiring fill-in-the-blank responses
+
+    Example:
+        # Basic answer field
+        body.add_element(ContentAST.Answer(
+            answer=self.answer,
+            label="Result",
+            unit="MB"
+        ))
+
+        # Multiple choice or complex answers
+        body.add_element(ContentAST.Answer(
+            answer=[self.answer_a, self.answer_b],
+            label="Choose the best answer"
+        ))
+    """
     def __init__(self, answer: Answer = None, label: str = "", unit: str = "", blank_length=5):
       super().__init__()
       self.answer = answer
@@ -334,6 +586,34 @@ class ContentAST:
       return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
   
   class Code(Text):
+    """
+    Code block formatter with proper syntax highlighting and monospace formatting.
+
+    Use this for displaying source code, terminal output, file contents,
+    or any content that should appear in monospace font with preserved formatting.
+
+    When to use:
+    - Source code examples
+    - Terminal/shell output
+    - File contents or configuration
+    - Any monospace-formatted text
+
+    Features:
+    - Automatic code block formatting in markdown
+    - Proper HTML code styling
+    - LaTeX verbatim environments
+    - Preserved whitespace and line breaks
+
+    Example:
+        # Code snippet
+        code_block = ContentAST.Code(
+            "if (x > 0) {\n    print('positive');\n}"
+        )
+        body.add_element(code_block)
+
+        # Terminal output
+        terminal = ContentAST.Code("$ ls -la\ntotal 24\ndrwxr-xr-x 3 user")
+    """
     def __init__(self, lines, **kwargs):
       super().__init__(lines)
       self.make_normal = kwargs.get("make_normal", False)
@@ -357,6 +637,33 @@ class ContentAST:
       return content
   
   class Equation(Element):
+    """
+    Mathematical equation renderer with LaTeX input and cross-format output.
+
+    CRITICAL: Use this for ALL mathematical content instead of manual LaTeX strings.
+    Provides consistent math rendering across PDF (LaTeX) and Canvas (MathJax).
+
+    When to use:
+    - Any mathematical expressions, equations, or formulas
+    - Variables, functions, mathematical notation
+    - Both inline math (within text) and display math (separate lines)
+
+    DON'T manually write LaTeX in ContentAST.Text - always use ContentAST.Equation.
+
+    Example:
+        # Display equation (separate line, larger)
+        body.add_element(ContentAST.Equation("x^2 + y^2 = r^2"))
+
+        # Inline equation (within text)
+        paragraph = ContentAST.Paragraph([
+            "The solution is ",
+            ContentAST.Equation("x = \\frac{-b}{2a}", inline=True),
+            " which can be computed easily."
+        ])
+
+        # Complex equations
+        body.add_element(ContentAST.Equation(r"\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}"))
+    """
     def __init__(self, latex, inline=False):
       super().__init__()
       self.latex = latex
@@ -502,15 +809,42 @@ class ContentAST:
         return f"\\[\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\]"
 
   class Table(Element):
+    """
+    Structured data table with cross-format rendering and proper formatting.
+
+    Creates properly formatted tables that work in PDF, Canvas, and Markdown.
+    Automatically handles headers, alignment, and responsive formatting.
+    All data is converted to ContentAST elements for consistent rendering.
+
+    When to use:
+    - Structured data presentation (comparison tables, data sets)
+    - Answer choices in tabular format
+    - Organized information display
+    - Memory layout diagrams, process tables, etc.
+
+    Features:
+    - Automatic alignment control (left, right, center)
+    - Optional headers with proper formatting
+    - Canvas-compatible HTML output
+    - LaTeX booktabs for professional PDF tables
+
+    Example:
+        # Basic data table
+        data = [
+            ["Process A", "4MB", "Running"],
+            ["Process B", "2MB", "Waiting"]
+        ]
+        headers = ["Process", "Memory", "Status"]
+        table = ContentAST.Table(data=data, headers=headers, alignments=["left", "right", "center"])
+        body.add_element(table)
+
+        # Mixed content table
+        data = [
+            [ContentAST.Text("x"), ContentAST.Equation("x^2", inline=True)],
+            [ContentAST.Text("y"), ContentAST.Equation("y^2", inline=True)]
+        ]
+    """
     def __init__(self, data, headers=None, alignments=None, padding=False, transpose=False, hide_rules=False):
-      """
-      Generates a ContentAST.Table element
-      :param data: data in the table.  List[List[Element]]
-      :param headers: headers for the tables
-      :param alignments: how should columns be aligned
-      :param padding: Add in padding around cells in html table
-      :param transpose: apple transpose to table
-      """
       # todo: fix alignments
       # todo: implement transpose
       super().__init__()
@@ -629,6 +963,36 @@ class ContentAST:
       return "\n\n" + "\n".join(result)
   
   class Picture(Element):
+    """
+    Image/diagram container with proper sizing and captioning.
+
+    Handles image content with automatic upload management for Canvas
+    and proper LaTeX figure environments for PDF output.
+
+    When to use:
+    - Diagrams, charts, or visual content
+    - Memory layout diagrams
+    - Process flowcharts
+    - Any visual aid for questions
+
+    Features:
+    - Automatic Canvas image upload handling
+    - Proper LaTeX figure environments
+    - Responsive sizing with width control
+    - Optional captions
+
+    Example:
+        # Image with caption
+        with open('diagram.png', 'rb') as f:
+            img_data = BytesIO(f.read())
+
+        picture = ContentAST.Picture(
+            img_data=img_data,
+            caption="Memory layout diagram",
+            width="80%"
+        )
+        body.add_element(picture)
+    """
     def __init__(self, img_data, caption=None, width=None):
       super().__init__()
       self.img_data = img_data
@@ -671,10 +1035,35 @@ class ContentAST:
       return "\n".join(result)
   
   class AnswerBlock(Table):
+    """
+    Specialized table for organizing multiple answer fields with proper spacing.
+
+    Creates a clean layout for multiple answer inputs with extra vertical
+    spacing in PDF output. Inherits from Table but optimized for answers.
+
+    When to use:
+    - Questions with multiple answer fields
+    - Organized answer input sections
+    - Better visual grouping of related answers
+
+    Example:
+        # Multiple related answers
+        answers = [
+            ContentAST.Answer(answer=self.memory_answer, label="Memory used", unit="MB"),
+            ContentAST.Answer(answer=self.time_answer, label="Execution time", unit="ms")
+        ]
+        answer_block = ContentAST.AnswerBlock(answers)
+        body.add_element(answer_block)
+
+        # Single answer with better spacing
+        single_answer = ContentAST.AnswerBlock(
+            ContentAST.Answer(answer=self.result, label="Final result")
+        )
+    """
     def __init__(self, answers: ContentAST.Answer|List[ContentAST.Answer]):
       if not isinstance(answers, list):
         answers = [answers]
-        
+
       super().__init__(
         data=[
           [answer]
