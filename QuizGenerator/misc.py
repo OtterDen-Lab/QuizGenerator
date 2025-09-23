@@ -171,20 +171,20 @@ class Answer:
             {
               "blank_id": self.key,
               "answer_weight": 100 if self.correct else 0,
-              "answer_text": f"{','.join(combination)}",
+              "answer_text": f"{', '.join(combination)}",
             }
           )
         canvas_answers.append({
           "blank_id" : self.key,
           "answer_weight": 100 if self.correct else 0,
-          "answer_text": f"({','.join(list(combination))})",
+          "answer_text": f"({', '.join(list(combination))})",
         })
         if len(combination) == 1:
           canvas_answers.append(
             {
               "blank_id": self.key,
               "answer_weight": 100 if self.correct else 0,
-              "answer_text": f"{','.join(combination)}",
+              "answer_text": f"{', '.join(combination)}",
             }
           )
       return canvas_answers
@@ -193,7 +193,7 @@ class Answer:
       canvas_answers = [
         {
           "blank_id": self.key,
-          "answer_text": ','.join(map(str, possible_state)),
+          "answer_text": ', '.join(map(str, possible_state)),
           "answer_weight": 100 if self.correct else 0,
         }
         for possible_state in [self.value] #itertools.permutations(self.value)

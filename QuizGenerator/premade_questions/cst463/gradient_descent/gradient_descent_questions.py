@@ -101,12 +101,19 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     return results
   
   def _format_vector(self, vec: List[float]) -> str:
-    """Format a vector for display, handling single vs multi-variable cases."""
+    
+    vector_string = ', '.join(
+      [
+        sorted(Answer.accepted_strings(v), key=lambda s: len(s))[0]
+        for v in vec
+      ]
+    )
+    
     if len(vec) == 1:
-      return f"{vec[0]:.{Answer.DEFAULT_ROUNDING_DIGITS}f}"
+      return vector_string
     else:
-      formatted_elements = [f"{x:.{Answer.DEFAULT_ROUNDING_DIGITS}f}" for x in vec]
-      return f"[{', '.join(formatted_elements)}]"
+      return f"({vector_string})"
+    
   
   def refresh(self, rng_seed=None, *args, **kwargs):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
@@ -175,8 +182,9 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       row = {"n": str(step)}
       
       if step == 1:
+        
         # Fill in starting location for first row with default formatting
-        row["location"] = f"{self.starting_point[0]:0.{Answer.DEFAULT_ROUNDING_DIGITS}f}"
+        row["location"] = f"{self._format_vector(self.starting_point)}"
         row[headers[2]] = f"answer__gradient_{step}"  # gradient column
         row[headers[3]] = f"answer__update_{step}"  # update column
       else:
@@ -248,9 +256,9 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       step = result['step']
       row = {"n": str(step)}
       
-      row["location"] = f"{tuple(result['location'])}"
-      row[solution_headers[2]] = f"{tuple(result['gradient'])}"
-      row[solution_headers[3]] = f"{tuple(result['update'])}"
+      row["location"] = f"{self._format_vector(result['location'])}"
+      row[solution_headers[2]] = f"{self._format_vector(result['gradient'])}"
+      row[solution_headers[3]] = f"{self._format_vector(result['update'])}"
     
       solution_rows.append(row)
     
