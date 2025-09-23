@@ -5,7 +5,7 @@ import math
 from typing import List
 
 from QuizGenerator.question import Question, QuestionRegistry, Answer
-from QuizGenerator.misc import ContentAST
+from QuizGenerator.contentast import ContentAST
 
 log = logging.getLogger(__name__)
 

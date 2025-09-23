@@ -15,7 +15,8 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-from QuizGenerator.misc import OutputFormat, ContentAST
+from QuizGenerator.misc import OutputFormat
+from QuizGenerator.contentast import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 

@@ -3,7 +3,7 @@ import abc
 import logging
 
 from QuizGenerator.question import Question, QuestionRegistry, Answer
-from QuizGenerator.misc import ContentAST
+from QuizGenerator.contentast import ContentAST
 
 log = logging.getLogger(__name__)
 

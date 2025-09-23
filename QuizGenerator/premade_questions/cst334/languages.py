@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Tuple, Any
 
 from QuizGenerator.question import QuestionRegistry, Question, Answer
 
-from QuizGenerator.misc import ContentAST
+from QuizGenerator.contentast import ContentAST
 
 import logging
 log = logging.getLogger(__name__)

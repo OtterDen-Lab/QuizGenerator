@@ -5,7 +5,8 @@ These mixins provide reusable patterns for common question structures.
 """
 
 from typing import Dict, List, Any, Union
-from QuizGenerator.misc import ContentAST, Answer
+from QuizGenerator.misc import Answer
+from QuizGenerator.contentast import ContentAST
 
 
 class TableQuestionMixin:

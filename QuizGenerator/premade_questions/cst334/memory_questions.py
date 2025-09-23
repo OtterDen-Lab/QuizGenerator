@@ -9,7 +9,7 @@ import logging
 import math
 from typing import List, Optional
 
-from QuizGenerator.misc import ContentAST
+from QuizGenerator.contentast import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 

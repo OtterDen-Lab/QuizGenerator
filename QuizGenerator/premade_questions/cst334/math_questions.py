@@ -4,7 +4,7 @@ import logging
 import math
 
 from QuizGenerator.question import Question, QuestionRegistry, Answer
-from QuizGenerator.misc import ContentAST
+from QuizGenerator.contentast import ContentAST
 from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)

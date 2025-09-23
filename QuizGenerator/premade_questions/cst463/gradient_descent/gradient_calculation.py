@@ -5,7 +5,7 @@ import logging
 from typing import List
 import sympy as sp
 
-from QuizGenerator.misc import ContentAST
+from QuizGenerator.contentast import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from .misc import generate_function, format_vector
 

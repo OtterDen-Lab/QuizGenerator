@@ -5,7 +5,7 @@ import abc
 import logging
 
 from QuizGenerator.question import Question, Answer, QuestionRegistry
-from QuizGenerator.misc import ContentAST
+from QuizGenerator.contentast import ContentAST
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)

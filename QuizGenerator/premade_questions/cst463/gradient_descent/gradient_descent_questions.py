@@ -6,8 +6,7 @@ import math
 from typing import List, Tuple, Callable, Union, Any
 import sympy as sp
 
-
-from QuizGenerator.misc import ContentAST
+from QuizGenerator.contentast import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
