@@ -7,7 +7,7 @@ import sympy as sp
 
 from QuizGenerator.misc import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
-from .misc import generate_function
+from .misc import generate_function, format_vector
 
 log = logging.getLogger(__name__)
 
@@ -46,9 +46,10 @@ class DerivativeQuestion(Question, abc.ABC):
       partial_value = self.gradient_function[i].subs(subs_map)
       try:
         gradient_value = float(partial_value)
-      except TypeError:
-        # For complex expressions, use numerical evaluation
-        gradient_value = float(partial_value.evalf())
+      except (TypeError, ValueError):
+        # If we get a complex number or other conversion error,
+        # this likely means log hit a negative value - regenerate
+        raise ValueError("Complex number encountered - need to regenerate")
 
       # Use auto_float for Canvas compatibility with integers and decimals
       self.answers[answer_key] = Answer.auto_float(answer_key, gradient_value)
@@ -67,12 +68,8 @@ class DerivativeQuestion(Question, abc.ABC):
         gradient_value = float(partial_value.evalf())
       gradient_values.append(gradient_value)
 
-    # Format as vector for display
-    if self.num_variables == 1:
-      vector_str = str(gradient_values[0])
-    else:
-      vector_str = f"({', '.join(map(str, gradient_values))})"
-
+    # Format as vector for display using consistent formatting
+    vector_str = format_vector(gradient_values)
     self.answers["gradient_vector"] = Answer.string("gradient_vector", vector_str)
 
   def get_body(self, **kwargs) -> ContentAST.Section:
@@ -84,7 +81,7 @@ class DerivativeQuestion(Question, abc.ABC):
         "Given the function ",
         ContentAST.Equation(sp.latex(self.equation), inline=True),
         ", calculate the gradient at the point ",
-        ContentAST.Equation(f"({', '.join(map(str, self.evaluation_point))})", inline=True),
+        ContentAST.Equation(format_vector(self.evaluation_point), inline=True),
         "."
       ])
     )
@@ -141,7 +138,7 @@ class DerivativeQuestion(Question, abc.ABC):
     # Show evaluation at the specific point
     explanation.add_element(
       ContentAST.Paragraph([
-        f"Evaluating at the point ({', '.join(map(str, self.evaluation_point))}):"
+        f"Evaluating at the point {format_vector(self.evaluation_point)}:"
       ])
     )
 
@@ -149,12 +146,21 @@ class DerivativeQuestion(Question, abc.ABC):
     subs_map = dict(zip(self.variables, self.evaluation_point))
     for i in range(self.num_variables):
       partial_expr = self.gradient_function[i]
-      partial_value = float(partial_expr.subs(subs_map))
+      partial_value = partial_expr.subs(subs_map)
+
+      # Use Answer.accepted_strings for clean numerical formatting
+      try:
+        numerical_value = float(partial_value)
+      except (TypeError, ValueError):
+        numerical_value = float(partial_value.evalf())
+
+      # Get clean string representation
+      clean_value = sorted(Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
 
       explanation.add_element(
         ContentAST.Paragraph([
           ContentAST.Equation(
-            f"{self._format_partial_derivative(i)} = {sp.latex(partial_expr)} = {partial_value}",
+            f"{self._format_partial_derivative(i)} = {sp.latex(partial_expr)} = {clean_value}",
             inline=False
           )
         ])
@@ -192,17 +198,33 @@ class DerivativeChain(DerivativeQuestion):
   def refresh(self, rng_seed=None, *args, **kwargs):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
 
-    # Generate inner and outer functions for composition
-    self._generate_composed_function()
+    # Try to generate a valid function/point combination, regenerating if we hit complex numbers
+    max_attempts = 10
+    for attempt in range(max_attempts):
+      try:
+        # Generate inner and outer functions for composition
+        self._generate_composed_function()
 
-    # Generate evaluation point
-    self.evaluation_point = self._generate_evaluation_point()
+        # Generate evaluation point
+        self.evaluation_point = self._generate_evaluation_point()
 
-    # Create answers
-    self._create_derivative_answers(self.evaluation_point)
+        # Create answers - this will raise ValueError if we get complex numbers
+        self._create_derivative_answers(self.evaluation_point)
 
-    # For PDF: Create single gradient vector answer
-    self._create_gradient_vector_answer()
+        # For PDF: Create single gradient vector answer
+        self._create_gradient_vector_answer()
+
+        # If we get here, everything worked
+        break
+
+      except ValueError as e:
+        if "Complex number encountered" in str(e) and attempt < max_attempts - 1:
+          # Advance RNG state by making a dummy call
+          _ = self.rng.random()
+          continue
+        else:
+          # If we've exhausted attempts or different error, re-raise
+          raise
 
   def _generate_composed_function(self) -> None:
     """Generate a composed function f(g(x)) for chain rule practice."""
@@ -317,7 +339,7 @@ class DerivativeChain(DerivativeQuestion):
     # Show evaluation at the specific point
     explanation.add_element(
       ContentAST.Paragraph([
-        f"Evaluating at the point ({', '.join(map(str, self.evaluation_point))}):"
+        f"Evaluating at the point {format_vector(self.evaluation_point)}:"
       ])
     )
 
@@ -325,12 +347,21 @@ class DerivativeChain(DerivativeQuestion):
     subs_map = dict(zip(self.variables, self.evaluation_point))
     for i in range(self.num_variables):
       partial_expr = self.gradient_function[i]
-      partial_value = float(partial_expr.subs(subs_map))
+      partial_value = partial_expr.subs(subs_map)
+
+      # Use Answer.accepted_strings for clean numerical formatting
+      try:
+        numerical_value = float(partial_value)
+      except (TypeError, ValueError):
+        numerical_value = float(partial_value.evalf())
+
+      # Get clean string representation
+      clean_value = sorted(Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
 
       explanation.add_element(
         ContentAST.Paragraph([
           ContentAST.Equation(
-            f"{self._format_partial_derivative(i)} = {sp.latex(partial_expr)} = {partial_value}",
+            f"{self._format_partial_derivative(i)} = {sp.latex(partial_expr)} = {clean_value}",
             inline=False
           )
         ])
