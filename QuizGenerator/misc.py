@@ -418,6 +418,36 @@ class Answer:
     return sorted(outs, key=lambda s: (len(s), s))
 
 class ContentAST:
+  """
+  Content Abstract Syntax Tree - The core content system for quiz generation.
+
+  IMPORTANT: ALWAYS use ContentAST elements for ALL content generation.
+  Never create custom LaTeX, HTML, or Markdown strings manually.
+
+  This system provides cross-format compatibility between:
+  - LaTeX/PDF output for printed exams
+  - HTML/Canvas output for online quizzes
+  - Markdown for documentation
+
+  Key Components:
+  - ContentAST.Section: Container for groups of elements (use for get_body/get_explanation)
+  - ContentAST.Paragraph: Text blocks that automatically handle spacing
+  - ContentAST.Equation: Mathematical equations with proper LaTeX/MathJax rendering
+  - ContentAST.Matrix: Mathematical matrices (DON'T use manual \\begin{bmatrix})
+  - ContentAST.Table: Data tables with proper formatting
+  - ContentAST.Answer: Answer input fields
+  - ContentAST.OnlyHtml/OnlyLatex: Platform-specific content
+
+  Examples:
+    # Good - uses ContentAST
+    body = ContentAST.Section()
+    body.add_element(ContentAST.Paragraph(["Calculate the matrix:"]))
+    matrix_data = [[1, 2], [3, 4]]
+    body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="b"))
+
+    # Bad - manual LaTeX (inconsistent, error-prone)
+    body.add_element(ContentAST.Text("\\\\begin{bmatrix} 1 & 2 \\\\\\\\ 3 & 4 \\\\end{bmatrix}"))
+  """
   
   class Element:
     def __init__(self, elements=None, add_spacing_before=False):
@@ -776,12 +806,45 @@ class ContentAST:
       return cls('\n'.join(equation_lines))
 
   class Matrix(Element):
+    """
+    Mathematical matrix renderer for consistent cross-format display.
+
+    CRITICAL: Use this for ALL matrix and vector notation instead of manual LaTeX.
+
+    DON'T do this:
+        # Manual LaTeX (error-prone, inconsistent)
+        latex_str = f"\\\\begin{{bmatrix}} {a} & {b} \\\\\\\\ {c} & {d} \\\\end{{bmatrix}}"
+
+    DO this instead:
+        # ContentAST.Matrix (consistent, cross-format)
+        matrix_data = [[a, b], [c, d]]
+        ContentAST.Matrix(data=matrix_data, bracket_type="b")
+
+    For vectors (single column matrices):
+        vector_data = [[v1], [v2], [v3]]  # Note: list of single-element lists
+        ContentAST.Matrix(data=vector_data, bracket_type="b")
+
+    For LaTeX strings in equations:
+        matrix_latex = ContentAST.Matrix.to_latex(matrix_data, "b")
+        ContentAST.Equation(f"A = {matrix_latex}")
+
+    Bracket types:
+        - "b": square brackets [matrix] - most common for vectors/matrices
+        - "p": parentheses (matrix) - sometimes used for matrices
+        - "v": vertical bars |matrix| - for determinants
+        - "B": curly braces {matrix}
+        - "V": double vertical bars ||matrix|| - for norms
+    """
     def __init__(self, data, bracket_type="p", inline=False):
       """
-      Generates a ContentAST.Matrix element for mathematical matrices
-      :param data: matrix data as List[List[numbers/strings]]
-      :param bracket_type: 'p' for parentheses, 'b' for brackets, 'v' for bars, 'B' for braces, 'V' for double bars
-      :param inline: whether this is an inline matrix (uses smallmatrix)
+      Creates a matrix element that renders consistently across output formats.
+
+      Args:
+          data: Matrix data as List[List[numbers/strings]]
+                For vectors: [[v1], [v2], [v3]] (column vector)
+                For matrices: [[a, b], [c, d]]
+          bracket_type: Bracket style - "b" for [], "p" for (), "v" for |, etc.
+          inline: Whether to use inline (smaller) matrix formatting
       """
       super().__init__()
       self.data = data
@@ -790,7 +853,20 @@ class ContentAST:
 
     @staticmethod
     def to_latex(data, bracket_type="p"):
-      """Convert matrix data to LaTeX string without equation wrapper"""
+      """
+      Convert matrix data to LaTeX string for use in equations.
+
+      Use this when you need a LaTeX string to embed in ContentAST.Equation:
+          matrix_latex = ContentAST.Matrix.to_latex([[1, 2], [3, 4]], "b")
+          ContentAST.Equation(f"A = {matrix_latex}")
+
+      Args:
+          data: Matrix data as List[List[numbers/strings]]
+          bracket_type: Bracket style ("b", "p", "v", etc.)
+
+      Returns:
+          str: LaTeX matrix string (e.g., "\\begin{bmatrix} 1 & 2 \\\\ 3 & 4 \\end{bmatrix}")
+      """
       rows = []
       for row in data:
         rows.append(" & ".join(str(cell) for cell in row))
@@ -1027,3 +1103,4 @@ class ContentAST:
         r"}"
       )
       return content
+    

@@ -101,7 +101,39 @@ class QuestionRegistry:
 
 class Question(abc.ABC):
   """
-  A question base class that will be able to output questions to a variety of formats.
+  Base class for all quiz questions with cross-format rendering support.
+
+  CRITICAL: When implementing Question subclasses, ALWAYS use ContentAST elements
+  for all content in get_body() and get_explanation() methods.
+
+  NEVER create manual LaTeX, HTML, or Markdown strings. The ContentAST system
+  ensures consistent rendering across PDF/LaTeX and Canvas/HTML formats.
+
+  Required Methods:
+    - get_body(): Return ContentAST.Section with question content
+    - get_explanation(): Return ContentAST.Section with solution steps
+
+  ContentAST Usage Examples:
+    def get_body(self):
+        body = ContentAST.Section()
+        body.add_element(ContentAST.Paragraph(["Calculate the matrix:"]))
+
+        # Use ContentAST.Matrix for math, NOT manual LaTeX
+        matrix_data = [[1, 2], [3, 4]]
+        body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="b"))
+
+        # Use ContentAST.Answer for input fields
+        body.add_element(ContentAST.Answer(answer=self.answers["result"]))
+        return body
+
+  Common ContentAST Elements:
+    - ContentAST.Paragraph: Text blocks
+    - ContentAST.Equation: Mathematical expressions
+    - ContentAST.Matrix: Matrices and vectors (use instead of manual LaTeX!)
+    - ContentAST.Table: Data tables
+    - ContentAST.OnlyHtml/OnlyLatex: Platform-specific content
+
+  See existing questions in premade_questions/ for patterns and examples.
   """
   
   class Topic(enum.Enum):
