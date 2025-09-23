@@ -198,7 +198,7 @@ class LossQuestion_Linear(LossQuestion):
     return "Mean Squared Error (MSE)"
 
   def _get_loss_function_short_name(self) -> str:
-    return "loss per sample"
+    return "MSE"
 
   def _get_loss_function_formula(self) -> str:
     if self.num_output_vars == 1:
