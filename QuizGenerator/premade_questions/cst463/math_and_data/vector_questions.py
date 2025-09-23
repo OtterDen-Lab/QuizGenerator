@@ -83,19 +83,22 @@ class VectorAddition(VectorMathQuestion):
 
     explanation.add_element(ContentAST.Paragraph(["To add vectors, we add corresponding components:"]))
 
-    # Show step-by-step calculation
-    vector_a_inline = self._format_vector_inline(self.vector_a)
-    vector_b_inline = self._format_vector_inline(self.vector_b)
-    result_inline = self._format_vector_inline(self.result)
+    # Create LaTeX strings for multiline equation
+    vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
+    vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
+    addition_str = r" \\ ".join([f"{self.vector_a[i]}+{self.vector_b[i]}" for i in range(self.dimension)])
+    result_str = r" \\ ".join([str(v) for v in self.result])
 
-    explanation.add_element(ContentAST.Paragraph([f"Vector A: {vector_a_inline}"]))
-    explanation.add_element(ContentAST.Paragraph([f"Vector B: {vector_b_inline}"]))
-
-    # Show component-wise addition
-    for i in range(self.dimension):
-      explanation.add_element(ContentAST.Paragraph([f"Component {i+1}: {self.vector_a[i]} + {self.vector_b[i]} = {self.result[i]}"]))
-
-    explanation.add_element(ContentAST.Paragraph([f"Result: {result_inline}"]))
+    explanation.add_element(
+        ContentAST.Equation.make_block_equation__multiline_equals(
+            lhs="\\vec{a} + \\vec{b}",
+            rhs=[
+                f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+            ]
+        )
+    )
 
     return explanation
 
@@ -153,18 +156,21 @@ class VectorScalarMultiplication(VectorMathQuestion):
 
     explanation.add_element(ContentAST.Paragraph(["To multiply a vector by a scalar, we multiply each component by the scalar:"]))
 
-    # Show step-by-step calculation
-    vector_inline = self._format_vector_inline(self.vector)
-    result_inline = self._format_vector_inline(self.result)
+    # Create LaTeX strings for multiline equation
+    vector_str = r" \\ ".join([str(v) for v in self.vector])
+    multiplication_str = r" \\ ".join([f"{self.scalar} \\cdot {v}" for v in self.vector])
+    result_str = r" \\ ".join([str(v) for v in self.result])
 
-    explanation.add_element(ContentAST.Paragraph([f"Scalar: {self.scalar}"]))
-    explanation.add_element(ContentAST.Paragraph([f"Vector: {vector_inline}"]))
-
-    # Show component-wise multiplication
-    for i in range(self.dimension):
-      explanation.add_element(ContentAST.Paragraph([f"Component {i+1}: {self.scalar} × {self.vector[i]} = {self.result[i]}"]))
-
-    explanation.add_element(ContentAST.Paragraph([f"Result: {result_inline}"]))
+    explanation.add_element(
+        ContentAST.Equation.make_block_equation__multiline_equals(
+            lhs=f"{self.scalar} \\cdot \\vec{{v}}",
+            rhs=[
+                f"{self.scalar} \\cdot \\begin{{bmatrix}} {vector_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {multiplication_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+            ]
+        )
+    )
 
     return explanation
 
@@ -208,7 +214,7 @@ class VectorDotProduct(VectorMathQuestion):
     body.add_element(ContentAST.Equation(f"{vector_a_latex} \\cdot {vector_b_latex} = ", inline=False))
 
     # Answer section
-    body.add_element(ContentAST.Paragraph(["Answer: "]))
+    body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Answer: "])]))
     body.add_element(ContentAST.Answer(answer=self.answers["dot_product"]))
 
     return body
@@ -218,22 +224,23 @@ class VectorDotProduct(VectorMathQuestion):
 
     explanation.add_element(ContentAST.Paragraph(["The dot product is calculated by multiplying corresponding components and summing the results:"]))
 
-    # Show vectors
-    vector_a_inline = self._format_vector_inline(self.vector_a)
-    vector_b_inline = self._format_vector_inline(self.vector_b)
+    # Create LaTeX strings for multiline equation
+    vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
+    vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
+    products_str = " + ".join([f"({self.vector_a[i]} \\cdot {self.vector_b[i]})" for i in range(self.dimension)])
+    calculation_str = " + ".join([str(self.vector_a[i] * self.vector_b[i]) for i in range(self.dimension)])
 
-    explanation.add_element(ContentAST.Paragraph([f"Vector A: {vector_a_inline}"]))
-    explanation.add_element(ContentAST.Paragraph([f"Vector B: {vector_b_inline}"]))
-
-    # Show component-wise multiplication
-    calculation_parts = []
-    for i in range(self.dimension):
-      product = self.vector_a[i] * self.vector_b[i]
-      calculation_parts.append(f"({self.vector_a[i]} × {self.vector_b[i]}) = {product}")
-
-    explanation.add_element(ContentAST.Paragraph(["Calculation:"]))
-    explanation.add_element(ContentAST.Paragraph([" + ".join(calculation_parts)]))
-    explanation.add_element(ContentAST.Paragraph([f"= {self.result}"]))
+    explanation.add_element(
+        ContentAST.Equation.make_block_equation__multiline_equals(
+            lhs="\\vec{a} \\cdot \\vec{b}",
+            rhs=[
+                f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} \\cdot \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
+                products_str,
+                calculation_str,
+                str(self.result)
+            ]
+        )
+    )
 
     return explanation
 
@@ -272,7 +279,7 @@ class VectorMagnitude(VectorMathQuestion):
     body.add_element(ContentAST.Equation(f"\\left\\|{vector_latex}\\right\\| = ", inline=False))
 
     # Answer section
-    body.add_element(ContentAST.Paragraph(["Answer: "]))
+    body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Answer: "])]))
     body.add_element(ContentAST.Answer(answer=self.answers["magnitude"]))
 
     return body
@@ -283,25 +290,25 @@ class VectorMagnitude(VectorMathQuestion):
     explanation.add_element(ContentAST.Paragraph(["The magnitude of a vector is calculated using the formula:"]))
     explanation.add_element(ContentAST.Equation("\\left\\|\\vec{v}\\right\\| = \\sqrt{v_1^2 + v_2^2 + \\ldots + v_n^2}", inline=False))
 
-    # Show vector
-    vector_inline = self._format_vector_inline(self.vector)
-    explanation.add_element(ContentAST.Paragraph([f"Vector: {vector_inline}"]))
-
-    # Show calculation
-    squared_terms = []
-    sum_of_squares = 0
-    for i, component in enumerate(self.vector):
-      squared_term = component ** 2
-      squared_terms.append(f"{component}^2 = {squared_term}")
-      sum_of_squares += squared_term
-
-    explanation.add_element(ContentAST.Paragraph(["Calculation:"]))
-    explanation.add_element(ContentAST.Paragraph([" + ".join(squared_terms)]))
-    explanation.add_element(ContentAST.Paragraph([f"= {sum_of_squares}"]))
-
-    # Format the final result cleanly
+    # Create LaTeX strings for multiline equation
+    vector_str = r" \\ ".join([str(v) for v in self.vector])
+    squares_str = " + ".join([f"{v}^2" for v in self.vector])
+    calculation_str = " + ".join([str(v**2) for v in self.vector])
+    sum_of_squares = sum(component ** 2 for component in self.vector)
     result_formatted = sorted(Answer.accepted_strings(self.result), key=lambda s: len(s))[0]
-    explanation.add_element(ContentAST.Paragraph([f"= √{sum_of_squares} = {result_formatted}"]))
+
+    explanation.add_element(
+        ContentAST.Equation.make_block_equation__multiline_equals(
+            lhs="\\left\\|\\vec{v}\\right\\|",
+            rhs=[
+                f"\\left\\|\\begin{{bmatrix}} {vector_str} \\end{{bmatrix}}\\right\\|",
+                f"\\sqrt{{{squares_str}}}",
+                f"\\sqrt{{{calculation_str}}}",
+                f"\\sqrt{{{sum_of_squares}}}",
+                result_formatted
+            ]
+        )
+    )
 
     return explanation
 
@@ -358,25 +365,28 @@ class VectorCrossProduct(VectorMathQuestion):
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["The cross product of two 3D vectors is calculated using the formula:"]))
-    explanation.add_element(ContentAST.Equation("\\vec{a} \\times \\vec{b} = \\begin{pmatrix} a_2 b_3 - a_3 b_2 \\\\\\\\ a_3 b_1 - a_1 b_3 \\\\\\\\ a_1 b_2 - a_2 b_1 \\end{pmatrix}", inline=False))
+    explanation.add_element(ContentAST.Equation("\\vec{a} \\times \\vec{b} = \\begin{bmatrix} a_2 b_3 - a_3 b_2 \\\\ a_3 b_1 - a_1 b_3 \\\\ a_1 b_2 - a_2 b_1 \\end{bmatrix}", inline=False))
 
-    # Show vectors
-    vector_a_inline = self._format_vector_inline(self.vector_a)
-    vector_b_inline = self._format_vector_inline(self.vector_b)
-
-    explanation.add_element(ContentAST.Paragraph([f"Vector A: {vector_a_inline}"]))
-    explanation.add_element(ContentAST.Paragraph([f"Vector B: {vector_b_inline}"]))
-
-    # Show component-wise calculation
+    # Create LaTeX strings for multiline equation
     a1, a2, a3 = self.vector_a
     b1, b2, b3 = self.vector_b
 
-    explanation.add_element(ContentAST.Paragraph(["Component calculations:"]))
-    explanation.add_element(ContentAST.Paragraph([f"x-component: ({a2}) × ({b3}) - ({a3}) × ({b2}) = {a2*b3} - {a3*b2} = {self.result[0]}"]))
-    explanation.add_element(ContentAST.Paragraph([f"y-component: ({a3}) × ({b1}) - ({a1}) × ({b3}) = {a3*b1} - {a1*b3} = {self.result[1]}"]))
-    explanation.add_element(ContentAST.Paragraph([f"z-component: ({a1}) × ({b2}) - ({a2}) × ({b1}) = {a1*b2} - {a2*b1} = {self.result[2]}"]))
+    vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
+    vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
+    formula_str = f"{a2} \\cdot {b3} - {a3} \\cdot {b2} \\\\\\\\ {a3} \\cdot {b1} - {a1} \\cdot {b3} \\\\\\\\ {a1} \\cdot {b2} - {a2} \\cdot {b1}"
+    calculation_str = f"{a2*b3} - {a3*b2} \\\\\\\\ {a3*b1} - {a1*b3} \\\\\\\\ {a1*b2} - {a2*b1}"
+    result_str = r" \\ ".join([str(v) for v in self.result])
 
-    result_inline = self._format_vector_inline(self.result)
-    explanation.add_element(ContentAST.Paragraph([f"Result: {result_inline}"]))
+    explanation.add_element(
+        ContentAST.Equation.make_block_equation__multiline_equals(
+            lhs="\\vec{a} \\times \\vec{b}",
+            rhs=[
+                f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} \\times \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {formula_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {calculation_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+            ]
+        )
+    )
 
     return explanation
