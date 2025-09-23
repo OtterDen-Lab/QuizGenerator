@@ -3,15 +3,15 @@ from __future__ import annotations
 import abc
 import logging
 import math
-from typing import List, Tuple, Callable, Union
-import numpy as np
+from typing import List, Tuple, Callable, Union, Any
 import sympy as sp
-# from sympy import symbols, latex, diff, lambdify
 
 
 from QuizGenerator.misc import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
+
+from .misc import generate_function, format_vector
 
 log = logging.getLogger(__name__)
 
@@ -35,36 +35,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     
     if self.single_variable:
       self.num_variables = 1
-  
-  def _generate_function(self) -> Tuple[Callable, Callable, str, List[float]]:
-    """
-    Generate a function, its gradient, LaTeX representation, and optimal point using SymPy.
-    Supports 1-5 variables.
-    Returns: (function, gradient_function, latex_string, optimal_point)
-    """
-    # Create variable symbols
-    
-    # variables: tuple even for a single variable
-    var_names = [f'x_{i}' for i in range(self.num_variables)]
-    self.variables = sp.symbols(var_names)  # returns a tuple; robust when n==1
-    
-    # monomials up to max_degree; drop constant 1
-    terms = [m for m in sp.polys.itermonomials(self.variables, self.max_degree) if m != 1]
-    
-    # random nonzero integer coefficients in [-10,-1] ∪ [1,9]
-    coeff_pool = [*range(-10, 0), *range(1, 10)]
-    
-    # polynomial; if no terms (e.g., max_degree==0), fall back to 0
-    poly = sp.Add(*(self.rng.choice(coeff_pool) * t for t in terms)) if terms else sp.Integer(0)
-    
-    # f(x_1, ..., x_n) = poly
-    f = sp.Function('f')
-    self.function = poly
-    self.gradient_function = sp.Matrix([poly.diff(v) for v in self.variables])
-    self.equation = sp.Eq(f(*self.variables), poly)
-    
-    return
-    
+      
   def _perform_gradient_descent(self) -> List[dict]:
     """
     Perform gradient descent and return step-by-step results.
@@ -99,27 +70,12 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         [xi + ui for xi, ui in zip(x, update)]
 
     return results
-  
-  def _format_vector(self, vec: List[float]) -> str:
-    
-    vector_string = ', '.join(
-      [
-        sorted(Answer.accepted_strings(v), key=lambda s: len(s))[0]
-        for v in vec
-      ]
-    )
-    
-    if len(vec) == 1:
-      return vector_string
-    else:
-      return f"({vector_string})"
-    
-  
+
   def refresh(self, rng_seed=None, *args, **kwargs):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
     
     # Generate function and its properties
-    self._generate_function()
+    self.variables, self.function, self.gradient_function, self.equation = generate_function(self.rng, self.num_variables, self.max_degree)
     
     # Generate learning rate (expanded range)
     self.learning_rate = self.rng.choice([0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
@@ -184,7 +140,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       if step == 1:
         
         # Fill in starting location for first row with default formatting
-        row["location"] = f"{self._format_vector(self.starting_point)}"
+        row["location"] = f"{format_vector(self.starting_point)}"
         row[headers[2]] = f"answer__gradient_{step}"  # gradient column
         row[headers[3]] = f"answer__update_{step}"  # update column
       else:
@@ -269,9 +225,9 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       step = result['step']
       row = {"n": str(step)}
       
-      row["location"] = f"{self._format_vector(result['location'])}"
-      row[solution_headers[2]] = f"{self._format_vector(result['gradient'])}"
-      row[solution_headers[3]] = f"{self._format_vector(result['update'])}"
+      row["location"] = f"{format_vector(result['location'])}"
+      row[solution_headers[2]] = f"{format_vector(result['gradient'])}"
+      row[solution_headers[3]] = f"{format_vector(result['update'])}"
     
       solution_rows.append(row)
     
@@ -299,7 +255,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       explanation.add_element(
         ContentAST.Paragraph(
           [
-            f"Location: {self._format_vector(result['location'])}"
+            f"Location: {format_vector(result['location'])}"
           ]
         )
       )
@@ -307,7 +263,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       explanation.add_element(
         ContentAST.Paragraph(
           [
-            f"Gradient: {self._format_vector(result['gradient'])}"
+            f"Gradient: {format_vector(result['gradient'])}"
           ]
         )
       )
@@ -317,7 +273,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           [
             "Update: ",
             ContentAST.Equation(
-              f"\\alpha \\cdot \\nabla f = {self.learning_rate} \\cdot {self._format_vector(result['gradient'])} = {self._format_vector(result['update'])}",
+              f"\\alpha \\cdot \\nabla f = {self.learning_rate} \\cdot {format_vector(result['gradient'])} = {format_vector(result['update'])}",
               inline=True
             )
           ]
@@ -333,7 +289,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         explanation.add_element(
           ContentAST.Paragraph(
             [
-              f"Next location: {self._format_vector(current_loc)} - {self._format_vector(result['update'])} = {self._format_vector(next_loc)}"
+              f"Next location: {format_vector(current_loc)} - {format_vector(result['update'])} = {format_vector(next_loc)}"
             ]
           )
         )

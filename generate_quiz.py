@@ -72,6 +72,10 @@ def test():
   markdown_output = question.body.render("markdown")
   print(markdown_output)
 
+  print("\n" + "="*20 + " Explanation Output " + "="*20)
+  explanation_output = question.explanation.render("html")
+  print(explanation_output)
+
   print("\n" + "="*60)
   print("TEST COMPLETE")
   print("="*60)

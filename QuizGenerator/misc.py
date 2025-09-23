@@ -126,7 +126,7 @@ class Answer:
       
       ]
     elif self.variable_kind == Answer.VariableKind.AUTOFLOAT:
-      value_fraction = fractions.fractions.Fraction(self.value).limit_denominator(3*4*5) # For process questions, these are the numbers of jobs we'd have
+      value_fraction = fractions.Fraction(self.value).limit_denominator(3*4*5) # For process questions, these are the numbers of jobs we'd have
       
       answer_strings = [
         f"{self.value:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
