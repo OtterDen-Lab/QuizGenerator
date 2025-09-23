@@ -9,6 +9,19 @@ log = logging.getLogger(__name__)
 
 
 class MatrixMathQuestion(Question, abc.ABC):
+    """
+    Base class for matrix mathematics questions.
+
+    NOTE: This class demonstrates proper ContentAST usage patterns.
+    When implementing similar question types (vectors, equations, etc.),
+    follow these patterns for consistent formatting across output formats.
+
+    Key patterns demonstrated:
+    - ContentAST.Matrix for mathematical matrices
+    - ContentAST.Equation.make_block_equation__multiline_equals for step-by-step solutions
+    - ContentAST.OnlyHtml for Canvas-specific content
+    - Answer.integer for numerical answers
+    """
     def __init__(self, *args, **kwargs):
         kwargs["topic"] = kwargs.get("topic", Question.Topic.MATH)
         super().__init__(*args, **kwargs)
