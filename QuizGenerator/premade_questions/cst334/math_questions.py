@@ -288,7 +288,7 @@ class AverageMemoryAccessTime(MathQuestion):
         lhs="AMAT",
         rhs=[
           r"(hit\_rate)*(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
-          f"({self.hit_rate: 0.4f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.4f})*({self.miss_latency}) = {self.amat: 0.{Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
+          f"({self.hit_rate: 0.{Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.{Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.miss_latency}) = {self.amat: 0.{Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
         ]
       )
     )

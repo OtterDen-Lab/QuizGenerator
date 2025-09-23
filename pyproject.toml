@@ -27,7 +27,8 @@ dependencies = [
     "pylatex>=1.4.2",
     "docker>=6.1.3",
     "matplotlib",
-    "lms_interface"
+    "lms_interface",
+    "sympy>=1.14.0",
 ]
 
 [tool.uv.sources]

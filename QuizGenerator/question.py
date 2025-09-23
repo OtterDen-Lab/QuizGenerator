@@ -26,83 +26,6 @@ import logging
 log = logging.getLogger(__name__)
 
 
-@dataclasses.dataclass
-class TableGenerator:
-  headers : List[str] = None
-  value_matrix : List[List[str]] = None
-  transpose : bool = False # todo: make actually do something
-  
-  @staticmethod
-  def tex_escape(text):
-    """
-        :param text: a plain text message
-        :return: the message escaped to appear correctly in LaTeX
-    """
-    conv = {
-      '&': r'\&',
-      '%': r'\%',
-      '$': r'\$',
-      '#': r'\#',
-      '_': r'\_',
-      '{': r'\{',
-      '}': r'\}',
-      '~': r'\textasciitilde{}',
-      '^': r'\^{}',
-      '\\': r'\textbackslash{}',
-      '<': r'\textless{}',
-      '>': r'\textgreater{}',
-    }
-    regex = re.compile('|'.join(re.escape(str(key)) for key in sorted(conv.keys(), key = lambda item: - len(item))))
-    return regex.sub(lambda match: conv[match.group()], text)
-  
-  def generate(self, output_format: OutputFormat) -> str:
-    if output_format == OutputFormat.CANVAS:
-      html_lines = [
-        "<table border=\"1\" style=\"border-collapse: collapse; width: 100%;\">",
-      ]
-      
-      html_lines.append("<tr>")
-      if self.headers is not None:
-        html_lines.extend([
-          f"<th>{header_text}</th>"
-          for header_text in self.headers
-        ])
-      html_lines.append("</tr>")
-      
-      for row in self.value_matrix:
-        html_lines.append("<tr>")
-        for val in row:
-          html_lines.append(f"<td style=\"padding: 5px;\">{val}</td>")
-        html_lines.append("</tr>")
-      
-      html_lines.append("</table>")
-      return '\n'.join(html_lines)
-      
-    elif output_format == OutputFormat.LATEX:
-      table_lines = [
-        # r"\begin{table}[h!]",
-        # r"\centering",
-        r"\begin{tabular}{" + '|l' * len(self.value_matrix[0]) + '|}',
-        r"\toprule",
-      ]
-      if self.headers is not None:
-        table_lines.extend([
-          ' & '.join([self.tex_escape(element) for element in self.headers]) + r" \\",
-          r"\midrule"
-        ])
-      table_lines.extend([
-        ' & '.join([self.tex_escape(element) for element in line]) + r" \\"
-        for line in self.value_matrix
-      ])
-      table_lines.extend([
-        r"\bottomrule",
-        r"\end{tabular}"
-      ])
-      return '\n'.join(table_lines)
-
-  def __str__(self):
-    return self.generate(OutputFormat.CANVAS)
-
 class QuestionRegistry:
   _registry = {}
   _scanned = False
@@ -182,26 +105,63 @@ class Question(abc.ABC):
   """
   
   class Topic(enum.Enum):
-    PROCESS = enum.auto()
-    MEMORY = enum.auto()
-    CONCURRENCY = enum.auto()
-    IO = enum.auto()
-    PROGRAMMING = enum.auto()
-    MATH = enum.auto()
-    LANGUAGES = enum.auto()
-    SECURITY = enum.auto()
-    MISC = enum.auto()
-    
+    # CST334 (Operating Systems) Topics
+    SYSTEM_MEMORY = enum.auto()      # Virtual memory, paging, segmentation, caching
+    SYSTEM_PROCESSES = enum.auto()   # Process management, scheduling
+    SYSTEM_CONCURRENCY = enum.auto() # Threads, synchronization, locks
+    SYSTEM_IO = enum.auto()          # File systems, persistence, I/O operations
+    SYSTEM_SECURITY = enum.auto()    # Access control, protection mechanisms
+
+    # CST463 (Machine Learning/Data Science) Topics
+    ML_OPTIMIZATION = enum.auto()    # Gradient descent, optimization algorithms
+    ML_LINEAR_ALGEBRA = enum.auto()  # Matrix operations, vector mathematics
+    ML_STATISTICS = enum.auto()      # Probability, distributions, statistical inference
+    ML_ALGORITHMS = enum.auto()      # Classification, regression, clustering
+    DATA_PREPROCESSING = enum.auto() # Data cleaning, transformation, feature engineering
+
+    # General/Shared Topics
+    MATH_GENERAL = enum.auto()       # Basic mathematics, calculus, algebra
+    PROGRAMMING = enum.auto()        # General programming concepts
+    LANGUAGES = enum.auto()          # Programming languages specifics
+    MISC = enum.auto()              # Uncategorized questions
+
+    # Legacy aliases for backward compatibility
+    PROCESS = SYSTEM_PROCESSES
+    MEMORY = SYSTEM_MEMORY
+    CONCURRENCY = SYSTEM_CONCURRENCY
+    IO = SYSTEM_IO
+    SECURITY = SYSTEM_SECURITY
+    MATH = MATH_GENERAL
+
     @classmethod
     def from_string(cls, string) -> Question.Topic:
       mappings = {
         member.name.lower() : member for member in cls
       }
       mappings.update({
-        "processes": cls.PROCESS,
-        "threads": cls.CONCURRENCY,
-        "persistance": cls.IO,
-        "persistence": cls.IO,
+        # Legacy mappings
+        "processes": cls.SYSTEM_PROCESSES,
+        "process": cls.SYSTEM_PROCESSES,
+        "threads": cls.SYSTEM_CONCURRENCY,
+        "concurrency": cls.SYSTEM_CONCURRENCY,
+        "persistance": cls.SYSTEM_IO,
+        "persistence": cls.SYSTEM_IO,
+        "io": cls.SYSTEM_IO,
+        "memory": cls.SYSTEM_MEMORY,
+        "security": cls.SYSTEM_SECURITY,
+        "math": cls.MATH_GENERAL,
+        "mathematics": cls.MATH_GENERAL,
+
+        # New mappings
+        "optimization": cls.ML_OPTIMIZATION,
+        "gradient_descent": cls.ML_OPTIMIZATION,
+        "machine_learning": cls.ML_ALGORITHMS,
+        "ml": cls.ML_ALGORITHMS,
+        "linear_algebra": cls.ML_LINEAR_ALGEBRA,
+        "matrix": cls.ML_LINEAR_ALGEBRA,
+        "statistics": cls.ML_STATISTICS,
+        "stats": cls.ML_STATISTICS,
+        "data": cls.DATA_PREPROCESSING,
         "programming" : cls.PROGRAMMING,
         "misc": cls.MISC,
       })

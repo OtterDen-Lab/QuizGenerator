@@ -7,17 +7,13 @@ questions:
       class: FromText
       topic: MISC # Question.Topic enum
       spacing: 0 # int
+      text: |
+        Trial Question
 
     FromGenerator:
       class: FromGenerator
-      text: null # str
-      generator: null # str - Python code to generate content
-      possible_variations: .inf # int or float
-      topic: MISC # Question.Topic enum
-      spacing: 0 # int
-
-    TrueFalse:
-      class: TrueFalse
+      generator: return "Trial Question" # str - Python code to generate content
+      possible_variations: 1 # int or float
       topic: MISC # Question.Topic enum
       spacing: 0 # int
 
@@ -90,24 +86,6 @@ questions:
       num_jobs: 3 # int
       scheduler_kind: null # str - "FIFO", "ShortestDuration", "ShortestTimeRemaining", "RoundRobin"
       topic: PROCESS # Question.Topic enum (auto-set by ProcessQuestion)
-      spacing: 0 # int
-
-    MLFQ_Question:
-      class: cst334.MLFQ_Question
-      topic: PROCESS # Question.Topic enum (auto-set by ProcessQuestion)
-      spacing: 0 # int
-      # Note: Implementation appears incomplete
-
-    # CST334 Language Questions
-    ValidStringsInLanguageQuestion:
-      class: cst334.ValidStringsInLanguageQuestion
-      grammar_str_good: null # str - BNF grammar string
-      grammar_str_bad: null # str - BNF grammar string
-      include_spaces: false # bool
-      max_length: 30 # int
-      num_answer_options: 4 # int
-      num_answer_blanks: 4 # int
-      topic: LANGUAGES # Question.Topic enum (auto-set by LanguageQuestion)
       spacing: 0 # int
 
     # CST334 Persistence Questions

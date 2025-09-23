@@ -1,16 +1,19 @@
 #!env python
 from __future__ import annotations
 
+import decimal
 import enum
 import fractions
+import itertools
 import logging
 import math
 import textwrap
 from io import BytesIO
-from typing import List, Dict, Callable
+from typing import List, Dict, Callable, Tuple
 
 import pylatex
 import pypandoc
+import fractions
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +41,7 @@ class Answer:
     BINARY_OR_HEX = enum.auto()
     AUTOFLOAT = enum.auto()
     LIST = enum.auto()
+    VECTOR = enum.auto()
     
     
   def __init__(
@@ -122,7 +126,7 @@ class Answer:
       
       ]
     elif self.variable_kind == Answer.VariableKind.AUTOFLOAT:
-      value_fraction = fractions.Fraction(self.value).limit_denominator(3*4*5) # For process questions, these are the numbers of jobs we'd have
+      value_fraction = fractions.fractions.Fraction(self.value).limit_denominator(3*4*5) # For process questions, these are the numbers of jobs we'd have
       
       answer_strings = [
         f"{self.value:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
@@ -152,11 +156,44 @@ class Answer:
         for answer_string in set(answer_strings)
       ]
       
+    elif self.variable_kind == Answer.VariableKind.VECTOR:
+      
+      # Get all answer variations
+      answer_variations = [
+        self.__class__.accepted_strings(dimension_value)
+        for dimension_value in self.value
+      ]
+      
+      canvas_answers = []
+      for combination in itertools.product(*answer_variations):
+        if len(combination) == 1:
+          canvas_answers.append(
+            {
+              "blank_id": self.key,
+              "answer_weight": 100 if self.correct else 0,
+              "answer_text": f"{', '.join(combination)}",
+            }
+          )
+        canvas_answers.append({
+          "blank_id" : self.key,
+          "answer_weight": 100 if self.correct else 0,
+          "answer_text": f"({', '.join(list(combination))})",
+        })
+        if len(combination) == 1:
+          canvas_answers.append(
+            {
+              "blank_id": self.key,
+              "answer_weight": 100 if self.correct else 0,
+              "answer_text": f"{', '.join(combination)}",
+            }
+          )
+      return canvas_answers
+        
     elif self.variable_kind == Answer.VariableKind.LIST:
       canvas_answers = [
         {
           "blank_id": self.key,
-          "answer_text": ','.join(map(str, possible_state)),
+          "answer_text": ', '.join(map(str, possible_state)),
           "answer_weight": 100 if self.correct else 0,
         }
         for possible_state in [self.value] #itertools.permutations(self.value)
@@ -243,7 +280,7 @@ class Answer:
     )
   
   @classmethod
-  def float_value(cls, key: str, value: float, **kwargs) -> 'Answer':
+  def float_value(cls, key: str, value: Tuple[float], **kwargs) -> 'Answer':
     """Create a simple float answer (no fraction conversion)"""
     return cls(
       key=key,
@@ -259,6 +296,16 @@ class Answer:
       key=key,
       value=value,
       variable_kind=cls.VariableKind.LIST,
+      **kwargs
+    )
+
+  @classmethod
+  def vector_value(cls, key: str, value: List[float], **kwargs) -> 'Answer':
+    """Create a simple float answer (no fraction conversion)"""
+    return cls(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.VECTOR,
       **kwargs
     )
 
@@ -293,7 +340,92 @@ class Answer:
       kind=cls.AnswerKind.ESSAY,
       **kwargs
     )
-
+  
+  @staticmethod
+  def _to_fraction(x):
+    """Convert int/float/decimal.Decimal/fractions.Fraction/str('a/b' or decimal) to fractions.Fraction exactly."""
+    if isinstance(x, fractions.Fraction):
+      return x
+    if isinstance(x, int):
+      return fractions.Fraction(x, 1)
+    if isinstance(x, decimal.Decimal):
+      # exact conversion of decimal.Decimal to fractions.Fraction
+      sign, digits, exp = x.as_tuple()
+      n = 0
+      for d in digits:
+        n = n * 10 + d
+      n = -n if sign else n
+      if exp >= 0:
+        return fractions.Fraction(n * (10 ** exp), 1)
+      else:
+        return fractions.Fraction(n, 10 ** (-exp))
+    if isinstance(x, str):
+      s = x.strip()
+      if '/' in s:
+        a, b = s.split('/', 1)
+        return fractions.Fraction(int(a.strip()), int(b.strip()))
+      return fractions.Fraction(decimal.Decimal(s))
+    # float or other numerics
+    return fractions.Fraction(decimal.Decimal(str(x)))
+  
+  @staticmethod
+  def accepted_strings(
+      value,
+      *,
+      allow_integer=True,  # allow "whole numbers as whole numbers"
+      allow_simple_fraction=True,  # allow simple a/b when denominator small
+      max_denominator=720,  # how "simple" the fraction is
+      allow_mixed=False,  # also allow "1 1/2" for 3/2
+      include_spaces=False,  # also accept "1 / 2"
+      include_fixed_even_if_integer=False  # include "1.0000" when value is 1 and fixed_decimals is set
+  ):
+    """
+    Return a sorted list of strings you can paste into Canvas as alternate correct answers.
+    """
+    decimal.getcontext().prec = max(34, (Answer.DEFAULT_ROUNDING_DIGITS or 0) + 10)
+    f = Answer._to_fraction(value)
+    outs = set()
+    
+    # Integer form
+    if f.denominator == 1 and allow_integer:
+      outs.add(str(f.numerator))
+      if include_fixed_even_if_integer:
+        q = decimal.Decimal(1).scaleb(-Answer.DEFAULT_ROUNDING_DIGITS)  # 1e-<fixed_decimals>
+        d = decimal.Decimal(f.numerator).quantize(q, rounding=decimal.ROUND_HALF_UP)
+        outs.add(format(d, 'f'))
+    
+    # Fixed-decimal form (exactly N decimals)
+    q = decimal.Decimal(1).scaleb(-Answer.DEFAULT_ROUNDING_DIGITS)
+    d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
+    outs.add(format(d, 'f'))
+    
+    # Trimmed decimal (no trailing zeros; up to max_trimmed_decimals)
+    if Answer.DEFAULT_ROUNDING_DIGITS:
+      q = decimal.Decimal(1).scaleb(-Answer.DEFAULT_ROUNDING_DIGITS)
+      d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
+      s = format(d, 'f').rstrip('0').rstrip('.')
+      # ensure we keep leading zero like "0.5"
+      if s.startswith('.'):
+        s = '0' + s
+      if s == '-0':  # tidy negative zero
+        s = '0'
+      outs.add(s)
+    
+    # Simple fraction (reduced, with small denominator)
+    if allow_simple_fraction:
+      fr = f.limit_denominator(max_denominator)
+      if fr == f:
+        a, b = fr.numerator, fr.denominator
+        outs.add(f"{a}/{b}")
+        if include_spaces:
+          outs.add(f"{a} / {b}")
+        if allow_mixed and b != 1 and abs(a) > b:
+          sign = '-' if a < 0 else ''
+          A = abs(a)
+          whole, rem = divmod(A, b)
+          outs.add(f"{sign}{whole} {rem}/{b}")
+    
+    return sorted(outs, key=lambda s: (len(s), s))
 
 class ContentAST:
   
@@ -339,7 +471,7 @@ class ContentAST:
       return "".join(element.render("markdown", **kwargs) for element in self.elements)
     
     def render_html(self, **kwargs):
-      html = "".join(element.render("html", **kwargs) for element in self.elements)
+      html = " ".join(element.render("html", **kwargs) for element in self.elements)
       return f"{'<br>' if self.add_spacing_before else ''}{html}"
     
     def render_latex(self, **kwargs):
@@ -453,7 +585,7 @@ class ContentAST:
       
       return latex
     
-  
+  ## Below here are smaller elements generally
   class Question(Element):
     def __init__(
         self,
@@ -492,6 +624,8 @@ class ContentAST:
         ]
         content = '\n'.join(latex_lines)
       
+      log.debug(f"content: \n{content}")
+      
       return content
   
   class Section(Element):
@@ -513,7 +647,11 @@ class ContentAST:
       if self.hide_from_html:
         return ""
       # If the super function returns None then we just return content as is
-      return super().convert_markdown(self.content, "html") or self.content
+      conversion_results = super().convert_markdown(self.content.replace("#", r"\#"), "html").strip()
+      if conversion_results is not None:
+        if conversion_results.startswith("<p>") and conversion_results.endswith("</p>"):
+          conversion_results = conversion_results[3:-4]
+      return conversion_results or self.content
     
     def render_latex(self, **kwargs):
       if self.hide_from_latex:
@@ -556,24 +694,7 @@ class ContentAST:
           self.elements.append(line)
       
     def render(self, output_format, **kwargs):
-      # Merge all Text nodes before we render
-      # todo: if equations are inlined then we can merge (as of right now at least)
-      merged_elements = []
-      previous_node = ContentAST.Text("")
-      for elem in self.elements:
-        if not previous_node.is_mergeable(elem):
-          # Then we can't merge, so we should move on
-          merged_elements.append(previous_node)
-          previous_node = elem
-          continue
-        
-        # Otherwise, we can merge
-        previous_node.merge(elem)
-      merged_elements.append(previous_node)
-      
-      self.elements = merged_elements
-      
-      # todo: double new lines like this are not sustainable and should be removed -- these should be in the individual renders
+      # Add in new lines to break these up visually
       return "\n\n" + super().render(output_format, **kwargs)
   
     def add_line(self, line: str):
@@ -630,13 +751,22 @@ class ContentAST:
       self.inline = inline
     
     def render_markdown(self, **kwargs):
-      return r"$$ \displaystyle " + f"{self.latex}" + r" \phantom{{}}$$"
+      if self.inline:
+        return f"${self.latex}$"
+      else:
+        return r"$$ \displaystyle " + f"{self.latex}" + r" \; $$"
 
     def render_html(self, **kwargs):
-      return f"<div class='math'>$$ \\displaystyle {self.latex} \\phantom{{}} $$</div>"
-    
+      if self.inline:
+        return fr"\({self.latex}\)"
+      else:
+        return f"<div class='math'>$$ \\displaystyle {self.latex} \\; $$</div>"
+
     def render_latex(self, **kwargs):
-      return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
+      if self.inline:
+        return f"${self.latex}$~"
+      else:
+        return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
   
     @classmethod
     def make_block_equation__multiline_equals(cls, lhs : str, rhs : List[str]):
@@ -726,8 +856,29 @@ class ContentAST:
       # todo: fix alignments
       # todo: implement transpose
       super().__init__()
-      self.data = data
-      self.headers = headers
+
+      # Normalize data to ContentAST elements
+      self.data = []
+      for row in data:
+        normalized_row = []
+        for cell in row:
+          if isinstance(cell, ContentAST.Element):
+            normalized_row.append(cell)
+          else:
+            normalized_row.append(ContentAST.Text(str(cell)))
+        self.data.append(normalized_row)
+
+      # Normalize headers to ContentAST elements
+      if headers:
+        self.headers = []
+        for header in headers:
+          if isinstance(header, ContentAST.Element):
+            self.headers.append(header)
+          else:
+            self.headers.append(ContentAST.Text(str(header)))
+      else:
+        self.headers = None
+
       self.alignments = alignments
       self.padding = padding,
       self.hide_rules = hide_rules
@@ -760,19 +911,22 @@ class ContentAST:
     def render_html(self, **kwargs):
       # HTML table implementation
       result = ["<table border=\"1\" style=\"border-collapse: collapse; width: 100%;\">"]
-      
+
+      result.append("  <tbody>")
+
+      # Render headers as bold first row instead of <th> tags for Canvas compatibility
       if self.headers:
-        result.append("  <thead>")
         result.append("    <tr>")
         for i, header in enumerate(self.headers):
           align_attr = ""
           if self.alignments and i < len(self.alignments):
             align_attr = f' align="{self.alignments[i]}"'
-          result.append(f"      <th{align_attr}>{header}</th>")
+          # Render header as bold content in regular <td> tag
+          rendered_header = header.render(output_format="html")
+          result.append(f"      <td style=\"padding: {'5px' if self.padding else '0x'}; font-weight: bold; {align_attr};\"><b>{rendered_header}</b></td>")
         result.append("    </tr>")
-        result.append("  </thead>")
-      
-      result.append("  <tbody>")
+
+      # Render data rows
       for row in self.data:
         result.append("    <tr>")
         for i, cell in enumerate(row):
@@ -785,7 +939,7 @@ class ContentAST:
         result.append("    </tr>")
       result.append("  </tbody>")
       result.append("</table>")
-      
+
       return "\n".join(result)
     
     def render_latex(self, **kwargs):
@@ -795,27 +949,25 @@ class ContentAST:
                            for a in self.alignments)
       else:
         col_spec = '|'.join(["l"] * (len(self.headers) if self.headers else len(self.data[0])))
-      
+
       result = [f"\\begin{{tabular}}{{{col_spec}}}"]
       if not self.hide_rules: result.append("\\toprule")
-      
+
       if self.headers:
-        result.append(" & ".join(pylatex.escape_latex(str(h)) for h in self.headers) + " \\\\")
+        # Now all headers are ContentAST elements, so render them consistently
+        rendered_headers = [header.render(output_format="latex") for header in self.headers]
+        result.append(" & ".join(rendered_headers) + " \\\\")
         if not self.hide_rules: result.append("\\midrule")
-      
+
       for row in self.data:
-        rendered_row = [
-          cell.render(output_format="latex")
-          if isinstance(cell, ContentAST.Element)
-          else pylatex.escape_latex(cell)
-          for cell in row
-        ]
+        # All data cells are now ContentAST elements, so render them consistently
+        rendered_row = [cell.render(output_format="latex") for cell in row]
         result.append(" & ".join(rendered_row) + " \\\\")
-      
+
       if len(self.data) > 1 and not self.hide_rules:
         result.append("\\bottomrule")
       result.append("\\end{tabular}")
-      
+
       return "\n\n" + "\n".join(result)
   
   class Picture(Element):
