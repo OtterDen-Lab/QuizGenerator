@@ -3,15 +3,15 @@ from __future__ import annotations
 import abc
 import logging
 import math
-from typing import List, Tuple, Callable, Union
-import numpy as np
+from typing import List, Tuple, Callable, Union, Any
 import sympy as sp
-# from sympy import symbols, latex, diff, lambdify
 
 
 from QuizGenerator.misc import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
+
+from .misc import generate_function
 
 log = logging.getLogger(__name__)
 
@@ -35,36 +35,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     
     if self.single_variable:
       self.num_variables = 1
-  
-  def _generate_function(self) -> Tuple[Callable, Callable, str, List[float]]:
-    """
-    Generate a function, its gradient, LaTeX representation, and optimal point using SymPy.
-    Supports 1-5 variables.
-    Returns: (function, gradient_function, latex_string, optimal_point)
-    """
-    # Create variable symbols
-    
-    # variables: tuple even for a single variable
-    var_names = [f'x_{i}' for i in range(self.num_variables)]
-    self.variables = sp.symbols(var_names)  # returns a tuple; robust when n==1
-    
-    # monomials up to max_degree; drop constant 1
-    terms = [m for m in sp.polys.itermonomials(self.variables, self.max_degree) if m != 1]
-    
-    # random nonzero integer coefficients in [-10,-1] ∪ [1,9]
-    coeff_pool = [*range(-10, 0), *range(1, 10)]
-    
-    # polynomial; if no terms (e.g., max_degree==0), fall back to 0
-    poly = sp.Add(*(self.rng.choice(coeff_pool) * t for t in terms)) if terms else sp.Integer(0)
-    
-    # f(x_1, ..., x_n) = poly
-    f = sp.Function('f')
-    self.function = poly
-    self.gradient_function = sp.Matrix([poly.diff(v) for v in self.variables])
-    self.equation = sp.Eq(f(*self.variables), poly)
-    
-    return
-    
+      
   def _perform_gradient_descent(self) -> List[dict]:
     """
     Perform gradient descent and return step-by-step results.
@@ -119,7 +90,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
     
     # Generate function and its properties
-    self._generate_function()
+    self.variables, self.function, self.gradient_function, self.equation = generate_function(self.rng, self.num_variables, self.max_degree)
     
     # Generate learning rate (expanded range)
     self.learning_rate = self.rng.choice([0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
