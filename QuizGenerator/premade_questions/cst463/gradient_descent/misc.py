@@ -2,6 +2,7 @@
 from typing import List, Tuple, Callable, Union, Any
 import sympy as sp
 
+from QuizGenerator.misc import Answer
 
 def generate_function(rng, num_variables: int, max_degree: int) -> tuple[Any, sp.Expr, sp.MutableDenseMatrix, sp.Equality]:
   """
@@ -30,3 +31,19 @@ def generate_function(rng, num_variables: int, max_degree: int) -> tuple[Any, sp
   equation = sp.Eq(f(*variables), poly)
   
   return variables, function, gradient_function, equation
+  
+  
+def format_vector(vec: List[float]) -> str:
+  
+  vector_string = ', '.join(
+    [
+      sorted(Answer.accepted_strings(v), key=lambda s: len(s))[0]
+      for v in vec
+    ]
+  )
+  
+  if len(vec) == 1:
+    return vector_string
+  else:
+    return f"({vector_string})"
+

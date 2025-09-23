@@ -11,7 +11,7 @@ from QuizGenerator.misc import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
-from .misc import generate_function
+from .misc import generate_function, format_vector
 
 log = logging.getLogger(__name__)
 
@@ -70,22 +70,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         [xi + ui for xi, ui in zip(x, update)]
 
     return results
-  
-  def _format_vector(self, vec: List[float]) -> str:
-    
-    vector_string = ', '.join(
-      [
-        sorted(Answer.accepted_strings(v), key=lambda s: len(s))[0]
-        for v in vec
-      ]
-    )
-    
-    if len(vec) == 1:
-      return vector_string
-    else:
-      return f"({vector_string})"
-    
-  
+
   def refresh(self, rng_seed=None, *args, **kwargs):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
     
@@ -155,7 +140,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       if step == 1:
         
         # Fill in starting location for first row with default formatting
-        row["location"] = f"{self._format_vector(self.starting_point)}"
+        row["location"] = f"{format_vector(self.starting_point)}"
         row[headers[2]] = f"answer__gradient_{step}"  # gradient column
         row[headers[3]] = f"answer__update_{step}"  # update column
       else:
@@ -240,9 +225,9 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       step = result['step']
       row = {"n": str(step)}
       
-      row["location"] = f"{self._format_vector(result['location'])}"
-      row[solution_headers[2]] = f"{self._format_vector(result['gradient'])}"
-      row[solution_headers[3]] = f"{self._format_vector(result['update'])}"
+      row["location"] = f"{format_vector(result['location'])}"
+      row[solution_headers[2]] = f"{format_vector(result['gradient'])}"
+      row[solution_headers[3]] = f"{format_vector(result['update'])}"
     
       solution_rows.append(row)
     
@@ -270,7 +255,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       explanation.add_element(
         ContentAST.Paragraph(
           [
-            f"Location: {self._format_vector(result['location'])}"
+            f"Location: {format_vector(result['location'])}"
           ]
         )
       )
@@ -278,7 +263,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       explanation.add_element(
         ContentAST.Paragraph(
           [
-            f"Gradient: {self._format_vector(result['gradient'])}"
+            f"Gradient: {format_vector(result['gradient'])}"
           ]
         )
       )
@@ -288,7 +273,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           [
             "Update: ",
             ContentAST.Equation(
-              f"\\alpha \\cdot \\nabla f = {self.learning_rate} \\cdot {self._format_vector(result['gradient'])} = {self._format_vector(result['update'])}",
+              f"\\alpha \\cdot \\nabla f = {self.learning_rate} \\cdot {format_vector(result['gradient'])} = {format_vector(result['update'])}",
               inline=True
             )
           ]
@@ -304,7 +289,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         explanation.add_element(
           ContentAST.Paragraph(
             [
-              f"Next location: {self._format_vector(current_loc)} - {self._format_vector(result['update'])} = {self._format_vector(next_loc)}"
+              f"Next location: {format_vector(current_loc)} - {format_vector(result['update'])} = {format_vector(next_loc)}"
             ]
           )
         )
