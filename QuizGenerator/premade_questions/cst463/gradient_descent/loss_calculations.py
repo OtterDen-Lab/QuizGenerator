@@ -55,6 +55,11 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     """Return the LaTeX formula for the loss function."""
     pass
 
+  @abc.abstractmethod
+  def _get_loss_function_short_name(self) -> str:
+    """Return the short name of the loss function (used in question body)."""
+    pass
+
   def _create_answers(self):
     """Create answer objects for individual losses and overall loss."""
     self.answers = {}
@@ -72,22 +77,16 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
     # Question description
     body.add_element(ContentAST.Paragraph([
-      f"Given the dataset below, calculate the {self._get_loss_function_name()} for each sample "
-      f"and the overall {self._get_loss_function_name()}."
+      f"Given the dataset below, calculate the {self._get_loss_function_short_name()} for each sample "
+      f"and the overall {self._get_loss_function_short_name()}."
     ]))
-
-    # Loss function formula
-    body.add_element(ContentAST.Paragraph([
-      f"The {self._get_loss_function_name()} formula is:"
-    ]))
-    body.add_element(ContentAST.Equation(self._get_loss_function_formula(), inline=False))
 
     # Data table
     body.add_element(self._create_data_table())
 
     # Overall loss question
     body.add_element(ContentAST.Paragraph([
-      f"Overall {self._get_loss_function_name()}: "
+      f"Overall {self._get_loss_function_short_name()}: "
     ]))
     body.add_element(ContentAST.Answer(self.answers["overall_loss"]))
 
@@ -193,6 +192,9 @@ class LossQuestion_Linear(LossQuestion):
 
   def _get_loss_function_name(self) -> str:
     return "Mean Squared Error (MSE)"
+
+  def _get_loss_function_short_name(self) -> str:
+    return "loss per sample"
 
   def _get_loss_function_formula(self) -> str:
     if self.num_output_vars == 1:
@@ -376,6 +378,9 @@ class LossQuestion_Logistic(LossQuestion):
   def _get_loss_function_name(self) -> str:
     return "Log-Loss (Binary Cross-Entropy)"
 
+  def _get_loss_function_short_name(self) -> str:
+    return "log-loss"
+
   def _get_loss_function_formula(self) -> str:
     return r"L(y, p) = -[y \log(p) + (1-y) \log(1-p)]"
 
@@ -484,9 +489,10 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
       # Generate input features
       sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(2)]
 
-      # Generate true class (one-hot encoded)
-      true_class = self.rng.randint(0, self.num_classes)
-      sample['true_values'] = [1 if j == true_class else 0 for j in range(self.num_classes)]
+      # Generate true class (one-hot encoded) - ensure exactly one class is 1
+      true_class_idx = self.rng.randint(0, self.num_classes - 1)
+      sample['true_values'] = [0] * self.num_classes  # Start with all zeros
+      sample['true_values'][true_class_idx] = 1        # Set exactly one to 1
 
       # Generate predicted probabilities (softmax-like, sum to 1)
       raw_probs = [self.rng.uniform(0.1, 2.0) for _ in range(self.num_classes)]
@@ -516,22 +522,15 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
   def _get_loss_function_name(self) -> str:
     return "Cross-Entropy Loss"
 
+  def _get_loss_function_short_name(self) -> str:
+    return "cross-entropy loss"
+
   def _get_loss_function_formula(self) -> str:
     return r"L(\mathbf{y}, \mathbf{p}) = -\sum_{i=1}^{K} y_i \log(p_i)"
 
   def _create_data_table(self) -> ContentAST.Element:
     """Create table with features, true class vectors, predicted probabilities, and loss fields."""
-    headers = ["x_0", "x_1"]
-
-    # Add true value columns (one-hot)
-    for i in range(self.num_classes):
-      headers.append(f"y_{i}")
-
-    # Add prediction columns (probabilities)
-    for i in range(self.num_classes):
-      headers.append(f"p_{i}")
-
-    headers.append("loss")
+    headers = ["x_0", "x_1", "y", "p", "loss"]
 
     rows = []
     for i, sample in enumerate(self.data):
@@ -541,13 +540,13 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
       row["x_0"] = f"{sample['inputs'][0]:.2f}"
       row["x_1"] = f"{sample['inputs'][1]:.2f}"
 
-      # True values (one-hot)
-      for j, y in enumerate(sample['true_values']):
-        row[f"y_{j}"] = str(y)
+      # True values (one-hot vector)
+      y_vector = "[" + ", ".join([str(y) for y in sample['true_values']]) + "]"
+      row["y"] = y_vector
 
-      # Predicted probabilities
-      for j, p in enumerate(sample['predictions']):
-        row[f"p_{j}"] = f"{p:.3f}"
+      # Predicted probabilities (vector)
+      p_vector = "[" + ", ".join([f"{p:.3f}" for p in sample['predictions']]) + "]"
+      row["p"] = p_vector
 
       # Loss answer field
       row["loss"] = self.answers[f"loss_{i}"]
@@ -567,31 +566,37 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
 
       steps.add_element(ContentAST.Paragraph([f"Sample {i+1}:"]))
 
+      # Show vector dot product calculation
+      y_str = "[" + ", ".join([str(y) for y in y_vec]) + "]"
+      p_str = "[" + ", ".join([f"{p:.3f}" for p in p_vec]) + "]"
+
+      steps.add_element(ContentAST.Paragraph([f"\\mathbf{{y}} = {y_str}, \\mathbf{{p}} = {p_str}"]))
+
       # Find the true class (where y_i = 1)
       try:
         true_class_idx = y_vec.index(1)
         p_true = p_vec[true_class_idx]
-        calculation = f"L = -\\sum y_i \\log(p_i) = -1 \\cdot \\log({p_true:.3f}) = {loss:.4f}"
+
+        # Show the vector multiplication more explicitly
+        terms = []
+        for j, (y, p) in enumerate(zip(y_vec, p_vec)):
+          if y == 1:
+            terms.append(f"{y} \\cdot \\log({p:.3f})")
+          else:
+            terms.append(f"{y} \\cdot \\log({p:.3f})")
+
+        calculation = f"L = -\\mathbf{{y}} \\cdot \\log(\\mathbf{{p}}) = -({' + '.join(terms)}) = -{y_vec[true_class_idx]} \\cdot \\log({p_true:.3f}) = {loss:.4f}"
       except ValueError:
         # Fallback in case no class is set to 1 (shouldn't happen, but safety check)
-        calculation = f"L = -\\sum y_i \\log(p_i) = {loss:.4f}"
+        calculation = f"L = -\\mathbf{{y}} \\cdot \\log(\\mathbf{{p}}) = {loss:.4f}"
+
       steps.add_element(ContentAST.Equation(calculation, inline=False))
 
     return steps
 
   def _create_completed_table(self) -> ContentAST.Element:
     """Create table with all values including calculated losses."""
-    headers = ["x_0", "x_1"]
-
-    # Add true value columns (one-hot)
-    for i in range(self.num_classes):
-      headers.append(f"y_{i}")
-
-    # Add prediction columns (probabilities)
-    for i in range(self.num_classes):
-      headers.append(f"p_{i}")
-
-    headers.append("loss")
+    headers = ["x_0", "x_1", "y", "p", "loss"]
 
     rows = []
     for i, sample in enumerate(self.data):
@@ -601,13 +606,13 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
       for x in sample['inputs']:
         row.append(f"{x:.2f}")
 
-      # True values (one-hot)
-      for y in sample['true_values']:
-        row.append(str(y))
+      # True values (one-hot vector)
+      y_vector = "[" + ", ".join([str(y) for y in sample['true_values']]) + "]"
+      row.append(y_vector)
 
-      # Predicted probabilities
-      for p in sample['predictions']:
-        row.append(f"{p:.3f}")
+      # Predicted probabilities (vector)
+      p_vector = "[" + ", ".join([f"{p:.3f}" for p in sample['predictions']]) + "]"
+      row.append(p_vector)
 
       # Calculated loss
       row.append(f"{self.individual_losses[i]:.4f}")
