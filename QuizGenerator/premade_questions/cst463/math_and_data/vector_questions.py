@@ -20,9 +20,10 @@ class VectorMathQuestion(Question, abc.ABC):
     return [self.rng.randint(min_val, max_val) for _ in range(dimension)]
 
   def _format_vector(self, vector):
-    """Format vector for display as column vector."""
-    elements = [str(v) for v in vector]
-    return f"\\begin{{pmatrix}} {' \\\\\\\\ '.join(elements)} \\end{{pmatrix}}"
+    """Format vector for display as column vector using ContentAST.Matrix."""
+    # Convert to column matrix format
+    matrix_data = [[v] for v in vector]
+    return ContentAST.Matrix.to_latex(matrix_data, "b")
 
   def _format_vector_inline(self, vector):
     """Format vector for inline display."""
@@ -59,13 +60,13 @@ class VectorAddition(VectorMathQuestion):
 
     body.add_element(ContentAST.Paragraph(["Calculate the vector addition:"]))
 
-    # Display the addition problem
+    # Display the addition problem as a single equation
     vector_a_latex = self._format_vector(self.vector_a)
     vector_b_latex = self._format_vector(self.vector_b)
     body.add_element(ContentAST.Equation(f"{vector_a_latex} + {vector_b_latex} = ", inline=False))
 
     # Answer section
-    body.add_element(ContentAST.Paragraph(["Enter your answer as a column vector:"]))
+    body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
 
     # Create answer table for vector components
     table_data = []
@@ -74,14 +75,6 @@ class VectorAddition(VectorMathQuestion):
 
     body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
 
-    # For PDF, show as a single column vector answer
-    pdf_answer_text = "\\begin{pmatrix} "
-    for i in range(self.dimension):
-      if i > 0:
-        pdf_answer_text += " \\\\\\\\ "
-      pdf_answer_text += f"\\underline{{\\hspace{{2cm}}}}"
-    pdf_answer_text += " \\end{pmatrix}"
-    body.add_element(ContentAST.OnlyLatex([ContentAST.Equation(pdf_answer_text, inline=False)]))
 
     return body
 
@@ -138,12 +131,12 @@ class VectorScalarMultiplication(VectorMathQuestion):
 
     body.add_element(ContentAST.Paragraph(["Calculate the scalar multiplication:"]))
 
-    # Display the multiplication problem
+    # Display the multiplication problem as a single equation
     vector_latex = self._format_vector(self.vector)
     body.add_element(ContentAST.Equation(f"{self.scalar} \\cdot {vector_latex} = ", inline=False))
 
     # Answer section
-    body.add_element(ContentAST.Paragraph(["Enter your answer as a column vector:"]))
+    body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
 
     # Create answer table for vector components
     table_data = []
@@ -152,14 +145,6 @@ class VectorScalarMultiplication(VectorMathQuestion):
 
     body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
 
-    # For PDF, show as a single column vector answer
-    pdf_answer_text = "\\begin{pmatrix} "
-    for i in range(self.dimension):
-      if i > 0:
-        pdf_answer_text += " \\\\\\\\ "
-      pdf_answer_text += f"\\underline{{\\hspace{{2cm}}}}"
-    pdf_answer_text += " \\end{pmatrix}"
-    body.add_element(ContentAST.OnlyLatex([ContentAST.Equation(pdf_answer_text, inline=False)]))
 
     return body
 
@@ -217,7 +202,7 @@ class VectorDotProduct(VectorMathQuestion):
     else:
       body.add_element(ContentAST.Paragraph(["Evaluate the following vector expression:"]))
 
-    # Display the problem
+    # Display the problem as a single equation
     vector_a_latex = self._format_vector(self.vector_a)
     vector_b_latex = self._format_vector(self.vector_b)
     body.add_element(ContentAST.Equation(f"{vector_a_latex} \\cdot {vector_b_latex} = ", inline=False))
@@ -274,17 +259,17 @@ class VectorMagnitude(VectorMathQuestion):
 
     # Create answer - use float_value for proper rounding
     self.answers = {
-      "magnitude": Answer.float_value("magnitude", self.result)
+      "magnitude": Answer.auto_float("magnitude", self.result)
     }
 
   def get_body(self):
     body = ContentAST.Section()
 
-    body.add_element(ContentAST.Paragraph(["Calculate the magnitude (length) of the following vector:"]))
+    body.add_element(ContentAST.Paragraph(["Calculate the magnitude of the following vector:"]))
 
-    # Display the vector
+    # Display the vector as a single equation
     vector_latex = self._format_vector(self.vector)
-    body.add_element(ContentAST.Equation(f"\\|{vector_latex}\\| = ", inline=False))
+    body.add_element(ContentAST.Equation(f"\\left\\|{vector_latex}\\right\\| = ", inline=False))
 
     # Answer section
     body.add_element(ContentAST.Paragraph(["Answer: "]))
@@ -296,7 +281,7 @@ class VectorMagnitude(VectorMathQuestion):
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["The magnitude of a vector is calculated using the formula:"]))
-    explanation.add_element(ContentAST.Equation("\\|\\vec{v}\\| = \\sqrt{v_1^2 + v_2^2 + \\ldots + v_n^2}", inline=False))
+    explanation.add_element(ContentAST.Equation("\\left\\|\\vec{v}\\right\\| = \\sqrt{v_1^2 + v_2^2 + \\ldots + v_n^2}", inline=False))
 
     # Show vector
     vector_inline = self._format_vector_inline(self.vector)
@@ -351,13 +336,13 @@ class VectorCrossProduct(VectorMathQuestion):
 
     body.add_element(ContentAST.Paragraph(["Calculate the cross product of the following 3D vectors:"]))
 
-    # Display the cross product problem
+    # Display the cross product problem as a single equation
     vector_a_latex = self._format_vector(self.vector_a)
     vector_b_latex = self._format_vector(self.vector_b)
     body.add_element(ContentAST.Equation(f"{vector_a_latex} \\times {vector_b_latex} = ", inline=False))
 
     # Answer section
-    body.add_element(ContentAST.Paragraph(["Enter your answer as a column vector:"]))
+    body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
 
     # Create answer table for vector components
     table_data = []
@@ -366,14 +351,6 @@ class VectorCrossProduct(VectorMathQuestion):
 
     body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
 
-    # For PDF, show as a single column vector answer
-    pdf_answer_text = "\\begin{pmatrix} "
-    for i in range(self.dimension):
-      if i > 0:
-        pdf_answer_text += " \\\\\\\\ "
-      pdf_answer_text += f"\\underline{{\\hspace{{2cm}}}}"
-    pdf_answer_text += " \\end{pmatrix}"
-    body.add_element(ContentAST.OnlyLatex([ContentAST.Equation(pdf_answer_text, inline=False)]))
 
     return body
 
