@@ -1,8 +1,10 @@
 #!env python
 from __future__ import annotations
 
+import decimal
 import enum
 import fractions
+import itertools
 import logging
 import math
 import textwrap
@@ -11,6 +13,7 @@ from typing import List, Dict, Callable, Tuple
 
 import pylatex
 import pypandoc
+import fractions
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +41,7 @@ class Answer:
     BINARY_OR_HEX = enum.auto()
     AUTOFLOAT = enum.auto()
     LIST = enum.auto()
-    POINT = enum.auto()
+    VECTOR = enum.auto()
     
     
   def __init__(
@@ -123,7 +126,7 @@ class Answer:
       
       ]
     elif self.variable_kind == Answer.VariableKind.AUTOFLOAT:
-      value_fraction = fractions.Fraction(self.value).limit_denominator(3*4*5) # For process questions, these are the numbers of jobs we'd have
+      value_fraction = fractions.fractions.Fraction(self.value).limit_denominator(3*4*5) # For process questions, these are the numbers of jobs we'd have
       
       answer_strings = [
         f"{self.value:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
@@ -153,41 +156,39 @@ class Answer:
         for answer_string in set(answer_strings)
       ]
       
-    elif self.variable_kind == Answer.VariableKind.POINT:
-      # Convert self.value tuple to strings, rounded to an appropriate number of digits
-      answer_as_a_string_w_spaces = ', '.join(
-        map(
-          lambda v: f"{v:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
-          self.value
-        )
-      )
-      answer_as_a_string_wo_spaces = ','.join(
-        map(
-          lambda v: f"{v:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
-          self.value
-        )
-      )
+    elif self.variable_kind == Answer.VariableKind.VECTOR:
       
-      canvas_answers = [
-        {
-          "blank_id": self.key,
-          "answer_text": f"({answer_as_a_string_w_spaces})",
-          "answer_weight": 100 if self.correct else 0,
-        },{
-          "blank_id": self.key,
-          "answer_text": f"({answer_as_a_string_wo_spaces})",
-          "answer_weight": 100 if self.correct else 0,
-        }
+      # Get all answer variations
+      answer_variations = [
+        self.__class__.accepted_strings(dimension_value)
+        for dimension_value in self.value
       ]
-      if len(self.value) == 1:
-        # Then we'll also accept if it doesn't have parentheses
-        canvas_answers.extend([
-          {
-            "blank_id": self.key,
-            "answer_text": f"{answer_as_a_string_w_spaces}",
-            "answer_weight": 100 if self.correct else 0,
-          }
-        ])
+      
+      canvas_answers = []
+      for combination in itertools.product(*answer_variations):
+        if len(combination) == 1:
+          canvas_answers.append(
+            {
+              "blank_id": self.key,
+              "answer_weight": 100 if self.correct else 0,
+              "answer_text": f"{','.join(combination)}",
+            }
+          )
+        canvas_answers.append({
+          "blank_id" : self.key,
+          "answer_weight": 100 if self.correct else 0,
+          "answer_text": f"({','.join(list(combination))})",
+        })
+        if len(combination) == 1:
+          canvas_answers.append(
+            {
+              "blank_id": self.key,
+              "answer_weight": 100 if self.correct else 0,
+              "answer_text": f"{','.join(combination)}",
+            }
+          )
+      return canvas_answers
+        
     elif self.variable_kind == Answer.VariableKind.LIST:
       canvas_answers = [
         {
@@ -299,12 +300,12 @@ class Answer:
     )
 
   @classmethod
-  def point_value(cls, key: str, value: float, **kwargs) -> 'Answer':
+  def vector_value(cls, key: str, value: List[float], **kwargs) -> 'Answer':
     """Create a simple float answer (no fraction conversion)"""
     return cls(
       key=key,
       value=value,
-      variable_kind=cls.VariableKind.POINT,
+      variable_kind=cls.VariableKind.VECTOR,
       **kwargs
     )
 
@@ -339,7 +340,92 @@ class Answer:
       kind=cls.AnswerKind.ESSAY,
       **kwargs
     )
-
+  
+  @staticmethod
+  def _to_fraction(x):
+    """Convert int/float/decimal.Decimal/fractions.Fraction/str('a/b' or decimal) to fractions.Fraction exactly."""
+    if isinstance(x, fractions.Fraction):
+      return x
+    if isinstance(x, int):
+      return fractions.Fraction(x, 1)
+    if isinstance(x, decimal.Decimal):
+      # exact conversion of decimal.Decimal to fractions.Fraction
+      sign, digits, exp = x.as_tuple()
+      n = 0
+      for d in digits:
+        n = n * 10 + d
+      n = -n if sign else n
+      if exp >= 0:
+        return fractions.Fraction(n * (10 ** exp), 1)
+      else:
+        return fractions.Fraction(n, 10 ** (-exp))
+    if isinstance(x, str):
+      s = x.strip()
+      if '/' in s:
+        a, b = s.split('/', 1)
+        return fractions.Fraction(int(a.strip()), int(b.strip()))
+      return fractions.Fraction(decimal.Decimal(s))
+    # float or other numerics
+    return fractions.Fraction(decimal.Decimal(str(x)))
+  
+  @staticmethod
+  def accepted_strings(
+      value,
+      *,
+      allow_integer=True,  # allow "whole numbers as whole numbers"
+      allow_simple_fraction=True,  # allow simple a/b when denominator small
+      max_denominator=720,  # how "simple" the fraction is
+      allow_mixed=False,  # also allow "1 1/2" for 3/2
+      include_spaces=False,  # also accept "1 / 2"
+      include_fixed_even_if_integer=False  # include "1.0000" when value is 1 and fixed_decimals is set
+  ):
+    """
+    Return a sorted list of strings you can paste into Canvas as alternate correct answers.
+    """
+    decimal.getcontext().prec = max(34, (Answer.DEFAULT_ROUNDING_DIGITS or 0) + 10)
+    f = Answer._to_fraction(value)
+    outs = set()
+    
+    # Integer form
+    if f.denominator == 1 and allow_integer:
+      outs.add(str(f.numerator))
+      if include_fixed_even_if_integer:
+        q = decimal.Decimal(1).scaleb(-Answer.DEFAULT_ROUNDING_DIGITS)  # 1e-<fixed_decimals>
+        d = decimal.Decimal(f.numerator).quantize(q, rounding=decimal.ROUND_HALF_UP)
+        outs.add(format(d, 'f'))
+    
+    # Fixed-decimal form (exactly N decimals)
+    q = decimal.Decimal(1).scaleb(-Answer.DEFAULT_ROUNDING_DIGITS)
+    d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
+    outs.add(format(d, 'f'))
+    
+    # Trimmed decimal (no trailing zeros; up to max_trimmed_decimals)
+    if Answer.DEFAULT_ROUNDING_DIGITS:
+      q = decimal.Decimal(1).scaleb(-Answer.DEFAULT_ROUNDING_DIGITS)
+      d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
+      s = format(d, 'f').rstrip('0').rstrip('.')
+      # ensure we keep leading zero like "0.5"
+      if s.startswith('.'):
+        s = '0' + s
+      if s == '-0':  # tidy negative zero
+        s = '0'
+      outs.add(s)
+    
+    # Simple fraction (reduced, with small denominator)
+    if allow_simple_fraction:
+      fr = f.limit_denominator(max_denominator)
+      if fr == f:
+        a, b = fr.numerator, fr.denominator
+        outs.add(f"{a}/{b}")
+        if include_spaces:
+          outs.add(f"{a} / {b}")
+        if allow_mixed and b != 1 and abs(a) > b:
+          sign = '-' if a < 0 else ''
+          A = abs(a)
+          whole, rem = divmod(A, b)
+          outs.add(f"{sign}{whole} {rem}/{b}")
+    
+    return sorted(outs, key=lambda s: (len(s), s))
 
 class ContentAST:
   

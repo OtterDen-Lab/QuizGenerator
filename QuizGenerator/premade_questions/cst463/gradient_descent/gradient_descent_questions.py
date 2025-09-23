@@ -110,14 +110,9 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
   
   def refresh(self, rng_seed=None, *args, **kwargs):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
-    log.debug("Refreshing...")
     
     # Generate function and its properties
     self._generate_function()
-    # self.function, self.gradient_function, self.function_latex, self.optimal_point = self._generate_function()
-    
-    log.debug(self.function)
-    log.debug(sp.latex(self.equation))
     
     # Generate learning rate (expanded range)
     self.learning_rate = self.rng.choice([0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
@@ -136,15 +131,15 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       
       # Location answer
       location_key = f"answer__location_{step}"
-      self.answers[location_key] = Answer.point_value(location_key, tuple(result['location']))
+      self.answers[location_key] = Answer.vector_value(location_key, list(result['location']))
       
       # Gradient answer
       gradient_key = f"answer__gradient_{step}"
-      self.answers[gradient_key] = Answer.point_value(gradient_key, tuple(result['gradient']))
+      self.answers[gradient_key] = Answer.vector_value(gradient_key, list(result['gradient']))
       
       # Update answer
       update_key = f"answer__update_{step}"
-      self.answers[update_key] = Answer.point_value(update_key, tuple(result['update']))
+      self.answers[update_key] = Answer.vector_value(update_key, list(result['update']))
   
   def get_body(self, **kwargs) -> ContentAST.Section:
     body = ContentAST.Section()
