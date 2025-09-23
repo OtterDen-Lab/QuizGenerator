@@ -1,1 +1,2 @@
 from .gradient_descent_questions import GradientDescentWalkthrough
+from .gradient_calculation import DerivativeBasic, DerivativeChain
