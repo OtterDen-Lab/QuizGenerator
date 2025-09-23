@@ -8,25 +8,32 @@ Based on multiple question development cycles, these are the essential practices
 
 ### 🚨 **Check First, Implement Second**
 1. **Code style**: Verify project conventions (see CLAUDE.md) - this project uses 2-space indentation
-2. **Existing patterns**: Search `misc.py` for `Answer` factory methods (`Answer.float_value()`, not manual rounding)
+2. **Existing patterns**: Search `misc.py` for `Answer` factory methods (`Answer.auto_float()`, `Answer.float_value()`, not manual rounding)
 3. **Mathematical frameworks**: Use SymPy's `latex()` function for automatic formatting, never manual LaTeX construction
 4. **Platform differences**: Canvas MathJax ≠ PDF LaTeX - test both early and often
+5. **Utility functions**: Check for existing formatting utilities (`format_vector()`) before implementing custom solutions
+6. **Error handling**: Plan for numerical edge cases (complex numbers, evaluation failures) with graceful regeneration
 
 ### 🎯 **Core Implementation Patterns**
 - **Question structure**: Extend base class + `@QuestionRegistry.register()` + three methods (`refresh()`, `get_body()`, `get_explanation()`)
 - **Testing workflow**: `scratch.yaml` → `python generate_quiz.py TEST` → Canvas + PDF verification
 - **Mathematical content**: SymPy for expressions, `ContentAST.Equation` for display, avoid fragmented math elements
 - **Canvas compatibility**: No LaTeX in table headers (`<th>`), use bold `<td>` instead
+- **Multi-platform answers**: Use `ContentAST.OnlyHtml/OnlyLatex` for platform-specific answer formats
+- **Consistent formatting**: Leverage `Answer.accepted_strings()` for clean numerical display
 
 ### 🔧 **Common Anti-Patterns to Avoid**
 - Manual mathematical formatting (`\nabla f = \begin{pmatrix}...` → `sp.latex(gradient_function)`)
 - Magic numbers (`round(value, 4)` → `Answer.float_value()` with automatic `DEFAULT_ROUNDING_DIGITS`)
 - Hardcoded constraints (1-2 variables → parameterized for 1-5+ variables)
-- Ignoring teaching conventions (ask about notation preferences: horizontal vs vertical vectors)
+- Ignoring teaching conventions (ask about notation preferences: horizontal vs vertical vectors, Leibniz vs prime notation)
+- Duplicate formatting logic (check for utilities like `format_vector()` before reimplementing)
+- Fragile numerical evaluation (handle complex numbers, infinite values, evaluation failures)
 
 ### 📁 **Essential Reference Files**
-- `misc.py`: Answer types and ContentAST system
+- `misc.py`: Answer types, ContentAST system, and utility functions
 - `cst334/memory_questions.py`: Comprehensive question examples
+- `cst463/gradient_descent/misc.py`: Mathematical utilities and shared functions
 - `constants.py`: Standard ranges and probabilities
 - `scratch.yaml`: Testing configuration
 
@@ -136,6 +143,162 @@ QuizGenerator/
 │       └── gradient_descent_questions.py
 └── example_files/
     └── scratch.yaml          # Testing configuration
+```
+
+---
+
+## Derivative Calculation Questions Development
+
+**Date:** September 22, 2025
+**Project:** CST463 Derivative Calculation Questions (Issue #22)
+**Duration:** Single session implementation with iterative refinement
+
+### Overview
+Implementation of derivative calculation questions for gradient descent practice, featuring both basic polynomial derivatives and chain rule compositions. The project required dual answer formats (Canvas individual fields vs PDF gradient vectors) and robust numerical evaluation handling.
+
+### Major Lessons Learned
+
+#### 1. **Reuse and Abstract Existing Utilities**
+**Problem**: Initially started implementing custom vector formatting and function generation.
+**Better Approach**: Discovered existing `_generate_function` method in gradient descent questions that could be abstracted.
+**Solution**: Extracted `generate_function()` and `format_vector()` into shared `misc.py` module.
+**Impact**: Eliminated code duplication and ensured consistent formatting across all gradient descent questions.
+**Key Learning**: Always search for existing utilities before implementing new functionality - look for patterns that can be abstracted for reuse.
+
+#### 2. **Plan for Numerical Edge Cases Early**
+**Problem**: Chain rule questions with logarithmic functions failed when evaluation points produced negative arguments, causing complex number errors.
+**Root Cause**: `log(inner_function)` where `inner_function` evaluates to negative values at random points.
+**Solution**: Implemented graceful regeneration with up to 10 attempts, advancing RNG state between attempts.
+**Key Learning**: Mathematical question generators need robust error handling for transcendental functions, complex numbers, and evaluation failures.
+
+#### 3. **Design Platform-Specific Answer Formats**
+**Challenge**: Canvas needs individual answer fields for precise grading, while PDF needs single gradient vector for handwritten answers.
+**Solution**: Used `ContentAST.OnlyHtml` and `ContentAST.OnlyLatex` to provide different answer formats per platform.
+**Example**:
+```python
+# Canvas: Individual partial derivative fields
+ContentAST.OnlyHtml([...Answer(self.answers[f"partial_derivative_{i}"])...])
+
+# PDF: Single gradient vector field
+ContentAST.OnlyLatex([...Answer(self.answers["gradient_vector"])...])
+```
+**Key Learning**: Consider how different platforms will be used (typing vs handwriting) and design appropriate answer formats for each.
+
+#### 4. **Leverage Mathematical Notation Standards**
+**Problem**: Initial implementation used basic derivative notation.
+**User Request**: Use proper "evaluated at" notation with LaTeX vertical bars.
+**Solution**: Implemented `\left. \frac{\partial f}{\partial x} \right|_{x=a}` notation for professional mathematical display.
+**Impact**: Questions now match textbook-quality mathematical notation.
+**Key Learning**: Invest in proper mathematical notation - it significantly improves the educational value and professionalism of questions.
+
+#### 5. **Consistent Numerical Formatting Across All Contexts**
+**Problem**: Explanations showed `9.0` and `52.0` instead of clean integers like `9` and `52`.
+**Root Cause**: Using raw `float()` conversion instead of project's `Answer.accepted_strings()` formatting.
+**Solution**: Applied `Answer.accepted_strings()` throughout explanations to match answer field formatting.
+**Key Learning**: Numerical formatting should be consistent across question bodies, answers, and explanations - use shared utilities for all number display.
+
+#### 6. **Test Explanation Output During Development**
+**Problem**: Explanation formatting issues weren't visible in standard test output.
+**Solution**: Enhanced test function to include explanation rendering alongside body rendering.
+**Impact**: Made it easier to catch and fix formatting inconsistencies during development.
+**Key Learning**: Include explanation testing in your development workflow - explanations are just as important as question bodies.
+
+### What Worked Exceptionally Well
+
+#### 1. **SymPy Chain Rule Implementation**
+- Automatic differentiation handled complex chain rule compositions correctly
+- `outer_func.subs(u, inner_poly)` created proper function compositions
+- Symbolic computation eliminated manual derivative calculation errors
+
+#### 2. **Educational Value Through Proper Notation**
+- Leibniz notation for chain rule (`∂f/∂g · ∂g/∂x`) matched classroom teaching
+- "Evaluated at" notation (`f|_{x=a}`) provided textbook-quality presentation
+- Step-by-step explanations with clean numerical formatting enhanced learning
+
+#### 3. **Robust Function Generation**
+- Abstracted `generate_function()` utility enabled consistent polynomial generation
+- Chain rule questions successfully composed exp, log, and polynomial functions
+- Regeneration strategy handled edge cases gracefully without user-visible failures
+
+### Development Anti-Patterns to Avoid
+
+#### 1. **Implementing Before Searching**
+- Don't write new utilities without checking for existing solutions
+- Search both current file and related modules for reusable patterns
+- Abstract common functionality into shared utilities
+
+#### 2. **Fragile Mathematical Evaluation**
+- Don't assume all function evaluations will produce real numbers
+- Plan for complex numbers, infinite values, and evaluation failures
+- Implement regeneration strategies for problematic cases
+
+#### 3. **Inconsistent Formatting Standards**
+- Don't use different formatting approaches in different contexts
+- Apply the same numerical formatting utilities everywhere
+- Test explanations as thoroughly as question bodies
+
+#### 4. **Platform-Agnostic Answer Design**
+- Don't assume one answer format works for all platforms
+- Consider how answers will be entered (typing vs handwriting)
+- Design appropriate formats for each output medium
+
+### Recommended Implementation Sequence
+
+1. **Research Phase**: Search for existing utilities and patterns before implementing
+2. **Basic Implementation**: Start with simplest case (polynomial derivatives)
+3. **Platform Testing**: Test both Canvas and PDF early and often
+4. **Advanced Features**: Add complex cases (chain rule) with robust error handling
+5. **Polish Phase**: Enhance notation, explanations, and formatting consistency
+6. **Explanation Testing**: Verify explanation output quality and formatting
+
+### Essential Code Patterns for Mathematical Questions
+
+#### Function Generation with Error Handling
+```python
+max_attempts = 10
+for attempt in range(max_attempts):
+  try:
+    # Generate function and evaluate
+    result = complex_mathematical_operation()
+    break
+  except ValueError as e:
+    if "problematic condition" in str(e) and attempt < max_attempts - 1:
+      _ = self.rng.random()  # Advance RNG state
+      continue
+    else:
+      raise
+```
+
+#### Platform-Specific Answer Formats
+```python
+# Canvas: Individual answer fields
+for i in range(self.num_variables):
+  body.add_element(ContentAST.OnlyHtml([
+    ContentAST.Answer(self.answers[f"component_{i}"])
+  ]))
+
+# PDF: Single vector answer field
+body.add_element(ContentAST.OnlyLatex([
+  ContentAST.Answer(self.answers["vector_result"])
+]))
+```
+
+#### Consistent Numerical Formatting
+```python
+# Use Answer.accepted_strings() for all number display
+clean_value = sorted(Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
+ContentAST.Equation(f"result = {clean_value}", inline=False)
+```
+
+### Files Modified/Created
+```
+QuizGenerator/premade_questions/cst463/gradient_descent/
+├── gradient_calculation.py          # New: DerivativeBasic and DerivativeChain classes
+├── misc.py                         # New: Shared utilities (generate_function, format_vector)
+├── __init__.py                     # Updated: Import new question classes
+└── gradient_descent_questions.py   # Updated: Use shared utilities
+
+generate_quiz.py                    # Updated: Enhanced test function with explanations
 ```
 
 ---
