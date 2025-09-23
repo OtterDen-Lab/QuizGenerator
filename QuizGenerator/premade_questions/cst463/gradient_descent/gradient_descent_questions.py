@@ -207,7 +207,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
     explanation = ContentAST.Section()
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -216,16 +216,29 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         ]
       )
     )
-    
+
     objective = "minimize" if self.minimize else "maximize"
     sign = "-" if self.minimize else "+"
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
-          f"Since we want to {objective} the function ",
+          f"We want to {objective} the function ",
           ContentAST.Equation(sp.latex(self.function), inline=True),
-          f", we should use the update rule: ",
+          ". First, we calculate the analytical gradient:"
+        ]
+      )
+    )
+
+    # Add analytical gradient calculation as a display equation (vertical vector)
+    explanation.add_element(
+      ContentAST.Equation(f"\\nabla f = {sp.latex(self.gradient_function)}", inline=False)
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph(
+        [
+          f"Since we want to {objective}, we use the update rule: ",
           ContentAST.Equation(f"x_{{new}} = x_{{old}} {sign} \\alpha \\nabla f", inline=True),
           f". We start at {tuple(self.starting_point)} with learning rate ",
           ContentAST.Equation(f"\\alpha = {self.learning_rate}", inline=True),
