@@ -126,34 +126,24 @@ class Answer:
       
       ]
     elif self.variable_kind == Answer.VariableKind.AUTOFLOAT:
-      value_fraction = fractions.Fraction(self.value).limit_denominator(3*4*5) # For process questions, these are the numbers of jobs we'd have
-      
-      answer_strings = [
-        f"{self.value:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
-        f"{value_fraction}",
-        f"{value_fraction:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
-        f"{value_fraction.numerator / value_fraction.denominator:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
-      ]
+      # Use the accepted_strings helper with settings that match the original AUTOFLOAT behavior
+      answer_strings = self.__class__.accepted_strings(
+        self.value,
+        allow_integer=True,
+        allow_simple_fraction=True,
+        max_denominator=3*4*5,  # For process questions, these are the numbers of jobs we'd have
+        allow_mixed=True,
+        include_spaces=False,
+        include_fixed_even_if_integer=True
+      )
 
-      # Always include exact fraction representation and mixed number format
-      # even for whole numbers, since students should be able to enter improper fractions
-      answer_strings.extend([
-        f"{value_fraction.numerator / value_fraction.denominator}",
-      ])
-
-      if not value_fraction.is_integer():
-        # Add mixed number format only for non-integers
-        answer_strings.append(
-          f"{value_fraction.numerator // value_fraction.denominator} {value_fraction.numerator % value_fraction.denominator}/{value_fraction.denominator}"
-        )
-        
       canvas_answers = [
         {
           "blank_id": self.key,
           "answer_text": answer_string,
           "answer_weight": 100 if self.correct else 0,
         }
-        for answer_string in set(answer_strings)
+        for answer_string in answer_strings
       ]
       
     elif self.variable_kind == Answer.VariableKind.VECTOR:
