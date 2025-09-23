@@ -47,12 +47,8 @@ class DerivativeQuestion(Question, abc.ABC):
       try:
         gradient_value = float(partial_value)
       except TypeError:
-        # If direct float conversion fails, try numerical evaluation
-        try:
-          gradient_value = float(partial_value.evalf())
-        except (TypeError, ValueError):
-          # For complex expressions, use N() for numerical evaluation
-          gradient_value = float(sp.N(partial_value))
+        # For complex expressions, use numerical evaluation
+        gradient_value = float(partial_value.evalf())
 
       # Use auto_float for Canvas compatibility with integers and decimals
       self.answers[answer_key] = Answer.auto_float(answer_key, gradient_value)
@@ -68,10 +64,7 @@ class DerivativeQuestion(Question, abc.ABC):
       try:
         gradient_value = float(partial_value)
       except TypeError:
-        try:
-          gradient_value = float(partial_value.evalf())
-        except (TypeError, ValueError):
-          gradient_value = float(sp.N(partial_value))
+        gradient_value = float(partial_value.evalf())
       gradient_values.append(gradient_value)
 
     # Format as vector for display
@@ -226,16 +219,14 @@ class DerivativeChain(DerivativeQuestion):
     else:
       inner_poly = sp.Add(*[self.rng.choice(coeff_pool) * v for v in self.variables])
 
-    # Generate outer function - simple function that takes the inner result
-    # For simplicity, use powers and basic operations
+    # Generate outer function - use polynomials, exp, and ln for reliable evaluation
     u = sp.Symbol('u')  # Intermediate variable
     outer_functions = [
       u**2,
       u**3,
-      sp.sin(u),
-      sp.cos(u),
+      u**4,
       sp.exp(u),
-      sp.log(sp.Abs(u) + 1)  # Add 1 to avoid log(0)
+      sp.log(u + 2)  # Add 2 to ensure positive argument for evaluation points
     ]
 
     outer_func = self.rng.choice(outer_functions)
@@ -266,14 +257,59 @@ class DerivativeChain(DerivativeQuestion):
       ])
     )
 
-    # Show chain rule application
+    # Explain chain rule with Leibniz notation
     explanation.add_element(
       ContentAST.Paragraph([
-        "Using the chain rule, we calculate:"
+        "The chain rule states that for a composite function ",
+        ContentAST.Equation("f(g(x))", inline=True),
+        ", the derivative with respect to each variable is found by multiplying the derivative of the outer function with respect to the inner function by the derivative of the inner function with respect to the variable:"
       ])
     )
 
+    # Show chain rule formula for each variable
+    for i in range(self.num_variables):
+      var_name = f"x_{i}"
+      explanation.add_element(
+        ContentAST.Equation(
+          f"\\frac{{\\partial f}}{{\\partial {var_name}}} = \\frac{{\\partial f}}{{\\partial g}} \\cdot \\frac{{\\partial g}}{{\\partial {var_name}}}",
+          inline=False
+        )
+      )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Applying this to our specific function:"
+      ])
+    )
+
+    # Show the specific derivatives step by step
+    for i in range(self.num_variables):
+      var_name = f"x_{i}"
+
+      # Get outer function derivative with respect to inner function
+      outer_deriv = self.outer_function.diff(sp.Symbol('u'))
+      inner_deriv = self.inner_function.diff(self.variables[i])
+
+      explanation.add_element(
+        ContentAST.Paragraph([
+          f"For {var_name}:"
+        ])
+      )
+
+      explanation.add_element(
+        ContentAST.Equation(
+          f"\\frac{{\\partial f}}{{\\partial {var_name}}} = \\left({sp.latex(outer_deriv)}\\right) \\cdot \\left({sp.latex(inner_deriv)}\\right)",
+          inline=False
+        )
+      )
+
     # Show analytical gradient
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "This gives us the complete gradient:"
+      ])
+    )
+
     explanation.add_element(
       ContentAST.Equation(f"\\nabla f = {sp.latex(self.gradient_function)}", inline=False)
     )
