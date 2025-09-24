@@ -1,0 +1,213 @@
+# CST463 Matrix Addition Practice
+name: "(Ungraded) Matrix Addition Practice"
+practice: False
+questions:
+  1:
+    MatrixAddition:
+      class: cst463.MatrixAddition
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Matrix Scalar Multiplication Practice
+name: "(Ungraded) Matrix Scalar Multiplication Practice"
+practice: False
+questions:
+  1:
+    MatrixScalarMultiplication:
+      class: cst463.MatrixScalarMultiplication
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Matrix Multiplication Practice
+name: "(Ungraded) Matrix Multiplication Practice"
+practice: False
+questions:
+  1:
+    MatrixMultiplication:
+      class: cst463.MatrixMultiplication
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Vector Addition Practice
+name: "(Ungraded) Vector Addition Practice"
+practice: False
+questions:
+  1:
+    VectorAddition:
+      class: cst463.VectorAddition
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Vector Scalar Multiplication Practice
+name: "(Ungraded) Vector Scalar Multiplication Practice"
+practice: False
+questions:
+  1:
+    VectorScalarMultiplication:
+      class: cst463.VectorScalarMultiplication
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Vector Dot Product Practice
+name: "(Ungraded) Vector Dot Product Practice"
+practice: False
+questions:
+  1:
+    VectorDotProduct:
+      class: cst463.VectorDotProduct
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Vector Magnitude Practice
+name: "(Ungraded) Vector Magnitude Practice"
+practice: False
+questions:
+  1:
+    VectorMagnitude:
+      class: cst463.VectorMagnitude
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Vector Cross Product Practice
+name: "(Ungraded) Vector Cross Product Practice"
+practice: False
+questions:
+  1:
+    VectorCrossProduct:
+      class: cst463.VectorCrossProduct
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Gradient Descent Walkthrough Practice
+name: "(Ungraded) Gradient Descent Walkthrough Practice"
+practice: False
+questions:
+  1:
+    GradientDescentWalkthrough:
+      class: cst463.GradientDescentWalkthrough
+      num_steps: 4
+      num_variables: 2
+      max_degree: 2
+      single_variable: false
+      minimize: true
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Basic Derivative Practice
+name: "(Ungraded) Basic Derivative Practice"
+practice: False
+questions:
+  1:
+    DerivativeBasic:
+      class: cst463.DerivativeBasic
+      num_variables: 2
+      max_degree: 2
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Chain Rule Derivative Practice
+name: "(Ungraded) Chain Rule Derivative Practice"
+practice: False
+questions:
+  1:
+    DerivativeChain:
+      class: cst463.DerivativeChain
+      num_variables: 2
+      max_degree: 2
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Linear Loss Function Practice
+name: "(Ungraded) Linear Loss Function Practice"
+practice: False
+questions:
+  1:
+    LossQuestion_Linear:
+      class: cst463.LossQuestion_Linear
+      num_samples: 5
+      num_input_features: 2
+      num_output_vars: 1
+      vector_inputs: false
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Logistic Loss Function Practice
+name: "(Ungraded) Logistic Loss Function Practice"
+practice: False
+questions:
+  1:
+    LossQuestion_Logistic:
+      class: cst463.LossQuestion_Logistic
+      num_samples: 5
+      num_input_features: 2
+      vector_inputs: false
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Multiclass Logistic Loss Function Practice
+name: "(Ungraded) Multiclass Logistic Loss Function Practice"
+practice: False
+questions:
+  1:
+    LossQuestion_MulticlassLogistic:
+      class: cst463.LossQuestion_MulticlassLogistic
+      num_samples: 5
+      num_input_features: 2
+      num_classes: 3
+      vector_inputs: false
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5

@@ -1,0 +1,173 @@
+# CST334 Bits and Bytes Practice
+name: "(Ungraded) Bits and Bytes Practice"
+practice: False
+questions:
+  1:
+    BitsAndBytes:
+      class: cst334.BitsAndBytes
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Hex and Binary Practice
+name: "(Ungraded) Hex and Binary Practice"
+practice: False
+questions:
+  1:
+    HexAndBinary:
+      class: cst334.HexAndBinary
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Average Memory Access Time Practice
+name: "(Ungraded) Average Memory Access Time Practice"
+practice: False
+questions:
+  1:
+    AverageMemoryAccessTime:
+      class: cst334.AverageMemoryAccessTime
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Virtual Address Parts Practice
+name: "(Ungraded) Virtual Address Parts Practice"
+practice: False
+questions:
+  1:
+    VirtualAddressParts:
+      class: cst334.VirtualAddressParts
+      topic: MEMORY
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Caching Question Practice
+name: "(Ungraded) Caching Question Practice"
+practice: False
+questions:
+  1:
+    CachingQuestion:
+      class: cst334.CachingQuestion
+      num_elements: 5
+      cache_size: 3
+      num_requests: 10
+      policy: null
+      algo: null
+      topic: MEMORY
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Base and Bounds Practice
+name: "(Ungraded) Base and Bounds Practice"
+practice: False
+questions:
+  1:
+    BaseAndBounds:
+      class: cst334.BaseAndBounds
+      topic: MEMORY
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Segmentation Practice
+name: "(Ungraded) Segmentation Practice"
+practice: False
+questions:
+  1:
+    Segmentation:
+      class: cst334.Segmentation
+      topic: MEMORY
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Paging Practice
+name: "(Ungraded) Paging Practice"
+practice: False
+questions:
+  1:
+    Paging:
+      class: cst334.Paging
+      topic: MEMORY
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Scheduling Question Practice
+name: "(Ungraded) Scheduling Question Practice"
+practice: False
+questions:
+  1:
+    SchedulingQuestion:
+      class: cst334.SchedulingQuestion
+      num_jobs: 3
+      scheduler_kind: null
+      topic: PROCESS
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 Hard Drive Access Time Practice
+name: "(Ungraded) Hard Drive Access Time Practice"
+practice: False
+questions:
+  1:
+    HardDriveAccessTime:
+      class: cst334.HardDriveAccessTime
+      topic: IO
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 INode Accesses Practice
+name: "(Ungraded) INode Accesses Practice"
+practice: False
+questions:
+  1:
+    INodeAccesses:
+      class: cst334.INodeAccesses
+      topic: IO
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST334 VSFS States Practice
+name: "(Ungraded) VSFS States Practice"
+practice: False
+questions:
+  1:
+    VSFS_states:
+      class: cst334.VSFS_states
+      num_steps: 10
+      topic: IO
+      spacing: 0
+      _config:
+        repeat: 5

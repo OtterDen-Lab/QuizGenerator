@@ -49,6 +49,84 @@ questions:
       topic: MATH # Question.Topic enum (auto-set by MatrixMathQuestion)
       spacing: 0 # int
 
+    # CST463 Vector Questions
+    VectorAddition:
+      class: cst463.VectorAddition
+      topic: MATH # Question.Topic enum (auto-set by VectorMathQuestion)
+      spacing: 0 # int
+
+    VectorScalarMultiplication:
+      class: cst463.VectorScalarMultiplication
+      topic: MATH # Question.Topic enum (auto-set by VectorMathQuestion)
+      spacing: 0 # int
+
+    VectorDotProduct:
+      class: cst463.VectorDotProduct
+      topic: MATH # Question.Topic enum (auto-set by VectorMathQuestion)
+      spacing: 0 # int
+
+    VectorMagnitude:
+      class: cst463.VectorMagnitude
+      topic: MATH # Question.Topic enum (auto-set by VectorMathQuestion)
+      spacing: 0 # int
+
+    VectorCrossProduct:
+      class: cst463.VectorCrossProduct
+      topic: MATH # Question.Topic enum (auto-set by VectorMathQuestion)
+      spacing: 0 # int
+
+    # CST463 Gradient Descent Questions
+    GradientDescentWalkthrough:
+      class: cst463.GradientDescentWalkthrough
+      num_steps: 4 # int
+      num_variables: 2 # int
+      max_degree: 2 # int
+      single_variable: false # bool
+      minimize: true # bool
+      topic: ML_OPTIMIZATION # Question.Topic enum (auto-set by GradientDescentQuestion)
+      spacing: 0 # int
+
+    DerivativeBasic:
+      class: cst463.DerivativeBasic
+      num_variables: 2 # int
+      max_degree: 2 # int
+      topic: ML_OPTIMIZATION # Question.Topic enum (auto-set by DerivativeQuestion)
+      spacing: 0 # int
+
+    DerivativeChain:
+      class: cst463.DerivativeChain
+      num_variables: 2 # int
+      max_degree: 2 # int
+      topic: ML_OPTIMIZATION # Question.Topic enum (auto-set by DerivativeQuestion)
+      spacing: 0 # int
+
+    # CST463 Loss Function Questions
+    LossQuestion_Linear:
+      class: cst463.LossQuestion_Linear
+      num_samples: 5 # int
+      num_input_features: 2 # int
+      num_output_vars: 1 # int
+      vector_inputs: false # bool
+      topic: ML_OPTIMIZATION # Question.Topic enum (auto-set by LossQuestion)
+      spacing: 0 # int
+
+    LossQuestion_Logistic:
+      class: cst463.LossQuestion_Logistic
+      num_samples: 5 # int
+      num_input_features: 2 # int
+      vector_inputs: false # bool
+      topic: ML_OPTIMIZATION # Question.Topic enum (auto-set by LossQuestion)
+      spacing: 0 # int
+
+    LossQuestion_MulticlassLogistic:
+      class: cst463.LossQuestion_MulticlassLogistic
+      num_samples: 5 # int
+      num_input_features: 2 # int
+      num_classes: 3 # int
+      vector_inputs: false # bool
+      topic: ML_OPTIMIZATION # Question.Topic enum (auto-set by LossQuestion)
+      spacing: 0 # int
+
     # CST334 Memory Questions
     VirtualAddressParts:
       class: cst334.VirtualAddressParts
