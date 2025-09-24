@@ -17,24 +17,26 @@ log.setLevel(logging.DEBUG)
 
 def parse_args():
   parser = argparse.ArgumentParser()
-  
+
   parser.add_argument("--prod", action="store_true")
   parser.add_argument("--course_id", type=int)
-  
+
   parser.add_argument("--quiz_yaml", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "example_files/exam_generation.yaml"))
   parser.add_argument("--num_canvas", default=0, type=int)
   parser.add_argument("--num_pdfs", default=0, type=int)
-  
+  parser.add_argument("--delete-assignment-group", action="store_true",
+                     help="Delete existing assignment group before uploading new quizzes")
+
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
-  
-  
+
+
   args = parser.parse_args()
-  
+
   if args.num_canvas > 0 and args.course_id is None:
     log.error("Must provide course_id when pushing to canvas")
     exit(8)
-  
+
   return args
 
 
@@ -118,10 +120,25 @@ def generate_quiz(
     num_pdfs=0,
     num_canvas=0,
     use_prod=False,
-    course_id=None
+    course_id=None,
+    delete_assignment_group=False
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
+
+  # Handle Canvas uploads with shared assignment group
+  if num_canvas > 0:
+    canvas_interface = CanvasInterface(prod=use_prod)
+    canvas_course = canvas_interface.get_course(course_id=course_id)
+
+    # Create assignment group once, with delete flag if specified
+    assignment_group = canvas_course.create_assignment_group(
+      name="dev",
+      delete_existing=delete_assignment_group
+    )
+
+    log.info(f"Using assignment group '{assignment_group.name}' for all quizzes")
+
   for quiz in quizzes:
 
     for i in range(num_pdfs):
@@ -131,11 +148,15 @@ def generate_quiz(
       pdf_seed = i * 1000  # Large gap to avoid overlap with rng_seed_offset
       latex_text = quiz.get_quiz(rng_seed=pdf_seed).render_latex()
       generate_latex(latex_text, remove_previous=(i==0))
-    
+
     if num_canvas > 0:
-      canvas_interface = CanvasInterface(prod=use_prod)
-      canvas_course = canvas_interface.get_course(course_id=course_id)
-      canvas_course.push_quiz_to_canvas(quiz, num_canvas, title=quiz.name, is_practice=quiz.practice)
+      canvas_course.push_quiz_to_canvas(
+        quiz,
+        num_canvas,
+        title=quiz.name,
+        is_practice=quiz.practice,
+        assignment_group=assignment_group
+      )
     
     quiz.describe()
 
@@ -152,7 +173,8 @@ def main():
     num_pdfs=args.num_pdfs,
     num_canvas=args.num_canvas,
     use_prod=args.prod,
-    course_id=args.course_id
+    course_id=args.course_id,
+    delete_assignment_group=getattr(args, 'delete_assignment_group', False)
   )
 
 
