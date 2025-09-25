@@ -96,20 +96,6 @@ questions:
 
 ---
 
-# CST463 Vector Cross Product Practice
-name: "(Ungraded) Vector Cross Product Practice"
-practice: False
-questions:
-  1:
-    VectorCrossProduct:
-      class: cst463.VectorCrossProduct
-      topic: MATH
-      spacing: 0
-      _config:
-        repeat: 5
-
----
-
 # CST463 Gradient Descent Walkthrough Practice
 name: "(Ungraded) Gradient Descent Walkthrough Practice"
 practice: False

@@ -22,6 +22,7 @@ import canvasapi.course, canvasapi.quiz
 
 from QuizGenerator.misc import OutputFormat, Answer
 from QuizGenerator.contentast import ContentAST
+from QuizGenerator.performance import timer, PerformanceTracker
 
 import logging
 log = logging.getLogger(__name__)
@@ -234,13 +235,25 @@ class Question(abc.ABC):
     :return: (ContentAST.Question) Containing question.
     """
     # todo: would it make sense to refresh here?
-    self.refresh(rng_seed=kwargs.get("rng_seed", None))
-    while not self.is_interesting():
-      self.refresh(hard_refresh=False)
-    
+    with timer("question_refresh", question_name=self.name, question_type=self.__class__.__name__):
+      base_seed = kwargs.get("rng_seed", None)
+      self.refresh(rng_seed=base_seed)
+      backoff_counter = 1
+      while not self.is_interesting():
+        # Increment seed for each backoff attempt to maintain deterministic behavior
+        backoff_seed = None if base_seed is None else base_seed + backoff_counter
+        self.refresh(rng_seed=backoff_seed, hard_refresh=False)
+        backoff_counter += 1
+
+    with timer("question_body", question_name=self.name, question_type=self.__class__.__name__):
+      body = self.get_body()
+
+    with timer("question_explanation", question_name=self.name, question_type=self.__class__.__name__):
+      explanation = self.get_explanation()
+
     return ContentAST.Question(
-      body=self.get_body(),
-      explanation=self.get_explanation(),
+      body=body,
+      explanation=explanation,
       value=self.points_value,
       spacing=self.spacing,
       topic=self.topic
@@ -287,39 +300,47 @@ class Question(abc.ABC):
     return True
   
   def get__canvas(self, course: canvasapi.course.Course, quiz : canvasapi.quiz.Quiz, interest_threshold=1.0, *args, **kwargs):
-    
+
     # Get the AST for the question
-    questionAST = self.get_question(**kwargs)
-    
+    with timer("question_get_ast", question_name=self.name, question_type=self.__class__.__name__):
+      questionAST = self.get_question(**kwargs)
+
     # Get the answers and type of question
     question_type, answers = self.get_answers(*args, **kwargs)
-    
+
     # Define a helper function for uploading images to canvas
     def image_upload(img_data) -> str:
-      
+
       course.create_folder(f"{quiz.id}", parent_folder_path="Quiz Files")
       file_name = f"{uuid.uuid4()}.png"
-      
+
       with io.FileIO(file_name, 'w+') as ffid:
         ffid.write(img_data.getbuffer())
         ffid.flush()
         ffid.seek(0)
         upload_success, f = course.upload(ffid, parent_folder_path=f"Quiz Files/{quiz.id}")
       os.remove(file_name)
-      
+
       img_data.name = "img.png"
       # upload_success, f = course.upload(img_data, parent_folder_path=f"Quiz Files/{quiz.id}")
       log.debug("path: " + f"/courses/{course.id}/files/{f['id']}/preview")
       return f"/courses/{course.id}/files/{f['id']}/preview"
-      
+
+    # Render AST to HTML for Canvas
+    with timer("ast_render_body", question_name=self.name, question_type=self.__class__.__name__):
+      question_html = questionAST.render("html", upload_func=image_upload)
+
+    with timer("ast_render_explanation", question_name=self.name, question_type=self.__class__.__name__):
+      explanation_html = questionAST.explanation.render("html", upload_func=image_upload)
+
     # Build appropriate dictionary to send to canvas
     return {
       "question_name": f"{self.name} ({datetime.datetime.now().strftime('%m/%d/%y %H:%M:%S.%f')})",
-      "question_text": questionAST.render("html", upload_func=image_upload),
+      "question_text": question_html,
       "question_type": question_type.value,
       "points_possible": self.points_value,
       "answers": answers,
-      "neutral_comments_html": questionAST.explanation.render("html", upload_func=image_upload)
+      "neutral_comments_html": explanation_html
     }
 
 class QuestionGroup():

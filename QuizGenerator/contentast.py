@@ -5,6 +5,7 @@ from io import BytesIO
 from typing import List, Callable
 
 import pypandoc
+import markdown
 
 from QuizGenerator.misc import log, Answer
 
@@ -86,19 +87,33 @@ class ContentAST:
       self.elements.extend(elements)
 
     def convert_markdown(self, str_to_convert, output_format):
-      try:
-        output = pypandoc.convert_text(
-          str_to_convert,
-          output_format,
-          format='md',
-          extra_args=["-M2GB", "+RTS", "-K64m", "-RTS"]
-        )
-        # if output_format == "html":
-        #   output = re.sub(r'^<p>(.*)</p>$', r'\1', output, flags=re.DOTALL)
-        return output
-      except RuntimeError as e:
-        log.warning(f"Specified conversion format '{output_format}' not recognized by pypandoc. Defaulting to markdown")
-      return None
+      if output_format == "html":
+        # Fast in-process HTML conversion using Python markdown library
+        try:
+          # Convert markdown to HTML using fast Python library
+          html_output = markdown.markdown(str_to_convert)
+
+          # Strip surrounding <p> tags for inline content (matching old behavior)
+          if html_output.startswith("<p>") and html_output.endswith("</p>"):
+            html_output = html_output[3:-4]
+
+          return html_output.strip()
+        except Exception as e:
+          log.warning(f"Markdown conversion failed: {e}. Returning original content.")
+          return str_to_convert
+      else:
+        # Keep using Pandoc for LaTeX and other formats (less critical path)
+        try:
+          output = pypandoc.convert_text(
+            str_to_convert,
+            output_format,
+            format='md',
+            extra_args=["-M2GB", "+RTS", "-K64m", "-RTS"]
+          )
+          return output
+        except RuntimeError as e:
+          log.warning(f"Specified conversion format '{output_format}' not recognized by pypandoc. Defaulting to markdown")
+        return None
     
     def render(self, output_format, **kwargs):
       method_name = f"render_{output_format}"
