@@ -229,32 +229,30 @@ class VectorDotProduct(VectorMathQuestion, MultiPartQuestionMixin):
     return subparts
 
   def get_body(self):
-    if self.is_multipart():
-      # Use multipart formatting with repeated problem parts
-      intro_text = "Calculate the dot product of the following vectors:"
-      return self.create_multipart_body(intro_text)
-    else:
-      # Original single question body
-      return self._create_single_part_body()
-
-  def _create_single_part_body(self):
-    """Create the body for a single-part dot product question."""
     body = ContentAST.Section()
 
+    # Use consistent wording for both single and multipart questions
     # Randomly choose between "dot product" and "evaluate" phrasing
     if self.rng.random() < 0.5:
-      body.add_element(ContentAST.Paragraph(["Calculate the dot product of the following vectors:"]))
+      intro_text = "Calculate the dot product of the following vectors:"
     else:
-      body.add_element(ContentAST.Paragraph(["Evaluate the following vector expression:"]))
+      intro_text = "Evaluate the following vector expression:"
 
-    # Display the problem as a single equation
-    vector_a_latex = self._format_vector(self.vector_a)
-    vector_b_latex = self._format_vector(self.vector_b)
-    body.add_element(ContentAST.Equation(f"{vector_a_latex} \\cdot {vector_b_latex} = ", inline=False))
+    body.add_element(ContentAST.Paragraph([intro_text]))
 
-    # Answer section
-    body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Answer: "])]))
-    body.add_element(ContentAST.Answer(answer=self.answers["dot_product"]))
+    if self.is_multipart():
+      # Use multipart formatting with repeated problem parts
+      subpart_data = self.generate_subquestion_data()
+      repeated_part = self.create_repeated_problem_part(subpart_data)
+      body.add_element(repeated_part)
+    else:
+      # Single equation display
+      vector_a_latex = self._format_vector(self.vector_a)
+      vector_b_latex = self._format_vector(self.vector_b)
+      body.add_element(ContentAST.Equation(f"{vector_a_latex} \\cdot {vector_b_latex} = ", inline=False))
+
+      # Canvas-only answer field (hidden from PDF)
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Answer(answer=self.answers["dot_product"])]))
 
     return body
 
@@ -345,9 +343,8 @@ class VectorMagnitude(VectorMathQuestion):
     vector_latex = self._format_vector(self.vector)
     body.add_element(ContentAST.Equation(f"\\left\\|{vector_latex}\\right\\| = ", inline=False))
 
-    # Answer section
-    body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Answer: "])]))
-    body.add_element(ContentAST.Answer(answer=self.answers["magnitude"]))
+    # Canvas-only answer field (hidden from PDF)
+    body.add_element(ContentAST.OnlyHtml([ContentAST.Answer(answer=self.answers["magnitude"])]))
 
     return body
 
