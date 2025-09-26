@@ -33,7 +33,7 @@ class VectorMathQuestion(Question, abc.ABC):
 
 
 @QuestionRegistry.register()
-class VectorAddition(VectorMathQuestion):
+class VectorAddition(VectorMathQuestion, MultiPartQuestionMixin):
 
   MIN_DIMENSION = 2
   MAX_DIMENSION = 4
@@ -44,38 +44,70 @@ class VectorAddition(VectorMathQuestion):
     # Generate vector dimension
     self.dimension = self.rng.randint(self.MIN_DIMENSION, self.MAX_DIMENSION)
 
-    # Generate two vectors
-    self.vector_a = self._generate_vector(self.dimension)
-    self.vector_b = self._generate_vector(self.dimension)
-
-    # Calculate result
-    self.result = [self.vector_a[i] + self.vector_b[i] for i in range(self.dimension)]
-
-    # Create answers
+    # Clear any existing data
     self.answers = {}
-    for i in range(self.dimension):
-      self.answers[f"result_{i}"] = Answer.integer(f"result_{i}", self.result[i])
+
+    if self.is_multipart():
+      # Generate multiple subquestions
+      self.subquestion_data = []
+      for i in range(self.num_subquestions):
+        # Generate unique vectors for each subquestion
+        vector_a = self._generate_vector(self.dimension)
+        vector_b = self._generate_vector(self.dimension)
+        result = [vector_a[j] + vector_b[j] for j in range(self.dimension)]
+
+        self.subquestion_data.append({
+          'vector_a': vector_a,
+          'vector_b': vector_b,
+          'result': result
+        })
+
+        # Create answers for this subpart
+        letter = chr(ord('a') + i)
+        for j in range(self.dimension):
+          self.answers[f"subpart_{letter}_{j}"] = Answer.integer(f"subpart_{letter}_{j}", result[j])
+    else:
+      # Single question (original behavior)
+      self.vector_a = self._generate_vector(self.dimension)
+      self.vector_b = self._generate_vector(self.dimension)
+      self.result = [self.vector_a[i] + self.vector_b[i] for i in range(self.dimension)]
+
+      # Create answers
+      for i in range(self.dimension):
+        self.answers[f"result_{i}"] = Answer.integer(f"result_{i}", self.result[i])
+
+  def generate_subquestion_data(self):
+    """Generate LaTeX content for each subpart of the vector addition question."""
+    subparts = []
+    for data in self.subquestion_data:
+      vector_a_latex = self._format_vector(data['vector_a'])
+      vector_b_latex = self._format_vector(data['vector_b'])
+      # Return as tuple of (matrix_a, operator, matrix_b)
+      subparts.append((vector_a_latex, "+", vector_b_latex))
+    return subparts
 
   def get_body(self):
     body = ContentAST.Section()
 
     body.add_element(ContentAST.Paragraph(["Calculate the vector addition:"]))
 
-    # Display the addition problem as a single equation
-    vector_a_latex = self._format_vector(self.vector_a)
-    vector_b_latex = self._format_vector(self.vector_b)
-    body.add_element(ContentAST.Equation(f"{vector_a_latex} + {vector_b_latex} = ", inline=False))
+    if self.is_multipart():
+      # Use multipart formatting with repeated problem parts
+      subpart_data = self.generate_subquestion_data()
+      repeated_part = self.create_repeated_problem_part(subpart_data)
+      body.add_element(repeated_part)
+    else:
+      # Single equation display
+      vector_a_latex = self._format_vector(self.vector_a)
+      vector_b_latex = self._format_vector(self.vector_b)
+      body.add_element(ContentAST.Equation(f"{vector_a_latex} + {vector_b_latex} = ", inline=False))
 
-    # Answer section
-    body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
-
-    # Create answer table for vector components
-    table_data = []
-    for i in range(self.dimension):
-      table_data.append([ContentAST.Answer(answer=self.answers[f"result_{i}"])])
-
-    body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
-
+      # Canvas-only answer fields (hidden from PDF)
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
+      table_data = []
+      for i in range(self.dimension):
+        table_data.append([ContentAST.Answer(answer=self.answers[f"result_{i}"])])
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
 
     return body
 
@@ -84,28 +116,55 @@ class VectorAddition(VectorMathQuestion):
 
     explanation.add_element(ContentAST.Paragraph(["To add vectors, we add corresponding components:"]))
 
-    # Create LaTeX strings for multiline equation
-    vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
-    vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
-    addition_str = r" \\ ".join([f"{self.vector_a[i]}+{self.vector_b[i]}" for i in range(self.dimension)])
-    result_str = r" \\ ".join([str(v) for v in self.result])
+    if self.is_multipart():
+      # Handle multipart explanations
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        vector_a = data['vector_a']
+        vector_b = data['vector_b']
+        result = data['result']
 
-    explanation.add_element(
-        ContentAST.Equation.make_block_equation__multiline_equals(
-            lhs="\\vec{a} + \\vec{b}",
-            rhs=[
-                f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
-                f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
-                f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
-            ]
+        # Create LaTeX strings for multiline equation
+        vector_a_str = r" \\ ".join([str(v) for v in vector_a])
+        vector_b_str = r" \\ ".join([str(v) for v in vector_b])
+        addition_str = r" \\ ".join([f"{vector_a[j]}+{vector_b[j]}" for j in range(self.dimension)])
+        result_str = r" \\ ".join([str(v) for v in result])
+
+        # Add explanation for this subpart
+        explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
+        explanation.add_element(
+            ContentAST.Equation.make_block_equation__multiline_equals(
+                lhs="\\vec{a} + \\vec{b}",
+                rhs=[
+                    f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
+                    f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
+                    f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                ]
+            )
         )
-    )
+    else:
+      # Single part explanation (original behavior)
+      vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
+      vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
+      addition_str = r" \\ ".join([f"{self.vector_a[i]}+{self.vector_b[i]}" for i in range(self.dimension)])
+      result_str = r" \\ ".join([str(v) for v in self.result])
+
+      explanation.add_element(
+          ContentAST.Equation.make_block_equation__multiline_equals(
+              lhs="\\vec{a} + \\vec{b}",
+              rhs=[
+                  f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
+                  f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
+                  f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+              ]
+          )
+      )
 
     return explanation
 
 
 @QuestionRegistry.register()
-class VectorScalarMultiplication(VectorMathQuestion):
+class VectorScalarMultiplication(VectorMathQuestion, MultiPartQuestionMixin):
 
   MIN_DIMENSION = 2
   MAX_DIMENSION = 4
