@@ -228,3 +228,147 @@ class BodyTemplatesMixin:
             body.add_element(answer_table)
 
         return body
+
+
+class MultiPartQuestionMixin:
+    """
+    Mixin providing multi-part question generation with labeled subparts (a), (b), (c), etc.
+
+    This mixin enables questions to be split into multiple subparts when num_subquestions > 1.
+    Each subpart gets its own calculation with proper (a), (b), (c) labeling and alignment.
+    Primarily designed for vector math questions but extensible to other question types.
+
+    Usage:
+        class VectorDotProduct(VectorMathQuestion, MultiPartQuestionMixin):
+            def get_body(self):
+                if self.is_multipart():
+                    return self.create_multipart_body()
+                else:
+                    return self.create_single_part_body()
+
+    Methods provided:
+        - is_multipart(): Check if this question should generate multiple subparts
+        - create_repeated_problem_part(): Create the ContentAST.RepeatedProblemPart element
+        - generate_subquestion_data(): Abstract method for subclasses to implement
+    """
+
+    def is_multipart(self):
+        """
+        Check if this question should generate multiple subparts.
+
+        Returns:
+            bool: True if num_subquestions > 1, False otherwise
+        """
+        return getattr(self, 'num_subquestions', 1) > 1
+
+    def create_repeated_problem_part(self, subpart_data_list):
+        """
+        Create a ContentAST.RepeatedProblemPart element from subpart data.
+
+        Args:
+            subpart_data_list: List of data for each subpart. Each item can be:
+                - A string (LaTeX equation content)
+                - A ContentAST.Element
+                - A tuple/list of elements to be joined
+
+        Returns:
+            ContentAST.RepeatedProblemPart: The formatted multi-part element
+
+        Example:
+            # For vector dot products
+            subparts = [
+                (matrix_a1, "\\cdot", matrix_b1),
+                (matrix_a2, "\\cdot", matrix_b2)
+            ]
+            return self.create_repeated_problem_part(subparts)
+        """
+        from QuizGenerator.contentast import ContentAST
+        return ContentAST.RepeatedProblemPart(subpart_data_list)
+
+    def generate_subquestion_data(self):
+        """
+        Generate data for each subpart of the question.
+
+        This is an abstract method that subclasses must implement.
+        It should generate and return the data needed for each subpart.
+
+        Returns:
+            list: List of data for each subpart. The format depends on the
+                  specific question type but should be compatible with
+                  ContentAST.RepeatedProblemPart.
+
+        Example implementation:
+            def generate_subquestion_data(self):
+                subparts = []
+                for i in range(self.num_subquestions):
+                    vector_a = self._generate_vector(self.dimension)
+                    vector_b = self._generate_vector(self.dimension)
+                    matrix_a = ContentAST.Matrix.to_latex(
+                        [[v] for v in vector_a], "b"
+                    )
+                    matrix_b = ContentAST.Matrix.to_latex(
+                        [[v] for v in vector_b], "b"
+                    )
+                    subparts.append((matrix_a, "\\cdot", matrix_b))
+                return subparts
+        """
+        raise NotImplementedError(
+            "Subclasses using MultiPartQuestionMixin must implement generate_subquestion_data()"
+        )
+
+    def create_multipart_body(self, intro_text="Calculate the following:"):
+        """
+        Create a standard multipart question body using the repeated problem part format.
+
+        Args:
+            intro_text: Introduction text for the question
+
+        Returns:
+            ContentAST.Section: Complete question body with intro and subparts
+
+        Example:
+            def get_body(self):
+                if self.is_multipart():
+                    return self.create_multipart_body("Calculate the dot products:")
+                else:
+                    return self.create_single_part_body()
+        """
+        from QuizGenerator.contentast import ContentAST
+        body = ContentAST.Section()
+        body.add_element(ContentAST.Paragraph([intro_text]))
+
+        # Generate subpart data and create the repeated problem part
+        subpart_data = self.generate_subquestion_data()
+        repeated_part = self.create_repeated_problem_part(subpart_data)
+        body.add_element(repeated_part)
+
+        return body
+
+    def get_subpart_answers(self):
+        """
+        Retrieve answers organized by subpart for multipart questions.
+
+        Returns:
+            dict: Dictionary mapping subpart letters ('a', 'b', 'c') to their answers.
+                  Returns empty dict if not a multipart question.
+
+        Example:
+            # For a 3-part question
+            {
+                'a': Answer.integer('a', 5),
+                'b': Answer.integer('b', 12),
+                'c': Answer.integer('c', -3)
+            }
+        """
+        if not self.is_multipart():
+            return {}
+
+        subpart_answers = {}
+        for i in range(self.num_subquestions):
+            letter = chr(ord('a') + i)
+            # Look for answers with subpart keys
+            answer_key = f"subpart_{letter}"
+            if hasattr(self, 'answers') and answer_key in self.answers:
+                subpart_answers[letter] = self.answers[answer_key]
+
+        return subpart_answers

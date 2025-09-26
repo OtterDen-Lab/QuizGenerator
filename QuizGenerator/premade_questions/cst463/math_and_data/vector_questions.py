@@ -6,6 +6,7 @@ from typing import List
 
 from QuizGenerator.question import Question, QuestionRegistry, Answer
 from QuizGenerator.contentast import ContentAST
+from QuizGenerator.mixins import MultiPartQuestionMixin
 
 log = logging.getLogger(__name__)
 
@@ -176,7 +177,7 @@ class VectorScalarMultiplication(VectorMathQuestion):
 
 
 @QuestionRegistry.register()
-class VectorDotProduct(VectorMathQuestion):
+class VectorDotProduct(VectorMathQuestion, MultiPartQuestionMixin):
 
   MIN_DIMENSION = 2
   MAX_DIMENSION = 4
@@ -187,19 +188,57 @@ class VectorDotProduct(VectorMathQuestion):
     # Generate vector dimension
     self.dimension = self.rng.randint(self.MIN_DIMENSION, self.MAX_DIMENSION)
 
-    # Generate two vectors
-    self.vector_a = self._generate_vector(self.dimension)
-    self.vector_b = self._generate_vector(self.dimension)
+    # Clear any existing data
+    self.answers = {}
 
-    # Calculate dot product
-    self.result = sum(self.vector_a[i] * self.vector_b[i] for i in range(self.dimension))
+    if self.is_multipart():
+      # Generate multiple subquestions
+      self.subquestion_data = []
+      for i in range(self.num_subquestions):
+        # Generate unique vectors for each subquestion
+        vector_a = self._generate_vector(self.dimension)
+        vector_b = self._generate_vector(self.dimension)
+        result = sum(vector_a[j] * vector_b[j] for j in range(self.dimension))
 
-    # Create answer
-    self.answers = {
-      "dot_product": Answer.integer("dot_product", self.result)
-    }
+        self.subquestion_data.append({
+          'vector_a': vector_a,
+          'vector_b': vector_b,
+          'result': result
+        })
+
+        # Create answer for this subpart
+        letter = chr(ord('a') + i)
+        self.answers[f"subpart_{letter}"] = Answer.integer(f"subpart_{letter}", result)
+    else:
+      # Single question (original behavior)
+      self.vector_a = self._generate_vector(self.dimension)
+      self.vector_b = self._generate_vector(self.dimension)
+      self.result = sum(self.vector_a[i] * self.vector_b[i] for i in range(self.dimension))
+      self.answers = {
+        "dot_product": Answer.integer("dot_product", self.result)
+      }
+
+  def generate_subquestion_data(self):
+    """Generate LaTeX content for each subpart of the dot product question."""
+    subparts = []
+    for data in self.subquestion_data:
+      vector_a_latex = self._format_vector(data['vector_a'])
+      vector_b_latex = self._format_vector(data['vector_b'])
+      # Return as tuple of (matrix_a, operator, matrix_b)
+      subparts.append((vector_a_latex, "\\cdot", vector_b_latex))
+    return subparts
 
   def get_body(self):
+    if self.is_multipart():
+      # Use multipart formatting with repeated problem parts
+      intro_text = "Calculate the dot product of the following vectors:"
+      return self.create_multipart_body(intro_text)
+    else:
+      # Original single question body
+      return self._create_single_part_body()
+
+  def _create_single_part_body(self):
+    """Create the body for a single-part dot product question."""
     body = ContentAST.Section()
 
     # Randomly choose between "dot product" and "evaluate" phrasing
@@ -224,23 +263,51 @@ class VectorDotProduct(VectorMathQuestion):
 
     explanation.add_element(ContentAST.Paragraph(["The dot product is calculated by multiplying corresponding components and summing the results:"]))
 
-    # Create LaTeX strings for multiline equation
-    vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
-    vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
-    products_str = " + ".join([f"({self.vector_a[i]} \\cdot {self.vector_b[i]})" for i in range(self.dimension)])
-    calculation_str = " + ".join([str(self.vector_a[i] * self.vector_b[i]) for i in range(self.dimension)])
+    if self.is_multipart():
+      # Handle multipart explanations
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        vector_a = data['vector_a']
+        vector_b = data['vector_b']
+        result = data['result']
 
-    explanation.add_element(
-        ContentAST.Equation.make_block_equation__multiline_equals(
-            lhs="\\vec{a} \\cdot \\vec{b}",
-            rhs=[
-                f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} \\cdot \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
-                products_str,
-                calculation_str,
-                str(self.result)
-            ]
+        # Create LaTeX strings for multiline equation
+        vector_a_str = r" \\ ".join([str(v) for v in vector_a])
+        vector_b_str = r" \\ ".join([str(v) for v in vector_b])
+        products_str = " + ".join([f"({vector_a[j]} \\cdot {vector_b[j]})" for j in range(self.dimension)])
+        calculation_str = " + ".join([str(vector_a[j] * vector_b[j]) for j in range(self.dimension)])
+
+        # Add explanation for this subpart
+        explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
+        explanation.add_element(
+            ContentAST.Equation.make_block_equation__multiline_equals(
+                lhs="\\vec{a} \\cdot \\vec{b}",
+                rhs=[
+                    f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} \\cdot \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
+                    products_str,
+                    calculation_str,
+                    str(result)
+                ]
+            )
         )
-    )
+    else:
+      # Single part explanation (original behavior)
+      vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
+      vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
+      products_str = " + ".join([f"({self.vector_a[i]} \\cdot {self.vector_b[i]})" for i in range(self.dimension)])
+      calculation_str = " + ".join([str(self.vector_a[i] * self.vector_b[i]) for i in range(self.dimension)])
+
+      explanation.add_element(
+          ContentAST.Equation.make_block_equation__multiline_equals(
+              lhs="\\vec{a} \\cdot \\vec{b}",
+              rhs=[
+                  f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} \\cdot \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
+                  products_str,
+                  calculation_str,
+                  str(self.result)
+              ]
+          )
+      )
 
     return explanation
 

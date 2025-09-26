@@ -212,14 +212,17 @@ class Question(abc.ABC):
     self.topic = topic
     self.spacing = kwargs.get("spacing", 0)
     self.answer_kind = Answer.AnswerKind.BLANK
-    
+
+    # Support for multi-part questions (defaults to 1 for normal questions)
+    self.num_subquestions = kwargs.get("num_subquestions", 1)
+
     self.extra_attrs = kwargs # clear page, etc.
-    
+
     self.answers = {}
     self.possible_variations = float('inf')
-    
+
     self.rng_seed_offset = kwargs.get("rng_seed_offset", 0)
-    
+
     # To be used throughout when generating random things
     self.rng = random.Random()
   
