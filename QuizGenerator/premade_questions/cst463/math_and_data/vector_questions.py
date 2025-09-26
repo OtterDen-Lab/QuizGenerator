@@ -6,12 +6,13 @@ from typing import List
 
 from QuizGenerator.question import Question, QuestionRegistry, Answer
 from QuizGenerator.contentast import ContentAST
-from QuizGenerator.mixins import MultiPartQuestionMixin
+from QuizGenerator.mixins import MathOperationQuestion
 
 log = logging.getLogger(__name__)
 
 
-class VectorMathQuestion(Question, MultiPartQuestionMixin, abc.ABC):
+class VectorMathQuestion(MathOperationQuestion, Question):
+
   def __init__(self, *args, **kwargs):
     kwargs["topic"] = kwargs.get("topic", Question.Topic.MATH)
     super().__init__(*args, **kwargs)
@@ -31,97 +32,57 @@ class VectorMathQuestion(Question, MultiPartQuestionMixin, abc.ABC):
     elements = [str(v) for v in vector]
     return f"({', '.join(elements)})"
 
-  def get_intro_text(self):
-    """Default intro text - subclasses can override."""
-    return "Calculate the following:"
+  # Implement MathOperationQuestion abstract methods
 
-  @abc.abstractmethod
-  def get_operator(self):
-    """Return the LaTeX operator for this operation (e.g., '+', '\\cdot', '\\times')."""
-    pass
+  def generate_operands(self):
+    """Generate two vectors for the operation."""
+    if not hasattr(self, 'dimension'):
+      self.dimension = self.rng.randint(self.MIN_DIMENSION, self.MAX_DIMENSION)
+    vector_a = self._generate_vector(self.dimension)
+    vector_b = self._generate_vector(self.dimension)
+    return vector_a, vector_b
 
-  @abc.abstractmethod
-  def calculate_single_result(self, vector_a, vector_b):
-    """Calculate the result for a single question with two vectors."""
-    pass
+  def format_operand_latex(self, operand):
+    """Format a vector for LaTeX display."""
+    return self._format_vector(operand)
 
-  @abc.abstractmethod
-  def create_subquestion_answers(self, subpart_index, result):
-    """Create answer objects for a subquestion result."""
-    pass
+  def format_single_equation(self, operand_a, operand_b):
+    """Format the equation for single questions."""
+    operand_a_latex = self.format_operand_latex(operand_a)
+    operand_b_latex = self.format_operand_latex(operand_b)
+    return f"{operand_a_latex} {self.get_operator()} {operand_b_latex}"
 
-  def create_single_answers(self, result):
-    """Create answers for single questions - just delegate to subquestion method."""
-    return self.create_subquestion_answers(0, result)
+  # Vector-specific overrides
 
   def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-
-    # Generate vector dimension
+    # Generate vector dimension first
     self.dimension = self.rng.randint(self.MIN_DIMENSION, self.MAX_DIMENSION)
 
-    # Clear any existing data
-    self.answers = {}
+    # Call parent refresh which will use our generate_operands method
+    super().refresh(*args, **kwargs)
 
-    if self.is_multipart():
-      # Generate multiple subquestions
-      self.subquestion_data = []
-      for i in range(self.num_subquestions):
-        # Generate unique vectors for each subquestion
-        vector_a = self._generate_vector(self.dimension)
-        vector_b = self._generate_vector(self.dimension)
-        result = self.calculate_single_result(vector_a, vector_b)
-
-        self.subquestion_data.append({
-          'vector_a': vector_a,
-          'vector_b': vector_b,
-          'result': result
-        })
-
-        # Create answers for this subpart
-        self.create_subquestion_answers(i, result)
-    else:
-      # Single question (original behavior)
-      self.vector_a = self._generate_vector(self.dimension)
-      self.vector_b = self._generate_vector(self.dimension)
-      self.result = self.calculate_single_result(self.vector_a, self.vector_b)
-
-      # Create answers
-      self.create_single_answers(self.result)
+    # For backward compatibility, set vector_a/vector_b for single questions
+    if not self.is_multipart():
+      self.vector_a = self.operand_a
+      self.vector_b = self.operand_b
 
   def generate_subquestion_data(self):
-    """Generate LaTeX content for each subpart of the question."""
+    """Generate LaTeX content for each subpart of the question.
+    Override to handle vector-specific keys in subquestion_data."""
     subparts = []
     for data in self.subquestion_data:
-      vector_a_latex = self._format_vector(data['vector_a'])
-      vector_b_latex = self._format_vector(data['vector_b'])
+      # Map generic operand names to vector names for compatibility
+      vector_a = data.get('vector_a', data['operand_a'])
+      vector_b = data.get('vector_b', data['operand_b'])
+
+      vector_a_latex = self._format_vector(vector_a)
+      vector_b_latex = self._format_vector(vector_b)
       # Return as tuple of (matrix_a, operator, matrix_b)
       subparts.append((vector_a_latex, self.get_operator(), vector_b_latex))
     return subparts
 
-  def get_body(self):
-    body = ContentAST.Section()
-
-    body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
-
-    if self.is_multipart():
-      # Use multipart formatting with repeated problem parts
-      subpart_data = self.generate_subquestion_data()
-      repeated_part = self.create_repeated_problem_part(subpart_data)
-      body.add_element(repeated_part)
-    else:
-      # Single equation display
-      vector_a_latex = self._format_vector(self.vector_a)
-      vector_b_latex = self._format_vector(self.vector_b)
-      body.add_element(ContentAST.Equation(f"{vector_a_latex} {self.get_operator()} {vector_b_latex} = ", inline=False))
-
-      # Canvas-only answer fields (hidden from PDF)
-      self._add_single_question_answers(body)
-
-    return body
-
   def _add_single_question_answers(self, body):
-    """Add Canvas-only answer fields for single questions. Subclasses can override."""
+    """Add Canvas-only answer fields for single questions."""
     # Check if it's a scalar result (like dot product)
     if hasattr(self, 'answers') and len(self.answers) == 1:
       # Single scalar answer
@@ -137,29 +98,21 @@ class VectorMathQuestion(Question, MultiPartQuestionMixin, abc.ABC):
       if table_data:
         body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
 
-  def get_explanation_intro(self):
-    """Get the intro text for explanations. Subclasses should override."""
-    return "The calculation is performed as follows:"
+  # Abstract methods that subclasses must still implement
+  @abc.abstractmethod
+  def get_operator(self):
+    """Return the LaTeX operator for this operation."""
+    pass
 
-  def create_explanation_for_subpart(self, subpart_data, letter):
-    """Create explanation for a single subpart. Subclasses should override."""
-    return ContentAST.Paragraph([f"Part ({letter}): Calculation details would go here."])
+  @abc.abstractmethod
+  def calculate_single_result(self, vector_a, vector_b):
+    """Calculate the result for a single question with two vectors."""
+    pass
 
-  def get_explanation(self):
-    explanation = ContentAST.Section()
-
-    explanation.add_element(ContentAST.Paragraph([self.get_explanation_intro()]))
-
-    if self.is_multipart():
-      # Handle multipart explanations
-      for i, data in enumerate(self.subquestion_data):
-        letter = chr(ord('a') + i)
-        explanation.add_element(self.create_explanation_for_subpart(data, letter))
-    else:
-      # Single part explanation - subclasses should override this
-      explanation.add_element(ContentAST.Paragraph(["Single question explanation would go here."]))
-
-    return explanation
+  @abc.abstractmethod
+  def create_subquestion_answers(self, subpart_index, result):
+    """Create answer objects for a subquestion result."""
+    pass
 
 
 @QuestionRegistry.register()
@@ -248,10 +201,18 @@ class VectorScalarMultiplication(VectorMathQuestion):
       scalar = self.rng.randint(-5, 5)
     return scalar
 
+  def generate_operands(self):
+    """Override to generate scalar and vector."""
+    if not hasattr(self, 'dimension'):
+      self.dimension = self.rng.randint(self.MIN_DIMENSION, self.MAX_DIMENSION)
+    vector_a = self._generate_vector(self.dimension)
+    vector_b = self._generate_vector(self.dimension)  # Not used, but kept for consistency
+    return vector_a, vector_b
+
   def refresh(self, *args, **kwargs):
     if self.is_multipart():
       # For multipart questions, we handle everything ourselves
-      # Don't call super() because it would try to use calculate_single_result without scalars
+      # Don't call super() because we need different scalars per subpart
 
       # Call Question.refresh() directly to get basic setup
       Question.refresh(self, *args, **kwargs)
@@ -272,6 +233,8 @@ class VectorScalarMultiplication(VectorMathQuestion):
         result = [scalar * component for component in vector_a]
 
         self.subquestion_data.append({
+          'operand_a': vector_a,
+          'operand_b': vector_b,
           'vector_a': vector_a,
           'vector_b': vector_b,
           'scalar': scalar,

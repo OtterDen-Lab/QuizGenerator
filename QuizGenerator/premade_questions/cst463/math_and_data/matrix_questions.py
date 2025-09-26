@@ -4,13 +4,14 @@ import logging
 
 from QuizGenerator.question import Question, QuestionRegistry, Answer
 from QuizGenerator.contentast import ContentAST
+from QuizGenerator.mixins import MathOperationQuestion
 
 log = logging.getLogger(__name__)
 
 
-class MatrixMathQuestion(Question, abc.ABC):
+class MatrixMathQuestion(MathOperationQuestion, Question):
     """
-    Base class for matrix mathematics questions.
+    Base class for matrix mathematics questions with multipart support.
 
     NOTE: This class demonstrates proper ContentAST usage patterns.
     When implementing similar question types (vectors, equations, etc.),
@@ -45,6 +46,79 @@ class MatrixMathQuestion(Question, abc.ABC):
             table_data.append(row)
         return ContentAST.Table(data=table_data, padding=True)
 
+    # Implement MathOperationQuestion abstract methods
+
+    @abc.abstractmethod
+    def generate_operands(self):
+        """Generate matrices for the operation. Subclasses must implement."""
+        pass
+
+    def format_operand_latex(self, operand):
+        """Format a matrix for LaTeX display."""
+        return ContentAST.Matrix.to_latex(operand, "b")
+
+    def format_single_equation(self, operand_a, operand_b):
+        """Format the equation for single questions."""
+        operand_a_latex = self.format_operand_latex(operand_a)
+        operand_b_latex = self.format_operand_latex(operand_b)
+        return f"{operand_a_latex} {self.get_operator()} {operand_b_latex}"
+
+    def _add_single_question_answers(self, body):
+        """Add Canvas-only answer fields for single questions."""
+        # For matrices, we typically show result dimensions and answer table
+        if hasattr(self, 'result_rows') and hasattr(self, 'result_cols'):
+            # Matrix multiplication case with dimension answers
+            if hasattr(self, 'answers') and "result_rows" in self.answers:
+                body.add_element(
+                    ContentAST.OnlyHtml([
+                        ContentAST.AnswerBlock([
+                            ContentAST.Answer(
+                                answer=self.answers["result_rows"],
+                                label="Number of rows in result"
+                            ),
+                            ContentAST.Answer(
+                                answer=self.answers["result_cols"],
+                                label="Number of columns in result"
+                            )
+                        ])
+                    ])
+                )
+
+        # Matrix result table
+        if hasattr(self, 'result') and self.result:
+            rows = len(self.result)
+            cols = len(self.result[0])
+            body.add_element(
+                ContentAST.OnlyHtml([
+                    ContentAST.Paragraph(["Result matrix:"]),
+                    self._create_answer_table(rows, cols, self.answers)
+                ])
+            )
+        elif hasattr(self, 'max_dim'):
+            # Matrix multiplication with max dimensions
+            body.add_element(
+                ContentAST.OnlyHtml([
+                    ContentAST.Paragraph(["Result matrix (use '-' if cell doesn't exist):"]),
+                    self._create_answer_table(self.max_dim, self.max_dim, self.answers)
+                ])
+            )
+
+    # Abstract methods that subclasses must implement
+    @abc.abstractmethod
+    def get_operator(self):
+        """Return the LaTeX operator for this operation."""
+        pass
+
+    @abc.abstractmethod
+    def calculate_single_result(self, matrix_a, matrix_b):
+        """Calculate the result for a single question with two matrices."""
+        pass
+
+    @abc.abstractmethod
+    def create_subquestion_answers(self, subpart_index, result):
+        """Create answer objects for a subquestion result."""
+        pass
+
 
 @QuestionRegistry.register()
 class MatrixAddition(MatrixMathQuestion):
@@ -52,48 +126,56 @@ class MatrixAddition(MatrixMathQuestion):
     MIN_SIZE = 2
     MAX_SIZE = 4
 
-    def refresh(self, *args, **kwargs):
-        super().refresh(*args, **kwargs)
-
+    def generate_operands(self):
+        """Generate two matrices with the same dimensions for addition."""
         # Generate matrix dimensions (same for both matrices in addition)
         self.rows = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
         self.cols = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
 
         # Generate two matrices
-        self.matrix_a = self._generate_matrix(self.rows, self.cols)
-        self.matrix_b = self._generate_matrix(self.rows, self.cols)
+        matrix_a = self._generate_matrix(self.rows, self.cols)
+        matrix_b = self._generate_matrix(self.rows, self.cols)
+        return matrix_a, matrix_b
 
-        # Calculate result matrix
-        self.result = [[self.matrix_a[i][j] + self.matrix_b[i][j]
-                       for j in range(self.cols)] for i in range(self.rows)]
+    def get_operator(self):
+        """Return the addition operator."""
+        return "+"
 
-        # Create answers dictionary
-        self.answers = {}
-        for i in range(self.rows):
-            for j in range(self.cols):
-                answer_key = f"answer_{i}_{j}"
-                self.answers[answer_key] = Answer.integer(answer_key, self.result[i][j])
+    def calculate_single_result(self, matrix_a, matrix_b):
+        """Calculate matrix addition result."""
+        rows = len(matrix_a)
+        cols = len(matrix_a[0])
+        return [[matrix_a[i][j] + matrix_b[i][j] for j in range(cols)] for i in range(rows)]
 
-    def get_body(self, **kwargs) -> ContentAST.Section:
-        body = ContentAST.Section()
+    def create_subquestion_answers(self, subpart_index, result):
+        """Create answer objects for matrix addition result."""
+        if subpart_index == 0 and not self.is_multipart():
+            # For single questions, use the old answer format
+            rows = len(result)
+            cols = len(result[0])
+            for i in range(rows):
+                for j in range(cols):
+                    answer_key = f"answer_{i}_{j}"
+                    self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+        else:
+            # For multipart questions, use subpart letter format
+            letter = chr(ord('a') + subpart_index)
+            rows = len(result)
+            cols = len(result[0])
+            for i in range(rows):
+                for j in range(cols):
+                    answer_key = f"subpart_{letter}_{i}_{j}"
+                    self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
 
-        # Concise question with matrices in single equation
-        body.add_element(ContentAST.Paragraph(["Calculate:"]))
+    def refresh(self, *args, **kwargs):
+        """Override refresh to set rows/cols for compatibility."""
+        super().refresh(*args, **kwargs)
 
-        # Create single equation with both matrices
-        matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "b")
-        matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
-        body.add_element(ContentAST.Equation(f"{matrix_a_latex} + {matrix_b_latex} = "))
-
-        # Answer table (HTML only - PDFs get blank space)
-        body.add_element(
-            ContentAST.OnlyHtml([
-                ContentAST.Paragraph(["Result (A + B):"]),
-                self._create_answer_table(self.rows, self.cols, self.answers)
-            ])
-        )
-
-        return body
+        # For backward compatibility, set matrix attributes for single questions
+        if not self.is_multipart():
+            self.matrix_a = self.operand_a
+            self.matrix_b = self.operand_b
+            # rows and cols should already be set by generate_operands
 
     def get_explanation(self, **kwargs) -> ContentAST.Section:
         explanation = ContentAST.Section()
@@ -105,26 +187,55 @@ class MatrixAddition(MatrixMathQuestion):
             ])
         )
 
-        # Comprehensive step-by-step walkthrough
-        explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation:"]))
+        if self.is_multipart():
+            # Handle multipart explanations
+            explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation for each part:"]))
+            for i, data in enumerate(self.subquestion_data):
+                letter = chr(ord('a') + i)
+                matrix_a = data.get('matrix_a', data['operand_a'])
+                matrix_b = data.get('matrix_b', data['operand_b'])
+                result = data['result']
 
-        # Show matrix addition with symbolic representation
-        # Create properly formatted matrix strings
-        matrix_a_str = r" \\ ".join([" & ".join([str(self.matrix_a[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
-        matrix_b_str = r" \\ ".join([" & ".join([str(self.matrix_b[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
-        addition_str = r" \\ ".join([" & ".join([f"{self.matrix_a[i][j]}+{self.matrix_b[i][j]}" for j in range(self.cols)]) for i in range(self.rows)])
-        result_str = r" \\ ".join([" & ".join([str(self.result[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+                # Create LaTeX strings for multiline equation
+                rows = len(matrix_a)
+                cols = len(matrix_a[0])
+                matrix_a_str = r" \\ ".join([" & ".join([str(matrix_a[row][col]) for col in range(cols)]) for row in range(rows)])
+                matrix_b_str = r" \\ ".join([" & ".join([str(matrix_b[row][col]) for col in range(cols)]) for row in range(rows)])
+                addition_str = r" \\ ".join([" & ".join([f"{matrix_a[row][col]}+{matrix_b[row][col]}" for col in range(cols)]) for row in range(rows)])
+                result_str = r" \\ ".join([" & ".join([str(result[row][col]) for col in range(cols)]) for row in range(rows)])
 
-        explanation.add_element(
-            ContentAST.Equation.make_block_equation__multiline_equals(
-                lhs="A + B",
-                rhs=[
-                    f"\\begin{{bmatrix}} {matrix_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {matrix_b_str} \\end{{bmatrix}}",
-                    f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
-                    f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
-                ]
+                # Add explanation for this subpart
+                explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
+                explanation.add_element(
+                    ContentAST.Equation.make_block_equation__multiline_equals(
+                        lhs="A + B",
+                        rhs=[
+                            f"\\begin{{bmatrix}} {matrix_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {matrix_b_str} \\end{{bmatrix}}",
+                            f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
+                            f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                        ]
+                    )
+                )
+        else:
+            # Single part explanation (original behavior)
+            explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation:"]))
+
+            # Create properly formatted matrix strings
+            matrix_a_str = r" \\ ".join([" & ".join([str(self.matrix_a[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+            matrix_b_str = r" \\ ".join([" & ".join([str(self.matrix_b[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+            addition_str = r" \\ ".join([" & ".join([f"{self.matrix_a[i][j]}+{self.matrix_b[i][j]}" for j in range(self.cols)]) for i in range(self.rows)])
+            result_str = r" \\ ".join([" & ".join([str(self.result[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+
+            explanation.add_element(
+                ContentAST.Equation.make_block_equation__multiline_equals(
+                    lhs="A + B",
+                    rhs=[
+                        f"\\begin{{bmatrix}} {matrix_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {matrix_b_str} \\end{{bmatrix}}",
+                        f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
+                        f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                    ]
+                )
             )
-        )
 
         return explanation
 
@@ -137,47 +248,110 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
     MIN_SCALAR = 2
     MAX_SCALAR = 9
 
-    def refresh(self, *args, **kwargs):
-        super().refresh(*args, **kwargs)
+    def _generate_scalar(self):
+        """Generate a scalar for multiplication."""
+        return self.rng.randint(self.MIN_SCALAR, self.MAX_SCALAR)
 
+    def generate_operands(self):
+        """Generate scalar and matrix for scalar multiplication."""
         # Generate matrix dimensions
         self.rows = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
         self.cols = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
 
-        # Generate scalar and matrix
-        self.scalar = self.rng.randint(self.MIN_SCALAR, self.MAX_SCALAR)
-        self.matrix = self._generate_matrix(self.rows, self.cols)
+        # Generate matrix (we'll generate scalar per subpart in refresh)
+        matrix = self._generate_matrix(self.rows, self.cols)
+        dummy_matrix = matrix  # Not used but needed for interface compatibility
+        return matrix, dummy_matrix
 
-        # Calculate result matrix
-        self.result = [[self.scalar * self.matrix[i][j]
-                       for j in range(self.cols)] for i in range(self.rows)]
+    def get_operator(self):
+        """Return scalar multiplication operator with current scalar."""
+        if hasattr(self, 'scalar'):
+            return f"{self.scalar} \\cdot"
+        else:
+            return "k \\cdot"  # Fallback for multipart case
 
-        # Create answers dictionary
-        self.answers = {}
-        for i in range(self.rows):
-            for j in range(self.cols):
-                answer_key = f"answer_{i}_{j}"
-                self.answers[answer_key] = Answer.integer(answer_key, self.result[i][j])
+    def calculate_single_result(self, matrix_a, matrix_b):
+        """Calculate scalar multiplication result."""
+        # For scalar multiplication, we only use matrix_a and need self.scalar
+        rows = len(matrix_a)
+        cols = len(matrix_a[0])
+        return [[self.scalar * matrix_a[i][j] for j in range(cols)] for i in range(rows)]
 
-    def get_body(self, **kwargs) -> ContentAST.Section:
-        body = ContentAST.Section()
+    def create_subquestion_answers(self, subpart_index, result):
+        """Create answer objects for matrix scalar multiplication result."""
+        if subpart_index == 0 and not self.is_multipart():
+            # For single questions, use the old answer format
+            rows = len(result)
+            cols = len(result[0])
+            for i in range(rows):
+                for j in range(cols):
+                    answer_key = f"answer_{i}_{j}"
+                    self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+        else:
+            # For multipart questions, use subpart letter format
+            letter = chr(ord('a') + subpart_index)
+            rows = len(result)
+            cols = len(result[0])
+            for i in range(rows):
+                for j in range(cols):
+                    answer_key = f"subpart_{letter}_{i}_{j}"
+                    self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
 
-        # Concise question with scalar and matrix using Matrix AST
-        body.add_element(ContentAST.Paragraph(["Calculate:"]))
+    def refresh(self, *args, **kwargs):
+        """Override refresh to handle different scalars per subpart."""
+        if self.is_multipart():
+            # For multipart questions, handle everything ourselves like VectorScalarMultiplication
+            Question.refresh(self, *args, **kwargs)
 
-        # Create single equation with scalar and matrix
-        matrix_latex = ContentAST.Matrix.to_latex(self.matrix, "b")
-        body.add_element(ContentAST.Equation(f"{self.scalar} \\cdot {matrix_latex} = "))
+            # Generate matrix dimensions
+            self.rows = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
+            self.cols = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
 
-        # Answer table (HTML only - PDFs get blank space)
-        body.add_element(
-            ContentAST.OnlyHtml([
-                ContentAST.Paragraph([f"Result ({self.scalar} · Matrix):"]),
-                self._create_answer_table(self.rows, self.cols, self.answers)
-            ])
-        )
+            # Clear any existing data
+            self.answers = {}
 
-        return body
+            # Generate multiple subquestions with different scalars
+            self.subquestion_data = []
+            for i in range(self.num_subquestions):
+                # Generate matrix and scalar for each subquestion
+                matrix = self._generate_matrix(self.rows, self.cols)
+                scalar = self._generate_scalar()
+                result = [[scalar * matrix[i][j] for j in range(self.cols)] for i in range(self.rows)]
+
+                self.subquestion_data.append({
+                    'operand_a': matrix,
+                    'operand_b': matrix,  # Not used but kept for consistency
+                    'matrix': matrix,     # For compatibility
+                    'scalar': scalar,
+                    'result': result
+                })
+
+                # Create answers for this subpart
+                self.create_subquestion_answers(i, result)
+        else:
+            # For single questions, generate scalar first
+            self.scalar = self._generate_scalar()
+            # Then call super() normally
+            super().refresh(*args, **kwargs)
+
+            # For backward compatibility
+            if hasattr(self, 'operand_a'):
+                self.matrix = self.operand_a
+
+    def generate_subquestion_data(self):
+        """Override to handle scalar multiplication format."""
+        subparts = []
+        for data in self.subquestion_data:
+            matrix_latex = ContentAST.Matrix.to_latex(data['matrix'], "b")
+            scalar = data['scalar']
+            # Return scalar * matrix as a single string
+            subparts.append(f"{scalar} \\cdot {matrix_latex}")
+        return subparts
+
+    def format_single_equation(self, operand_a, operand_b):
+        """Format the equation for single questions."""
+        matrix_latex = ContentAST.Matrix.to_latex(operand_a, "b")
+        return f"{self.scalar} \\cdot {matrix_latex}"
 
     def get_explanation(self, **kwargs) -> ContentAST.Section:
         explanation = ContentAST.Section()
@@ -188,25 +362,53 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
             ])
         )
 
-        # Comprehensive step-by-step walkthrough
-        explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation:"]))
+        if self.is_multipart():
+            # Handle multipart explanations
+            explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation for each part:"]))
+            for i, data in enumerate(self.subquestion_data):
+                letter = chr(ord('a') + i)
+                matrix = data.get('matrix', data['operand_a'])
+                scalar = data['scalar']
+                result = data['result']
 
-        # Show scalar multiplication with symbolic representation
-        # Create properly formatted matrix strings
-        matrix_str = r" \\ ".join([" & ".join([str(self.matrix[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
-        multiplication_str = r" \\ ".join([" & ".join([f"{self.scalar} \\cdot {self.matrix[i][j]}" for j in range(self.cols)]) for i in range(self.rows)])
-        result_str = r" \\ ".join([" & ".join([str(self.result[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+                # Create LaTeX strings for multiline equation
+                rows = len(matrix)
+                cols = len(matrix[0])
+                matrix_str = r" \\ ".join([" & ".join([str(matrix[row][col]) for col in range(cols)]) for row in range(rows)])
+                multiplication_str = r" \\ ".join([" & ".join([f"{scalar} \\cdot {matrix[row][col]}" for col in range(cols)]) for row in range(rows)])
+                result_str = r" \\ ".join([" & ".join([str(result[row][col]) for col in range(cols)]) for row in range(rows)])
 
-        explanation.add_element(
-            ContentAST.Equation.make_block_equation__multiline_equals(
-                lhs=f"{self.scalar} \\cdot A",
-                rhs=[
-                    f"{self.scalar} \\cdot \\begin{{bmatrix}} {matrix_str} \\end{{bmatrix}}",
-                    f"\\begin{{bmatrix}} {multiplication_str} \\end{{bmatrix}}",
-                    f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
-                ]
+                # Add explanation for this subpart
+                explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
+                explanation.add_element(
+                    ContentAST.Equation.make_block_equation__multiline_equals(
+                        lhs=f"{scalar} \\cdot A",
+                        rhs=[
+                            f"{scalar} \\cdot \\begin{{bmatrix}} {matrix_str} \\end{{bmatrix}}",
+                            f"\\begin{{bmatrix}} {multiplication_str} \\end{{bmatrix}}",
+                            f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                        ]
+                    )
+                )
+        else:
+            # Single part explanation
+            explanation.add_element(ContentAST.Paragraph(["Step-by-step calculation:"]))
+
+            # Create properly formatted matrix strings
+            matrix_str = r" \\ ".join([" & ".join([str(self.matrix[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+            multiplication_str = r" \\ ".join([" & ".join([f"{self.scalar} \\cdot {self.matrix[i][j]}" for j in range(self.cols)]) for i in range(self.rows)])
+            result_str = r" \\ ".join([" & ".join([str(self.result[i][j]) for j in range(self.cols)]) for i in range(self.rows)])
+
+            explanation.add_element(
+                ContentAST.Equation.make_block_equation__multiline_equals(
+                    lhs=f"{self.scalar} \\cdot A",
+                    rhs=[
+                        f"{self.scalar} \\cdot \\begin{{bmatrix}} {matrix_str} \\end{{bmatrix}}",
+                        f"\\begin{{bmatrix}} {multiplication_str} \\end{{bmatrix}}",
+                        f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                    ]
+                )
             )
-        )
 
         return explanation
 
@@ -218,11 +420,14 @@ class MatrixMultiplication(MatrixMathQuestion):
     MAX_SIZE = 4
     PROBABILITY_OF_VALID = 0.875  # 7/8 chance of success, 1/8 chance of failure
 
-    def refresh(self, *args, **kwargs):
-        super().refresh(*args, **kwargs)
-
-        # Use controlled probability to determine if multiplication should be possible
-        should_be_valid = self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1-self.PROBABILITY_OF_VALID], k=1)[0]
+    def generate_operands(self):
+        """Generate two matrices for multiplication."""
+        # For multipart questions, always generate valid multiplications
+        # For single questions, use probability to determine validity
+        if self.is_multipart():
+            should_be_valid = True  # Always valid for multipart
+        else:
+            should_be_valid = self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1-self.PROBABILITY_OF_VALID], k=1)[0]
 
         if should_be_valid:
             # Generate dimensions that allow multiplication
@@ -240,98 +445,114 @@ class MatrixMultiplication(MatrixMathQuestion):
             while self.cols_a == self.rows_b:
                 self.rows_b = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
 
-        # Determine if multiplication is possible
+        # Store multiplication possibility
         self.multiplication_possible = (self.cols_a == self.rows_b)
 
         # Generate matrices
-        self.matrix_a = self._generate_matrix(self.rows_a, self.cols_a)
-        self.matrix_b = self._generate_matrix(self.rows_b, self.cols_b)
+        matrix_a = self._generate_matrix(self.rows_a, self.cols_a)
+        matrix_b = self._generate_matrix(self.rows_b, self.cols_b)
 
         # Calculate max dimensions for answer table
         self.max_dim = max(self.rows_a, self.cols_a, self.rows_b, self.cols_b)
 
-        # Calculate result if possible
-        if self.multiplication_possible:
-            self.result_rows = self.rows_a
-            self.result_cols = self.cols_b
-            self.result = [[sum(self.matrix_a[i][k] * self.matrix_b[k][j]
-                              for k in range(self.cols_a))
-                           for j in range(self.cols_b)] for i in range(self.rows_a)]
+        return matrix_a, matrix_b
+
+    def get_operator(self):
+        """Return the multiplication operator."""
+        return "\\cdot"
+
+    def calculate_single_result(self, matrix_a, matrix_b):
+        """Calculate matrix multiplication result."""
+        rows_a = len(matrix_a)
+        cols_a = len(matrix_a[0])
+        rows_b = len(matrix_b)
+        cols_b = len(matrix_b[0])
+
+        # Check if multiplication is possible
+        if cols_a != rows_b:
+            return None  # Multiplication not possible
+
+        # Calculate result
+        result = [[sum(matrix_a[i][k] * matrix_b[k][j] for k in range(cols_a))
+                  for j in range(cols_b)] for i in range(rows_a)]
+
+        # Store result dimensions
+        self.result_rows = rows_a
+        self.result_cols = cols_b
+
+        return result
+
+    def create_subquestion_answers(self, subpart_index, result):
+        """Create answer objects for matrix multiplication result."""
+        if subpart_index == 0 and not self.is_multipart():
+            # For single questions, use the old answer format
+            # Dimension answers
+            if result is not None:
+                self.answers["result_rows"] = Answer.integer("result_rows", self.result_rows)
+                self.answers["result_cols"] = Answer.integer("result_cols", self.result_cols)
+
+                # Matrix element answers
+                for i in range(self.max_dim):
+                    for j in range(self.max_dim):
+                        answer_key = f"answer_{i}_{j}"
+                        if i < self.result_rows and j < self.result_cols:
+                            self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+                        else:
+                            self.answers[answer_key] = Answer.string(answer_key, "-")
+            else:
+                # Multiplication not possible
+                self.answers["result_rows"] = Answer.string("result_rows", "-")
+                self.answers["result_cols"] = Answer.string("result_cols", "-")
+
+                # All matrix elements are "-"
+                for i in range(self.max_dim):
+                    for j in range(self.max_dim):
+                        answer_key = f"answer_{i}_{j}"
+                        self.answers[answer_key] = Answer.string(answer_key, "-")
         else:
-            self.result_rows = 0
-            self.result_cols = 0
-            self.result = []
+            # For multipart questions, use subpart letter format
+            letter = chr(ord('a') + subpart_index)
 
-        # Create answers dictionary
-        self.answers = {}
+            # For multipart, result should always be valid
+            if result is not None:
+                rows = len(result)
+                cols = len(result[0])
+                for i in range(rows):
+                    for j in range(cols):
+                        answer_key = f"subpart_{letter}_{i}_{j}"
+                        self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
 
-        # Dimension answers - always ask for dimensions
-        if self.multiplication_possible:
-            self.answers["result_rows"] = Answer.integer("result_rows", self.result_rows)
-            self.answers["result_cols"] = Answer.integer("result_cols", self.result_cols)
-        else:
-            self.answers["result_rows"] = Answer.string("result_rows", "-")
-            self.answers["result_cols"] = Answer.string("result_cols", "-")
+    def refresh(self, *args, **kwargs):
+        """Override refresh to handle matrix attributes."""
+        super().refresh(*args, **kwargs)
 
-        # Matrix element answers
-        for i in range(self.max_dim):
-            for j in range(self.max_dim):
-                answer_key = f"answer_{i}_{j}"
-                if (self.multiplication_possible and
-                    i < self.result_rows and j < self.result_cols):
-                    self.answers[answer_key] = Answer.integer(answer_key, self.result[i][j])
-                else:
-                    self.answers[answer_key] = Answer.string(answer_key, "-")
-
-    def get_body(self, **kwargs) -> ContentAST.Section:
-        body = ContentAST.Section()
-
-        # Concise question with matrices in single equation
-        body.add_element(ContentAST.Paragraph(["Calculate:"]))
-
-        # Create single equation with both matrices
-        matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "b")
-        matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
-        body.add_element(ContentAST.Equation(f"{matrix_a_latex} \\cdot {matrix_b_latex} = "))
-        body.add_element(
-            ContentAST.OnlyHtml([
-                ContentAST.Paragraph([
-                    "(Use '-' for cells that don't exist in the result if multiplication is not possible.)"
-                ])
-            ])
-        )
-
-        # Always ask for result dimensions (HTML only)
-        body.add_element(
-            ContentAST.OnlyHtml([
-                ContentAST.AnswerBlock([
-                    ContentAST.Answer(
-                        answer=self.answers["result_rows"],
-                        label="Number of rows in result (use '-' if not possible)"
-                    ),
-                    ContentAST.Answer(
-                        answer=self.answers["result_cols"],
-                        label="Number of columns in result (use '-' if not possible)"
-                    )
-                ])
-            ])
-        )
-
-        # Answer table (HTML only - PDFs get blank space)
-        body.add_element(
-            ContentAST.OnlyHtml([
-                ContentAST.Paragraph(["Result matrix (A · B):"]),
-                self._create_answer_table(self.max_dim, self.max_dim, self.answers)
-            ])
-        )
-
-        return body
+        # For backward compatibility, set matrix attributes for single questions
+        if not self.is_multipart():
+            self.matrix_a = self.operand_a
+            self.matrix_b = self.operand_b
 
     def get_explanation(self, **kwargs) -> ContentAST.Section:
         explanation = ContentAST.Section()
 
-        if self.multiplication_possible:
-            # Restate the original matrices
+        if self.is_multipart():
+            # For multipart questions, provide simpler explanations
+            explanation.add_element(
+                ContentAST.Paragraph([
+                    "Matrix multiplication: Each element in the result is the dot product of "
+                    "the corresponding row from the first matrix and column from the second matrix."
+                ])
+            )
+
+            for i, data in enumerate(self.subquestion_data):
+                letter = chr(ord('a') + i)
+                matrix_a = data.get('matrix_a', data['operand_a'])
+                matrix_b = data.get('matrix_b', data['operand_b'])
+                result = data['result']
+
+                explanation.add_element(ContentAST.Paragraph([f"Part ({letter}): Matrices multiplied successfully."]))
+
+        elif hasattr(self, 'multiplication_possible') and self.multiplication_possible:
+            # Single question with successful multiplication
             explanation.add_element(ContentAST.Paragraph(["Given matrices:"]))
             matrix_a_latex = ContentAST.Matrix.to_latex(self.matrix_a, "b")
             matrix_b_latex = ContentAST.Matrix.to_latex(self.matrix_b, "b")
@@ -372,10 +593,11 @@ class MatrixMultiplication(MatrixMathQuestion):
             explanation.add_element(ContentAST.Paragraph(["Final result:"]))
             explanation.add_element(ContentAST.Matrix(data=self.result, bracket_type="b"))
         else:
+            # Single question with failed multiplication
             explanation.add_element(
                 ContentAST.Paragraph([
-                    f"Matrix multiplication is not possible because the number of columns in Matrix A ({self.cols_a}) "
-                    f"does not equal the number of rows in Matrix B ({self.rows_b})."
+                    f"Matrix multiplication is not possible because the number of columns in Matrix A ({getattr(self, 'cols_a', 'unknown')}) "
+                    f"does not equal the number of rows in Matrix B ({getattr(self, 'rows_b', 'unknown')})."
                 ])
             )
 
