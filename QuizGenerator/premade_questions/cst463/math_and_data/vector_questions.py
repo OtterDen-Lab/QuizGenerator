@@ -11,7 +11,7 @@ from QuizGenerator.mixins import MultiPartQuestionMixin
 log = logging.getLogger(__name__)
 
 
-class VectorMathQuestion(Question, abc.ABC):
+class VectorMathQuestion(Question, MultiPartQuestionMixin, abc.ABC):
   def __init__(self, *args, **kwargs):
     kwargs["topic"] = kwargs.get("topic", Question.Topic.MATH)
     super().__init__(*args, **kwargs)
@@ -31,12 +31,28 @@ class VectorMathQuestion(Question, abc.ABC):
     elements = [str(v) for v in vector]
     return f"({', '.join(elements)})"
 
+  def get_intro_text(self):
+    """Default intro text - subclasses can override."""
+    return "Calculate the following:"
 
-@QuestionRegistry.register()
-class VectorAddition(VectorMathQuestion, MultiPartQuestionMixin):
+  @abc.abstractmethod
+  def get_operator(self):
+    """Return the LaTeX operator for this operation (e.g., '+', '\\cdot', '\\times')."""
+    pass
 
-  MIN_DIMENSION = 2
-  MAX_DIMENSION = 4
+  @abc.abstractmethod
+  def calculate_single_result(self, vector_a, vector_b):
+    """Calculate the result for a single question with two vectors."""
+    pass
+
+  @abc.abstractmethod
+  def create_subquestion_answers(self, subpart_index, result):
+    """Create answer objects for a subquestion result."""
+    pass
+
+  def create_single_answers(self, result):
+    """Create answers for single questions - just delegate to subquestion method."""
+    return self.create_subquestion_answers(0, result)
 
   def refresh(self, *args, **kwargs):
     super().refresh(*args, **kwargs)
@@ -54,7 +70,7 @@ class VectorAddition(VectorMathQuestion, MultiPartQuestionMixin):
         # Generate unique vectors for each subquestion
         vector_a = self._generate_vector(self.dimension)
         vector_b = self._generate_vector(self.dimension)
-        result = [vector_a[j] + vector_b[j] for j in range(self.dimension)]
+        result = self.calculate_single_result(vector_a, vector_b)
 
         self.subquestion_data.append({
           'vector_a': vector_a,
@@ -63,33 +79,30 @@ class VectorAddition(VectorMathQuestion, MultiPartQuestionMixin):
         })
 
         # Create answers for this subpart
-        letter = chr(ord('a') + i)
-        for j in range(self.dimension):
-          self.answers[f"subpart_{letter}_{j}"] = Answer.integer(f"subpart_{letter}_{j}", result[j])
+        self.create_subquestion_answers(i, result)
     else:
       # Single question (original behavior)
       self.vector_a = self._generate_vector(self.dimension)
       self.vector_b = self._generate_vector(self.dimension)
-      self.result = [self.vector_a[i] + self.vector_b[i] for i in range(self.dimension)]
+      self.result = self.calculate_single_result(self.vector_a, self.vector_b)
 
       # Create answers
-      for i in range(self.dimension):
-        self.answers[f"result_{i}"] = Answer.integer(f"result_{i}", self.result[i])
+      self.create_single_answers(self.result)
 
   def generate_subquestion_data(self):
-    """Generate LaTeX content for each subpart of the vector addition question."""
+    """Generate LaTeX content for each subpart of the question."""
     subparts = []
     for data in self.subquestion_data:
       vector_a_latex = self._format_vector(data['vector_a'])
       vector_b_latex = self._format_vector(data['vector_b'])
       # Return as tuple of (matrix_a, operator, matrix_b)
-      subparts.append((vector_a_latex, "+", vector_b_latex))
+      subparts.append((vector_a_latex, self.get_operator(), vector_b_latex))
     return subparts
 
   def get_body(self):
     body = ContentAST.Section()
 
-    body.add_element(ContentAST.Paragraph(["Calculate the vector addition:"]))
+    body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
 
     if self.is_multipart():
       # Use multipart formatting with repeated problem parts
@@ -100,16 +113,75 @@ class VectorAddition(VectorMathQuestion, MultiPartQuestionMixin):
       # Single equation display
       vector_a_latex = self._format_vector(self.vector_a)
       vector_b_latex = self._format_vector(self.vector_b)
-      body.add_element(ContentAST.Equation(f"{vector_a_latex} + {vector_b_latex} = ", inline=False))
+      body.add_element(ContentAST.Equation(f"{vector_a_latex} {self.get_operator()} {vector_b_latex} = ", inline=False))
 
       # Canvas-only answer fields (hidden from PDF)
+      self._add_single_question_answers(body)
+
+    return body
+
+  def _add_single_question_answers(self, body):
+    """Add Canvas-only answer fields for single questions. Subclasses can override."""
+    # Check if it's a scalar result (like dot product)
+    if hasattr(self, 'answers') and len(self.answers) == 1:
+      # Single scalar answer
+      answer_key = list(self.answers.keys())[0]
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Answer(answer=self.answers[answer_key])]))
+    else:
+      # Vector results (like addition) - show table
       body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
       table_data = []
       for i in range(self.dimension):
-        table_data.append([ContentAST.Answer(answer=self.answers[f"result_{i}"])])
-      body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
+        if f"result_{i}" in self.answers:
+          table_data.append([ContentAST.Answer(answer=self.answers[f"result_{i}"])])
+      if table_data:
+        body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
 
-    return body
+  def get_explanation_intro(self):
+    """Get the intro text for explanations. Subclasses should override."""
+    return "The calculation is performed as follows:"
+
+  def create_explanation_for_subpart(self, subpart_data, letter):
+    """Create explanation for a single subpart. Subclasses should override."""
+    return ContentAST.Paragraph([f"Part ({letter}): Calculation details would go here."])
+
+  def get_explanation(self):
+    explanation = ContentAST.Section()
+
+    explanation.add_element(ContentAST.Paragraph([self.get_explanation_intro()]))
+
+    if self.is_multipart():
+      # Handle multipart explanations
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        explanation.add_element(self.create_explanation_for_subpart(data, letter))
+    else:
+      # Single part explanation - subclasses should override this
+      explanation.add_element(ContentAST.Paragraph(["Single question explanation would go here."]))
+
+    return explanation
+
+
+@QuestionRegistry.register()
+class VectorAddition(VectorMathQuestion):
+
+  MIN_DIMENSION = 2
+  MAX_DIMENSION = 4
+
+  def get_operator(self):
+    return "+"
+
+  def calculate_single_result(self, vector_a, vector_b):
+    return [vector_a[i] + vector_b[i] for i in range(len(vector_a))]
+
+  def create_subquestion_answers(self, subpart_index, result):
+    letter = chr(ord('a') + subpart_index)
+    for j in range(len(result)):
+      self.answers[f"subpart_{letter}_{j}"] = Answer.integer(f"subpart_{letter}_{j}", result[j])
+
+  def create_single_answers(self, result):
+    for i in range(len(result)):
+      self.answers[f"result_{i}"] = Answer.integer(f"result_{i}", result[i])
 
   def get_explanation(self):
     explanation = ContentAST.Section()
@@ -236,84 +308,25 @@ class VectorScalarMultiplication(VectorMathQuestion, MultiPartQuestionMixin):
 
 
 @QuestionRegistry.register()
-class VectorDotProduct(VectorMathQuestion, MultiPartQuestionMixin):
+class VectorDotProduct(VectorMathQuestion):
 
   MIN_DIMENSION = 2
   MAX_DIMENSION = 4
 
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
+  def get_operator(self):
+    return "\\cdot"
 
-    # Generate vector dimension
-    self.dimension = self.rng.randint(self.MIN_DIMENSION, self.MAX_DIMENSION)
+  def calculate_single_result(self, vector_a, vector_b):
+    return sum(vector_a[i] * vector_b[i] for i in range(len(vector_a)))
 
-    # Clear any existing data
-    self.answers = {}
+  def create_subquestion_answers(self, subpart_index, result):
+    letter = chr(ord('a') + subpart_index)
+    self.answers[f"subpart_{letter}"] = Answer.integer(f"subpart_{letter}", result)
 
-    if self.is_multipart():
-      # Generate multiple subquestions
-      self.subquestion_data = []
-      for i in range(self.num_subquestions):
-        # Generate unique vectors for each subquestion
-        vector_a = self._generate_vector(self.dimension)
-        vector_b = self._generate_vector(self.dimension)
-        result = sum(vector_a[j] * vector_b[j] for j in range(self.dimension))
-
-        self.subquestion_data.append({
-          'vector_a': vector_a,
-          'vector_b': vector_b,
-          'result': result
-        })
-
-        # Create answer for this subpart
-        letter = chr(ord('a') + i)
-        self.answers[f"subpart_{letter}"] = Answer.integer(f"subpart_{letter}", result)
-    else:
-      # Single question (original behavior)
-      self.vector_a = self._generate_vector(self.dimension)
-      self.vector_b = self._generate_vector(self.dimension)
-      self.result = sum(self.vector_a[i] * self.vector_b[i] for i in range(self.dimension))
-      self.answers = {
-        "dot_product": Answer.integer("dot_product", self.result)
-      }
-
-  def generate_subquestion_data(self):
-    """Generate LaTeX content for each subpart of the dot product question."""
-    subparts = []
-    for data in self.subquestion_data:
-      vector_a_latex = self._format_vector(data['vector_a'])
-      vector_b_latex = self._format_vector(data['vector_b'])
-      # Return as tuple of (matrix_a, operator, matrix_b)
-      subparts.append((vector_a_latex, "\\cdot", vector_b_latex))
-    return subparts
-
-  def get_body(self):
-    body = ContentAST.Section()
-
-    # Use consistent wording for both single and multipart questions
-    # Randomly choose between "dot product" and "evaluate" phrasing
-    if self.rng.random() < 0.5:
-      intro_text = "Calculate the dot product of the following vectors:"
-    else:
-      intro_text = "Evaluate the following vector expression:"
-
-    body.add_element(ContentAST.Paragraph([intro_text]))
-
-    if self.is_multipart():
-      # Use multipart formatting with repeated problem parts
-      subpart_data = self.generate_subquestion_data()
-      repeated_part = self.create_repeated_problem_part(subpart_data)
-      body.add_element(repeated_part)
-    else:
-      # Single equation display
-      vector_a_latex = self._format_vector(self.vector_a)
-      vector_b_latex = self._format_vector(self.vector_b)
-      body.add_element(ContentAST.Equation(f"{vector_a_latex} \\cdot {vector_b_latex} = ", inline=False))
-
-      # Canvas-only answer field (hidden from PDF)
-      body.add_element(ContentAST.OnlyHtml([ContentAST.Answer(answer=self.answers["dot_product"])]))
-
-    return body
+  def create_single_answers(self, result):
+    self.answers = {
+      "dot_product": Answer.integer("dot_product", result)
+    }
 
   def get_explanation(self):
     explanation = ContentAST.Section()
