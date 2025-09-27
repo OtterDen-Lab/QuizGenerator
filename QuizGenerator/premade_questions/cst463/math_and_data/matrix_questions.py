@@ -522,6 +522,33 @@ class MatrixMultiplication(MatrixMathQuestion):
                         answer_key = f"subpart_{letter}_{i}_{j}"
                         self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
 
+    def _add_single_question_answers(self, body):
+        """Add Canvas-only answer fields for MatrixMultiplication with dash instruction."""
+        # Dimension answers for matrix multiplication
+        if hasattr(self, 'answers') and "result_rows" in self.answers:
+            body.add_element(
+                ContentAST.OnlyHtml([
+                    ContentAST.AnswerBlock([
+                        ContentAST.Answer(
+                            answer=self.answers["result_rows"],
+                            label="Number of rows in result"
+                        ),
+                        ContentAST.Answer(
+                            answer=self.answers["result_cols"],
+                            label="Number of columns in result"
+                        )
+                    ])
+                ])
+            )
+
+        # Matrix result table with dash instruction
+        body.add_element(
+            ContentAST.OnlyHtml([
+                ContentAST.Paragraph(["Result matrix (use '-' if cell doesn't exist):"]),
+                self._create_answer_table(self.max_dim, self.max_dim, self.answers)
+            ])
+        )
+
     def refresh(self, *args, **kwargs):
         """Override refresh to handle matrix attributes."""
         super().refresh(*args, **kwargs)
