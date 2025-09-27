@@ -47,7 +47,8 @@ class Answer:
       display=None,
       length=None,
       correct=True,
-      baffles=None
+      baffles=None,
+      pdf_only=False
   ):
     self.key = key
     self.value = value
@@ -57,8 +58,13 @@ class Answer:
     self.length = length # Used for bits and hex to be printed appropriately
     self.correct = correct
     self.baffles = baffles
+    self.pdf_only = pdf_only
   
   def get_for_canvas(self) -> List[Dict]:
+    # If this answer is marked as PDF-only, don't send it to Canvas
+    if self.pdf_only:
+      return []
+
     canvas_answers : List[Dict] = []
     if self.variable_kind == Answer.VariableKind.FLOAT:
       canvas_answers = [{
@@ -142,28 +148,23 @@ class Answer:
       ]
       
     elif self.variable_kind == Answer.VariableKind.VECTOR:
-      
+
       # Get all answer variations
       answer_variations = [
         self.__class__.accepted_strings(dimension_value)
         for dimension_value in self.value
       ]
-      
+
       canvas_answers = []
       for combination in itertools.product(*answer_variations):
-        if len(combination) == 1:
-          canvas_answers.append(
-            {
-              "blank_id": self.key,
-              "answer_weight": 100 if self.correct else 0,
-              "answer_text": f"{', '.join(combination)}",
-            }
-          )
+        # Add parentheses format for all vectors: (1, 2, 3)
         canvas_answers.append({
           "blank_id" : self.key,
           "answer_weight": 100 if self.correct else 0,
           "answer_text": f"({', '.join(list(combination))})",
         })
+
+        # Add non-parentheses format only for single-element vectors: 5
         if len(combination) == 1:
           canvas_answers.append(
             {

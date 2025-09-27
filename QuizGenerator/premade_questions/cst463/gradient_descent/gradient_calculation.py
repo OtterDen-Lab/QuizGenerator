@@ -70,7 +70,7 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # Format as vector for display using consistent formatting
     vector_str = format_vector(gradient_values)
-    self.answers["gradient_vector"] = Answer.string("gradient_vector", vector_str)
+    self.answers["gradient_vector"] = Answer.string("gradient_vector", vector_str, pdf_only=True)
 
   def get_body(self, **kwargs) -> ContentAST.Section:
     body = ContentAST.Section()
