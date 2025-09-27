@@ -66,13 +66,7 @@ class Answer:
       return []
 
     canvas_answers : List[Dict] = []
-    if self.variable_kind == Answer.VariableKind.FLOAT:
-      canvas_answers = [{
-        "blank_id": self.key,
-        "answer_text": f"{self.value:0.{self.DEFAULT_ROUNDING_DIGITS}f}",
-        "answer_weight": 100 if self.correct else 0,
-      }]
-    elif self.variable_kind == Answer.VariableKind.BINARY:
+    if self.variable_kind == Answer.VariableKind.BINARY:
       canvas_answers = [
         {
           "blank_id": self.key,
@@ -126,7 +120,11 @@ class Answer:
         },
       
       ]
-    elif self.variable_kind == Answer.VariableKind.AUTOFLOAT:
+    elif self.variable_kind in [
+      Answer.VariableKind.AUTOFLOAT,
+      Answer.VariableKind.FLOAT,
+      Answer.VariableKind.INT
+    ]:
       # Use the accepted_strings helper with settings that match the original AUTOFLOAT behavior
       answer_strings = self.__class__.accepted_strings(
         self.value,

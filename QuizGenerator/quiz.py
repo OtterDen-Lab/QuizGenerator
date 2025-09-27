@@ -33,6 +33,17 @@ class Quiz:
     self.name = name
     self.questions = questions
     self.instructions = kwargs.get("instructions", "")
+
+    # Parse description with ContentAST if provided
+    raw_description = kwargs.get("description", None)
+    if raw_description:
+      # Create a ContentAST document from the description text
+      desc_doc = ContentAST.Document()
+      desc_doc.add_element(ContentAST.Paragraph([raw_description]))
+      self.description = desc_doc.render("html")
+    else:
+      self.description = None
+
     self.question_sort_order = None
     self.practice = practice
     
@@ -60,6 +71,7 @@ class Quiz:
       # Get general quiz information from the dictionary
       name = exam_dict.get("name", f"Unnamed Exam ({datetime.now().strftime('%a %b %d %I:%M %p')})")
       practice = exam_dict.get("practice", False)
+      description = exam_dict.get("description", None)
       sort_order = list(map(lambda t: Question.Topic.from_string(t), exam_dict.get("sort order", [])))
       sort_order = sort_order + list(filter(lambda t: t not in sort_order, Question.Topic))
       
@@ -136,7 +148,7 @@ class Quiz:
               for repeat_number in range(question_config["repeat"])
             ])
       log.debug(f"len(questions_for_exam): {len(questions_for_exam)}")
-      quiz_from_yaml = cls(name, questions_for_exam, practice)
+      quiz_from_yaml = cls(name, questions_for_exam, practice, description=description)
       quiz_from_yaml.set_sort_order(sort_order)
       quizes_loaded.append(quiz_from_yaml)
     return quizes_loaded
