@@ -223,7 +223,8 @@ class ContentAST:
     \usepackage[a4paper, margin=1.5cm]{geometry}
 
     % Math packages
-    \usepackage{amsmath}        % For advanced math environments (matrices, equations)
+    \usepackage[leqno,fleqn]{amsmath}        % For advanced math environments (matrices, equations)
+    \setlength{\mathindent}{0pt}  % flush left
     \usepackage{amsfonts}       % For additional math fonts
     \usepackage{amssymb}        % For additional math symbols
 
@@ -234,7 +235,7 @@ class ContentAST:
     \usepackage{enumitem}       % For customized list spacing
     \usepackage{setspace}       % For \onehalfspacing
     
-    % Add this after your existing packages
+    % Setting up Code environments
     \let\originalverbatim\verbatim
     \let\endoriginalverbatim\endverbatim
     \renewenvironment{verbatim}
@@ -366,6 +367,7 @@ class ContentAST:
           f"\\vspace{{{self.spacing}cm}}"
           r"\end{minipage}",
           r"\end{minipage}",
+          "\n\n",
         ]
         content = '\n'.join(latex_lines)
       
@@ -1049,6 +1051,121 @@ class ContentAST:
       result.append("\\end{figure}")
       return "\n".join(result)
   
+  class RepeatedProblemPart(Element):
+    """
+    Multi-part problem renderer for questions with labeled subparts (a), (b), (c), etc.
+
+    Creates the specialized alignat* LaTeX format for multipart math problems
+    where each subpart is labeled and aligned properly. Used primarily for
+    vector math questions that need multiple similar calculations.
+
+    When to use:
+    - Questions with multiple subparts that need (a), (b), (c) labeling
+    - Vector math problems with repeated calculations
+    - Any math problem where subparts should be aligned
+
+    Features:
+    - Automatic subpart labeling with (a), (b), (c), etc.
+    - Proper LaTeX alignat* formatting for PDF
+    - HTML fallback with organized layout
+    - Flexible content support (equations, matrices, etc.)
+
+    Example:
+        # Create subparts for vector dot products
+        subparts = [
+            (ContentAST.Matrix([[1], [2]]), "\\cdot", ContentAST.Matrix([[3], [4]])),
+            (ContentAST.Matrix([[5], [6]]), "\\cdot", ContentAST.Matrix([[7], [8]]))
+        ]
+        repeated_part = ContentAST.RepeatedProblemPart(subparts)
+        body.add_element(repeated_part)
+    """
+    def __init__(self, subpart_contents):
+      """
+      Create a repeated problem part with multiple subquestions.
+
+      Args:
+          subpart_contents: List of content for each subpart.
+                           Each item can be:
+                           - A string (rendered as equation)
+                           - A ContentAST.Element
+                           - A tuple/list of elements to be joined
+      """
+      super().__init__()
+      self.subpart_contents = subpart_contents
+
+    def render_markdown(self, **kwargs):
+      result = []
+      for i, content in enumerate(self.subpart_contents):
+        letter = chr(ord('a') + i)  # Convert to (a), (b), (c), etc.
+        if isinstance(content, str):
+          result.append(f"({letter}) {content}")
+        elif isinstance(content, (list, tuple)):
+          content_str = " ".join(str(item) for item in content)
+          result.append(f"({letter}) {content_str}")
+        else:
+          result.append(f"({letter}) {str(content)}")
+      return "\n\n".join(result)
+
+    def render_html(self, **kwargs):
+      result = []
+      for i, content in enumerate(self.subpart_contents):
+        letter = chr(ord('a') + i)
+        if isinstance(content, str):
+          result.append(f"<p>({letter}) {content}</p>")
+        elif isinstance(content, (list, tuple)):
+          rendered_items = []
+          for item in content:
+            if hasattr(item, 'render'):
+              rendered_items.append(item.render('html', **kwargs))
+            else:
+              rendered_items.append(str(item))
+          content_str = " ".join(rendered_items)
+          result.append(f"<p>({letter}) {content_str}</p>")
+        else:
+          if hasattr(content, 'render'):
+            content_str = content.render('html', **kwargs)
+          else:
+            content_str = str(content)
+          result.append(f"<p>({letter}) {content_str}</p>")
+      return "\n".join(result)
+
+    def render_latex(self, **kwargs):
+      if not self.subpart_contents:
+        return ""
+
+      # Start alignat environment - use 2 columns for alignment
+      result = [r"\begin{alignat*}{2}"]
+
+      for i, content in enumerate(self.subpart_contents):
+        letter = chr(ord('a') + i)
+        spacing = r"\\[6pt]" if i < len(self.subpart_contents) - 1 else r" \\"
+
+        if isinstance(content, str):
+          # Treat as raw LaTeX equation content
+          result.append(f"({letter})\\;& {content} &=&\\; {spacing}")
+        elif isinstance(content, (list, tuple)):
+          # Join multiple elements (e.g., matrix, operator, matrix)
+          rendered_items = []
+          for item in content:
+            if hasattr(item, 'render'):
+              rendered_items.append(item.render('latex', **kwargs))
+            elif isinstance(item, str):
+              rendered_items.append(item)
+            else:
+              rendered_items.append(str(item))
+          content_str = " ".join(rendered_items)
+          result.append(f"({letter})\\;& {content_str} &=&\\; {spacing}")
+        else:
+          # Single element (ContentAST element or string)
+          if hasattr(content, 'render'):
+            content_str = content.render('latex', **kwargs)
+          else:
+            content_str = str(content)
+          result.append(f"({letter})\\;& {content_str} &=&\\; {spacing}")
+
+      result.append(r"\end{alignat*}")
+      return "\n".join(result)
+
   class AnswerBlock(Table):
     """
     Specialized table for organizing multiple answer fields with proper spacing.
@@ -1086,10 +1203,10 @@ class ContentAST:
         ]
       )
       self.hide_rules = True
-    
+
     def add_element(self, element):
       self.data.append(element)
-    
+
     def render_latex(self, **kwargs):
       rendered_content = super().render_latex(**kwargs)
       content = (

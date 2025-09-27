@@ -1,24 +1,72 @@
-name: "Loss Function Calculations Test"
-sort order:
-  - math
+name: "Comprehensive Vector and Matrix Questions"
 questions:
+  # Vector Questions - Multipart
+  10:
+    vector addition 4-part:
+      class: VectorAddition
+      num_subquestions: 4
+      kwargs:
+        spacing: 2
+
+  9:
+    vector scalar multiplication 3-part:
+      class: VectorScalarMultiplication
+      num_subquestions: 3
+      kwargs:
+        spacing: 2
+
+  8:
+    vector dot product 4-part:
+      class: VectorDotProduct
+      num_subquestions: 4
+      kwargs:
+        spacing: 2
+
+  7:
+    vector magnitude 3-part:
+      class: VectorMagnitude
+      num_subquestions: 3
+      kwargs:
+        spacing: 2
+
+  # Matrix Questions - Multipart
+  6:
+    matrix addition 4-part:
+      class: MatrixAddition
+      num_subquestions: 4
+      kwargs:
+        spacing: 2
+
   5:
-    LossQuestion_Linear:
-      class: CST463.gradient_descent.LossQuestion_Linear
-      _config:
-        repeat: 1
-        num_samples: 3
-        num_output_vars: 1
+    matrix scalar multiplication 3-part:
+      class: MatrixScalarMultiplication
+      num_subquestions: 3
+      kwargs:
+        spacing: 2
 
-    LossQuestion_Logistic:
-      class: CST463.gradient_descent.LossQuestion_Logistic
-      _config:
-        repeat: 1
-        num_samples: 3
+  4:
+    matrix multiplication 2-part:
+      class: MatrixMultiplication
+      num_subquestions: 2
+      kwargs:
+        spacing: 2
 
-    LossQuestion_MulticlassLogistic:
-      class: CST463.gradient_descent.LossQuestion_MulticlassLogistic
-      _config:
-        repeat: 1
-        num_samples: 3
-        num_classes: 3
+  # Vector Questions - Single
+  3:
+    single vector addition:
+      class: VectorAddition
+      kwargs:
+        spacing: 2
+
+  2:
+    single vector dot product:
+      class: VectorDotProduct
+      kwargs:
+        spacing: 2
+
+  # Matrix Questions - Single
+  1:
+    single matrix addition:
+      class: MatrixAddition
+      kwargs:
+        spacing: 2
