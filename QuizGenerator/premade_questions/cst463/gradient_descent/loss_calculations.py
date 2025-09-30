@@ -155,20 +155,20 @@ class LossQuestion_Linear(LossQuestion):
     for i in range(self.num_samples):
       sample = {}
 
-      # Generate input features
-      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(self.num_input_features)]
+      # Generate input features (rounded to 2 decimal places)
+      sample['inputs'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_input_features)]
 
-      # Generate true values (y) - multiple outputs if specified
+      # Generate true values (y) - multiple outputs if specified (rounded to 2 decimal places)
       if self.num_output_vars == 1:
-        sample['true_values'] = self.rng.uniform(-100, 100)
+        sample['true_values'] = round(self.rng.uniform(-100, 100), 2)
       else:
-        sample['true_values'] = [self.rng.uniform(-100, 100) for _ in range(self.num_output_vars)]
+        sample['true_values'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_output_vars)]
 
-      # Generate predictions (p) - multiple outputs if specified
+      # Generate predictions (p) - multiple outputs if specified (rounded to 2 decimal places)
       if self.num_output_vars == 1:
-        sample['predictions'] = self.rng.uniform(-100, 100)
+        sample['predictions'] = round(self.rng.uniform(-100, 100), 2)
       else:
-        sample['predictions'] = [self.rng.uniform(-100, 100) for _ in range(self.num_output_vars)]
+        sample['predictions'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_output_vars)]
 
       self.data.append(sample)
 
@@ -260,8 +260,13 @@ class LossQuestion_Linear(LossQuestion):
         y = sample['true_values']
         p = sample['predictions']
         loss = self.individual_losses[i]
+        diff = y - p
 
-        calculation = f"L = ({y:.2f} - {p:.2f})^2 = ({y-p:.2f})^2 = {loss:.4f}"
+        # Format the subtraction nicely to avoid double negatives
+        if p >= 0:
+          calculation = f"L = ({y:.2f} - {p:.2f})^2 = ({diff:.2f})^2 = {loss:.4f}"
+        else:
+          calculation = f"L = ({y:.2f} - ({p:.2f}))^2 = ({diff:.2f})^2 = {loss:.4f}"
         steps.add_element(ContentAST.Equation(calculation, inline=False))
       else:
         # Multi-output calculation
@@ -271,7 +276,11 @@ class LossQuestion_Linear(LossQuestion):
 
         terms = []
         for j, (y, p) in enumerate(zip(y_vals, p_vals)):
-          terms.append(f"({y:.2f} - {p:.2f})^2")
+          # Format the subtraction nicely to avoid double negatives
+          if p >= 0:
+            terms.append(f"({y:.2f} - {p:.2f})^2")
+          else:
+            terms.append(f"({y:.2f} - ({p:.2f}))^2")
 
         calculation = f"L = {' + '.join(terms)} = {loss:.4f}"
         steps.add_element(ContentAST.Equation(calculation, inline=False))
@@ -347,14 +356,14 @@ class LossQuestion_Logistic(LossQuestion):
     for i in range(self.num_samples):
       sample = {}
 
-      # Generate input features
-      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(self.num_input_features)]
+      # Generate input features (rounded to 2 decimal places)
+      sample['inputs'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_input_features)]
 
       # Generate binary true values (0 or 1)
       sample['true_values'] = self.rng.choice([0, 1])
 
-      # Generate predicted probabilities (between 0 and 1)
-      sample['predictions'] = self.rng.uniform(0.1, 0.9)  # Avoid extreme values
+      # Generate predicted probabilities (between 0 and 1, rounded to 3 decimal places)
+      sample['predictions'] = round(self.rng.uniform(0.1, 0.9), 3)  # Avoid extreme values
 
       self.data.append(sample)
 
@@ -490,18 +499,18 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
     for i in range(self.num_samples):
       sample = {}
 
-      # Generate input features
-      sample['inputs'] = [self.rng.uniform(-100, 100) for _ in range(self.num_input_features)]
+      # Generate input features (rounded to 2 decimal places)
+      sample['inputs'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_input_features)]
 
       # Generate true class (one-hot encoded) - ensure exactly one class is 1
       true_class_idx = self.rng.randint(0, self.num_classes - 1)
       sample['true_values'] = [0] * self.num_classes  # Start with all zeros
       sample['true_values'][true_class_idx] = 1        # Set exactly one to 1
 
-      # Generate predicted probabilities (softmax-like, sum to 1)
+      # Generate predicted probabilities (softmax-like, sum to 1, rounded to 3 decimal places)
       raw_probs = [self.rng.uniform(0.1, 2.0) for _ in range(self.num_classes)]
       prob_sum = sum(raw_probs)
-      sample['predictions'] = [p / prob_sum for p in raw_probs]
+      sample['predictions'] = [round(p / prob_sum, 3) for p in raw_probs]
 
       self.data.append(sample)
 

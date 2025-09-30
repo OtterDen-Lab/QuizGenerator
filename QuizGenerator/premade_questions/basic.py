@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Tuple
 
 import logging
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import *
 from QuizGenerator.question import Question, QuestionRegistry, Answer
 from QuizGenerator.mixins import TableQuestionMixin
 
