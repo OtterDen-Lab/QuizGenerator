@@ -89,15 +89,14 @@ class DerivativeQuestion(Question, abc.ABC):
     # Format evaluation point for LaTeX
     eval_point_str = ", ".join([f"x_{i} = {self.evaluation_point[i]}" for i in range(self.num_variables)])
 
-    # For PDF: Use OnlyLatex to show gradient vector format
+    # For PDF: Use OnlyLatex to show gradient vector format (no answer blank)
     body.add_element(
       ContentAST.OnlyLatex([
         ContentAST.Paragraph([
           ContentAST.Equation(
             f"\\left. \\nabla f \\right|_{{{eval_point_str}}} = ",
             inline=True
-          ),
-          ContentAST.Answer(self.answers["gradient_vector"])
+          )
         ])
       ])
     )
