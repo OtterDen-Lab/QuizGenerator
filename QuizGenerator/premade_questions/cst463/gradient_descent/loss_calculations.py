@@ -395,7 +395,7 @@ class LossQuestion_Logistic(LossQuestion):
     return "log-loss"
 
   def _get_loss_function_formula(self) -> str:
-    return r"L(y, p) = -[y \log(p) + (1-y) \log(1-p)]"
+    return r"L(y, p) = -[y \ln(p) + (1-y) \ln(1-p)]"
 
   def _create_data_table(self) -> ContentAST.Element:
     """Create table with features, true labels, predicted probabilities, and loss fields."""
@@ -434,9 +434,9 @@ class LossQuestion_Logistic(LossQuestion):
       steps.add_element(ContentAST.Paragraph([f"Sample {i+1}:"]))
 
       if y == 1:
-        calculation = f"L = -[1 \\cdot \\log({p:.3f}) + 0 \\cdot \\log(1-{p:.3f})] = -\\log({p:.3f}) = {loss:.4f}"
+        calculation = f"L = -[1 \\cdot \\ln({p:.3f}) + 0 \\cdot \\ln(1-{p:.3f})] = -\\ln({p:.3f}) = {loss:.4f}"
       else:
-        calculation = f"L = -[0 \\cdot \\log({p:.3f}) + 1 \\cdot \\log(1-{p:.3f})] = -\\log({1-p:.3f}) = {loss:.4f}"
+        calculation = f"L = -[0 \\cdot \\ln({p:.3f}) + 1 \\cdot \\ln(1-{p:.3f})] = -\\ln({1-p:.3f}) = {loss:.4f}"
 
       steps.add_element(ContentAST.Equation(calculation, inline=False))
 
@@ -539,7 +539,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
     return "cross-entropy loss"
 
   def _get_loss_function_formula(self) -> str:
-    return r"L(\mathbf{y}, \mathbf{p}) = -\sum_{i=1}^{K} y_i \log(p_i)"
+    return r"L(\mathbf{y}, \mathbf{p}) = -\sum_{i=1}^{K} y_i \ln(p_i)"
 
   def _create_data_table(self) -> ContentAST.Element:
     """Create table with features, true class vectors, predicted probabilities, and loss fields."""
@@ -594,14 +594,14 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
         terms = []
         for j, (y, p) in enumerate(zip(y_vec, p_vec)):
           if y == 1:
-            terms.append(f"{y} \\cdot \\log({p:.3f})")
+            terms.append(f"{y} \\cdot \\ln({p:.3f})")
           else:
-            terms.append(f"{y} \\cdot \\log({p:.3f})")
+            terms.append(f"{y} \\cdot \\ln({p:.3f})")
 
-        calculation = f"L = -\\mathbf{{y}} \\cdot \\log(\\mathbf{{p}}) = -({' + '.join(terms)}) = -{y_vec[true_class_idx]} \\cdot \\log({p_true:.3f}) = {loss:.4f}"
+        calculation = f"L = -\\mathbf{{y}} \\cdot \\ln(\\mathbf{{p}}) = -({' + '.join(terms)}) = -{y_vec[true_class_idx]} \\cdot \\ln({p_true:.3f}) = {loss:.4f}"
       except ValueError:
         # Fallback in case no class is set to 1 (shouldn't happen, but safety check)
-        calculation = f"L = -\\mathbf{{y}} \\cdot \\log(\\mathbf{{p}}) = {loss:.4f}"
+        calculation = f"L = -\\mathbf{{y}} \\cdot \\ln(\\mathbf{{p}}) = {loss:.4f}"
 
       steps.add_element(ContentAST.Equation(calculation, inline=False))
 
