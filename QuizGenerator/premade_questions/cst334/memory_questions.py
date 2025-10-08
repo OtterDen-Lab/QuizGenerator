@@ -949,5 +949,426 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         ContentAST.Paragraph(["But that's a lot of extra 0s, so I'm splitting them up for succinctness"])
       ]
     )
-    
+
+    return explanation
+
+
+@QuestionRegistry.register()
+class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
+  MIN_OFFSET_BITS = 3
+  MIN_PDI_BITS = 2
+  MIN_PTI_BITS = 2
+  MIN_PFN_BITS = 4
+
+  MAX_OFFSET_BITS = 5
+  MAX_PDI_BITS = 3
+  MAX_PTI_BITS = 3
+  MAX_PFN_BITS = 6
+
+  def refresh(self, rng_seed=None, *args, **kwargs):
+    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+
+    # Set up bit counts
+    self.num_bits_offset = self.rng.randint(self.MIN_OFFSET_BITS, self.MAX_OFFSET_BITS)
+    self.num_bits_pdi = self.rng.randint(self.MIN_PDI_BITS, self.MAX_PDI_BITS)
+    self.num_bits_pti = self.rng.randint(self.MIN_PTI_BITS, self.MAX_PTI_BITS)
+    self.num_bits_pfn = self.rng.randint(self.MIN_PFN_BITS, self.MAX_PFN_BITS)
+
+    # Total VPN bits = PDI + PTI
+    self.num_bits_vpn = self.num_bits_pdi + self.num_bits_pti
+ 
+    # Generate a random virtual address
+    self.virtual_address = self.rng.randint(1, 2 ** (self.num_bits_vpn + self.num_bits_offset))
+
+    # Extract components from virtual address
+    self.offset = self.virtual_address % (2 ** self.num_bits_offset)
+    vpn = self.virtual_address // (2 ** self.num_bits_offset)
+
+    self.pti = vpn % (2 ** self.num_bits_pti)
+    self.pdi = vpn // (2 ** self.num_bits_pti)
+
+    # Generate PFN randomly
+    self.pfn = self.rng.randint(0, 2 ** self.num_bits_pfn)
+
+    # Calculate physical address
+    self.physical_address = self.pfn * (2 ** self.num_bits_offset) + self.offset
+
+    # Determine validity at both levels
+    # PD entry can be valid or invalid
+    self.pd_valid = self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]
+
+    # PT entry only matters if PD is valid
+    if self.pd_valid:
+      self.pt_valid = self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]
+    else:
+      self.pt_valid = False  # Doesn't matter, won't be checked
+
+    # Generate a page table number (PTBR - Page Table Base Register value in the PD entry)
+    # This represents which page table to use
+    self.page_table_number = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+
+    # Create PD entry: valid bit + page table number
+    if self.pd_valid:
+      self.pd_entry = (2 ** self.num_bits_pfn) + self.page_table_number
+    else:
+      self.pd_entry = self.page_table_number  # Invalid, no valid bit set
+
+    # Create PT entry: valid bit + PFN
+    if self.pt_valid:
+      self.pte = (2 ** self.num_bits_pfn) + self.pfn
+    else:
+      self.pte = self.pfn  # Invalid, no valid bit set
+
+    # Overall validity requires both levels to be valid
+    self.is_valid = self.pd_valid and self.pt_valid
+
+    # Build page directory - show 3-4 entries
+    pd_size = self.rng.randint(3, 4)
+    lowest_pd_bottom = max([0, self.pdi - pd_size])
+    highest_pd_bottom = min([2 ** self.num_bits_pdi - pd_size, self.pdi])
+    pd_bottom = self.rng.randint(lowest_pd_bottom, highest_pd_bottom)
+    pd_top = pd_bottom + pd_size
+
+    self.page_directory = {}
+    self.page_directory[self.pdi] = self.pd_entry
+
+    # Fill in other PD entries
+    for pdi in range(pd_bottom, pd_top):
+      if pdi == self.pdi:
+        continue
+      # Generate random PD entry
+      pt_num = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+      while pt_num == self.page_table_number:  # Make sure it's different
+        pt_num = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+
+      # Randomly valid or invalid
+      if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
+        pd_val = (2 ** self.num_bits_pfn) + pt_num
+      else:
+        pd_val = pt_num
+
+      self.page_directory[pdi] = pd_val
+
+    # Build 2-3 page tables to show
+    # Always include the one we need, plus 1-2 others
+    num_page_tables_to_show = self.rng.randint(2, 3)
+
+    # Get unique page table numbers from the PD entries (extract PT numbers from valid entries)
+    shown_pt_numbers = set()
+    for pdi, pd_val in self.page_directory.items():
+      pt_num = pd_val % (2 ** self.num_bits_pfn)  # Extract PT number (remove valid bit)
+      shown_pt_numbers.add(pt_num)
+
+    # Ensure our required page table is included
+    shown_pt_numbers.add(self.page_table_number)
+
+    # Limit to requested number
+    shown_pt_numbers = list(shown_pt_numbers)[:num_page_tables_to_show]
+
+    # Build each page table
+    self.page_tables = {}  # Dict mapping PT number -> dict of PTI -> PTE
+
+    for pt_num in shown_pt_numbers:
+      pt_size = self.rng.randint(2, 3)
+
+      if pt_num == self.page_table_number:
+        # This is our target PT, must include our PTI
+        lowest_pt_bottom = max([0, self.pti - pt_size])
+        highest_pt_bottom = min([2 ** self.num_bits_pti - pt_size, self.pti])
+        pt_bottom = self.rng.randint(lowest_pt_bottom, highest_pt_bottom)
+        pt_top = pt_bottom + pt_size
+
+        self.page_tables[pt_num] = {}
+        self.page_tables[pt_num][self.pti] = self.pte
+
+        # Fill in other entries
+        for pti in range(pt_bottom, pt_top):
+          if pti == self.pti:
+            continue
+
+          # Generate random PTE
+          pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+          if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
+            pte_val = (2 ** self.num_bits_pfn) + pfn
+          else:
+            pte_val = pfn
+
+          self.page_tables[pt_num][pti] = pte_val
+      else:
+        # Random page table
+        pt_bottom = self.rng.randint(0, max(1, 2 ** self.num_bits_pti - pt_size))
+        pt_top = pt_bottom + pt_size
+
+        self.page_tables[pt_num] = {}
+        for pti in range(pt_bottom, pt_top):
+          pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+          if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
+            pte_val = (2 ** self.num_bits_pfn) + pfn
+          else:
+            pte_val = pfn
+
+          self.page_tables[pt_num][pti] = pte_val
+
+    # Set up answers
+    self.answers.update({
+      "answer__pdi": Answer.binary_hex("answer__pdi", self.pdi, length=self.num_bits_pdi),
+      "answer__pti": Answer.binary_hex("answer__pti", self.pti, length=self.num_bits_pti),
+      "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset),
+      "answer__pd_entry": Answer.binary_hex("answer__pd_entry", self.pd_entry, length=(self.num_bits_pfn + 1)),
+      "answer__pt_number": Answer.binary_hex("answer__pt_number", self.page_table_number, length=self.num_bits_pfn) if self.pd_valid else Answer.string("answer__pt_number", "INVALID"),
+    })
+
+    # PTE answer: if PD is valid, accept the actual PTE value from the table
+    # (regardless of whether that PTE is valid or invalid)
+    if self.pd_valid:
+      self.answers.update({
+        "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1)),
+      })
+    else:
+      # If PD is invalid, student can't look up the page table
+      # Accept both "INVALID" (for consistency) and "N/A" (for accuracy)
+      self.answers.update({
+        "answer__pte": Answer.string("answer__pte", ["INVALID", "N/A"]),
+      })
+
+    # Validity, PFN, and Physical Address depend on BOTH levels being valid
+    if self.pd_valid and self.pt_valid:
+      self.answers.update({
+        "answer__is_valid": Answer.string("answer__is_valid", "VALID"),
+        "answer__pfn": Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn),
+        "answer__physical_address": Answer.binary_hex(
+          "answer__physical_address", self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset)
+        ),
+      })
+    else:
+      self.answers.update({
+        "answer__is_valid": Answer.string("answer__is_valid", "INVALID"),
+        "answer__pfn": Answer.string("answer__pfn", "INVALID"),
+        "answer__physical_address": Answer.string("answer__physical_address", "INVALID"),
+      })
+
+  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+    body = ContentAST.Section()
+
+    body.add_element(
+      ContentAST.Paragraph([
+        "Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.",
+        "This problem uses <b>two-level (hierarchical) paging</b>.",
+        "Remember, we typically have the MSB representing valid or invalid."
+      ])
+    )
+
+    # Parameter info - make it more compact by showing it as a single paragraph
+    body.add_element(
+      ContentAST.Paragraph([
+        f"Virtual Address: <b>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</b>",
+        f"(PDI: {self.num_bits_pdi} bits, PTI: {self.num_bits_pti} bits, Offset: {self.num_bits_offset} bits, PFN: {self.num_bits_pfn} bits)"
+      ])
+    )
+
+    # Page Directory table
+    pd_matrix = []
+    if min(self.page_directory.keys()) != 0:
+      pd_matrix.append(["...", "..."])
+
+    pd_matrix.extend([
+      [f"0b{pdi:0{self.num_bits_pdi}b}", f"0b{pd_val:0{self.num_bits_pfn + 1}b}"]
+      for pdi, pd_val in sorted(self.page_directory.items())
+    ])
+
+    if (max(self.page_directory.keys()) + 1) != 2 ** self.num_bits_pdi:
+      pd_matrix.append(["...", "..."])
+
+    body.add_element(
+      ContentAST.Paragraph([
+        "<b>Page Directory:</b>"
+      ])
+    )
+    body.add_element(
+      ContentAST.Table(
+        headers=["PDI", "PD Entry"],
+        data=pd_matrix
+      )
+    )
+
+    # Page Tables - use TableGroup for side-by-side display
+    table_group = ContentAST.TableGroup()
+
+    for pt_num in sorted(self.page_tables.keys()):
+      pt_matrix = []
+      pt_entries = self.page_tables[pt_num]
+
+      if min(pt_entries.keys()) != 0:
+        pt_matrix.append(["...", "..."])
+
+      pt_matrix.extend([
+        [f"0b{pti:0{self.num_bits_pti}b}", f"0b{pte:0{self.num_bits_pfn + 1}b}"]
+        for pti, pte in sorted(pt_entries.items())
+      ])
+
+      if (max(pt_entries.keys()) + 1) != 2 ** self.num_bits_pti:
+        pt_matrix.append(["...", "..."])
+
+      table_group.add_table(
+        label=f"Page Table #0b{pt_num:0{self.num_bits_pfn}b}:",
+        table=ContentAST.Table(headers=["PTI", "PTE"], data=pt_matrix)
+      )
+
+    body.add_element(table_group)
+
+    # Answer block
+    body.add_element(
+      ContentAST.AnswerBlock([
+        ContentAST.Answer(self.answers["answer__pdi"], label="PDI (Page Directory Index)"),
+        ContentAST.Answer(self.answers["answer__pti"], label="PTI (Page Table Index)"),
+        ContentAST.Answer(self.answers["answer__offset"], label="Offset"),
+        ContentAST.Answer(self.answers["answer__pd_entry"], label="PD Entry (from Page Directory)"),
+        ContentAST.Answer(self.answers["answer__pt_number"], label="Page Table Number"),
+        ContentAST.Answer(self.answers["answer__pte"], label="PTE (from Page Table)"),
+        ContentAST.Answer(self.answers["answer__is_valid"], label="VALID or INVALID?"),
+        ContentAST.Answer(self.answers["answer__pfn"], label="PFN"),
+        ContentAST.Answer(self.answers["answer__physical_address"], label="Physical Address"),
+      ])
+    )
+
+    return body
+
+  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+    explanation = ContentAST.Section()
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Two-level paging requires two lookups: first in the Page Directory, then in a Page Table.",
+        "The virtual address is split into three parts: PDI | PTI | Offset."
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Don't forget to pad with the appropriate number of 0s!"
+      ])
+    )
+
+    # Step 1: Extract PDI, PTI, Offset
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"<b>Step 1: Extract components from Virtual Address</b>",
+        f"Virtual Address = PDI | PTI | Offset",
+        f"<tt>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</tt> = "
+        f"<tt>0b{self.pdi:0{self.num_bits_pdi}b}</tt> | "
+        f"<tt>0b{self.pti:0{self.num_bits_pti}b}</tt> | "
+        f"<tt>0b{self.offset:0{self.num_bits_offset}b}</tt>"
+      ])
+    )
+
+    # Step 2: Look up PD Entry
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"<b>Step 2: Look up Page Directory Entry</b>",
+        f"Using PDI = <tt>0b{self.pdi:0{self.num_bits_pdi}b}</tt>, we find PD Entry = <tt>0b{self.pd_entry:0{self.num_bits_pfn + 1}b}</tt>"
+      ])
+    )
+
+    # Step 3: Check PD validity
+    pd_valid_bit = self.pd_entry // (2 ** self.num_bits_pfn)
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"<b>Step 3: Check Page Directory Entry validity</b>",
+        f"The MSB (valid bit) is <b>{pd_valid_bit}</b>, so this PD Entry is <b>{'VALID' if self.pd_valid else 'INVALID'}</b>."
+      ])
+    )
+
+    if not self.pd_valid:
+      explanation.add_element(
+        ContentAST.Paragraph([
+          "Since the Page Directory Entry is invalid, the translation fails here.",
+          "We write <b>INVALID</b> for all remaining fields.",
+          "If it were valid, we would continue with the steps below.",
+          "<hr>"
+        ])
+      )
+
+    # Step 4: Extract PT number (if PD valid)
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"<b>Step 4: Extract Page Table Number</b>",
+        "We remove the valid bit from the PD Entry to get the Page Table Number:"
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Equation(
+        f"\\texttt{{{self.page_table_number:0{self.num_bits_pfn}b}}} = "
+        f"\\texttt{{0b{self.pd_entry:0{self.num_bits_pfn + 1}b}}} \\& "
+        f"\\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
+      )
+    )
+
+    if self.pd_valid:
+      explanation.add_element(
+        ContentAST.Paragraph([
+          f"This tells us to use <b>Page Table #{self.page_table_number}</b>."
+        ])
+      )
+
+      # Step 5: Look up PTE
+      explanation.add_element(
+        ContentAST.Paragraph([
+          f"<b>Step 5: Look up Page Table Entry</b>",
+          f"Using PTI = <tt>0b{self.pti:0{self.num_bits_pti}b}</tt> in Page Table #{self.page_table_number}, "
+          f"we find PTE = <tt>0b{self.pte:0{self.num_bits_pfn + 1}b}</tt>"
+        ])
+      )
+
+      # Step 6: Check PT validity
+      pt_valid_bit = self.pte // (2 ** self.num_bits_pfn)
+      explanation.add_element(
+        ContentAST.Paragraph([
+          f"<b>Step 6: Check Page Table Entry validity</b>",
+          f"The MSB (valid bit) is <b>{pt_valid_bit}</b>, so this PTE is <b>{'VALID' if self.pt_valid else 'INVALID'}</b>."
+        ])
+      )
+
+      if not self.pt_valid:
+        explanation.add_element(
+          ContentAST.Paragraph([
+            "Since the Page Table Entry is invalid, the translation fails.",
+            "We write <b>INVALID</b> for PFN and Physical Address.",
+            "If it were valid, we would continue with the steps below.",
+            "<hr>"
+          ])
+        )
+
+      # Step 7: Extract PFN
+      explanation.add_element(
+        ContentAST.Paragraph([
+          f"<b>Step 7: Extract PFN</b>",
+          "We remove the valid bit from the PTE to get the PFN:"
+        ])
+      )
+
+      explanation.add_element(
+        ContentAST.Equation(
+          f"\\texttt{{{self.pfn:0{self.num_bits_pfn}b}}} = "
+          f"\\texttt{{0b{self.pte:0{self.num_bits_pfn + 1}b}}} \\& "
+          f"\\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
+        )
+      )
+
+      # Step 8: Construct physical address
+      explanation.add_element(
+        ContentAST.Paragraph([
+          f"<b>Step 8: Construct Physical Address</b>",
+          "Physical Address = PFN | Offset"
+        ])
+      )
+
+      explanation.add_element(
+        ContentAST.Equation(
+          fr"{r'\mathbf{' if self.is_valid else ''}\mathtt{{0b{self.physical_address:0{self.num_bits_pfn + self.num_bits_offset}b}}}{r'}' if self.is_valid else ''} = "
+          f"\\mathtt{{0b{self.pfn:0{self.num_bits_pfn}b}}} \\mid "
+          f"\\mathtt{{0b{self.offset:0{self.num_bits_offset}b}}}"
+        )
+      )
+
     return explanation

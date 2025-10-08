@@ -54,7 +54,13 @@ class Answer:
     self.value = value
     self.kind = kind
     self.variable_kind = variable_kind
-    self.display = display if display is not None else value
+    # For list values in display, show the first option (or join them with /)
+    if display is not None:
+      self.display = display
+    elif isinstance(value, list) and variable_kind == Answer.VariableKind.STR:
+      self.display = value[0] if len(value) == 1 else " / ".join(value)
+    else:
+      self.display = value
     self.length = length # Used for bits and hex to be printed appropriately
     self.correct = correct
     self.baffles = baffles
@@ -183,11 +189,22 @@ class Answer:
         for possible_state in [self.value] #itertools.permutations(self.value)
       ]
     else:
-      canvas_answers = [{
-        "blank_id": self.key,
-        "answer_text": self.value,
-        "answer_weight": 100 if self.correct else 0,
-      }]
+      # For string answers, check if value is a list of acceptable alternatives
+      if isinstance(self.value, list):
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": str(alt),
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for alt in self.value
+        ]
+      else:
+        canvas_answers = [{
+          "blank_id": self.key,
+          "answer_text": self.value,
+          "answer_weight": 100 if self.correct else 0,
+        }]
     
     if self.baffles is not None:
       for baffle in self.baffles:

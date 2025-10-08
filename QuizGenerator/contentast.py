@@ -1167,6 +1167,101 @@ class ContentAST:
       result.append(r"\end{alignat*}")
       return "\n".join(result)
 
+  class TableGroup(Element):
+    """
+    Container for displaying multiple tables side-by-side in LaTeX, stacked in HTML.
+
+    Use this when you need to show multiple related tables together, such as
+    multiple page tables in hierarchical paging questions. In LaTeX, tables
+    are displayed side-by-side using minipages. In HTML/Canvas, they're stacked
+    vertically for better mobile compatibility.
+
+    When to use:
+    - Multiple related tables that should be visually grouped
+    - Page tables in hierarchical paging
+    - Comparison of multiple data structures
+
+    Features:
+    - Automatic side-by-side layout in PDF (using minipages)
+    - Vertical stacking in HTML for better readability
+    - Automatic width calculation based on number of tables
+    - Optional labels for each table
+
+    Example:
+        # Create table group with labels
+        table_group = ContentAST.TableGroup()
+
+        table_group.add_table(
+            label="Page Table #0",
+            table=ContentAST.Table(headers=["PTI", "PTE"], data=pt0_data)
+        )
+
+        table_group.add_table(
+            label="Page Table #1",
+            table=ContentAST.Table(headers=["PTI", "PTE"], data=pt1_data)
+        )
+
+        body.add_element(table_group)
+    """
+    def __init__(self):
+      super().__init__()
+      self.tables = []  # List of (label, table) tuples
+
+    def add_table(self, table: ContentAST.Table, label: str = None):
+      """
+      Add a table to the group with an optional label.
+
+      Args:
+          table: ContentAST.Table to add
+          label: Optional label to display above the table
+      """
+      self.tables.append((label, table))
+
+    def render_html(self, **kwargs):
+      # Stack tables vertically in HTML
+      result = []
+      for label, table in self.tables:
+        if label:
+          result.append(f"<p><b>{label}</b></p>")
+        result.append(table.render("html", **kwargs))
+      return "\n".join(result)
+
+    def render_latex(self, **kwargs):
+      if not self.tables:
+        return ""
+
+      # Calculate width based on number of tables
+      num_tables = len(self.tables)
+      if num_tables == 1:
+        width = 0.9
+      elif num_tables == 2:
+        width = 0.45
+      else:  # 3 or more
+        width = 0.30
+
+      result = ["\n\n"]  # Add spacing before table group
+
+      for i, (label, table) in enumerate(self.tables):
+        result.append(f"\\begin{{minipage}}{{{width}\\textwidth}}")
+
+        if label:
+          # Escape # characters in labels for LaTeX
+          escaped_label = label.replace("#", r"\#")
+          result.append(f"\\textbf{{{escaped_label}}}")
+          result.append("\\vspace{0.1cm}")
+
+        # Render the table
+        table_latex = table.render("latex", **kwargs)
+        result.append(table_latex)
+
+        result.append("\\end{minipage}")
+
+        # Add horizontal spacing between tables (but not after the last one)
+        if i < num_tables - 1:
+          result.append("\\hfill")
+
+      return "\n".join(result)
+
   class AnswerBlock(Table):
     """
     Specialized table for organizing multiple answer fields with proper spacing.
