@@ -457,7 +457,8 @@ class ContentAST:
     def render_latex(self, **kwargs):
       if self.hide_from_latex:
         return ""
-      content = super().convert_markdown(self.content, "latex") or self.content
+      # Escape # to prevent markdown header conversion in LaTeX
+      content = super().convert_markdown(self.content.replace("#", r"\#"), "latex") or self.content
       return content
     
     def is_mergeable(self, other: ContentAST.Element):
