@@ -30,6 +30,7 @@ dependencies = [
     "lms_interface",
     "sympy>=1.14.0",
     "markdown>=3.9",
+    "segno>=1.6.0",
 ]
 
 [tool.uv.sources]
