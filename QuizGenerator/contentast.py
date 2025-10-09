@@ -376,11 +376,11 @@ class ContentAST:
             question_header = (
               r"\vspace{0.5cm}" + "\n"
               r"\noindent\textbf{Question " + str(self.question_number) + r":} \hfill "
-              r"\raisebox{-0.5cm}{"
-              rf"\includegraphics[width={QuestionQRCode.DEFAULT_SIZE_CM}cm]{{{qr_path}}}"
-              r"}\hfill "
               r"\rule{0.5cm}{0.15mm} / " + str(int(self.value)) + "\n"
-              r"\par\vspace{0.1cm}"
+              r"\raisebox{-1cm}{"  # Reduced lift to minimize extra space above
+              rf"\includegraphics[width={QuestionQRCode.DEFAULT_SIZE_CM}cm]{{{qr_path}}}"
+              r"} "
+              r"\par\vspace{-1cm}"
             )
           except Exception as e:
             log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
