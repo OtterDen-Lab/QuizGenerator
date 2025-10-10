@@ -115,6 +115,10 @@ class Question(abc.ABC):
     - get_body(): Return ContentAST.Section with question content
     - get_explanation(): Return ContentAST.Section with solution steps
 
+  Required Class Attributes:
+    - VERSION (str): Question version number (e.g., "1.0")
+      Increment when RNG logic changes to ensure reproducibility
+
   ContentAST Usage Examples:
     def get_body(self):
         body = ContentAST.Section()
@@ -135,8 +139,21 @@ class Question(abc.ABC):
     - ContentAST.Table: Data tables
     - ContentAST.OnlyHtml/OnlyLatex: Platform-specific content
 
+  Versioning Guidelines:
+    - Increment VERSION when changing:
+      * Order of random number generation calls
+      * Question generation logic
+      * Answer calculation methods
+    - Do NOT increment for:
+      * Cosmetic changes (formatting, wording)
+      * Bug fixes that don't affect answer generation
+      * Changes to get_explanation() only
+
   See existing questions in premade_questions/ for patterns and examples.
   """
+
+  # Default version - subclasses should override this
+  VERSION = "1.0"
   
   class Topic(enum.Enum):
     # CST334 (Operating Systems) Topics
@@ -254,13 +271,22 @@ class Question(abc.ABC):
     with timer("question_explanation", question_name=self.name, question_type=self.__class__.__name__):
       explanation = self.get_explanation()
 
-    return ContentAST.Question(
+    # Store the actual seed used and question metadata for QR code generation
+    actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
+    question_ast = ContentAST.Question(
       body=body,
       explanation=explanation,
       value=self.points_value,
       spacing=self.spacing,
       topic=self.topic
     )
+
+    # Attach regeneration metadata to the question AST
+    question_ast.question_class_name = self.__class__.__name__
+    question_ast.generation_seed = actual_seed
+    question_ast.question_version = self.VERSION
+
+    return question_ast
   
   @abc.abstractmethod
   def get_body(self, **kwargs) -> ContentAST.Section:

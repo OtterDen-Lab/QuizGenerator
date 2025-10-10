@@ -367,9 +367,19 @@ class ContentAST:
         if self.question_number is not None:
           try:
             from QuizGenerator.qrcode_generator import QuestionQRCode
+
+            # Build extra_data dict with regeneration metadata if available
+            extra_data = {}
+            if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(self, 'question_version'):
+              if self.question_class_name and self.generation_seed is not None and self.question_version:
+                extra_data['question_type'] = self.question_class_name
+                extra_data['seed'] = self.generation_seed
+                extra_data['version'] = self.question_version
+
             qr_path = QuestionQRCode.generate_png_path(
               self.question_number,
-              self.value
+              self.value,
+              **extra_data
             )
             # Build custom question header with QR code centered
             # Format: Question N:  [QR code centered]  __ / points
