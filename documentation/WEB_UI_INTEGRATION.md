@@ -443,4 +443,4 @@ export QUIZ_ENCRYPTION_KEY="your-key-here"
 
 ---
 
-**For more examples, see**: `web_ui_integration_example.py`
+**For more examples, see**: `examples/web_ui_integration_example.py`

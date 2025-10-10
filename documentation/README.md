@@ -134,8 +134,9 @@ QuizGeneration/
 │   ├── README.md           # This file
 │   ├── GRADING_GUIDE.md    # CLI grading guide
 │   └── WEB_UI_INTEGRATION.md  # Web API guide
+├── examples/
+│   └── web_ui_integration_example.py  # Working code examples
 ├── grade_from_qr.py        # Main grading module (CLI + library)
-├── web_ui_integration_example.py  # Working code examples
 ├── QuizGenerator/
 │   ├── qrcode_generator.py # QR code generation/encryption
 │   ├── question.py         # Question classes and registry
@@ -149,7 +150,7 @@ QuizGeneration/
 
 For issues or questions:
 - Check the troubleshooting sections in the guides
-- Review `web_ui_integration_example.py` for working code
+- Review `examples/web_ui_integration_example.py` for working code
 - Verify environment setup (encryption key, dependencies)
 
 ---
