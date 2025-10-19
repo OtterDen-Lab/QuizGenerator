@@ -46,7 +46,8 @@ class Quiz:
 
     self.question_sort_order = None
     self.practice = practice
-    
+    self.preserve_order_point_values = set()  # Point values that should preserve question order
+
     # Plan: right now we just take in questions and then assume they have a score and a "generate" button
   
   def __iter__(self):
@@ -77,10 +78,19 @@ class Quiz:
       
       # Load questions from the quiz dictionary
       questions_for_exam = []
+      # Track point values where order should be preserved (for layout optimization)
+      preserve_order_point_values = set()
+
       for question_value, question_definitions in exam_dict["questions"].items():
         # todo: I can also add in "extra credit" and "mix-ins" as other keys to indicate extra credit or questions that can go anywhere
         log.info(f"Parsing {question_value} point questions")
-        
+
+        # Check for point-value-level config
+        point_config = question_definitions.pop("_config", {})
+        if point_config.get("preserve_order", False):
+          preserve_order_point_values.add(question_value)
+          log.info(f"  Point value {question_value} will preserve question order")
+
         def make_question(q_name, q_data, **kwargs):
           # Build up the kwargs that we're going to pass in
           # todo: this is currently a mess due to legacy things, so before I tell others to use this make it cleaner
@@ -150,20 +160,176 @@ class Quiz:
       log.debug(f"len(questions_for_exam): {len(questions_for_exam)}")
       quiz_from_yaml = cls(name, questions_for_exam, practice, description=description)
       quiz_from_yaml.set_sort_order(sort_order)
+      quiz_from_yaml.preserve_order_point_values = preserve_order_point_values
       quizes_loaded.append(quiz_from_yaml)
     return quizes_loaded
   
+  def _estimate_question_height(self, question, **kwargs) -> float:
+    """
+    Estimate the rendered height of a question for layout optimization.
+    Returns height in centimeters.
+    """
+    # Base height for question header, borders, and minimal content
+    # Each question has: horizontal rule, question number line, and minipage wrapper
+    base_height = 1.5  # cm
+
+    # The spacing parameter directly controls \vspace{} in cm
+    spacing_height = question.spacing  # cm
+
+    # Estimate content height by rendering to LaTeX and analyzing structure
+    question_ast = question.get_question(**kwargs)
+    latex_content = question_ast.render("latex")
+
+    # Count content that adds height (rough estimates in cm)
+    content_height = 0.0
+
+    # Tables add significant height (~0.5cm per row as rough estimate)
+    table_count = latex_content.count('\\begin{tabular}')
+    content_height += table_count * 3.0  # Assume ~3cm per table on average
+
+    # Matrices add height
+    matrix_count = latex_content.count('\\begin{') - table_count  # Rough matrix count
+    content_height += matrix_count * 2.0  # ~2cm per matrix
+
+    # Code blocks (verbatim) add significant height
+    verbatim_count = latex_content.count('\\begin{verbatim}')
+    content_height += verbatim_count * 4.0  # ~4cm per code block
+
+    # Count paragraphs and text blocks (very rough estimate)
+    # Each ~500 characters of text ≈ 1cm of height
+    char_count = len(latex_content)
+    content_height += (char_count / 500.0) * 0.5
+
+    # Total estimated height
+    total_height = base_height + spacing_height + content_height
+
+    return total_height
+
+  def _optimize_question_order(self, questions, **kwargs) -> List[Question]:
+    """
+    Optimize question ordering to minimize PDF length while respecting point-value tiers.
+    Uses bin-packing heuristics to reorder questions within each point-value group.
+    """
+    # Group questions by point value
+    from collections import defaultdict
+    point_groups = defaultdict(list)
+
+    for question in questions:
+      point_groups[question.points_value].append(question)
+
+    # Track which point values should preserve order (from config)
+    preserve_order_for = kwargs.pop('preserve_order_for', set())
+
+    # For each point group, estimate heights and apply bin-packing optimization
+    optimized_questions = []
+    is_first_page = True  # Track if we're packing the first page
+
+    log.debug("Optimizing question order for PDF layout...")
+
+    for points in sorted(point_groups.keys(), reverse=True):
+      group = point_groups[points]
+
+      # Check if this point tier should preserve order
+      if points in preserve_order_for:
+        # Sort by topic only (preserve original order)
+        group.sort(key=lambda q: self.question_sort_order.index(q.topic))
+        optimized_questions.extend(group)
+        log.debug(f"  {points}pt questions: {len(group)} questions (order preserved by config)")
+        # After adding preserved-order questions, we're likely past the first page
+        is_first_page = False
+        continue
+
+      # If only 1-2 questions, no optimization needed
+      if len(group) <= 2:
+        # Still sort by topic for consistency
+        group.sort(key=lambda q: self.question_sort_order.index(q.topic))
+        optimized_questions.extend(group)
+        log.debug(f"  {points}pt questions: {len(group)} questions (no optimization needed)")
+        is_first_page = False
+        continue
+
+      # Estimate height for each question
+      question_heights = [(q, self._estimate_question_height(q, **kwargs)) for q in group]
+
+      # Sort by height descending to identify large and small questions
+      question_heights.sort(key=lambda x: x[1], reverse=True)
+
+      log.debug(f"  Question heights for {points}pt questions:")
+      for q, h in question_heights:
+        log.debug(f"    {q.name}: {h:.1f}cm (spacing={q.spacing}cm)")
+
+      # Calculate page capacity in centimeters
+      # A typical A4 page with margins has ~25cm of usable height
+      # After accounting for headers and separators, estimate ~22cm per page
+      base_page_capacity = 22.0  # cm
+
+      # First page has header (title + name line) which takes ~3cm
+      first_page_capacity = base_page_capacity - 3.0 if is_first_page else base_page_capacity
+
+      # Better bin-packing strategy: interleave large and small questions
+      # Strategy: Start each page with the largest unplaced question, then fill with smaller ones
+      bins = []
+      placed = [False] * len(question_heights)
+
+      while not all(placed):
+        # Determine capacity for this page
+        page_capacity = first_page_capacity if len(bins) == 0 and is_first_page else base_page_capacity
+
+        # Find the largest unplaced question to start a new page
+        new_page = []
+        page_height = 0
+
+        for i, (question, height) in enumerate(question_heights):
+          if not placed[i]:
+            new_page.append(question)
+            page_height = height
+            placed[i] = True
+            break
+
+        # Now try to fill the remaining space with smaller questions
+        for i, (question, height) in enumerate(question_heights):
+          if not placed[i] and page_height + height <= page_capacity:
+            new_page.append(question)
+            page_height += height
+            placed[i] = True
+
+        bins.append((new_page, page_height))
+
+      log.debug(f"  {points}pt questions: {len(group)} questions packed into {len(bins)} pages")
+      for i, (page_questions, height) in enumerate(bins):
+        log.debug(f"    Page {i+1}: {height:.1f}cm with {len(page_questions)} questions: {[q.name for q in page_questions]}")
+
+      # Flatten bins back to ordered list
+      for bin_contents, _ in bins:
+        optimized_questions.extend(bin_contents)
+
+      # After packing questions, we're no longer on the first page
+      is_first_page = False
+
+    return optimized_questions
+
   def get_quiz(self, **kwargs) -> ContentAST.Document:
     quiz = ContentAST.Document(title=self.name)
 
-    # Sort questions first
-    sorted_questions = sorted(
-      self.questions,
-      key=lambda q: (-q.points_value, self.question_sort_order.index(q.topic))
-    )
+    # Check if optimization is requested (default: True)
+    optimize_layout = kwargs.pop('optimize_layout', True)
+
+    if optimize_layout:
+      # Use optimized ordering, passing preserve_order config
+      ordered_questions = self._optimize_question_order(
+        self.questions,
+        preserve_order_for=self.preserve_order_point_values,
+        **kwargs
+      )
+    else:
+      # Use simple ordering by point value and topic
+      ordered_questions = sorted(
+        self.questions,
+        key=lambda q: (-q.points_value, self.question_sort_order.index(q.topic))
+      )
 
     # Generate questions with sequential numbering for QR codes
-    for question_number, question in enumerate(sorted_questions, start=1):
+    for question_number, question in enumerate(ordered_questions, start=1):
       question_ast = question.get_question(**kwargs)
       # Add question number to the AST for QR code generation
       question_ast.question_number = question_number
