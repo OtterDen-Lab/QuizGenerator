@@ -132,7 +132,28 @@ class ContentAST:
     def render_latex(self, **kwargs):
       latex = "".join(element.render("latex", **kwargs) for element in self.elements)
       return f"{'\n\n\\vspace{0.5cm}' if self.add_spacing_before else ''}{latex}"
-  
+
+    def render_typst(self, **kwargs):
+      """
+      Default Typst rendering using markdown → typst conversion via pandoc.
+
+      This provides instant Typst support for all ContentAST elements without
+      needing explicit implementations. Override this method in subclasses
+      when pandoc conversion quality is insufficient or Typst-specific
+      features are needed.
+      """
+      # Render to markdown first
+      markdown_content = self.render_markdown(**kwargs)
+
+      # Convert markdown to Typst via pandoc
+      typst_content = self.convert_markdown(markdown_content, 'typst')
+
+      # Add spacing if needed (Typst equivalent of \vspace)
+      if self.add_spacing_before:
+        return f"#v(0.5cm)\n\n{typst_content}"
+
+      return typst_content if typst_content else markdown_content
+
     def is_mergeable(self, other: ContentAST.Element):
       return False
   
@@ -273,6 +294,62 @@ class ContentAST:
 
     \begin{document}
     """)
+
+    TYPST_HEADER = textwrap.dedent("""
+    // Quiz document settings
+    #set page(
+      paper: "a4",
+      margin: 1.5cm,
+    )
+
+    #set text(
+      size: 12pt,
+      font: "Linux Libertine",
+    )
+
+    // Math equation settings
+    #set math.equation(numbering: none)
+
+    // Paragraph spacing
+    #set par(
+      spacing: 1.5em,
+      leading: 0.65em,
+    )
+
+    // Question counter and command
+    #let question_num = counter("question")
+
+    #let question(points) = {
+      v(0.5cm)
+      question_num.step()
+      grid(
+        columns: (1fr, auto),
+        align: (left, right),
+        [*Question #context question_num.display():*],
+        [#box(
+          width: 0.5cm,
+          line(length: 100%, stroke: 0.15mm)
+        ) / #points]
+      )
+      v(0.1cm)
+    }
+
+    // Answer blank command
+    #let answerblank(length) = {
+      v(1cm)
+      box(
+        width: length * 1cm,
+        line(length: 100%, stroke: 0.15mm)
+      )
+    }
+
+    // Code block styling
+    #show raw.where(block: true): block.with(
+      fill: luma(240),
+      inset: 10pt,
+      radius: 4pt,
+    )
+    """)
     
     def __init__(self, title=None):
       super().__init__()
@@ -297,17 +374,34 @@ class ContentAST:
       latex += f"\\title{{{self.title}}}\n"
       latex += textwrap.dedent(f"""
         \\noindent\\Large {self.title} \\hfill \\normalsize Name: \\answerblank{{{5}}}
-        
+
         \\vspace{{0.5cm}}
         \\onehalfspacing
-        
+
       """)
-      
+
       latex += "\n".join(element.render("latex", **kwargs) for element in self.elements)
-      
+
       latex += r"\end{document}"
-      
+
       return latex
+
+    def render_typst(self, **kwargs):
+      """Render complete Typst document with header and title"""
+      typst = self.TYPST_HEADER
+
+      # Add title and name line
+      typst += f"\n#align(left)[\n"
+      typst += f"  #text(size: 14pt, weight: \"bold\")[{self.title}]\n"
+      typst += f"  #h(1fr)\n"
+      typst += f"  Name: #answerblank(5)\n"
+      typst += f"]\n\n"
+      typst += f"#v(0.5cm)\n\n"
+
+      # Render all elements
+      typst += "\n".join(element.render("typst", **kwargs) for element in self.elements)
+
+      return typst
     
   ## Below here are smaller elements generally
   class Question(Element):
@@ -746,7 +840,22 @@ class ContentAST:
         return f"${self.latex}$~"
       else:
         return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
-  
+
+    def render_typst(self, **kwargs):
+      """
+      Render equation in Typst format.
+
+      Typst uses LaTeX-like math syntax with $ delimiters.
+      Inline: $equation$
+      Display: $ equation $
+      """
+      if self.inline:
+        # Inline math in Typst
+        return f"${self.latex}$"
+      else:
+        # Display math in Typst
+        return f"$ {self.latex} $"
+
     @classmethod
     def make_block_equation__multiline_equals(cls, lhs : str, rhs : List[str]):
       equation_lines = []
@@ -1021,7 +1130,56 @@ class ContentAST:
       result.append("\\end{tabular}")
 
       return "\n\n" + "\n".join(result)
-  
+
+    def render_typst(self, **kwargs):
+      """
+      Render table in Typst format using native table() function.
+
+      Typst syntax:
+      #table(
+        columns: N,
+        align: (left, center, right),
+        [Header1], [Header2],
+        [Cell1], [Cell2]
+      )
+      """
+      # Determine number of columns
+      num_cols = len(self.headers) if self.headers else len(self.data[0])
+
+      # Build alignment specification
+      if self.alignments:
+        # Map alignment strings to Typst alignment
+        align_map = {"left": "left", "right": "right", "center": "center"}
+        aligns = [align_map.get(a, "left") for a in self.alignments]
+        align_spec = f"align: ({', '.join(aligns)})"
+      else:
+        align_spec = "align: left"
+
+      # Start table
+      result = [f"#table("]
+      result.append(f"  columns: {num_cols},")
+      result.append(f"  {align_spec},")
+
+      # Add stroke if not hiding rules
+      if not self.hide_rules:
+        result.append(f"  stroke: 0.5pt,")
+
+      # Render headers
+      if self.headers:
+        for header in self.headers:
+          rendered = header.render(output_format="typst", **kwargs)
+          result.append(f"  [*{rendered}*],")
+
+      # Render data rows
+      for row in self.data:
+        for cell in row:
+          rendered = cell.render(output_format="typst", **kwargs)
+          result.append(f"  [{rendered}],")
+
+      result.append(")")
+
+      return "\n" + "\n".join(result) + "\n"
+
   class Picture(Element):
     """
     Image/diagram container with proper sizing and captioning.

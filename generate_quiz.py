@@ -26,6 +26,8 @@ def parse_args():
   parser.add_argument("--quiz_yaml", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "example_files/exam_generation.yaml"))
   parser.add_argument("--num_canvas", default=0, type=int)
   parser.add_argument("--num_pdfs", default=0, type=int)
+  parser.add_argument("--typst", action="store_true",
+                     help="Use Typst instead of LaTeX for PDF generation")
   parser.add_argument("--delete-assignment-group", action="store_true",
                      help="Delete existing assignment group before uploading new quizzes")
 
@@ -156,14 +158,14 @@ def test():
   
   
 def generate_latex(latex_text, remove_previous=False):
-  
+
   if remove_previous:
     if os.path.exists('out'): shutil.rmtree('out')
-  
+
   tmp_tex = tempfile.NamedTemporaryFile('w')
-  
+
   tmp_tex.write(latex_text)
-  
+
   tmp_tex.flush()
   shutil.copy(f"{tmp_tex.name}", "debug.tex")
   p = subprocess.Popen(
@@ -187,13 +189,62 @@ def generate_latex(latex_text, remove_previous=False):
   proc.wait(timeout=30)
   tmp_tex.close()
 
+
+def generate_typst(typst_text, remove_previous=False):
+  """
+  Generate PDF from Typst source code.
+
+  Similar to generate_latex, but uses typst compiler instead of latexmk.
+  """
+  if remove_previous:
+    if os.path.exists('out'):
+      shutil.rmtree('out')
+
+  # Ensure output directory exists
+  os.makedirs('out', exist_ok=True)
+
+  # Create temporary Typst file
+  tmp_typ = tempfile.NamedTemporaryFile('w', suffix='.typ', delete=False)
+
+  try:
+    tmp_typ.write(typst_text)
+    tmp_typ.flush()
+    tmp_typ.close()
+
+    # Save debug copy
+    shutil.copy(tmp_typ.name, "debug.typ")
+
+    # Compile with typst
+    output_pdf = os.path.join(os.getcwd(), 'out', os.path.basename(tmp_typ.name).replace('.typ', '.pdf'))
+
+    p = subprocess.Popen(
+      ['typst', 'compile', tmp_typ.name, output_pdf],
+      stdout=subprocess.PIPE,
+      stderr=subprocess.PIPE
+    )
+
+    try:
+      p.wait(30)
+      if p.returncode != 0:
+        stderr = p.stderr.read().decode('utf-8')
+        log.error(f"Typst compilation failed: {stderr}")
+    except subprocess.TimeoutExpired:
+      log.error("Typst compile timed out")
+      p.kill()
+
+  finally:
+    # Clean up temp file
+    if os.path.exists(tmp_typ.name):
+      os.unlink(tmp_typ.name)
+
 def generate_quiz(
     path_to_quiz_yaml,
     num_pdfs=0,
     num_canvas=0,
     use_prod=False,
     course_id=None,
-    delete_assignment_group=False
+    delete_assignment_group=False,
+    use_typst=False
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -218,8 +269,15 @@ def generate_quiz(
       # Use a different seed for each PDF to ensure different workloads across PDFs
       # but consistent workloads within the same PDF
       pdf_seed = i * 1000  # Large gap to avoid overlap with rng_seed_offset
-      latex_text = quiz.get_quiz(rng_seed=pdf_seed).render_latex()
-      generate_latex(latex_text, remove_previous=(i==0))
+
+      if use_typst:
+        # Generate using Typst
+        typst_text = quiz.get_quiz(rng_seed=pdf_seed).render("typst")
+        generate_typst(typst_text, remove_previous=(i==0))
+      else:
+        # Generate using LaTeX (default)
+        latex_text = quiz.get_quiz(rng_seed=pdf_seed).render_latex()
+        generate_latex(latex_text, remove_previous=(i==0))
 
     if num_canvas > 0:
       canvas_course.push_quiz_to_canvas(
@@ -278,7 +336,8 @@ def main():
     num_canvas=args.num_canvas,
     use_prod=args.prod,
     course_id=args.course_id,
-    delete_assignment_group=getattr(args, 'delete_assignment_group', False)
+    delete_assignment_group=getattr(args, 'delete_assignment_group', False),
+    use_typst=getattr(args, 'typst', False)
   )
 
 
