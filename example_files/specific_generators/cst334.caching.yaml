@@ -1,0 +1,32 @@
+name: "Lab: Cache Replacement"
+practice: False
+questions:
+  2:
+    Grabbag-Small:
+      class: cst334.CachingQuestion
+      num_elements: 5
+      cache_size: 3
+      num_requests: 5
+    FIFO:
+      class: cst334.CachingQuestion
+      num_elements: 6
+      cache_size: 4
+      num_requests: 10
+      policy: FIFO
+    LRU:
+      class: cst334.CachingQuestion
+      num_elements: 6
+      cache_size: 4
+      num_requests: 10
+      policy: LRU
+    Belady:
+      class: cst334.CachingQuestion
+      num_elements: 6
+      cache_size: 4
+      num_requests: 10
+      policy: Belady
+    Grabbag-Large:
+      class: cst334.CachingQuestion
+      num_elements: 10
+      cache_size: 6
+      num_requests: 10

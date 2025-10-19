@@ -514,7 +514,7 @@ wheels = [
 [[package]]
 name = "lms-interface"
 version = "0.1.0"
-source = { directory = "lms_interface" }
+source = { directory = "../LMSInterface" }
 dependencies = [
     { name = "canvasapi" },
     { name = "python-dotenv" },
@@ -1171,7 +1171,7 @@ requires-dist = [
     { name = "flake8", marker = "extra == 'dev'" },
     { name = "fuzzywuzzy" },
     { name = "jinja2", specifier = "==3.1.3" },
-    { name = "lms-interface", directory = "lms_interface" },
+    { name = "lms-interface", directory = "../LMSInterface" },
     { name = "markdown", specifier = ">=3.9" },
     { name = "matplotlib" },
     { name = "mypy", marker = "extra == 'dev'" },
