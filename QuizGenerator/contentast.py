@@ -452,6 +452,10 @@ class ContentAST:
       self.question_number = question_number  # For QR code generation
     
     def render(self, output_format, **kwargs):
+      # Special handling for latex and typst - use dedicated render methods
+      if output_format == "typst":
+        return self.render_typst(**kwargs)
+
       # Generate content from all elements
       content = self.body.render(output_format, **kwargs)
 
@@ -510,7 +514,25 @@ class ContentAST:
       log.debug(f"content: \n{content}")
 
       return content
-  
+
+    def render_typst(self, **kwargs):
+      """Render question in Typst format with proper formatting"""
+      # Render question body
+      content = self.body.render("typst", **kwargs)
+
+      # Build Typst question structure
+      typst_lines = [
+        f"#line(length: 100%, stroke: 1pt)",
+        f"#question({int(self.value)})",
+        "",
+        content,
+        "",
+        f"#v({self.spacing}cm)",
+        "",
+      ]
+
+      return '\n'.join(typst_lines)
+
   class Section(Element):
     """
     Primary container for question content - USE THIS for get_body() and get_explanation().
