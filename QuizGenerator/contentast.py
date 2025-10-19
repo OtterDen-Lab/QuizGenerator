@@ -319,19 +319,26 @@ class ContentAST:
     // Question counter and command
     #let question_num = counter("question")
 
-    #let question(points) = {
-      v(0.5cm)
-      question_num.step()
-      grid(
-        columns: (1fr, auto),
-        align: (left, right),
-        [*Question #context question_num.display():*],
-        [#box(
-          width: 0.5cm,
-          line(length: 100%, stroke: 0.15mm)
-        ) / #points]
-      )
-      v(0.1cm)
+    #let question(points, content, spacing: 3cm) = {
+      block(breakable: false)[
+        #line(length: 100%, stroke: 1pt)
+        #v(0.5cm)
+        #question_num.step()
+        #grid(
+          columns: (1fr, auto),
+          align: (left, right),
+          [*Question #context question_num.display():*],
+          [#box(
+            width: 0.5cm,
+            line(length: 100%, stroke: 0.15mm)
+          ) / #points]
+        )
+        #v(0.1cm)
+
+        #content
+
+        #v(spacing)
+      ]
     }
 
     // Answer blank command
@@ -520,18 +527,8 @@ class ContentAST:
       # Render question body
       content = self.body.render("typst", **kwargs)
 
-      # Build Typst question structure
-      typst_lines = [
-        f"#line(length: 100%, stroke: 1pt)",
-        f"#question({int(self.value)})",
-        "",
-        content,
-        "",
-        f"#v({self.spacing}cm)",
-        "",
-      ]
-
-      return '\n'.join(typst_lines)
+      # Use the question function which handles all formatting including non-breaking
+      return f"#question({int(self.value)}, spacing: {self.spacing}cm)[{content}]\n"
 
   class Section(Element):
     """
