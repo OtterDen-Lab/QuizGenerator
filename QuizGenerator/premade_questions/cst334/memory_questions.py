@@ -290,7 +290,7 @@ class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
     
     instructions = (
       "For the cache state, please enter the cache contents in the order suggested in class, "
-      "which means separated by commas with no spaces (e.g. \"1,2,3\") "
+      "which means separated by commas with spaces (e.g. \"1, 2, 3\") "
       "and with the left-most being the next to be evicted. "
       "In the case where there is a tie, order by increasing number."
     )
@@ -351,7 +351,12 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
   def refresh(self, rng_seed=None, *args, **kwargs):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
     
-    bounds_bits = self.rng.randint(self.MIN_BOUNDS_BIT, self.MAX_BOUNDS_BITS)
+    max_bound_bits = kwargs.get("max_bound_bits")
+    
+    bounds_bits = self.rng.randint(
+      self.MIN_BOUNDS_BIT,
+      self.MAX_BOUNDS_BITS
+    )
     base_bits = self.MAX_BITS - bounds_bits
     
     self.bounds = int(math.pow(2, bounds_bits))
@@ -1062,8 +1067,13 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Ensure our required page table is included
     shown_pt_numbers.add(self.page_table_number)
 
-    # Limit to requested number
-    shown_pt_numbers = list(shown_pt_numbers)[:num_page_tables_to_show]
+    # Limit to requested number, but ALWAYS keep the required page table
+    shown_pt_numbers_list = list(shown_pt_numbers)
+    if self.page_table_number in shown_pt_numbers_list:
+      # Remove it temporarily so we can add it back first
+      shown_pt_numbers_list.remove(self.page_table_number)
+    # Start with required page table, then add others up to the limit
+    shown_pt_numbers = [self.page_table_number] + shown_pt_numbers_list[:num_page_tables_to_show - 1]
 
     # Build each page table
     self.page_tables = {}  # Dict mapping PT number -> dict of PTI -> PTE
