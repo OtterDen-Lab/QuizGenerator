@@ -222,6 +222,9 @@ class ContentAST:
     % Page layout
     \usepackage[a4paper, margin=1.5cm]{geometry}
 
+    % Graphics for QR codes
+    \usepackage{graphicx}       % For including QR code images
+
     % Math packages
     \usepackage[leqno,fleqn]{amsmath}        % For advanced math environments (matrices, equations)
     \setlength{\mathindent}{0pt}  % flush left
@@ -234,14 +237,14 @@ class ContentAST:
     \usepackage{verbatim}       % For verbatim environments (code blocks)
     \usepackage{enumitem}       % For customized list spacing
     \usepackage{setspace}       % For \onehalfspacing
-    
+
     % Setting up Code environments
     \let\originalverbatim\verbatim
     \let\endoriginalverbatim\endverbatim
     \renewenvironment{verbatim}
       {\small\setlength{\baselineskip}{0.8\baselineskip}\originalverbatim}
       {\endoriginalverbatim}
-      
+
     % Listings (for code)
     \usepackage[final]{listings}
     \lstset{
@@ -251,7 +254,7 @@ class ContentAST:
       breaklines=true,
       postbreak=\mbox{$\hookrightarrow$\,} % You can remove or customize this
     }
-    
+
     % Custom commands
     \newcounter{NumQuestions}
     \newcommand{\question}[1]{%
@@ -261,13 +264,13 @@ class ContentAST:
       \par\vspace{0.1cm}
     }
     \newcommand{\answerblank}[1]{\rule{0pt}{10mm}\rule[-1.5mm]{#1cm}{0.15mm}}
-    
+
     % Optional: spacing for itemized lists
     \setlist[itemize]{itemsep=10pt, parsep=5pt}
     \providecommand{\tightlist}{%
       \setlength{\itemsep}{10pt}\setlength{\parskip}{10pt}
     }
-    
+
     \begin{document}
     """)
     
@@ -341,7 +344,8 @@ class ContentAST:
         value=1,
         interest=1.0,
         spacing=3,
-        topic = None
+        topic = None,
+        question_number=None
     ):
       super().__init__()
       self.name = name
@@ -351,17 +355,55 @@ class ContentAST:
       self.interest = interest
       self.spacing = spacing
       self.topic = topic # todo: remove this bs.
+      self.question_number = question_number  # For QR code generation
     
     def render(self, output_format, **kwargs):
       # Generate content from all elements
       content = self.body.render(output_format, **kwargs)
-      
+
       # If output format is latex, add in minipage and question environments
       if output_format == "latex":
+        # Build question header - either with or without QR code
+        if self.question_number is not None:
+          try:
+            from QuizGenerator.qrcode_generator import QuestionQRCode
+
+            # Build extra_data dict with regeneration metadata if available
+            extra_data = {}
+            if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(self, 'question_version'):
+              if self.question_class_name and self.generation_seed is not None and self.question_version:
+                extra_data['question_type'] = self.question_class_name
+                extra_data['seed'] = self.generation_seed
+                extra_data['version'] = self.question_version
+
+            qr_path = QuestionQRCode.generate_png_path(
+              self.question_number,
+              self.value,
+              **extra_data
+            )
+            # Build custom question header with QR code centered
+            # Format: Question N:  [QR code centered]  __ / points
+            question_header = (
+              r"\vspace{0.5cm}" + "\n"
+              r"\noindent\textbf{Question " + str(self.question_number) + r":} \hfill "
+              r"\rule{0.5cm}{0.15mm} / " + str(int(self.value)) + "\n"
+              r"\raisebox{-1cm}{"  # Reduced lift to minimize extra space above
+              rf"\includegraphics[width={QuestionQRCode.DEFAULT_SIZE_CM}cm]{{{qr_path}}}"
+              r"} "
+              r"\par\vspace{-1cm}"
+            )
+          except Exception as e:
+            log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
+            # Fall back to standard question macro
+            question_header = r"\question{" + str(int(self.value)) + r"}"
+        else:
+          # Use standard question macro if no question number
+          question_header = r"\question{" + str(int(self.value)) + r"}"
+
         latex_lines = [
           r"\noindent\begin{minipage}{\textwidth}",
           r"\noindent\makebox[\linewidth]{\rule{\paperwidth}{1pt}}",
-          r"\question{" + str(int(self.value)) + r"}",
+          question_header,
           r"\noindent\begin{minipage}{0.9\textwidth}",
           content,
           f"\\vspace{{{self.spacing}cm}}"
@@ -370,9 +412,9 @@ class ContentAST:
           "\n\n",
         ]
         content = '\n'.join(latex_lines)
-      
+
       log.debug(f"content: \n{content}")
-      
+
       return content
   
   class Section(Element):
