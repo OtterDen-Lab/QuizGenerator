@@ -328,10 +328,12 @@ class Quiz:
         key=lambda q: (-q.points_value, self.question_sort_order.index(q.topic))
       )
 
-    quiz.add_elements(
-      question.get_question(**kwargs)
-      for question in ordered_questions
-    )
+    # Generate questions with sequential numbering for QR codes
+    for question_number, question in enumerate(ordered_questions, start=1):
+      question_ast = question.get_question(**kwargs)
+      # Add question number to the AST for QR code generation
+      question_ast.question_number = question_number
+      quiz.add_element(question_ast)
 
     return quiz
   
