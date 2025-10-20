@@ -9,6 +9,7 @@ import markdown
 
 from QuizGenerator.misc import log, Answer
 
+from QuizGenerator.qrcode_generator import QuestionQRCode
 
 class ContentAST:
   """
@@ -304,7 +305,6 @@ class ContentAST:
 
     #set text(
       size: 12pt,
-      font: "Linux Libertine",
     )
 
     // Math equation settings
@@ -312,44 +312,38 @@ class ContentAST:
 
     // Paragraph spacing
     #set par(
-      spacing: 1.5em,
-      leading: 0.65em,
+      spacing: 0.25em,
+      leading: 0.5em,
     )
 
     // Question counter and command
     #let question_num = counter("question")
 
-    #let question(points, content, spacing: 3cm) = {
+    #let question(points, content, spacing: 3cm, qr_code: none) = {
       block(breakable: false)[
         #line(length: 100%, stroke: 1pt)
-        #v(0.5cm)
+        #v(0.0cm)
         #question_num.step()
+
+        // Two-column layout with QR code positioned on the right if present
         #grid(
           columns: (1fr, auto),
           align: (left, right),
           [*Question #context question_num.display():*],
-          [#box(
+          box[#box(
             width: 0.5cm,
             line(length: 100%, stroke: 0.15mm)
-          ) / #points]
+          ) / #points #if qr_code != none {
+            box(baseline: 20%, image(qr_code, width: 1.5cm))
+          }]
         )
-        #v(0.1cm)
 
         #content
 
         #v(spacing)
       ]
     }
-
-    // Answer blank command
-    #let answerblank(length) = {
-      v(1cm)
-      box(
-        width: length * 1cm,
-        line(length: 100%, stroke: 0.15mm)
-      )
-    }
-
+    
     // Fill-in line for inline answer blanks (tables, etc.)
     #let fillline(width: 5cm, height: 1.2em, stroke: 0.5pt) = {
       box(width: width, height: height, baseline: 0.25em)[
@@ -406,12 +400,13 @@ class ContentAST:
       """Render complete Typst document with header and title"""
       typst = self.TYPST_HEADER
 
-      # Add title and name line
-      typst += f"\n#align(left)[\n"
-      typst += f"  #text(size: 14pt, weight: \"bold\")[{self.title}]\n"
-      typst += f"  #h(1fr)\n"
-      typst += f"  Name: #answerblank(5)\n"
-      typst += f"]\n\n"
+      # Add title and name line using grid for proper alignment
+      typst += f"\n#grid(\n"
+      typst += f"  columns: (1fr, auto),\n"
+      typst += f"  align: (left, right),\n"
+      typst += f"  [#text(size: 14pt, weight: \"bold\")[{self.title}]],\n"
+      typst += f"  [Name: #fillline(width: 5cm)]\n"
+      typst += f")\n\n"
       typst += f"#v(0.5cm)\n\n"
 
       # Render all elements
@@ -536,8 +531,34 @@ class ContentAST:
       # Render question body
       content = self.body.render("typst", **kwargs)
 
+      # Generate QR code if question number is available
+      qr_param = ""
+      if self.question_number is not None:
+        try:
+
+          # Build extra_data dict with regeneration metadata if available
+          extra_data = {}
+          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(self, 'question_version'):
+            if self.question_class_name and self.generation_seed is not None and self.question_version:
+              extra_data['question_type'] = self.question_class_name
+              extra_data['seed'] = self.generation_seed
+              extra_data['version'] = self.question_version
+
+          # Generate QR code PNG
+          qr_path = QuestionQRCode.generate_png_path(
+            self.question_number,
+            self.value,
+            **extra_data
+          )
+
+          # Add QR code parameter to question function call
+          qr_param = f', qr_code: "{qr_path}"'
+
+        except Exception as e:
+          log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
+
       # Use the question function which handles all formatting including non-breaking
-      return f"#question({int(self.value)}, spacing: {self.spacing}cm)[{content}]\n"
+      return f"#question({int(self.value)}, spacing: {self.spacing}cm{qr_param})[{content}]\n"
 
   class Section(Element):
     """
@@ -629,6 +650,10 @@ class ContentAST:
 
     def render_typst(self, **kwargs):
       """Render text to Typst, escaping special characters."""
+      # Hide HTML-only text from Typst (since Typst generates PDFs like LaTeX)
+      if self.hide_from_latex:
+        return ""
+
       # In Typst, # starts code/function calls, so we need to escape it
       content = self.content.replace("#", r"\#")
 
