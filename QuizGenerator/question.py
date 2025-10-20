@@ -33,7 +33,7 @@ SPACING_PRESETS = {
     "NONE": 1,
     "SHORT": 5,
     "LONG": 7,
-    "PAGE": 999,  # Special value that will be handled during bin-packing
+    "PAGE": 99,  # Special value that will be handled during bin-packing
 }
 
 

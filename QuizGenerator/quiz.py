@@ -164,11 +164,48 @@ class Quiz:
       quizes_loaded.append(quiz_from_yaml)
     return quizes_loaded
   
-  def _estimate_question_height(self, question, **kwargs) -> float:
+  def _estimate_question_height(self, question, use_typst_measurement=False, **kwargs) -> float:
     """
     Estimate the rendered height of a question for layout optimization.
     Returns height in centimeters.
+
+    Args:
+        question: Question object to measure
+        use_typst_measurement: If True, use Typst's layout engine for exact measurement
+        **kwargs: Additional arguments passed to question rendering
+
+    Returns:
+        Height in centimeters
     """
+    # Try Typst measurement if requested and available
+    if use_typst_measurement:
+      from QuizGenerator.typst_utils import measure_typst_content, check_typst_available
+
+      if check_typst_available():
+        try:
+          # Render question to Typst
+          question_ast = question.get_question(**kwargs)
+
+          # Get just the content body (without the #question wrapper which adds spacing)
+          typst_body = question_ast.body.render("typst", **kwargs)
+
+          # Measure the content
+          measured_height = measure_typst_content(typst_body, page_width_cm=18.0)
+
+          if measured_height is not None:
+            # Add base height for question formatting (header, line, etc.) ~1.5cm
+            # Plus the spacing parameter
+            total_height = 1.5 + measured_height + question.spacing
+            log.debug(f"Typst measurement: {question.name} = {total_height:.2f}cm (content: {measured_height:.2f}cm, spacing: {question.spacing}cm)")
+            return total_height
+          else:
+            log.debug(f"Typst measurement failed for {question.name}, falling back to heuristics")
+        except Exception as e:
+          log.warning(f"Error during Typst measurement: {e}, falling back to heuristics")
+      else:
+        log.debug("Typst not available, using heuristic estimation")
+
+    # Fallback: Use heuristic estimation (original implementation)
     # Base height for question header, borders, and minimal content
     # Each question has: horizontal rule, question number line, and minipage wrapper
     base_height = 1.5  # cm
