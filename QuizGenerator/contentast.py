@@ -319,30 +319,39 @@ class ContentAST:
     // Question counter and command
     #let question_num = counter("question")
 
-    #let question(points, content, spacing: 3cm, qr_code: none) = {
-      block(breakable: false)[
-        #line(length: 100%, stroke: 1pt)
-        #v(0.0cm)
-        #question_num.step()
+#let question(points, content, spacing: 3cm, qr_code: none) = {
+  block(breakable: false)[
+    #line(length: 100%, stroke: 1pt)
+    #v(0.0cm)
+    #question_num.step()
 
-        // Two-column layout with QR code positioned on the right if present
-        #grid(
-          columns: (1fr, auto),
-          align: (left, right),
-          [*Question #context question_num.display():*],
-          box[#box(
-            width: 0.5cm,
-            line(length: 100%, stroke: 0.15mm)
-          ) / #points #if qr_code != none {
-            box(baseline: 20%, image(qr_code, width: 1.5cm))
-          }]
-        )
+    *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
 
-        #content
-
-        #v(spacing)
-      ]
+    // Content on the left, QR pinned right
+    #if qr_code != none {
+      grid(
+        columns: (1fr, auto),
+        column-gutter: 0.8em,
+        [
+          #content
+        ],
+        [
+          #align(top + right)[
+            #v(0.1cm)
+            #image(qr_code, width: 1.5cm)
+          ]
+        ],
+      )
+    } else {
+      content
     }
+
+    #v(spacing)
+  ]
+}
+
+
+
     
     // Fill-in line for inline answer blanks (tables, etc.)
     #let fillline(width: 5cm, height: 1.2em, stroke: 0.5pt) = {
