@@ -562,13 +562,21 @@ class ContentAST:
           )
 
           # Add QR code parameter to question function call
-          qr_param = f', qr_code: "{qr_path}"'
+          qr_param = f'qr_code: "{qr_path}"'
 
         except Exception as e:
           log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
 
       # Use the question function which handles all formatting including non-breaking
-      return f"\n#question({int(self.value)}, spacing: {self.spacing}cm{qr_param})[{content}]\n"
+      return textwrap.dedent(f"""
+        #question(
+          {int(self.value)},
+          spacing: {self.spacing}cm{'' if not qr_param else ", "}
+          {qr_param}
+        )[
+          {content}
+        ]
+        """)
 
   class Section(Element):
     """
@@ -1261,17 +1269,37 @@ class ContentAST:
       else:
         result.append(f"  stroke: none,")
 
+      # Collect all rows (headers + data) and calculate column widths for alignment
+      all_rows = []
+
       # Render headers
       if self.headers:
+        header_cells = []
         for header in self.headers:
           rendered = header.render(output_format="typst", **kwargs).strip()
-          result.append(f"  [*{rendered}*],")
+          header_cells.append(f"[*{rendered}*]")
+        all_rows.append(header_cells)
 
       # Render data rows
       for row in self.data:
+        row_cells = []
         for cell in row:
           rendered = cell.render(output_format="typst", **kwargs).strip()
-          result.append(f"  [{rendered}],")
+          row_cells.append(f"[{rendered}]")
+        all_rows.append(row_cells)
+
+      # Calculate max width for each column
+      col_widths = [0] * num_cols
+      for row in all_rows:
+        for i, cell in enumerate(row):
+          col_widths[i] = max(col_widths[i], len(cell))
+
+      # Format rows with padding
+      for row in all_rows:
+        padded_cells = []
+        for i, cell in enumerate(row):
+          padded_cells.append(cell.ljust(col_widths[i]))
+        result.append(f"  {', '.join(padded_cells)},")
 
       result.append(")")
 
