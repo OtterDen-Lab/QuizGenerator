@@ -4,10 +4,14 @@ import os
 import shutil
 import subprocess
 import tempfile
+from pathlib import Path
+from dotenv import load_dotenv
 from lms_interface.canvas_interface import CanvasInterface, CanvasCourse
 
 from QuizGenerator.quiz import Quiz
 
+# Load environment variables from ~/.env
+load_dotenv(Path.home() / '.env')
 
 import logging
 logging.basicConfig()
@@ -217,8 +221,9 @@ def generate_typst(typst_text, remove_previous=False):
     # Compile with typst
     output_pdf = os.path.join(os.getcwd(), 'out', os.path.basename(tmp_typ.name).replace('.typ', '.pdf'))
 
+    # Use --root to set the filesystem root so absolute paths work correctly
     p = subprocess.Popen(
-      ['typst', 'compile', tmp_typ.name, output_pdf],
+      ['typst', 'compile', '--root', '/', tmp_typ.name, output_pdf],
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE
     )
