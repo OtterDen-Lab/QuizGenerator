@@ -784,7 +784,7 @@ class ContentAST:
       """Render answer blank as an underlined space in Typst."""
       # Use the fillline function defined in TYPST_HEADER
       # Width is based on self.length (in cm)
-      blank_width = self.length * 0.5  # Convert character length to cm
+      blank_width = self.length * 0.75  # Convert character length to cm
       blank = f"#fillline(width: {blank_width}cm)"
 
       label_part = f"{self.label}:" if self.label else ""
@@ -1216,6 +1216,8 @@ class ContentAST:
       # Add stroke if not hiding rules
       if not self.hide_rules:
         result.append(f"  stroke: 0.5pt,")
+      else:
+        result.append(f"  stroke: none,")
 
       # Render headers
       if self.headers:
