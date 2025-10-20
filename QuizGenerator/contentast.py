@@ -319,36 +319,36 @@ class ContentAST:
     // Question counter and command
     #let question_num = counter("question")
 
-#let question(points, content, spacing: 3cm, qr_code: none) = {
-  block(breakable: false)[
-    #line(length: 100%, stroke: 1pt)
-    #v(0.0cm)
-    #question_num.step()
+    #let question(points, content, spacing: 3cm, qr_code: none) = {
+      block(breakable: false)[
+        #line(length: 100%, stroke: 1pt)
+        #v(0.0cm)
+        #question_num.step()
 
-    *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
-    #v(0.25cm)
-    // Content on the left, QR pinned right
-    #if qr_code != none {
-      grid(
-        columns: (1fr, auto),
-        column-gutter: 0.8em,
-        [
-          #content
-        ],
-        [
-          #align(top + right)[
-            #v(0.0cm)
-            #image(qr_code, width: 1.5cm)
-          ]
-        ],
-      )
-    } else {
-      content
+        *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
+        #v(0.25cm)
+        // Content on the left, QR pinned right
+        #if qr_code != none {
+          grid(
+            columns: (1fr, auto),
+            column-gutter: 0.8em,
+            [
+              #content
+            ],
+            [
+              #align(top + right)[
+                #v(0.0cm)
+                #image(qr_code, width: 1.5cm)
+              ]
+            ],
+          )
+        } else {
+          content
+        }
+
+        #v(spacing)
+      ]
     }
-
-    #v(spacing)
-  ]
-}
 
 
 
@@ -363,6 +363,7 @@ class ContentAST:
     }
 
     // Code block styling
+    #show raw.where(block: true): set text(size: 10pt)
     #show raw.where(block: true): block.with(
       fill: luma(240),
       inset: 10pt,
@@ -567,7 +568,7 @@ class ContentAST:
           log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
 
       # Use the question function which handles all formatting including non-breaking
-      return f"#question({int(self.value)}, spacing: {self.spacing}cm{qr_param})[{content}]\n"
+      return f"\n#question({int(self.value)}, spacing: {self.spacing}cm{qr_param})[{content}]\n"
 
   class Section(Element):
     """
@@ -876,7 +877,14 @@ class ContentAST:
           r"}"
         )
       return content
-  
+
+    def render_typst(self, **kwargs):
+      """Render code block in Typst with smaller monospace font."""
+      # Use raw block with 11pt font size
+      # Escape backticks in the content
+      escaped_content = self.content.replace("`", r"\`")
+      return f"#text(size: 8pt)[```\n{escaped_content}\n```]"
+
   class Equation(Element):
     """
     Mathematical equation renderer with LaTeX input and cross-format output.
