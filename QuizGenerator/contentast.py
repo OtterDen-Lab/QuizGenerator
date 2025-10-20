@@ -350,6 +350,15 @@ class ContentAST:
       )
     }
 
+    // Fill-in line for inline answer blanks (tables, etc.)
+    #let fillline(width: 5cm, height: 1.2em, stroke: 0.5pt) = {
+      box(width: width, height: height, baseline: height)[
+        #align(bottom + left)[
+          #line(length: 100%, stroke: stroke)
+        ]
+      ]
+    }
+
     // Code block styling
     #show raw.where(block: true): block.with(
       fill: luma(240),
@@ -559,7 +568,9 @@ class ContentAST:
             body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
             return body
     """
-    pass
+    def render_typst(self, **kwargs):
+      """Render section by directly calling render on each child element."""
+      return "".join(element.render("typst", **kwargs) for element in self.elements)
   
   class Text(Element):
     """
@@ -615,7 +626,18 @@ class ContentAST:
       # Escape # to prevent markdown header conversion in LaTeX
       content = super().convert_markdown(self.content.replace("#", r"\#"), "latex") or self.content
       return content
-    
+
+    def render_typst(self, **kwargs):
+      """Render text to Typst, escaping special characters."""
+      # In Typst, # starts code/function calls, so we need to escape it
+      content = self.content.replace("#", r"\#")
+
+      # Apply emphasis if needed
+      if self.emphasis:
+        content = f"*{content}*"
+
+      return content
+
     def is_mergeable(self, other: ContentAST.Element):
       if not isinstance(other, ContentAST.Text):
         return False
@@ -757,7 +779,19 @@ class ContentAST:
     
     def render_latex(self, **kwargs):
       return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
-  
+
+    def render_typst(self, **kwargs):
+      """Render answer blank as an underlined space in Typst."""
+      # Use the fillline function defined in TYPST_HEADER
+      # Width is based on self.length (in cm)
+      blank_width = self.length * 0.5  # Convert character length to cm
+      blank = f"#fillline(width: {blank_width}cm)"
+
+      label_part = f"{self.label}:" if self.label else ""
+      unit_part = f" {self.unit}" if self.unit else ""
+
+      return f"{label_part} {blank}{unit_part}".strip()
+
   class Code(Text):
     """
     Code block formatter with proper syntax highlighting and monospace formatting.
@@ -1186,13 +1220,13 @@ class ContentAST:
       # Render headers
       if self.headers:
         for header in self.headers:
-          rendered = header.render(output_format="typst", **kwargs)
+          rendered = header.render(output_format="typst", **kwargs).strip()
           result.append(f"  [*{rendered}*],")
 
       # Render data rows
       for row in self.data:
         for cell in row:
-          rendered = cell.render(output_format="typst", **kwargs)
+          rendered = cell.render(output_format="typst", **kwargs).strip()
           result.append(f"  [{rendered}],")
 
       result.append(")")
