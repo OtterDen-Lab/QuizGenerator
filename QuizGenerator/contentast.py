@@ -352,7 +352,7 @@ class ContentAST:
 
     // Fill-in line for inline answer blanks (tables, etc.)
     #let fillline(width: 5cm, height: 1.2em, stroke: 0.5pt) = {
-      box(width: width, height: height, baseline: height)[
+      box(width: width, height: height, baseline: 0.25em)[
         #align(bottom + left)[
           #line(length: 100%, stroke: stroke)
         ]
