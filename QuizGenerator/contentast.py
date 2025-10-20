@@ -124,7 +124,7 @@ class ContentAST:
       return self.render_markdown(**kwargs)  # Fallback to markdown
     
     def render_markdown(self, **kwargs):
-      return "".join(element.render("markdown", **kwargs) for element in self.elements)
+      return " ".join(element.render("markdown", **kwargs) for element in self.elements)
     
     def render_html(self, **kwargs):
       html = " ".join(element.render("html", **kwargs) for element in self.elements)
@@ -151,7 +151,7 @@ class ContentAST:
 
       # Add spacing if needed (Typst equivalent of \vspace)
       if self.add_spacing_before:
-        return f"#v(0.5cm)\n\n{typst_content}"
+        return f"\n{typst_content}"
 
       return typst_content if typst_content else markdown_content
 
@@ -326,7 +326,7 @@ class ContentAST:
     #question_num.step()
 
     *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
-
+    #v(0.25cm)
     // Content on the left, QR pinned right
     #if qr_code != none {
       grid(
@@ -337,7 +337,7 @@ class ContentAST:
         ],
         [
           #align(top + right)[
-            #v(0.1cm)
+            #v(0.0cm)
             #image(qr_code, width: 1.5cm)
           ]
         ],
@@ -415,11 +415,11 @@ class ContentAST:
       typst += f"  align: (left, right),\n"
       typst += f"  [#text(size: 14pt, weight: \"bold\")[{self.title}]],\n"
       typst += f"  [Name: #fillline(width: 5cm)]\n"
-      typst += f")\n\n"
-      typst += f"#v(0.5cm)\n\n"
+      typst += f")\n"
+      typst += f"#v(0.5cm)\n"
 
       # Render all elements
-      typst += "\n".join(element.render("typst", **kwargs) for element in self.elements)
+      typst += "".join(element.render("typst", **kwargs) for element in self.elements)
 
       return typst
     
