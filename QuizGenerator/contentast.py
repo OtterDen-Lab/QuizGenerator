@@ -1551,6 +1551,47 @@ class ContentAST:
 
       return "\n".join(result)
 
+    def render_typst(self, **kwargs):
+      """
+      Render table group in Typst format using grid layout for side-by-side tables.
+
+      Uses Typst's grid() function to arrange tables horizontally with automatic
+      column sizing and spacing.
+      """
+      if not self.tables:
+        return ""
+
+      num_tables = len(self.tables)
+
+      # Start grid with equal-width columns and some spacing
+      result = ["\n#grid("]
+      result.append(f"  columns: {num_tables},")
+      result.append(f"  column-gutter: 1em,")
+      result.append(f"  row-gutter: 0.5em,")
+
+      # Add each table as a grid cell
+      for label, table in self.tables:
+        result.append("  [")  # Start grid cell
+
+        if label:
+          # Escape # characters in labels (already done by Text.render_typst)
+          result.append(f"    *{label}*")
+          result.append("    #v(0.1cm)")
+          result.append("")  # Empty line for spacing
+
+        # Render the table (indent for readability)
+        table_typst = table.render("typst", **kwargs)
+        # Indent each line of the table
+        indented_table = "\n".join(f"    {line}" if line else "" for line in table_typst.split("\n"))
+        result.append(indented_table)
+
+        result.append("  ],")  # End grid cell
+
+      result.append(")")
+      result.append("")  # Empty line after grid
+
+      return "\n".join(result)
+
   class AnswerBlock(Table):
     """
     Specialized table for organizing multiple answer fields with proper spacing.

@@ -1168,13 +1168,18 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       ])
     )
 
-    # Parameter info - make it more compact by showing it as a single paragraph
+    # Parameter info - use a simple table for better formatting
+    body.add_element(ContentAST.Paragraph([""]))  # Spacing before
     body.add_element(
-      ContentAST.Paragraph([
-        f"Virtual Address: <b>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</b>",
-        f"(PDI: {self.num_bits_pdi} bits, PTI: {self.num_bits_pti} bits, Offset: {self.num_bits_offset} bits, PFN: {self.num_bits_pfn} bits)"
-      ])
+      ContentAST.Table(
+        headers=None,
+        data=[[
+          f"Virtual Address: 0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b} (PDI: {self.num_bits_pdi} bits, PTI: {self.num_bits_pti} bits, Offset: {self.num_bits_offset} bits, PFN: {self.num_bits_pfn} bits)"
+        ]],
+        hide_rules=True
+      )
     )
+    body.add_element(ContentAST.Paragraph([""]))  # Spacing after
 
     # Page Directory table
     pd_matrix = []
@@ -1191,7 +1196,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     body.add_element(
       ContentAST.Paragraph([
-        "<b>Page Directory:</b>"
+        ContentAST.Text("Page Directory:", emphasis=True)
       ])
     )
     body.add_element(
@@ -1220,7 +1225,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
         pt_matrix.append(["...", "..."])
 
       table_group.add_table(
-        label=f"Page Table #0b{pt_num:0{self.num_bits_pfn}b}:",
+        label=f"PTC 0b{pt_num:0{self.num_bits_pfn}b}:",
         table=ContentAST.Table(headers=["PTI", "PTE"], data=pt_matrix)
       )
 
