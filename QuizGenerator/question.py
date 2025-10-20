@@ -28,6 +28,49 @@ import logging
 log = logging.getLogger(__name__)
 
 
+# Spacing presets for questions
+SPACING_PRESETS = {
+    "NONE": 1,
+    "SHORT": 5,
+    "LONG": 7,
+    "PAGE": 999,  # Special value that will be handled during bin-packing
+}
+
+
+def parse_spacing(spacing_value) -> float:
+    """
+    Parse spacing value from YAML config.
+
+    Args:
+        spacing_value: Either a preset name ("NONE", "SHORT", "LONG", "PAGE")
+                      or a numeric value in cm
+
+    Returns:
+        Spacing in cm as a float
+
+    Examples:
+        parse_spacing("SHORT") -> 5.0
+        parse_spacing("NONE") -> 1.0
+        parse_spacing(3.5) -> 3.5
+        parse_spacing("3.5") -> 3.5
+    """
+    if isinstance(spacing_value, str):
+        # Check if it's a preset
+        if spacing_value.upper() in SPACING_PRESETS:
+            return float(SPACING_PRESETS[spacing_value.upper()])
+        # Try to parse as a number
+        try:
+            return float(spacing_value)
+        except ValueError:
+            log.warning(f"Invalid spacing value '{spacing_value}', defaulting to 0")
+            return 0.0
+    elif isinstance(spacing_value, (int, float)):
+        return float(spacing_value)
+    else:
+        log.warning(f"Invalid spacing type {type(spacing_value)}, defaulting to 0")
+        return 0.0
+
+
 class QuestionRegistry:
   _registry = {}
   _scanned = False
@@ -227,7 +270,7 @@ class Question(abc.ABC):
     self.name = name
     self.points_value = points_value
     self.topic = topic
-    self.spacing = kwargs.get("spacing", 0)
+    self.spacing = parse_spacing(kwargs.get("spacing", 0))
     self.answer_kind = Answer.AnswerKind.BLANK
 
     # Support for multi-part questions (defaults to 1 for normal questions)
