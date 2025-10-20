@@ -312,7 +312,7 @@ class ContentAST:
 
     // Paragraph spacing
     #set par(
-      spacing: 0.25em,
+      spacing: 1.0em,
       leading: 0.5em,
     )
 
