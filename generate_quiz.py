@@ -14,9 +14,7 @@ from QuizGenerator.quiz import Quiz
 load_dotenv(Path.home() / '.env')
 
 import logging
-logging.basicConfig()
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
 
 from QuizGenerator.performance import PerformanceTracker
 
@@ -32,6 +30,8 @@ def parse_args():
   parser.add_argument("--num_pdfs", default=0, type=int)
   parser.add_argument("--typst", action="store_true",
                      help="Use Typst instead of LaTeX for PDF generation")
+  parser.add_argument("--typst-measurement", action="store_true",
+                     help="Use Typst to measure question heights for optimal bin-packing (requires Typst)")
   parser.add_argument("--delete-assignment-group", action="store_true",
                      help="Delete existing assignment group before uploading new quizzes")
 
@@ -249,7 +249,8 @@ def generate_quiz(
     use_prod=False,
     course_id=None,
     delete_assignment_group=False,
-    use_typst=False
+    use_typst=False,
+    use_typst_measurement=False
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -277,11 +278,11 @@ def generate_quiz(
 
       if use_typst:
         # Generate using Typst
-        typst_text = quiz.get_quiz(rng_seed=pdf_seed).render("typst")
+        typst_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render("typst")
         generate_typst(typst_text, remove_previous=(i==0))
       else:
         # Generate using LaTeX (default)
-        latex_text = quiz.get_quiz(rng_seed=pdf_seed).render_latex()
+        latex_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render_latex()
         generate_latex(latex_text, remove_previous=(i==0))
 
     if num_canvas > 0:
@@ -342,7 +343,8 @@ def main():
     use_prod=args.prod,
     course_id=args.course_id,
     delete_assignment_group=getattr(args, 'delete_assignment_group', False),
-    use_typst=getattr(args, 'typst', False)
+    use_typst=getattr(args, 'typst', False),
+    use_typst_measurement=getattr(args, 'typst_measurement', False)
   )
 
 
