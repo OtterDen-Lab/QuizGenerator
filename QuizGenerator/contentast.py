@@ -363,7 +363,7 @@ class ContentAST:
     }
 
     // Code block styling
-    #show raw.where(block: true): set text(size: 10pt)
+    #show raw.where(block: true): set text(size: 8pt)
     #show raw.where(block: true): block.with(
       fill: luma(240),
       inset: 10pt,
@@ -458,7 +458,7 @@ class ContentAST:
         name=None,
         value=1,
         interest=1.0,
-        spacing=3,
+        spacing=0,
         topic = None,
         question_number=None
     ):

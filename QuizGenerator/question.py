@@ -30,9 +30,9 @@ log = logging.getLogger(__name__)
 
 # Spacing presets for questions
 SPACING_PRESETS = {
-    "NONE": 1,
-    "SHORT": 5,
-    "LONG": 7,
+    "NONE": 0,
+    "SHORT": 4,
+    "LONG": 9,
     "PAGE": 99,  # Special value that will be handled during bin-packing
 }
 
