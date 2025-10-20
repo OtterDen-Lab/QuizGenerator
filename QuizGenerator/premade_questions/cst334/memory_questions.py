@@ -288,7 +288,7 @@ class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
       "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
     )
     
-    instructions = (
+    instructions = ContentAST.OnlyHtml(
       "For the cache state, please enter the cache contents in the order suggested in class, "
       "which means separated by commas with spaces (e.g. \"1, 2, 3\") "
       "and with the left-most being the next to be evicted. "
