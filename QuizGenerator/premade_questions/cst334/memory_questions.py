@@ -993,7 +993,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     self.pdi = vpn // (2 ** self.num_bits_pti)
 
     # Generate PFN randomly
-    self.pfn = self.rng.randint(0, 2 ** self.num_bits_pfn)
+    self.pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
 
     # Calculate physical address
     self.physical_address = self.pfn * (2 ** self.num_bits_offset) + self.offset
