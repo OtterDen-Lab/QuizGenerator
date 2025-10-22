@@ -153,18 +153,24 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
         question_type = regen_data['question_type']
         seed = regen_data['seed']
         version = regen_data['version']
+        config = regen_data.get('config', {})
 
         result['question_type'] = question_type
         result['seed'] = seed
         result['version'] = version
+        if config:
+            result['config'] = config
 
         log.info(f"Question {question_num}: {question_type} (seed={seed}, version={version})")
+        if config:
+            log.debug(f"  Config params: {config}")
 
-        # Regenerate the question using the registry
+        # Regenerate the question using the registry, passing through config params
         question = QuestionRegistry.create(
             question_type,
             name=f"Q{question_num}",
-            points_value=points
+            points_value=points,
+            **config
         )
 
         # Generate question with the specific seed
@@ -193,7 +199,7 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
 
 
 def regenerate_from_metadata(question_type: str, seed: int, version: str,
-                            points: float = 1.0) -> Dict[str, Any]:
+                            points: float = 1.0, kwargs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Regenerate question answers directly from metadata (for web UI integration).
 
@@ -204,6 +210,8 @@ def regenerate_from_metadata(question_type: str, seed: int, version: str,
         seed: Random seed used to generate the question
         version: Question version string (e.g., "1.0")
         points: Point value for the question (default: 1.0)
+        kwargs: Optional dictionary of question-specific configuration parameters
+                (e.g., {"num_bits_va": 32, "max_value": 100})
 
     Returns:
         Dictionary with regenerated answers:
@@ -212,6 +220,7 @@ def regenerate_from_metadata(question_type: str, seed: int, version: str,
             "seed": int,
             "version": str,
             "points": float,
+            "kwargs": dict,  # Question-specific config params (if provided)
             "answers": dict,  # Canvas-formatted answers
             "answer_objects": dict  # Raw Answer objects with values/tolerances
         }
@@ -224,15 +233,28 @@ def regenerate_from_metadata(question_type: str, seed: int, version: str,
         >>> result = regenerate_from_metadata("VectorDot", 12345, "1.0", points=5.0)
         >>> print(result['answer_objects'])
         {'result': Answer(value=42, tolerance=0.1)}
+
+        >>> # With kwargs
+        >>> result = regenerate_from_metadata(
+        ...     "VirtualAddressParts", 12345, "1.0",
+        ...     points=5.0,
+        ...     kwargs={"num_bits_va": 32}
+        ... )
     """
+    if kwargs is None:
+        kwargs = {}
+
     try:
         log.info(f"Regenerating: {question_type} (seed={seed}, version={version})")
+        if kwargs:
+            log.debug(f"  Config params: {kwargs}")
 
-        # Create question instance from registry
+        # Create question instance from registry, passing through kwargs
         question = QuestionRegistry.create(
             question_type,
             name=f"Q_{question_type}_{seed}",
-            points_value=points
+            points_value=points,
+            **kwargs
         )
 
         # Generate question with the specific seed
@@ -252,6 +274,10 @@ def regenerate_from_metadata(question_type: str, seed: int, version: str,
             },
             "answer_objects": question.answers
         }
+
+        # Include kwargs in result if provided
+        if kwargs:
+            result["kwargs"] = kwargs
 
         log.info(f"  Successfully regenerated with {len(canvas_answers)} answer(s)")
         return result
