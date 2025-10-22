@@ -288,7 +288,7 @@ class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
       "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
     )
     
-    instructions = (
+    instructions = ContentAST.OnlyHtml(
       "For the cache state, please enter the cache contents in the order suggested in class, "
       "which means separated by commas with spaces (e.g. \"1, 2, 3\") "
       "and with the left-most being the next to be evicted. "
@@ -993,7 +993,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     self.pdi = vpn // (2 ** self.num_bits_pti)
 
     # Generate PFN randomly
-    self.pfn = self.rng.randint(0, 2 ** self.num_bits_pfn)
+    self.pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
 
     # Calculate physical address
     self.physical_address = self.pfn * (2 ** self.num_bits_offset) + self.offset
@@ -1078,39 +1078,26 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Build each page table
     self.page_tables = {}  # Dict mapping PT number -> dict of PTI -> PTE
 
+    # Use consistent size for all page tables for cleaner presentation
+    pt_size = self.rng.randint(2, 4)
+
+    # Determine the PTI range that all tables will use (based on target PTI)
+    # This ensures all tables show the same PTI values for consistency
+    lowest_pt_bottom = max([0, self.pti - pt_size + 1])
+    highest_pt_bottom = min([2 ** self.num_bits_pti - pt_size, self.pti])
+    pt_bottom = self.rng.randint(lowest_pt_bottom, highest_pt_bottom)
+    pt_top = pt_bottom + pt_size
+
+    # Generate all page tables using the SAME PTI range
     for pt_num in shown_pt_numbers:
-      pt_size = self.rng.randint(2, 3)
+      self.page_tables[pt_num] = {}
 
-      if pt_num == self.page_table_number:
-        # This is our target PT, must include our PTI
-        lowest_pt_bottom = max([0, self.pti - pt_size])
-        highest_pt_bottom = min([2 ** self.num_bits_pti - pt_size, self.pti])
-        pt_bottom = self.rng.randint(lowest_pt_bottom, highest_pt_bottom)
-        pt_top = pt_bottom + pt_size
-
-        self.page_tables[pt_num] = {}
-        self.page_tables[pt_num][self.pti] = self.pte
-
-        # Fill in other entries
-        for pti in range(pt_bottom, pt_top):
-          if pti == self.pti:
-            continue
-
-          # Generate random PTE
-          pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
-          if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
-            pte_val = (2 ** self.num_bits_pfn) + pfn
-          else:
-            pte_val = pfn
-
-          self.page_tables[pt_num][pti] = pte_val
-      else:
-        # Random page table
-        pt_bottom = self.rng.randint(0, max(1, 2 ** self.num_bits_pti - pt_size))
-        pt_top = pt_bottom + pt_size
-
-        self.page_tables[pt_num] = {}
-        for pti in range(pt_bottom, pt_top):
+      for pti in range(pt_bottom, pt_top):
+        if pt_num == self.page_table_number and pti == self.pti:
+          # Use the actual answer for the target page table entry
+          self.page_tables[pt_num][pti] = self.pte
+        else:
+          # Generate random PTE for all other entries
           pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
           if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
             pte_val = (2 ** self.num_bits_pfn) + pfn
@@ -1168,13 +1155,16 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       ])
     )
 
-    # Parameter info - make it more compact by showing it as a single paragraph
-    body.add_element(
-      ContentAST.Paragraph([
-        f"Virtual Address: <b>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</b>",
-        f"(PDI: {self.num_bits_pdi} bits, PTI: {self.num_bits_pti} bits, Offset: {self.num_bits_offset} bits, PFN: {self.num_bits_pfn} bits)"
-      ])
-    )
+    # Create parameter info table using mixin (same format as Paging question)
+    parameter_info = {
+      "Virtual Address": f"0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}",
+      "# PDI bits": f"{self.num_bits_pdi}",
+      "# PTI bits": f"{self.num_bits_pti}",
+      "# Offset bits": f"{self.num_bits_offset}",
+      "# PFN bits": f"{self.num_bits_pfn}"
+    }
+
+    body.add_element(self.create_info_table(parameter_info))
 
     # Page Directory table
     pd_matrix = []
@@ -1189,9 +1179,10 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     if (max(self.page_directory.keys()) + 1) != 2 ** self.num_bits_pdi:
       pd_matrix.append(["...", "..."])
 
+    # Use a simple text paragraph - the bold will come from markdown conversion
     body.add_element(
       ContentAST.Paragraph([
-        "<b>Page Directory:</b>"
+        "**Page Directory:**"
       ])
     )
     body.add_element(
@@ -1208,19 +1199,44 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       pt_matrix = []
       pt_entries = self.page_tables[pt_num]
 
-      if min(pt_entries.keys()) != 0:
-        pt_matrix.append(["...", "..."])
+      min_pti = min(pt_entries.keys())
+      max_pti = max(pt_entries.keys())
+      max_possible_pti = 2 ** self.num_bits_pti - 1
 
+      # Smart leading ellipsis: only if there are 2+ hidden entries before
+      # (if only 1 hidden, we should just show it)
+      if min_pti > 1:
+        pt_matrix.append(["...", "..."])
+      elif min_pti == 1:
+        # Show the 0th entry instead of "..."
+        pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+        if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
+          pte_val = (2 ** self.num_bits_pfn) + pfn
+        else:
+          pte_val = pfn
+        pt_matrix.append([f"0b{0:0{self.num_bits_pti}b}", f"0b{pte_val:0{self.num_bits_pfn + 1}b}"])
+
+      # Add actual entries
       pt_matrix.extend([
         [f"0b{pti:0{self.num_bits_pti}b}", f"0b{pte:0{self.num_bits_pfn + 1}b}"]
         for pti, pte in sorted(pt_entries.items())
       ])
 
-      if (max(pt_entries.keys()) + 1) != 2 ** self.num_bits_pti:
+      # Smart trailing ellipsis: only if there are 2+ hidden entries after
+      hidden_after = max_possible_pti - max_pti
+      if hidden_after > 1:
         pt_matrix.append(["...", "..."])
+      elif hidden_after == 1:
+        # Show the last entry instead of "..."
+        pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+        if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
+          pte_val = (2 ** self.num_bits_pfn) + pfn
+        else:
+          pte_val = pfn
+        pt_matrix.append([f"0b{max_possible_pti:0{self.num_bits_pti}b}", f"0b{pte_val:0{self.num_bits_pfn + 1}b}"])
 
       table_group.add_table(
-        label=f"Page Table #0b{pt_num:0{self.num_bits_pfn}b}:",
+        label=f"PTC 0b{pt_num:0{self.num_bits_pfn}b}:",
         table=ContentAST.Table(headers=["PTI", "PTE"], data=pt_matrix)
       )
 

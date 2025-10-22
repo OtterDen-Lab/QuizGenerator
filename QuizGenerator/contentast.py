@@ -9,6 +9,7 @@ import markdown
 
 from QuizGenerator.misc import log, Answer
 
+from QuizGenerator.qrcode_generator import QuestionQRCode
 
 class ContentAST:
   """
@@ -123,7 +124,7 @@ class ContentAST:
       return self.render_markdown(**kwargs)  # Fallback to markdown
     
     def render_markdown(self, **kwargs):
-      return "".join(element.render("markdown", **kwargs) for element in self.elements)
+      return " ".join(element.render("markdown", **kwargs) for element in self.elements)
     
     def render_html(self, **kwargs):
       html = " ".join(element.render("html", **kwargs) for element in self.elements)
@@ -132,7 +133,28 @@ class ContentAST:
     def render_latex(self, **kwargs):
       latex = "".join(element.render("latex", **kwargs) for element in self.elements)
       return f"{'\n\n\\vspace{0.5cm}' if self.add_spacing_before else ''}{latex}"
-  
+
+    def render_typst(self, **kwargs):
+      """
+      Default Typst rendering using markdown → typst conversion via pandoc.
+
+      This provides instant Typst support for all ContentAST elements without
+      needing explicit implementations. Override this method in subclasses
+      when pandoc conversion quality is insufficient or Typst-specific
+      features are needed.
+      """
+      # Render to markdown first
+      markdown_content = self.render_markdown(**kwargs)
+
+      # Convert markdown to Typst via pandoc
+      typst_content = self.convert_markdown(markdown_content, 'typst')
+
+      # Add spacing if needed (Typst equivalent of \vspace)
+      if self.add_spacing_before:
+        return f"\n{typst_content}"
+
+      return typst_content if typst_content else markdown_content
+
     def is_mergeable(self, other: ContentAST.Element):
       return False
   
@@ -273,6 +295,81 @@ class ContentAST:
 
     \begin{document}
     """)
+
+    TYPST_HEADER = textwrap.dedent("""
+    // Quiz document settings
+    #set page(
+      paper: "us-letter",
+      margin: 1.5cm,
+    )
+
+    #set text(
+      size: 12pt,
+    )
+
+    // Math equation settings
+    #set math.equation(numbering: none)
+
+    // Paragraph spacing
+    #set par(
+      spacing: 1.0em,
+      leading: 0.5em,
+    )
+
+    // Question counter and command
+    #let question_num = counter("question")
+
+    #let question(points, content, spacing: 3cm, qr_code: none) = {
+      block(breakable: false)[
+        #line(length: 100%, stroke: 1pt)
+        #v(0.0cm)
+        #question_num.step()
+
+        *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
+        #v(0.25cm)
+        // Content on the left, QR pinned right
+        #if qr_code != none {
+          grid(
+            columns: (1fr, auto),
+            column-gutter: 0.8em,
+            [
+              #content
+            ],
+            [
+              #align(top + right)[
+                #v(0.0cm)
+                #image(qr_code, width: 1.5cm)
+              ]
+            ],
+          )
+        } else {
+          content
+        }
+
+        #v(spacing)
+      ]
+    }
+
+
+
+    
+    // Fill-in line for inline answer blanks (tables, etc.)
+    #let fillline(width: 5cm, height: 1.2em, stroke: 0.5pt) = {
+      box(width: width, height: height, baseline: 0.25em)[
+        #align(bottom + left)[
+          #line(length: 100%, stroke: stroke)
+        ]
+      ]
+    }
+
+    // Code block styling
+    #show raw.where(block: true): set text(size: 8pt)
+    #show raw.where(block: true): block.with(
+      fill: luma(240),
+      inset: 10pt,
+      radius: 4pt,
+    )
+    """)
     
     def __init__(self, title=None):
       super().__init__()
@@ -297,17 +394,35 @@ class ContentAST:
       latex += f"\\title{{{self.title}}}\n"
       latex += textwrap.dedent(f"""
         \\noindent\\Large {self.title} \\hfill \\normalsize Name: \\answerblank{{{5}}}
-        
+
         \\vspace{{0.5cm}}
         \\onehalfspacing
-        
+
       """)
-      
+
       latex += "\n".join(element.render("latex", **kwargs) for element in self.elements)
-      
+
       latex += r"\end{document}"
-      
+
       return latex
+
+    def render_typst(self, **kwargs):
+      """Render complete Typst document with header and title"""
+      typst = self.TYPST_HEADER
+
+      # Add title and name line using grid for proper alignment
+      typst += f"\n#grid(\n"
+      typst += f"  columns: (1fr, auto),\n"
+      typst += f"  align: (left, right),\n"
+      typst += f"  [#text(size: 14pt, weight: \"bold\")[{self.title}]],\n"
+      typst += f"  [Name: #fillline(width: 5cm)]\n"
+      typst += f")\n"
+      typst += f"#v(0.5cm)\n"
+
+      # Render all elements
+      typst += "".join(element.render("typst", **kwargs) for element in self.elements)
+
+      return typst
     
   ## Below here are smaller elements generally
   class Question(Element):
@@ -343,7 +458,7 @@ class ContentAST:
         name=None,
         value=1,
         interest=1.0,
-        spacing=3,
+        spacing=0,
         topic = None,
         question_number=None
     ):
@@ -358,6 +473,10 @@ class ContentAST:
       self.question_number = question_number  # For QR code generation
     
     def render(self, output_format, **kwargs):
+      # Special handling for latex and typst - use dedicated render methods
+      if output_format == "typst":
+        return self.render_typst(**kwargs)
+
       # Generate content from all elements
       content = self.body.render(output_format, **kwargs)
 
@@ -375,6 +494,9 @@ class ContentAST:
                 extra_data['question_type'] = self.question_class_name
                 extra_data['seed'] = self.generation_seed
                 extra_data['version'] = self.question_version
+                # Include question-specific configuration parameters if available
+                if hasattr(self, 'config_params') and self.config_params:
+                  extra_data['config'] = self.config_params
 
             qr_path = QuestionQRCode.generate_png_path(
               self.question_number,
@@ -416,7 +538,52 @@ class ContentAST:
       log.debug(f"content: \n{content}")
 
       return content
-  
+
+    def render_typst(self, **kwargs):
+      """Render question in Typst format with proper formatting"""
+      # Render question body
+      content = self.body.render("typst", **kwargs)
+
+      # Generate QR code if question number is available
+      qr_param = ""
+      if self.question_number is not None:
+        try:
+
+          # Build extra_data dict with regeneration metadata if available
+          extra_data = {}
+          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(self, 'question_version'):
+            if self.question_class_name and self.generation_seed is not None and self.question_version:
+              extra_data['question_type'] = self.question_class_name
+              extra_data['seed'] = self.generation_seed
+              extra_data['version'] = self.question_version
+              # Include question-specific configuration parameters if available
+              if hasattr(self, 'config_params') and self.config_params:
+                extra_data['config'] = self.config_params
+
+          # Generate QR code PNG
+          qr_path = QuestionQRCode.generate_png_path(
+            self.question_number,
+            self.value,
+            **extra_data
+          )
+
+          # Add QR code parameter to question function call
+          qr_param = f'qr_code: "{qr_path}"'
+
+        except Exception as e:
+          log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
+
+      # Use the question function which handles all formatting including non-breaking
+      return textwrap.dedent(f"""
+        #question(
+          {int(self.value)},
+          spacing: {self.spacing}cm{'' if not qr_param else ", "}
+          {qr_param}
+        )[
+          {content}
+        ]
+        """)
+
   class Section(Element):
     """
     Primary container for question content - USE THIS for get_body() and get_explanation().
@@ -446,7 +613,9 @@ class ContentAST:
             body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
             return body
     """
-    pass
+    def render_typst(self, **kwargs):
+      """Render section by directly calling render on each child element."""
+      return "".join(element.render("typst", **kwargs) for element in self.elements)
   
   class Text(Element):
     """
@@ -502,7 +671,22 @@ class ContentAST:
       # Escape # to prevent markdown header conversion in LaTeX
       content = super().convert_markdown(self.content.replace("#", r"\#"), "latex") or self.content
       return content
-    
+
+    def render_typst(self, **kwargs):
+      """Render text to Typst, escaping special characters."""
+      # Hide HTML-only text from Typst (since Typst generates PDFs like LaTeX)
+      if self.hide_from_latex:
+        return ""
+
+      # In Typst, # starts code/function calls, so we need to escape it
+      content = self.content.replace("#", r"\#")
+
+      # Apply emphasis if needed
+      if self.emphasis:
+        content = f"*{content}*"
+
+      return content
+
     def is_mergeable(self, other: ContentAST.Element):
       if not isinstance(other, ContentAST.Text):
         return False
@@ -644,7 +828,19 @@ class ContentAST:
     
     def render_latex(self, **kwargs):
       return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
-  
+
+    def render_typst(self, **kwargs):
+      """Render answer blank as an underlined space in Typst."""
+      # Use the fillline function defined in TYPST_HEADER
+      # Width is based on self.length (in cm)
+      blank_width = self.length * 0.75  # Convert character length to cm
+      blank = f"#fillline(width: {blank_width}cm)"
+
+      label_part = f"{self.label}:" if self.label else ""
+      unit_part = f" {self.unit}" if self.unit else ""
+
+      return f"{label_part} {blank}{unit_part}".strip()
+
   class Code(Text):
     """
     Code block formatter with proper syntax highlighting and monospace formatting.
@@ -695,7 +891,14 @@ class ContentAST:
           r"}"
         )
       return content
-  
+
+    def render_typst(self, **kwargs):
+      """Render code block in Typst with smaller monospace font."""
+      # Use raw block with 11pt font size
+      # Escape backticks in the content
+      escaped_content = self.content.replace("`", r"\`")
+      return f"#text(size: 8pt)[```\n{escaped_content}\n```]"
+
   class Equation(Element):
     """
     Mathematical equation renderer with LaTeX input and cross-format output.
@@ -746,7 +949,22 @@ class ContentAST:
         return f"${self.latex}$~"
       else:
         return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
-  
+
+    def render_typst(self, **kwargs):
+      """
+      Render equation in Typst format.
+
+      Typst uses LaTeX-like math syntax with $ delimiters.
+      Inline: $equation$
+      Display: $ equation $
+      """
+      if self.inline:
+        # Inline math in Typst
+        return f"${self.latex}$"
+      else:
+        # Display math in Typst
+        return f"$ {self.latex} $"
+
     @classmethod
     def make_block_equation__multiline_equals(cls, lhs : str, rhs : List[str]):
       equation_lines = []
@@ -1021,7 +1239,78 @@ class ContentAST:
       result.append("\\end{tabular}")
 
       return "\n\n" + "\n".join(result)
-  
+
+    def render_typst(self, **kwargs):
+      """
+      Render table in Typst format using native table() function.
+
+      Typst syntax:
+      #table(
+        columns: N,
+        align: (left, center, right),
+        [Header1], [Header2],
+        [Cell1], [Cell2]
+      )
+      """
+      # Determine number of columns
+      num_cols = len(self.headers) if self.headers else len(self.data[0])
+
+      # Build alignment specification
+      if self.alignments:
+        # Map alignment strings to Typst alignment
+        align_map = {"left": "left", "right": "right", "center": "center"}
+        aligns = [align_map.get(a, "left") for a in self.alignments]
+        align_spec = f"align: ({', '.join(aligns)})"
+      else:
+        align_spec = "align: left"
+
+      # Start table
+      result = [f"#table("]
+      result.append(f"  columns: {num_cols},")
+      result.append(f"  {align_spec},")
+
+      # Add stroke if not hiding rules
+      if not self.hide_rules:
+        result.append(f"  stroke: 0.5pt,")
+      else:
+        result.append(f"  stroke: none,")
+
+      # Collect all rows (headers + data) and calculate column widths for alignment
+      all_rows = []
+
+      # Render headers
+      if self.headers:
+        header_cells = []
+        for header in self.headers:
+          rendered = header.render(output_format="typst", **kwargs).strip()
+          header_cells.append(f"[*{rendered}*]")
+        all_rows.append(header_cells)
+
+      # Render data rows
+      for row in self.data:
+        row_cells = []
+        for cell in row:
+          rendered = cell.render(output_format="typst", **kwargs).strip()
+          row_cells.append(f"[{rendered}]")
+        all_rows.append(row_cells)
+
+      # Calculate max width for each column
+      col_widths = [0] * num_cols
+      for row in all_rows:
+        for i, cell in enumerate(row):
+          col_widths[i] = max(col_widths[i], len(cell))
+
+      # Format rows with padding
+      for row in all_rows:
+        padded_cells = []
+        for i, cell in enumerate(row):
+          padded_cells.append(cell.ljust(col_widths[i]))
+        result.append(f"  {', '.join(padded_cells)},")
+
+      result.append(")")
+
+      return "\n" + "\n".join(result) + "\n"
+
   class Picture(Element):
     """
     Image/diagram container with proper sizing and captioning.
@@ -1301,6 +1590,47 @@ class ContentAST:
         # Add horizontal spacing between tables (but not after the last one)
         if i < num_tables - 1:
           result.append("\\hfill")
+
+      return "\n".join(result)
+
+    def render_typst(self, **kwargs):
+      """
+      Render table group in Typst format using grid layout for side-by-side tables.
+
+      Uses Typst's grid() function to arrange tables horizontally with automatic
+      column sizing and spacing.
+      """
+      if not self.tables:
+        return ""
+
+      num_tables = len(self.tables)
+
+      # Start grid with equal-width columns and some spacing
+      result = ["\n#grid("]
+      result.append(f"  columns: {num_tables},")
+      result.append(f"  column-gutter: 1em,")
+      result.append(f"  row-gutter: 0.5em,")
+
+      # Add each table as a grid cell
+      for label, table in self.tables:
+        result.append("  [")  # Start grid cell
+
+        if label:
+          # Escape # characters in labels (already done by Text.render_typst)
+          result.append(f"    *{label}*")
+          result.append("    #v(0.1cm)")
+          result.append("")  # Empty line for spacing
+
+        # Render the table (indent for readability)
+        table_typst = table.render("typst", **kwargs)
+        # Indent each line of the table
+        indented_table = "\n".join(f"    {line}" if line else "" for line in table_typst.split("\n"))
+        result.append(indented_table)
+
+        result.append("  ],")  # End grid cell
+
+      result.append(")")
+      result.append("")  # Empty line after grid
 
       return "\n".join(result)
 

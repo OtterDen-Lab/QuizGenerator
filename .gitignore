@@ -7,6 +7,6 @@ out/
 .env
 output.csv
 imgs/
-debug.tex
+debug.*
 .claude
 *.log

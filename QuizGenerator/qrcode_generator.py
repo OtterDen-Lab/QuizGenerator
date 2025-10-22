@@ -69,6 +69,7 @@ class QuestionQRCode:
 
     @classmethod
     def encrypt_question_data(cls, question_type: str, seed: int, version: str,
+                              config: Optional[Dict[str, Any]] = None,
                               key: Optional[bytes] = None) -> str:
         """
         Encode question regeneration data with optional simple obfuscation.
@@ -77,6 +78,7 @@ class QuestionQRCode:
             question_type: Class name of the question (e.g., "VectorDotProduct")
             seed: Random seed used to generate this specific question
             version: Question class version (e.g., "1.0")
+            config: Optional dictionary of configuration parameters
             key: Encryption key (uses environment key if None)
 
         Returns:
@@ -87,8 +89,13 @@ class QuestionQRCode:
             >>> print(encrypted)
             'VmVjdG9yRG90OjEyMzQ1OjEuMA=='
         """
-        # Create compact data string
-        data_str = f"{question_type}:{seed}:{version}"
+        # Create compact data string, including config if provided
+        if config:
+            # Serialize config as JSON and append to data string
+            config_json = json.dumps(config, separators=(',', ':'))
+            data_str = f"{question_type}:{seed}:{version}:{config_json}"
+        else:
+            data_str = f"{question_type}:{seed}:{version}"
         data_bytes = data_str.encode('utf-8')
 
         # Simple XOR obfuscation if key is provided (optional, for basic protection)
@@ -121,7 +128,7 @@ class QuestionQRCode:
             key: Encryption key (uses environment key if None)
 
         Returns:
-            dict: {"question_type": str, "seed": int, "version": str}
+            dict: {"question_type": str, "seed": int, "version": str, "config": dict (optional)}
 
         Raises:
             ValueError: If decoding fails or data is malformed
@@ -147,18 +154,30 @@ class QuestionQRCode:
 
             data_str = data_bytes.decode('utf-8')
 
-            # Parse data string
-            parts = data_str.split(':')
-            if len(parts) != 3:
-                raise ValueError(f"Invalid encoded data format: expected 3 parts, got {len(parts)}")
+            # Parse data string - can be 3 or 4 parts (4th is optional config)
+            parts = data_str.split(':', 3)  # Split into max 4 parts
+            if len(parts) < 3:
+                raise ValueError(f"Invalid encoded data format: expected at least 3 parts, got {len(parts)}")
 
-            question_type, seed_str, version = parts
+            question_type = parts[0]
+            seed_str = parts[1]
+            version = parts[2]
 
-            return {
+            result = {
                 "question_type": question_type,
                 "seed": int(seed_str),
                 "version": version
             }
+
+            # Parse config JSON if present
+            if len(parts) == 4:
+                try:
+                    result["config"] = json.loads(parts[3])
+                except json.JSONDecodeError as e:
+                    log.warning(f"Failed to parse config JSON: {e}")
+                    # Continue without config rather than failing
+
+            return result
 
         except Exception as e:
             log.error(f"Failed to decode question data: {e}")
@@ -176,6 +195,7 @@ class QuestionQRCode:
                 - question_type (str): Question class name for regeneration
                 - seed (int): Random seed used for this question
                 - version (str): Question class version
+                - config (dict): Question-specific configuration parameters
 
         Returns:
             JSON string with question metadata
@@ -188,7 +208,8 @@ class QuestionQRCode:
             ...     2, 10,
             ...     question_type="VectorDot",
             ...     seed=12345,
-            ...     version="1.0"
+            ...     version="1.0",
+            ...     config={"max_value": 100}
             ... )
             '{"q": 2, "pts": 10, "s": "gAAAAAB..."}'
         """
@@ -199,16 +220,19 @@ class QuestionQRCode:
 
         # If question regeneration data provided, encrypt it
         if all(k in extra_data for k in ['question_type', 'seed', 'version']):
+            # Include config in encrypted data if present
+            config = extra_data.get('config', {})
             encrypted = cls.encrypt_question_data(
                 extra_data['question_type'],
                 extra_data['seed'],
-                extra_data['version']
+                extra_data['version'],
+                config=config
             )
             data['s'] = encrypted
 
             # Remove the unencrypted data
             extra_data = {k: v for k, v in extra_data.items()
-                         if k not in ['question_type', 'seed', 'version']}
+                         if k not in ['question_type', 'seed', 'version', 'config']}
 
         # Add any remaining extra metadata
         data.update(extra_data)

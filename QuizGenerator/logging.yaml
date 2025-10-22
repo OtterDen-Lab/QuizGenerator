@@ -35,8 +35,8 @@ handlers:
     mode: a
 
 loggers:
-  QuizGeneration:
-    level: INFO
+  QuizGenerator:
+    level: DEBUG
     handlers: [console, file]
     propagate: false
     

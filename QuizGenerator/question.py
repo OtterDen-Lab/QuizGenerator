@@ -28,6 +28,49 @@ import logging
 log = logging.getLogger(__name__)
 
 
+# Spacing presets for questions
+SPACING_PRESETS = {
+    "NONE": 0,
+    "SHORT": 4,
+    "LONG": 9,
+    "PAGE": 99,  # Special value that will be handled during bin-packing
+}
+
+
+def parse_spacing(spacing_value) -> float:
+    """
+    Parse spacing value from YAML config.
+
+    Args:
+        spacing_value: Either a preset name ("NONE", "SHORT", "LONG", "PAGE")
+                      or a numeric value in cm
+
+    Returns:
+        Spacing in cm as a float
+
+    Examples:
+        parse_spacing("SHORT") -> 5.0
+        parse_spacing("NONE") -> 1.0
+        parse_spacing(3.5) -> 3.5
+        parse_spacing("3.5") -> 3.5
+    """
+    if isinstance(spacing_value, str):
+        # Check if it's a preset
+        if spacing_value.upper() in SPACING_PRESETS:
+            return float(SPACING_PRESETS[spacing_value.upper()])
+        # Try to parse as a number
+        try:
+            return float(spacing_value)
+        except ValueError:
+            log.warning(f"Invalid spacing value '{spacing_value}', defaulting to 0")
+            return 0.0
+    elif isinstance(spacing_value, (int, float)):
+        return float(spacing_value)
+    else:
+        log.warning(f"Invalid spacing type {type(spacing_value)}, defaulting to 0")
+        return 0.0
+
+
 class QuestionRegistry:
   _registry = {}
   _scanned = False
@@ -227,7 +270,7 @@ class Question(abc.ABC):
     self.name = name
     self.points_value = points_value
     self.topic = topic
-    self.spacing = kwargs.get("spacing", 0)
+    self.spacing = parse_spacing(kwargs.get("spacing", 0))
     self.answer_kind = Answer.AnswerKind.BLANK
 
     # Support for multi-part questions (defaults to 1 for normal questions)
@@ -242,6 +285,14 @@ class Question(abc.ABC):
 
     # To be used throughout when generating random things
     self.rng = random.Random()
+
+    # Track question-specific configuration parameters (excluding framework parameters)
+    # These will be included in QR codes for exam regeneration
+    framework_params = {
+      'name', 'points_value', 'topic', 'spacing', 'num_subquestions',
+      'rng_seed_offset', 'rng_seed', 'class', 'kwargs', 'kind'
+    }
+    self.config_params = {k: v for k, v in kwargs.items() if k not in framework_params}
   
   @classmethod
   def from_yaml(cls, path_to_yaml):
@@ -285,6 +336,7 @@ class Question(abc.ABC):
     question_ast.question_class_name = self.__class__.__name__
     question_ast.generation_seed = actual_seed
     question_ast.question_version = self.VERSION
+    question_ast.config_params = self.config_params
 
     return question_ast
   
