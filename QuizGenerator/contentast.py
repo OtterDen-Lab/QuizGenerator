@@ -494,6 +494,9 @@ class ContentAST:
                 extra_data['question_type'] = self.question_class_name
                 extra_data['seed'] = self.generation_seed
                 extra_data['version'] = self.question_version
+                # Include question-specific configuration parameters if available
+                if hasattr(self, 'config_params') and self.config_params:
+                  extra_data['config'] = self.config_params
 
             qr_path = QuestionQRCode.generate_png_path(
               self.question_number,
@@ -553,6 +556,9 @@ class ContentAST:
               extra_data['question_type'] = self.question_class_name
               extra_data['seed'] = self.generation_seed
               extra_data['version'] = self.question_version
+              # Include question-specific configuration parameters if available
+              if hasattr(self, 'config_params') and self.config_params:
+                extra_data['config'] = self.config_params
 
           # Generate QR code PNG
           qr_path = QuestionQRCode.generate_png_path(

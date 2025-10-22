@@ -1,6 +1,7 @@
 #!env python
 import argparse
 import os
+import random
 import shutil
 import subprocess
 import tempfile
@@ -28,6 +29,8 @@ def parse_args():
   parser.add_argument("--quiz_yaml", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "example_files/exam_generation.yaml"))
   parser.add_argument("--num_canvas", default=0, type=int)
   parser.add_argument("--num_pdfs", default=0, type=int)
+  parser.add_argument("--seed", type=int, default=None,
+                     help="Random seed for quiz generation (default: None for random)")
   parser.add_argument("--typst", action="store_true",
                      help="Use Typst instead of LaTeX for PDF generation")
   parser.add_argument("--typst-measurement", action="store_true",
@@ -250,7 +253,8 @@ def generate_quiz(
     course_id=None,
     delete_assignment_group=False,
     use_typst=False,
-    use_typst_measurement=False
+    use_typst_measurement=False,
+    base_seed=None
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -272,9 +276,14 @@ def generate_quiz(
 
     for i in range(num_pdfs):
       log.debug(f"Generating PDF {i+1}/{num_pdfs}")
-      # Use a different seed for each PDF to ensure different workloads across PDFs
-      # but consistent workloads within the same PDF
-      pdf_seed = i * 1000  # Large gap to avoid overlap with rng_seed_offset
+      # If base_seed is provided, use it with an offset for each PDF
+      # Otherwise generate a random seed for this PDF
+      if base_seed is not None:
+        pdf_seed = base_seed + (i * 1000)  # Large gap to avoid overlap with rng_seed_offset
+      else:
+        pdf_seed = random.randint(0, 1_000_000)
+
+      log.info(f"Generating PDF {i+1} with seed: {pdf_seed}")
 
       if use_typst:
         # Generate using Typst
@@ -344,7 +353,8 @@ def main():
     course_id=args.course_id,
     delete_assignment_group=getattr(args, 'delete_assignment_group', False),
     use_typst=getattr(args, 'typst', False),
-    use_typst_measurement=getattr(args, 'typst_measurement', False)
+    use_typst_measurement=getattr(args, 'typst_measurement', False),
+    base_seed=getattr(args, 'seed', None)
   )
 
 

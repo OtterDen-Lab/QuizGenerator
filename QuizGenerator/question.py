@@ -285,6 +285,14 @@ class Question(abc.ABC):
 
     # To be used throughout when generating random things
     self.rng = random.Random()
+
+    # Track question-specific configuration parameters (excluding framework parameters)
+    # These will be included in QR codes for exam regeneration
+    framework_params = {
+      'name', 'points_value', 'topic', 'spacing', 'num_subquestions',
+      'rng_seed_offset', 'rng_seed', 'class', 'kwargs', 'kind'
+    }
+    self.config_params = {k: v for k, v in kwargs.items() if k not in framework_params}
   
   @classmethod
   def from_yaml(cls, path_to_yaml):
@@ -328,6 +336,7 @@ class Question(abc.ABC):
     question_ast.question_class_name = self.__class__.__name__
     question_ast.generation_seed = actual_seed
     question_ast.question_version = self.VERSION
+    question_ast.config_params = self.config_params
 
     return question_ast
   
