@@ -299,7 +299,7 @@ class ContentAST:
     TYPST_HEADER = textwrap.dedent("""
     // Quiz document settings
     #set page(
-      paper: "a4",
+      paper: "us-letter",
       margin: 1.5cm,
     )
 
