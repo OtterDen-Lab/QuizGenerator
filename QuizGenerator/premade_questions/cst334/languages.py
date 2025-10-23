@@ -149,8 +149,14 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
   MAX_TRIES = 1000
   
   def __init__(self, grammar_str_good: Optional[str] = None, grammar_str_bad: Optional[str] = None, *args, **kwargs):
+    # Preserve question-specific params for QR code config
+    if grammar_str_good is not None:
+      kwargs['grammar_str_good'] = grammar_str_good
+    if grammar_str_bad is not None:
+      kwargs['grammar_str_bad'] = grammar_str_bad
+
     super().__init__(*args, **kwargs)
-    
+
     if grammar_str_good is not None and grammar_str_bad is not None:
       self.grammar_str_good = grammar_str_good
       self.grammar_str_bad = grammar_str_bad

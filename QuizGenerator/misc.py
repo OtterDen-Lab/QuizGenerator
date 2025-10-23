@@ -215,7 +215,57 @@ class Answer:
         })
     
     return canvas_answers
-  
+
+  def get_display_string(self) -> str:
+    """
+    Get the formatted display string for this answer (for grading/answer keys).
+
+    Returns the answer in the most appropriate format for human readability:
+    - BINARY_OR_HEX: hex format (0x...)
+    - BINARY: binary format (0b...)
+    - HEX: hex format (0x...)
+    - AUTOFLOAT/FLOAT: rounded to DEFAULT_ROUNDING_DIGITS
+    - INT: integer
+    - STR/LIST/VECTOR: as-is
+    """
+    if self.variable_kind == Answer.VariableKind.BINARY_OR_HEX:
+      # For binary_hex answers, show hex format (more compact and readable)
+      hex_digits = math.ceil(self.length / 4) if self.length is not None else 0
+      return f"0x{self.value:0{hex_digits}X}"
+
+    elif self.variable_kind == Answer.VariableKind.BINARY:
+      # Show binary format
+      return f"0b{self.value:0{self.length if self.length is not None else 0}b}"
+
+    elif self.variable_kind == Answer.VariableKind.HEX:
+      # Show hex format
+      hex_digits = (self.length // 4) + 1 if self.length is not None else 0
+      return f"0x{self.value:0{hex_digits}X}"
+
+    elif self.variable_kind == Answer.VariableKind.AUTOFLOAT:
+      # Round to default precision for readability
+      return f"{round(self.value, self.DEFAULT_ROUNDING_DIGITS)}"
+
+    elif self.variable_kind == Answer.VariableKind.FLOAT:
+      # Round to default precision
+      if isinstance(self.value, (list, tuple)):
+        return f"{round(self.value[0], self.DEFAULT_ROUNDING_DIGITS)}"
+      return f"{round(self.value, self.DEFAULT_ROUNDING_DIGITS)}"
+
+    elif self.variable_kind == Answer.VariableKind.INT:
+      return str(int(self.value))
+
+    elif self.variable_kind == Answer.VariableKind.LIST:
+      return ", ".join(str(v) for v in self.value)
+
+    elif self.variable_kind == Answer.VariableKind.VECTOR:
+      # Format as comma-separated rounded values
+      return ", ".join(str(round(v, self.DEFAULT_ROUNDING_DIGITS)) for v in self.value)
+
+    else:
+      # Default: use display or value
+      return str(self.display if hasattr(self, 'display') else self.value)
+
   # Factory methods for common answer types
   @classmethod
   def binary_hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'Answer':
