@@ -348,6 +348,9 @@ class Quiz:
   def get_quiz(self, **kwargs) -> ContentAST.Document:
     quiz = ContentAST.Document(title=self.name)
 
+    # Extract master RNG seed (if provided) and remove from kwargs
+    master_seed = kwargs.pop('rng_seed', None)
+
     # Check if optimization is requested (default: True)
     optimize_layout = kwargs.pop('optimize_layout', True)
 
@@ -366,8 +369,19 @@ class Quiz:
       )
 
     # Generate questions with sequential numbering for QR codes
+    # Use master seed to generate unique per-question seeds
+    if master_seed is not None:
+      # Create RNG from master seed to generate per-question seeds
+      master_rng = random.Random(master_seed)
+
     for question_number, question in enumerate(ordered_questions, start=1):
-      question_ast = question.get_question(**kwargs)
+      # Generate a unique seed for this question from the master seed
+      if master_seed is not None:
+        question_seed = master_rng.randint(0, 2**31 - 1)
+        question_ast = question.get_question(rng_seed=question_seed, **kwargs)
+      else:
+        question_ast = question.get_question(**kwargs)
+
       # Add question number to the AST for QR code generation
       question_ast.question_number = question_number
       quiz.add_element(question_ast)

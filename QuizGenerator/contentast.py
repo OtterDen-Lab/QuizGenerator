@@ -823,8 +823,20 @@ class ContentAST:
         key_to_display = self.answer[0].key
       return f"{self.label + (':' if len(self.label) > 0 else '')} [{key_to_display}] {self.unit}".strip()
     
-    def render_html(self, **kwargs):
-      return self.render_markdown()
+    def render_html(self, show_answers=False, **kwargs):
+      if show_answers and self.answer:
+        # Show actual answer value using formatted display string
+        if not isinstance(self.answer, list):
+          answer_display = self.answer.get_display_string()
+        else:
+          answer_display = ", ".join(a.get_display_string() for a in self.answer)
+
+        label_part = f"{self.label}:" if self.label else ""
+        unit_part = f" {self.unit}" if self.unit else ""
+        return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
+      else:
+        # Default behavior: show [key]
+        return self.render_markdown(**kwargs)
     
     def render_latex(self, **kwargs):
       return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
@@ -1192,7 +1204,7 @@ class ContentAST:
           if self.alignments and i < len(self.alignments):
             align_attr = f' align="{self.alignments[i]}"'
           # Render header as bold content in regular <td> tag
-          rendered_header = header.render(output_format="html")
+          rendered_header = header.render(output_format="html", **kwargs)
           result.append(f"      <td style=\"padding: {'5px' if self.padding else '0x'}; font-weight: bold; {align_attr};\"><b>{rendered_header}</b></td>")
         result.append("    </tr>")
 
@@ -1201,7 +1213,7 @@ class ContentAST:
         result.append("    <tr>")
         for i, cell in enumerate(row):
           if isinstance(cell, ContentAST.Element):
-            cell = cell.render(output_format="html")
+            cell = cell.render(output_format="html", **kwargs)
           align_attr = ""
           if self.alignments and i < len(self.alignments):
             align_attr = f' align="{self.alignments[i]}"'
@@ -1225,13 +1237,13 @@ class ContentAST:
 
       if self.headers:
         # Now all headers are ContentAST elements, so render them consistently
-        rendered_headers = [header.render(output_format="latex") for header in self.headers]
+        rendered_headers = [header.render(output_format="latex", **kwargs) for header in self.headers]
         result.append(" & ".join(rendered_headers) + " \\\\")
         if not self.hide_rules: result.append("\\midrule")
 
       for row in self.data:
         # All data cells are now ContentAST elements, so render them consistently
-        rendered_row = [cell.render(output_format="latex") for cell in row]
+        rendered_row = [cell.render(output_format="latex", **kwargs) for cell in row]
         result.append(" & ".join(rendered_row) + " \\\\")
 
       if len(self.data) > 1 and not self.hide_rules:

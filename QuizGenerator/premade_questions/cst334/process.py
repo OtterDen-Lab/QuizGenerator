@@ -280,6 +280,12 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
         break
   
   def __init__(self, num_jobs=3, scheduler_kind=None, *args, **kwargs):
+    # Preserve question-specific params for QR code config
+    # (Python removes them from **kwargs when binding to named parameters)
+    kwargs['num_jobs'] = num_jobs
+    if scheduler_kind is not None:
+      kwargs['scheduler_kind'] = scheduler_kind
+
     super().__init__(*args, **kwargs)
     self.num_jobs = num_jobs
     self.fixed_scheduler_kind = scheduler_kind  # Store the original choice

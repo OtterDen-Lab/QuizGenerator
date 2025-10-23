@@ -6,15 +6,27 @@ This script scans QR codes from quiz PDFs to regenerate question answers
 for grading. It supports both scanning from image files and interactive
 scanning from webcam/scanner.
 
-Usage:
+CLI Usage:
     # Scan a single QR code image
     python grade_from_qr.py --image qr_code.png
 
     # Scan QR codes from a scanned exam page
     python grade_from_qr.py --image exam_page.jpg --all
 
-    # Interactive webcam scanning (future)
-    python grade_from_qr.py --interactive
+API Usage (recommended for web UIs):
+    from grade_from_qr import regenerate_from_encrypted
+
+    # Parse QR code JSON
+    qr_data = json.loads(qr_string)
+
+    # Regenerate answers from encrypted data (one function call!)
+    result = regenerate_from_encrypted(
+        encrypted_data=qr_data['s'],
+        points=qr_data['pts']
+    )
+
+    # Display HTML answer key to grader
+    print(result['answer_key_html'])
 
 The QR codes contain encrypted question metadata that allows regenerating
 the exact question and answer without needing the original exam file.
@@ -153,18 +165,24 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
         question_type = regen_data['question_type']
         seed = regen_data['seed']
         version = regen_data['version']
+        config = regen_data.get('config', {})
 
         result['question_type'] = question_type
         result['seed'] = seed
         result['version'] = version
+        if config:
+            result['config'] = config
 
         log.info(f"Question {question_num}: {question_type} (seed={seed}, version={version})")
+        if config:
+            log.debug(f"  Config params: {config}")
 
-        # Regenerate the question using the registry
+        # Regenerate the question using the registry, passing through config params
         question = QuestionRegistry.create(
             question_type,
             name=f"Q{question_num}",
-            points_value=points
+            points_value=points,
+            **config
         )
 
         # Generate question with the specific seed
@@ -181,6 +199,10 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
         # Also store the raw answer objects for easier access
         result['answer_objects'] = question.answers
 
+        # Generate HTML answer key for grading
+        question_html = question_ast.body.render("html", show_answers=True)
+        result['answer_key_html'] = question_html
+
         log.info(f"  Successfully regenerated question with {len(canvas_answers)} answer(s)")
 
         return result
@@ -192,17 +214,15 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
         return result
 
 
-def regenerate_from_metadata(question_type: str, seed: int, version: str,
-                            points: float = 1.0) -> Dict[str, Any]:
+def regenerate_from_encrypted(encrypted_data: str, points: float = 1.0) -> Dict[str, Any]:
     """
-    Regenerate question answers directly from metadata (for web UI integration).
+    Regenerate question answers from encrypted QR code data (RECOMMENDED API).
 
-    This is the main function your web UI should call after decoding a QR code.
+    This is the simplest function for web UI integration - just pass the encrypted
+    string from the QR code and get back the complete answer key.
 
     Args:
-        question_type: Question class name (e.g., "VirtualAddressParts")
-        seed: Random seed used to generate the question
-        version: Question version string (e.g., "1.0")
+        encrypted_data: The encrypted 's' field from the QR code JSON
         points: Point value for the question (default: 1.0)
 
     Returns:
@@ -212,27 +232,69 @@ def regenerate_from_metadata(question_type: str, seed: int, version: str,
             "seed": int,
             "version": str,
             "points": float,
+            "kwargs": dict,  # Question-specific config params (if any)
             "answers": dict,  # Canvas-formatted answers
-            "answer_objects": dict  # Raw Answer objects with values/tolerances
+            "answer_objects": dict,  # Raw Answer objects with values/tolerances
+            "answer_key_html": str  # HTML rendering of question with answers shown
         }
 
     Raises:
-        ValueError: If question type is not registered or regeneration fails
+        ValueError: If decryption fails or question regeneration fails
 
     Example:
-        >>> # Your web UI decodes QR and extracts: type="VectorDot", seed=12345, version="1.0"
-        >>> result = regenerate_from_metadata("VectorDot", 12345, "1.0", points=5.0)
-        >>> print(result['answer_objects'])
-        {'result': Answer(value=42, tolerance=0.1)}
+        >>> # Your web UI scans QR code and gets JSON: {"q": 1, "pts": 5, "s": "gAAAAAB..."}
+        >>> encrypted_string = qr_json['s']
+        >>> result = regenerate_from_encrypted(encrypted_string, points=qr_json['pts'])
+        >>> print(result['answer_key_html'])  # Display to grader!
     """
+    # Decrypt the data
+    decrypted = QuestionQRCode.decrypt_question_data(encrypted_data)
+
+    # Extract fields
+    question_type = decrypted['question_type']
+    seed = decrypted['seed']
+    version = decrypted['version']
+    kwargs = decrypted.get('config', {})
+
+    # Use the existing regeneration logic
+    return regenerate_from_metadata(question_type, seed, version, points, kwargs)
+
+
+def regenerate_from_metadata(question_type: str, seed: int, version: str,
+                            points: float = 1.0, kwargs: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """
+    Regenerate question answers from explicit metadata fields.
+
+    This is a lower-level function. Most users should use regenerate_from_encrypted() instead.
+
+    Args:
+        question_type: Question class name (e.g., "VirtualAddressParts")
+        seed: Random seed used to generate the question
+        version: Question version string (e.g., "1.0")
+        points: Point value for the question (default: 1.0)
+        kwargs: Optional dictionary of question-specific configuration parameters
+                (e.g., {"num_bits_va": 32, "max_value": 100})
+
+    Returns:
+        Dictionary with regenerated answers (same format as regenerate_from_encrypted)
+
+    Raises:
+        ValueError: If question type is not registered or regeneration fails
+    """
+    if kwargs is None:
+        kwargs = {}
+
     try:
         log.info(f"Regenerating: {question_type} (seed={seed}, version={version})")
+        if kwargs:
+            log.debug(f"  Config params: {kwargs}")
 
-        # Create question instance from registry
+        # Create question instance from registry, passing through kwargs
         question = QuestionRegistry.create(
             question_type,
             name=f"Q_{question_type}_{seed}",
-            points_value=points
+            points_value=points,
+            **kwargs
         )
 
         # Generate question with the specific seed
@@ -240,6 +302,9 @@ def regenerate_from_metadata(question_type: str, seed: int, version: str,
 
         # Extract answers
         answer_kind, canvas_answers = question.get_answers()
+
+        # Generate HTML answer key for grading
+        question_html = question_ast.body.render("html", show_answers=True)
 
         result = {
             "question_type": question_type,
@@ -250,8 +315,13 @@ def regenerate_from_metadata(question_type: str, seed: int, version: str,
                 "kind": answer_kind.value,
                 "data": canvas_answers
             },
-            "answer_objects": question.answers
+            "answer_objects": question.answers,
+            "answer_key_html": question_html
         }
+
+        # Include kwargs in result if provided
+        if kwargs:
+            result["kwargs"] = kwargs
 
         log.info(f"  Successfully regenerated with {len(canvas_answers)} answer(s)")
         return result
@@ -291,6 +361,9 @@ def display_answer_summary(question_data: Dict[str, Any]) -> None:
             print(f"  - {ans}")
     else:
         print("\n(No regeneration data available)")
+
+    if 'answer_key_html' in question_data:
+        print("\nHTML answer key available in result['answer_key_html']")
 
     print("="*60)
 
