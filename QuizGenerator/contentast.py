@@ -1359,8 +1359,30 @@ class ContentAST:
       self.img_data = img_data
       self.caption = caption
       self.width = width
-    
+      self.path = None  # Will be set when image is saved
+
+    def _ensure_image_saved(self):
+      """Save image data to file if not already saved."""
+      if self.path is None:
+        import os
+        import uuid
+
+        # Create imgs directory if it doesn't exist (use absolute path)
+        img_dir = os.path.abspath("imgs")
+        if not os.path.exists(img_dir):
+          os.makedirs(img_dir)
+
+        # Generate unique filename
+        filename = f"image-{uuid.uuid4()}.png"
+        self.path = os.path.join(img_dir, filename)
+
+        # Save BytesIO data to file
+        with open(self.path, 'wb') as f:
+          self.img_data.seek(0)  # Reset buffer position
+          f.write(self.img_data.read())
+
     def render_markdown(self, **kwargs):
+      self._ensure_image_saved()
       if self.caption:
         return f"![{self.caption}]({self.path})"
       return f"![]({self.path})"
@@ -1381,17 +1403,19 @@ class ContentAST:
       return img
     
     def render_latex(self, **kwargs):
+      self._ensure_image_saved()
+
       options = []
       if self.width:
         options.append(f"width={self.width}")
-      
+
       result = ["\\begin{figure}[h]"]
       result.append(f"\\centering")
       result.append(f"\\includegraphics[{','.join(options)}]{{{self.path}}}")
-      
+
       if self.caption:
         result.append(f"\\caption{{{self.caption}}}")
-      
+
       result.append("\\end{figure}")
       return "\n".join(result)
   
