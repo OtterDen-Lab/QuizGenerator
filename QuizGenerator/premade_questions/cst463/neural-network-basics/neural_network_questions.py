@@ -229,6 +229,7 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     - Vertical grouping within layers
     - Sigma/f notation inside nodes
     - Clear weight labels on edges
+    - Explicit bias nodes (labeled "1")
 
     Args:
       show_weights: If True, display weights on edges
@@ -237,11 +238,11 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     Returns:
       BytesIO buffer containing PNG image
     """
-    fig, ax = plt.subplots(1, 1, figsize=(8, 3.5))
+    fig, ax = plt.subplots(1, 1, figsize=(10, 5))
     ax.axis('off')
-    ax.set_aspect('equal')  # Force equal aspect ratio for circular nodes
+    ax.set_aspect('equal')  # Keep circles circular
 
-    # Layer positions - horizontal alignment, x1 at top
+    # Layer positions - horizontal alignment
     layer_x = [0.15, 0.5, 0.85]
 
     # Vertical positioning - spread out evenly
@@ -250,78 +251,120 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     output_y = 0.5
 
     # Spacing for multiple neurons
-    y_spacing = 0.25
+    y_spacing = 0.22
 
-    # Calculate positions
+    # Calculate positions for regular inputs
     input_y = [input_y_center + y_spacing * (0.5 - i/(max(self.num_inputs-1, 1)))
                for i in range(self.num_inputs)]
     hidden_y = [hidden_y_center + y_spacing * (0.5 - i/(max(self.num_hidden-1, 1)))
                 for i in range(self.num_hidden)]
+
+    # Add bias node positions (above regular inputs)
+    if self.use_bias:
+      bias1_y = max(input_y) + y_spacing * 0.8  # Bias for hidden layer
+      bias2_y = max(hidden_y) + y_spacing * 0.8  # Bias for output layer
+    else:
+      bias1_y = None
+      bias2_y = None
 
     # Node positions
     input_pos = [(layer_x[0], y) for y in input_y]
     hidden_pos = [(layer_x[1], y) for y in hidden_y]
     output_pos = [(layer_x[2], output_y)]
 
-    # Draw edges with weights
-    edge_drawn = {}  # Track which edges we've drawn to avoid duplicates
+    if self.use_bias:
+      bias1_pos = (layer_x[0], bias1_y)
+      bias2_pos = (layer_x[1], bias2_y)
+    else:
+      bias1_pos = None
+      bias2_pos = None
 
-    # Input to hidden
+    # Draw edges with weights
+    node_radius = 0.04
+
+    # Input to hidden (regular inputs)
     for i, (x1, y1) in enumerate(input_pos):
       for j, (x2, y2) in enumerate(hidden_pos):
         ax.plot([x1, x2], [y1, y2], 'k-', linewidth=0.8, alpha=0.6, zorder=1)
 
         if show_weights:
-          # Smart label positioning to avoid overlap
-          mid_x = (x1 + x2) / 2
-          mid_y = (y1 + y2) / 2
-
-          # Offset based on edge direction to prevent overlaps
-          # For edges crossing in the middle, we need larger offsets
-          if i == 0 and j == 1:  # x1 to h2 (going down)
-            offset_y = 0.04
-          elif i == 1 and j == 0:  # x2 to h1 (going up)
-            offset_y = -0.04
-          elif y1 > y2:  # Going down
-            offset_y = 0.02
-          else:  # Going up
-            offset_y = -0.02
+          # Position weight label near the source node (left side)
+          label_x = x1 + 0.06
+          label_y = y1 + (y2 - y1) * 0.15  # Slight offset toward destination
 
           if not show_activations:
             weight_text = f"{self.W1[j, i]:.1f}"
           else:
             weight_text = f"$w_{{{j+1}{i+1}}}$"
 
-          ax.text(mid_x, mid_y + offset_y, weight_text, fontsize=7,
-                  ha='center', va='center',
-                  bbox=dict(boxstyle='square,pad=0.2', facecolor='white',
+          ax.text(label_x, label_y, weight_text, fontsize=7,
+                  ha='left', va='center',
+                  bbox=dict(boxstyle='round,pad=0.15', facecolor='white',
                            edgecolor='none', alpha=0.9))
 
-    # Hidden to output
+    # Bias to hidden
+    if self.use_bias and bias1_pos:
+      x1, y1 = bias1_pos
+      for j, (x2, y2) in enumerate(hidden_pos):
+        ax.plot([x1, x2], [y1, y2], 'k-', linewidth=0.8, alpha=0.6, zorder=1)
+
+        if show_weights:
+          # Position bias weight label near source
+          label_x = x1 + 0.06
+          label_y = y1 + (y2 - y1) * 0.15
+
+          if not show_activations:
+            weight_text = f"{self.b1[j]:.1f}"
+          else:
+            weight_text = f"$b_{{{j+1}}}$"
+
+          ax.text(label_x, label_y, weight_text, fontsize=7,
+                  ha='left', va='center',
+                  bbox=dict(boxstyle='round,pad=0.15', facecolor='white',
+                           edgecolor='none', alpha=0.9))
+
+    # Hidden to output (regular hidden neurons)
     for i, (x1, y1) in enumerate(hidden_pos):
       x2, y2 = output_pos[0]
       ax.plot([x1, x2], [y1, y2], 'k-', linewidth=0.8, alpha=0.6, zorder=1)
 
       if show_weights:
-        mid_x = (x1 + x2) / 2
-        mid_y = (y1 + y2) / 2
-
-        # Offset based on which hidden neuron
-        offset_y = 0.04 if i == 0 else -0.04
+        # Position weight label near source
+        label_x = x1 + 0.06
+        label_y = y1 + (y2 - y1) * 0.15
 
         if not show_activations:
           weight_text = f"{self.W2[0, i]:.1f}"
         else:
-          weight_text = f"$w_{{{i+3}}}$"
+          weight_text = f"$w_{{{i+self.num_inputs*self.num_hidden+1}}}$"
 
-        ax.text(mid_x, mid_y + offset_y, weight_text, fontsize=7,
-                ha='center', va='center',
-                bbox=dict(boxstyle='square,pad=0.2', facecolor='white',
+        ax.text(label_x, label_y, weight_text, fontsize=7,
+                ha='left', va='center',
+                bbox=dict(boxstyle='round,pad=0.15', facecolor='white',
+                         edgecolor='none', alpha=0.9))
+
+    # Bias to output
+    if self.use_bias and bias2_pos:
+      x1, y1 = bias2_pos
+      x2, y2 = output_pos[0]
+      ax.plot([x1, x2], [y1, y2], 'k-', linewidth=0.8, alpha=0.6, zorder=1)
+
+      if show_weights:
+        # Position bias weight label near source
+        label_x = x1 + 0.06
+        label_y = y1 + (y2 - y1) * 0.15
+
+        if not show_activations:
+          weight_text = f"{self.b2[0]:.1f}"
+        else:
+          weight_text = "$b_{out}$"
+
+        ax.text(label_x, label_y, weight_text, fontsize=7,
+                ha='left', va='center',
+                bbox=dict(boxstyle='round,pad=0.15', facecolor='white',
                          edgecolor='none', alpha=0.9))
 
     # Draw nodes
-    node_radius = 0.04
-
     # Input nodes - simple circles with labels outside
     for i, (x, y) in enumerate(input_pos):
       circle = plt.Circle((x, y), node_radius*0.6, facecolor='lightgray',
@@ -334,6 +377,23 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       else:
         label_text = f"$x_{{{i+1}}}$"
       ax.text(x - 0.10, y, label_text, fontsize=9, ha='right', va='center')
+
+    # Bias nodes - small circles labeled "1"
+    if self.use_bias and bias1_pos:
+      x, y = bias1_pos
+      circle = plt.Circle((x, y), node_radius*0.6, facecolor='lightgray',
+                         edgecolor='black', linewidth=1, zorder=10)
+      ax.add_patch(circle)
+      # Label inside the circle
+      ax.text(x, y, "1", fontsize=8, ha='center', va='center', weight='bold')
+
+    if self.use_bias and bias2_pos:
+      x, y = bias2_pos
+      circle = plt.Circle((x, y), node_radius*0.6, facecolor='lightgray',
+                         edgecolor='black', linewidth=1, zorder=10)
+      ax.add_patch(circle)
+      # Label inside the circle
+      ax.text(x, y, "1", fontsize=8, ha='center', va='center', weight='bold')
 
     # Hidden nodes - larger circles with Σ/f inside
     for i, (x, y) in enumerate(hidden_pos):
@@ -380,14 +440,17 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       label_text = r"$\hat{y}$"
     ax.text(x + 0.10, y, label_text, fontsize=9, ha='left', va='center')
 
-    # Set axis limits
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0.15, 0.85)
+    # Set axis limits - tight to the content
+    ax.set_xlim(-0.05, 1.05)
+    if self.use_bias:
+      ax.set_ylim(0.05, 0.95)
+    else:
+      ax.set_ylim(0.1, 0.9)
 
-    # Save to buffer
+    # Save to buffer with minimal padding
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png', bbox_inches='tight', dpi=150,
-                facecolor='white', edgecolor='none')
+                facecolor='white', edgecolor='none', pad_inches=0.1)
     plt.close(fig)
     buffer.seek(0)
 
