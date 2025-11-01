@@ -966,16 +966,73 @@ class ContentAST:
       """
       Render equation in Typst format.
 
-      Typst uses LaTeX-like math syntax with $ delimiters.
+      Typst uses LaTeX-like math syntax with $ delimiters, but with different
+      symbol names. This method converts LaTeX math to Typst-compatible syntax.
       Inline: $equation$
       Display: $ equation $
       """
+      # Convert LaTeX to Typst-compatible math
+      typst_math = self._latex_to_typst(self.latex)
+
       if self.inline:
         # Inline math in Typst
-        return f"${self.latex}$"
+        return f"${typst_math}$"
       else:
         # Display math in Typst
-        return f"$ {self.latex} $"
+        return f"$ {typst_math} $"
+
+    @staticmethod
+    def _latex_to_typst(latex_str: str) -> str:
+      """
+      Convert LaTeX math syntax to Typst math syntax.
+
+      Typst uses different conventions:
+      - Greek letters: 'alpha' not '\alpha'
+      - No \left/\right: auto-sizing parentheses
+      - Operators: 'nabla' not '\nabla', 'times' not '\times'
+      """
+      import re
+
+      # Remove \left and \right (Typst uses auto-sizing)
+      latex_str = latex_str.replace(r'\left', '').replace(r'\right', '')
+
+      # Remove unnecessary braces in subscripts/superscripts
+      # Typst doesn't need braces for single characters: x_0 not x_{0}
+      # Match patterns like _{0}, ^{2}, _{10} (but keep multi-char like _{new})
+      latex_str = re.sub(r'_\{(\d+)\}', r'_\1', latex_str)  # _{0} -> _0
+      latex_str = re.sub(r'\^\{(\d+)\}', r'^\1', latex_str)  # ^{2} -> ^2
+
+      # Convert LaTeX Greek letters to Typst syntax (remove backslash)
+      greek_letters = [
+        'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta',
+        'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'rho', 'sigma',
+        'tau', 'phi', 'chi', 'psi', 'omega',
+        'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Phi', 'Psi', 'Omega'
+      ]
+
+      for letter in greek_letters:
+        # Use word boundaries to avoid replacing parts of other commands
+        latex_str = re.sub(rf'\\{letter}\b', letter, latex_str)
+
+      # Convert LaTeX operators to Typst syntax
+      latex_str = latex_str.replace(r'\nabla', 'nabla')
+      latex_str = latex_str.replace(r'\times', 'times')
+      latex_str = latex_str.replace(r'\cdot', 'dot')
+      latex_str = latex_str.replace(r'\partial', 'diff')
+
+      # Handle matrix environments
+      if r'\begin{matrix}' in latex_str:
+        matrix_pattern = r'\[\\begin\{matrix\}(.*?)\\end\{matrix\}\]'
+
+        def replace_matrix(match):
+          content = match.group(1)
+          elements = content.split(r'\\')
+          elements = [e.strip() for e in elements if e.strip()]
+          return f"vec({', '.join(elements)})"
+
+        latex_str = re.sub(matrix_pattern, replace_matrix, latex_str)
+
+      return latex_str
 
     @classmethod
     def make_block_equation__multiline_equals(cls, lhs : str, rhs : List[str]):
@@ -1359,8 +1416,30 @@ class ContentAST:
       self.img_data = img_data
       self.caption = caption
       self.width = width
-    
+      self.path = None  # Will be set when image is saved
+
+    def _ensure_image_saved(self):
+      """Save image data to file if not already saved."""
+      if self.path is None:
+        import os
+        import uuid
+
+        # Create imgs directory if it doesn't exist (use absolute path)
+        img_dir = os.path.abspath("imgs")
+        if not os.path.exists(img_dir):
+          os.makedirs(img_dir)
+
+        # Generate unique filename
+        filename = f"image-{uuid.uuid4()}.png"
+        self.path = os.path.join(img_dir, filename)
+
+        # Save BytesIO data to file
+        with open(self.path, 'wb') as f:
+          self.img_data.seek(0)  # Reset buffer position
+          f.write(self.img_data.read())
+
     def render_markdown(self, **kwargs):
+      self._ensure_image_saved()
       if self.caption:
         return f"![{self.caption}]({self.path})"
       return f"![]({self.path})"
@@ -1381,17 +1460,19 @@ class ContentAST:
       return img
     
     def render_latex(self, **kwargs):
+      self._ensure_image_saved()
+
       options = []
       if self.width:
         options.append(f"width={self.width}")
-      
+
       result = ["\\begin{figure}[h]"]
       result.append(f"\\centering")
       result.append(f"\\includegraphics[{','.join(options)}]{{{self.path}}}")
-      
+
       if self.caption:
         result.append(f"\\caption{{{self.caption}}}")
-      
+
       result.append("\\end{figure}")
       return "\n".join(result)
   
