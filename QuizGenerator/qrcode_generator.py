@@ -240,7 +240,7 @@ class QuestionQRCode:
         return json.dumps(data, separators=(',', ':'))
 
     @classmethod
-    def generate_png_path(cls, question_number: int, points_value: float,
+    def generate_qr_pdf(cls, question_number: int, points_value: float,
                          scale: int = 10, **extra_data) -> str:
         """
         Generate QR code and save as PNG file, returning the file path.
@@ -267,14 +267,14 @@ class QuestionQRCode:
         temp_dir = Path(tempfile.gettempdir()) / "quiz_qrcodes"
         temp_dir.mkdir(exist_ok=True)
 
-        png_path = temp_dir / f"qr_q{question_number}.png"
+        qr_path = temp_dir / f"qr_q{question_number}.pdf"
 
         # Save as PNG with appropriate scale
-        qr.save(str(png_path), scale=scale, border=0)
+        qr.save(str(qr_path), scale=scale, border=0)
 
-        log.debug(f"Generated QR code for question {question_number} at {png_path}")
+        log.debug(f"Generated QR code for question {question_number} at {qr_path}")
 
-        return str(png_path)
+        return str(qr_path)
 
     @classmethod
     def cleanup_temp_files(cls):

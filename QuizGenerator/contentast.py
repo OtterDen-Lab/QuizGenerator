@@ -441,7 +441,7 @@ class ContentAST:
                 if hasattr(self, 'config_params') and self.config_params:
                   extra_data['config'] = self.config_params
             
-            qr_path = QuestionQRCode.generate_png_path(
+            qr_path = QuestionQRCode.generate_qr_pdf(
               self.question_number,
               self.value,
               **extra_data
@@ -508,9 +508,10 @@ class ContentAST:
                 extra_data['config'] = self.config_params
           
           # Generate QR code PNG
-          qr_path = QuestionQRCode.generate_png_path(
+          qr_path = QuestionQRCode.generate_qr_pdf(
             self.question_number,
             self.value,
+            scale=1,
             **extra_data
           )
           
