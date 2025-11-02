@@ -9,8 +9,10 @@ enabling accurate bin-packing for PDF generation.
 import json
 import subprocess
 import tempfile
+import textwrap
 from pathlib import Path
 from typing import Optional
+from QuizGenerator.contentast import ContentAST
 
 import logging
 log = logging.getLogger(__name__)
@@ -29,31 +31,31 @@ def measure_typst_content(typst_content: str, page_width_cm: float = 18.0) -> Op
     """
 
     # Get the Typst header which includes fillline and other helper functions
-    from QuizGenerator.contentast import ContentAST
     typst_header = ContentAST.Document.TYPST_HEADER
 
     # Create temporary Typst file with measurement wrapper
-    typst_code = f"""
-{typst_header}
-
-#set page(width: {page_width_cm}cm, height: auto, margin: 0cm)
-
-#let content_to_measure = [{typst_content}]
-
-#context {{
-  let measured = measure(content_to_measure)
-
-  [#metadata((
-    height_pt: measured.height.pt(),
-    height_cm: measured.height.to-absolute().cm(),
-    width_pt: measured.width.pt(),
-    width_cm: measured.width.to-absolute().cm(),
-  )) <measurement>]
-}}
-
-// Render the content (required for compilation)
-#content_to_measure
-"""
+    typst_code = textwrap.dedent(f"""
+      {typst_header}
+      
+      #set page(width: {page_width_cm}cm, height: auto, margin: 0cm)
+      
+      #let content_to_measure = [{typst_content}]
+      
+      #context {{
+        let measured = measure(content_to_measure)
+      
+        [#metadata((
+          height_pt: measured.height.pt(),
+          height_cm: measured.height.to-absolute().cm(),
+          width_pt: measured.width.pt(),
+          width_cm: measured.width.to-absolute().cm(),
+        )) <measurement>]
+      }}
+      
+      // Render the content (required for compilation)
+      #content_to_measure
+      """
+    )
 
     # Write to temporary file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.typ', delete=False) as f:

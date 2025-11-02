@@ -344,11 +344,15 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     
     body.add_element(
       ContentAST.Paragraph([
-        ContentAST.TextHTML("Given the following grammar, which of the below strings are part of the language?"),
-        ContentAST.TextLatex(
-          "Given the following grammar "
-          "please circle any provided strings that are part of the language (or indicate clearly if there are none), "
-          "and on each blank line provide generate a new, unique string that is part of the language."
+        ContentAST.OnlyHtml(
+          ContentAST.Text("Given the following grammar, which of the below strings are part of the language?")
+        ),
+        ContentAST.OnlyLatex(
+          ContentAST.Text(
+            "Given the following grammar "
+            "please circle any provided strings that are part of the language (or indicate clearly if there are none), "
+            "and on each blank line provide generate a new, unique string that is part of the language."
+          )
         )
       ])
     )
@@ -362,7 +366,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     # Add in some answers as latex-only options to be circled
     body.add_element(
       ContentAST.OnlyLatex([
-        ContentAST.TextLatex(f"- `{str(answer)}`")
+        ContentAST.Text(f"- `{str(answer)}`")
         for answer in self.featured_answers
       ])
     )

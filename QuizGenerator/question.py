@@ -424,6 +424,7 @@ class Question(abc.ABC):
       "neutral_comments_html": explanation_html
     }
 
+
 class QuestionGroup():
   
   def __init__(self, questions_in_group: List[Question], pick_once : bool):
