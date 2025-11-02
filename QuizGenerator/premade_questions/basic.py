@@ -22,7 +22,8 @@ class FromText(Question):
     self.possible_variations = 1
   
   def get_body(self, **kwargs) -> ContentAST.Section:
-    return ContentAST.Section([ContentAST.Text(f"#cmarker.render(\n\"{self.text}\"\n)")])
+    
+    return ContentAST.Section([ContentAST.Text(self.text)])
   
   def get_answers(self, *args, **kwargs) -> Tuple[Answer.AnswerKind, List[Dict[str,Any]]]:
     return Answer.AnswerKind.ESSAY, []

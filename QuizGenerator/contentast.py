@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import textwrap
 from io import BytesIO
 from typing import List, Callable
@@ -247,7 +248,6 @@ class ContentAST:
 
     TYPST_HEADER = textwrap.dedent("""
     #import "@preview/wrap-it:0.1.1": wrap-content
-    #import "@preview/cmarker:0.1.6"
 
     // Quiz document settings
     #set page(
@@ -281,20 +281,11 @@ class ContentAST:
         #v(0.25cm)
     
         #if qr_code != none {
-          // Stable: content in left column, QR fixed on the right.
-          grid(
-            columns: (1fr, auto),
-            column-gutter: 0.5em,
-            [
-              // keep your code styling; no wrap-it needed
-              #content
-            ],
-            [
-              #align(top + right)[
-                #image(qr_code, width: 2cm)
-              ]
-            ],
-          )
+          let fig = figure(image(qr_code, width: 2cm))
+          // let fig = square(fill: teal, radius: 0.5em, width: 8em) // for debugging
+          wrap-content(fig, align: top + right)[
+            #content
+          ]
         } else {
           content
         }
@@ -303,10 +294,6 @@ class ContentAST:
       ]
     }
 
-
-
-
-    
     // Fill-in line for inline answer blanks (tables, etc.)
     #let fillline(width: 5cm, height: 1.2em, stroke: 0.5pt) = {
       box(width: width, height: height, baseline: 0.25em)[
@@ -316,7 +303,6 @@ class ContentAST:
       ]
     }
 
-    
     // Code block styling
     #show raw.where(block: true): set text(size: 8pt)
     #show raw.where(block: true): block.with(
@@ -536,12 +522,12 @@ class ContentAST:
       
       # Use the question function which handles all formatting including non-breaking
       return textwrap.dedent(f"""
-        #question(
+      #question(
           {int(self.value)},
           spacing: {self.spacing}cm{'' if not qr_param else ", "}
           {qr_param}
         )[
-        """) + textwrap.indent(content, "  ") + "\n]"
+      """) + content + "\n]"
       
   ## Individual Elements
   class Text(Element):
@@ -606,18 +592,32 @@ class ContentAST:
       if self.hide_from_latex:
         return ""
       
-      # In Typst, # starts code/function calls, so we need to escape it
-      content = self.content.replace("# ", r"\# ")
-      # content = self.content
+      content = re.sub(
+        textwrap.dedent("""
+        ```
+        (.*)
+        ```
+        """),
+        r"""
+        #box(
+          raw(
+            "\1",
+            block: true
+          )
+        )
+        """,
+        self.content,
+        flags=re.DOTALL
+      )
       
-      log.info(f"content: {content}")
+      # In Typst, # starts code/function calls, so we need to escape it
+      content = content.replace("# ", r"\# ")
+      # content = self.content
       
       # Apply emphasis if needed
       if self.emphasis:
         content = f"*{content}*"
-
-      # content = super().convert_markdown(content, "typst") or content
-      log.info(f"content: {content}")
+      
       return content
     
     def is_mergeable(self, other: ContentAST.Element):
