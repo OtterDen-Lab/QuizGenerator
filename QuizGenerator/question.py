@@ -230,7 +230,8 @@ class RegenerableChoiceMixin:
     if choice_info is None:
       raise ValueError(f"Choice '{param_name}' not registered. Call register_choice() in __init__() first.")
 
-    fixed_value = choice_info['fixed_value']
+    # Check for temporary fixed value (set during backoff loop in get_question())
+    fixed_value = choice_info.get('_temp_fixed_value', choice_info['fixed_value'])
 
     # CRITICAL: Always consume an RNG call to keep RNG state synchronized between
     # original generation and QR code regeneration. During original generation,
@@ -425,6 +426,22 @@ class Question(abc.ABC):
     # Generate the question, retrying with incremented seeds until we get an interesting one
     with timer("question_refresh", question_name=self.name, question_type=self.__class__.__name__):
       base_seed = kwargs.get("rng_seed", None)
+
+      # Pre-select any regenerable choices using the base seed
+      # This ensures the policy/algorithm stays constant across backoff attempts
+      if hasattr(self, '_regenerable_choices') and self._regenerable_choices:
+        # Seed a temporary RNG with the base seed to make the choices
+        choice_rng = random.Random(base_seed)
+        for param_name, choice_info in self._regenerable_choices.items():
+          if choice_info['fixed_value'] is None:
+            # No fixed value - pick randomly and store it as fixed for this get_question() call
+            enum_class = choice_info['enum_class']
+            random_choice = choice_rng.choice(list(enum_class))
+            # Temporarily set this as the fixed value so all refresh() calls use it
+            choice_info['_temp_fixed_value'] = random_choice.name
+            # Store in config_params
+            self.config_params[param_name] = random_choice.name
+
       backoff_counter = 0
       is_interesting = False
       while not is_interesting:
@@ -432,6 +449,12 @@ class Question(abc.ABC):
         current_seed = None if base_seed is None else base_seed + backoff_counter
         is_interesting = self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0))
         backoff_counter += 1
+
+      # Clear temporary fixed values
+      if hasattr(self, '_regenerable_choices') and self._regenerable_choices:
+        for param_name, choice_info in self._regenerable_choices.items():
+          if '_temp_fixed_value' in choice_info:
+            del choice_info['_temp_fixed_value']
 
     with timer("question_body", question_name=self.name, question_type=self.__class__.__name__):
       body = self.get_body()
