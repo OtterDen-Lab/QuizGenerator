@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 
 from QuizGenerator.misc import OutputFormat
 from QuizGenerator.contentast import ContentAST
-from QuizGenerator.question import Question, Answer, QuestionRegistry
+from QuizGenerator.question import Question, Answer, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class ProcessQuestion(Question, abc.ABC):
 
 
 @QuestionRegistry.register()
-class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
+class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionMixin, BodyTemplatesMixin):
   class Kind(enum.Enum):
     FIFO = enum.auto()
     ShortestDuration = enum.auto()
@@ -280,32 +280,22 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
         break
   
   def __init__(self, num_jobs=3, scheduler_kind=None, *args, **kwargs):
-    # Preserve question-specific params for QR code config
-    # (Python removes them from **kwargs when binding to named parameters)
+    # Preserve question-specific params for QR code config BEFORE calling super().__init__()
     kwargs['num_jobs'] = num_jobs
-    if scheduler_kind is not None:
-      kwargs['scheduler_kind'] = scheduler_kind
+
+    # Register the regenerable choice using the mixin
+    self.register_choice('scheduler_kind', SchedulingQuestion.Kind, scheduler_kind, kwargs)
 
     super().__init__(*args, **kwargs)
     self.num_jobs = num_jobs
-    self.fixed_scheduler_kind = scheduler_kind  # Store the original choice
 
-    if scheduler_kind is None:
-      self.scheduler_algorithm = self.rng.choice(list(SchedulingQuestion.Kind))
-    else:
-      self.scheduler_algorithm = self.get_kind_from_string(scheduler_kind)
-    
   def refresh(self, *args, **kwargs):
-    if not kwargs.get("hard_refresh", True):
-      self.rng_seed_offset += 1
-    else:
-      # Preserve the fixed scheduler kind if one was specified
-      if self.fixed_scheduler_kind is None:
-        self.scheduler_algorithm = self.rng.choice(list(SchedulingQuestion.Kind))
-      else:
-        self.scheduler_algorithm = self.get_kind_from_string(self.fixed_scheduler_kind)
-    
+    # Call parent refresh which seeds RNG and calls is_interesting()
+    # Note: We ignore the parent's return value since we need to generate the workload first
     super().refresh(*args, **kwargs)
+
+    # Use the mixin to get the scheduler (randomly selected or fixed)
+    self.scheduler_algorithm = self.get_choice('scheduler_kind', SchedulingQuestion.Kind)
     
     self.job_stats = {}
     
@@ -384,6 +374,9 @@ class SchedulingQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin
         sum([job.turnaround_time for job in jobs]) / len(jobs)
       )
     })
+
+    # Return whether this workload is interesting
+    return self.is_interesting()
   
   def get_body(self, output_format: OutputFormat|None = None, *args, **kwargs) -> ContentAST.Section:
     # Create table data for scheduling results

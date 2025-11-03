@@ -1706,7 +1706,15 @@ class ContentAST:
         # Add to main content - only appears in Canvas
         body.add_element(html_only)
     """
-    
+
+    def __init__(self, lines_or_elements: List[str|ContentAST.Element] = None):
+      super().__init__(add_spacing_before=True)
+      for line in lines_or_elements:
+        if isinstance(line, str):
+          self.elements.append(ContentAST.Text(line))
+        else:
+          self.elements.append(line)
+          
     def render(self, output_format, **kwargs):
       log.debug(f"Rendering (OnlyHTML): {self.elements}")
       if output_format != "html":
