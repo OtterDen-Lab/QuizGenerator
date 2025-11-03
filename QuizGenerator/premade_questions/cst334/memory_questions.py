@@ -196,16 +196,8 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     # Note: We ignore the parent's return value since we need to generate the workload first
     super().refresh(*args, **kwargs)
 
-    # DEBUG: Log RNG state before get_choice
-    rng_state_before = self.rng.getstate()
-    log.debug(f"CachingQuestion.refresh: RNG state before get_choice: {rng_state_before[1][0]}")
-
     # Use the mixin to get the cache policy (randomly selected or fixed)
     self.cache_policy = self.get_choice('policy', self.Kind)
-
-    # DEBUG: Log RNG state after get_choice
-    rng_state_after = self.rng.getstate()
-    log.debug(f"CachingQuestion.refresh: RNG state after get_choice (policy={self.cache_policy}): {rng_state_after[1][0]}")
 
     self.requests = (
         list(range(self.cache_size))  # Prime the cache with the compulsory misses
@@ -218,9 +210,6 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         + self.rng.choices(population=list(range(self.num_elements)), k=(self.num_requests - 2))
     ## Add in the rest of the requests
     )
-
-    # DEBUG: Log the generated requests
-    log.debug(f"CachingQuestion.refresh: Generated requests: {self.requests}")
     
     self.cache = CachingQuestion.Cache(self.cache_policy, self.cache_size, self.requests)
     
