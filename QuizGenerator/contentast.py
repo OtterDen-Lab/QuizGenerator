@@ -117,7 +117,7 @@ class ContentAST:
           log.warning(f"Specified conversion format '{output_format}' not recognized by pypandoc. Defaulting to markdown")
         return None
     
-    def render(self, output_format, **kwargs):
+    def render(self, output_format, **kwargs) -> str:
       method_name = f"render_{output_format}"
       if hasattr(self, method_name):
         return getattr(self, method_name)(**kwargs)
@@ -128,7 +128,17 @@ class ContentAST:
       return " ".join(element.render("markdown", **kwargs) for element in self.elements)
     
     def render_html(self, **kwargs):
-      html = " ".join(element.render("html", **kwargs) for element in self.elements)
+      
+      html_parts = []
+      for element in self.elements:
+        try:
+          html_parts.append(element.render("html", **kwargs))
+        except AttributeError:
+          log.error(f"That's the one: \"{element.__class__}\" \"{element}\"")
+          exit(8)
+          
+      html = " ".join(html_parts)
+      #html = " ".join(element.render("html", **kwargs) for element in self.elements)
       return f"{'<br>' if self.add_spacing_before else ''}{html}"
     
     def render_latex(self, **kwargs):
@@ -1698,6 +1708,7 @@ class ContentAST:
     """
     
     def render(self, output_format, **kwargs):
+      log.debug(f"Rendering (OnlyHTML): {self.elements}")
       if output_format != "html":
         return ""
       return super().render(output_format, **kwargs)
