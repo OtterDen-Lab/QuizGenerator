@@ -158,58 +158,7 @@ class ContentAST:
     def is_mergeable(self, other: ContentAST.Element):
       return False
   
-  class OnlyLatex(Element):
-    """
-    Container element that only renders content in LaTeX/PDF output format.
-
-    Use this when you need LaTeX-specific content that should not appear
-    in HTML/Canvas or Markdown outputs. Content is completely hidden
-    from non-LaTeX formats.
-
-    When to use:
-    - LaTeX-specific formatting that has no HTML equivalent
-    - PDF-only instructions or content
-    - Complex LaTeX commands that break HTML rendering
-
-    Example:
-        # LaTeX-only spacing or formatting
-        latex_only = ContentAST.OnlyLatex()
-        latex_only.add_element(ContentAST.Text("\\newpage"))
-
-        # Add to main content - only appears in PDF
-        body.add_element(latex_only)
-    """
-    def render(self, output_format, **kwargs):
-      if output_format != "latex":
-        return ""
-      return super().render(output_format, **kwargs)
-
-  class OnlyHtml(Element):
-    """
-    Container element that only renders content in HTML/Canvas output format.
-
-    Use this when you need HTML-specific content that should not appear
-    in LaTeX/PDF or Markdown outputs. Content is completely hidden
-    from non-HTML formats.
-
-    When to use:
-    - Canvas-specific instructions or formatting
-    - HTML-only interactive elements
-    - Content that doesn't translate well to PDF
-
-    Example:
-        # HTML-only instructions
-        html_only = ContentAST.OnlyHtml()
-        html_only.add_element(ContentAST.Text("Click submit when done"))
-
-        # Add to main content - only appears in Canvas
-        body.add_element(html_only)
-    """
-    def render(self, output_format, **kwargs):
-      if output_format != "html":
-        return ""
-      return super().render(output_format, **kwargs)
-  
+  ## Big containers
   class Document(Element):
     """
     Root document container for complete quiz documents with proper headers and structure.
@@ -423,8 +372,7 @@ class ContentAST:
       typst += "".join(element.render("typst", **kwargs) for element in self.elements)
 
       return typst
-    
-  ## Below here are smaller elements generally
+  
   class Question(Element):
     """
     Complete question container with body, explanation, and metadata.
@@ -584,39 +532,7 @@ class ContentAST:
         ]
         """)
 
-  class Section(Element):
-    """
-    Primary container for question content - USE THIS for get_body() and get_explanation().
-
-    This is the most important ContentAST class for question developers.
-    It serves as the main container for organizing question content
-    and should be the return type for your get_body() and get_explanation() methods.
-
-    CRITICAL: Always use ContentAST.Section as the container for:
-    - Question body content (return from get_body())
-    - Question explanation/solution content (return from get_explanation())
-    - Any grouped content that needs to render together
-
-    When to use:
-    - As the root container in get_body() and get_explanation() methods
-    - Grouping related content elements
-    - Organizing complex question content
-
-    Example:
-        def get_body(self):
-            body = ContentAST.Section()
-            body.add_element(ContentAST.Paragraph(["Calculate the determinant:"]))
-
-            matrix_data = [[1, 2], [3, 4]]
-            body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="v"))
-
-            body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
-            return body
-    """
-    def render_typst(self, **kwargs):
-      """Render section by directly calling render on each child element."""
-      return "".join(element.render("typst", **kwargs) for element in self.elements)
-  
+  # Individual elements
   class Text(Element):
     """
     Basic text content with automatic format conversion and selective visibility.
@@ -698,161 +614,6 @@ class ContentAST:
       self.content = self.render_markdown() + " " + other.render_markdown()
       self.emphasis = False
   
-  class TextHTML(Text):
-    """
-    Convenience class for HTML-only text content.
-
-    Identical to ContentAST.Text with hide_from_latex=True.
-    Use when you need text that only appears in Canvas/HTML output.
-
-    Example:
-        # Text that only appears in Canvas
-        canvas_instruction = ContentAST.TextHTML("Submit your answer above")
-    """
-    def __init__(self, *args, **kwargs):
-      super().__init__(*args, **kwargs)
-      self.hide_from_html = False
-      self.hide_from_latex = True
-
-  class TextLatex(Text):
-    """
-    Convenience class for LaTeX-only text content.
-
-    Identical to ContentAST.Text with hide_from_html=True.
-    Use when you need text that only appears in PDF output.
-
-    Example:
-        # Text that only appears in PDF
-        pdf_instruction = ContentAST.TextLatex("Write your answer in the space below")
-    """
-    def __init__(self, *args, **kwargs):
-      super().__init__(*args, **kwargs)
-      self.hide_from_html = True
-      self.hide_from_latex = False
-  
-  class Paragraph(Element):
-    """
-    Text block container with proper spacing and paragraph formatting.
-
-    IMPORTANT: Use this for grouping text content, especially in question bodies.
-    Automatically handles spacing between paragraphs and combines multiple
-    lines/elements into a cohesive text block.
-
-    When to use:
-    - Question instructions or problem statements
-    - Multi-line text content
-    - Grouping related text elements
-    - Any text that should be visually separated as a paragraph
-
-    When NOT to use:
-    - Single words or short phrases (use ContentAST.Text)
-    - Mathematical content (use ContentAST.Equation)
-    - Structured data (use ContentAST.Table)
-
-    Example:
-        # Multi-line question text
-        body.add_element(ContentAST.Paragraph([
-            "Consider the following system:",
-            "- Process A requires 4MB memory",
-            "- Process B requires 2MB memory",
-            "How much total memory is needed?"
-        ]))
-
-        # Mixed content paragraph
-        para = ContentAST.Paragraph([
-            "The equation ",
-            ContentAST.Equation("x^2 + 1 = 0", inline=True),
-            " has no real solutions."
-        ])
-    """
-
-    def __init__(self, lines_or_elements: List[str|ContentAST.Element] = None):
-      super().__init__(add_spacing_before=True)
-      for line in lines_or_elements:
-        if isinstance(line, str):
-          self.elements.append(ContentAST.Text(line))
-        else:
-          self.elements.append(line)
-      
-    def render(self, output_format, **kwargs):
-      # Add in new lines to break these up visually
-      return "\n\n" + super().render(output_format, **kwargs)
-  
-    def add_line(self, line: str):
-      self.elements.append(ContentAST.Text(line))
-  
-  class Answer(Element):
-    """
-    Answer input field that renders as blanks in PDF and shows answers in HTML.
-
-    CRITICAL: Use this for ALL answer inputs in questions.
-    Creates appropriate input fields that work across both PDF and Canvas formats.
-    In PDF, renders as blank lines for students to fill in.
-    In HTML/Canvas, can display the answer for checking.
-
-    When to use:
-    - Any place where students need to input an answer
-    - Numerical answers, short text answers, etc.
-    - Questions requiring fill-in-the-blank responses
-
-    Example:
-        # Basic answer field
-        body.add_element(ContentAST.Answer(
-            answer=self.answer,
-            label="Result",
-            unit="MB"
-        ))
-
-        # Multiple choice or complex answers
-        body.add_element(ContentAST.Answer(
-            answer=[self.answer_a, self.answer_b],
-            label="Choose the best answer"
-        ))
-    """
-    def __init__(self, answer: Answer = None, label: str = "", unit: str = "", blank_length=5):
-      super().__init__()
-      self.answer = answer
-      self.label = label
-      self.unit = unit
-      self.length = blank_length
-    
-    def render_markdown(self, **kwargs):
-      if not isinstance(self.answer, list):
-        key_to_display = self.answer.key
-      else:
-        key_to_display = self.answer[0].key
-      return f"{self.label + (':' if len(self.label) > 0 else '')} [{key_to_display}] {self.unit}".strip()
-    
-    def render_html(self, show_answers=False, **kwargs):
-      if show_answers and self.answer:
-        # Show actual answer value using formatted display string
-        if not isinstance(self.answer, list):
-          answer_display = self.answer.get_display_string()
-        else:
-          answer_display = ", ".join(a.get_display_string() for a in self.answer)
-
-        label_part = f"{self.label}:" if self.label else ""
-        unit_part = f" {self.unit}" if self.unit else ""
-        return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
-      else:
-        # Default behavior: show [key]
-        return self.render_markdown(**kwargs)
-    
-    def render_latex(self, **kwargs):
-      return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
-
-    def render_typst(self, **kwargs):
-      """Render answer blank as an underlined space in Typst."""
-      # Use the fillline function defined in TYPST_HEADER
-      # Width is based on self.length (in cm)
-      blank_width = self.length * 0.75  # Convert character length to cm
-      blank = f"#fillline(width: {blank_width}cm)"
-
-      label_part = f"{self.label}:" if self.label else ""
-      unit_part = f" {self.unit}" if self.unit else ""
-
-      return f"{label_part} {blank}{unit_part}".strip()
-
   class Code(Text):
     """
     Code block formatter with proper syntax highlighting and monospace formatting.
@@ -1155,231 +916,6 @@ class ContentAST:
       else:
         return f"\\[\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\]"
 
-  class Table(Element):
-    """
-    Structured data table with cross-format rendering and proper formatting.
-
-    Creates properly formatted tables that work in PDF, Canvas, and Markdown.
-    Automatically handles headers, alignment, and responsive formatting.
-    All data is converted to ContentAST elements for consistent rendering.
-
-    When to use:
-    - Structured data presentation (comparison tables, data sets)
-    - Answer choices in tabular format
-    - Organized information display
-    - Memory layout diagrams, process tables, etc.
-
-    Features:
-    - Automatic alignment control (left, right, center)
-    - Optional headers with proper formatting
-    - Canvas-compatible HTML output
-    - LaTeX booktabs for professional PDF tables
-
-    Example:
-        # Basic data table
-        data = [
-            ["Process A", "4MB", "Running"],
-            ["Process B", "2MB", "Waiting"]
-        ]
-        headers = ["Process", "Memory", "Status"]
-        table = ContentAST.Table(data=data, headers=headers, alignments=["left", "right", "center"])
-        body.add_element(table)
-
-        # Mixed content table
-        data = [
-            [ContentAST.Text("x"), ContentAST.Equation("x^2", inline=True)],
-            [ContentAST.Text("y"), ContentAST.Equation("y^2", inline=True)]
-        ]
-    """
-    def __init__(self, data, headers=None, alignments=None, padding=False, transpose=False, hide_rules=False):
-      # todo: fix alignments
-      # todo: implement transpose
-      super().__init__()
-
-      # Normalize data to ContentAST elements
-      self.data = []
-      for row in data:
-        normalized_row = []
-        for cell in row:
-          if isinstance(cell, ContentAST.Element):
-            normalized_row.append(cell)
-          else:
-            normalized_row.append(ContentAST.Text(str(cell)))
-        self.data.append(normalized_row)
-
-      # Normalize headers to ContentAST elements
-      if headers:
-        self.headers = []
-        for header in headers:
-          if isinstance(header, ContentAST.Element):
-            self.headers.append(header)
-          else:
-            self.headers.append(ContentAST.Text(str(header)))
-      else:
-        self.headers = None
-
-      self.alignments = alignments
-      self.padding = padding,
-      self.hide_rules = hide_rules
-    
-    def render_markdown(self, **kwargs):
-      # Basic markdown table implementation
-      result = []
-      
-      if self.headers:
-        result.append("| " + " | ".join(str(h) for h in self.headers) + " |")
-        
-        if self.alignments:
-          align_row = []
-          for align in self.alignments:
-            if align == "left":
-              align_row.append(":---")
-            elif align == "right":
-              align_row.append("---:")
-            else:  # center
-              align_row.append(":---:")
-          result.append("| " + " | ".join(align_row) + " |")
-        else:
-          result.append("| " + " | ".join(["---"] * len(self.headers)) + " |")
-      
-      for row in self.data:
-        result.append("| " + " | ".join(str(cell) for cell in row) + " |")
-        
-      return "\n".join(result)
-    
-    def render_html(self, **kwargs):
-      # HTML table implementation
-      result = ["<table border=\"1\" style=\"border-collapse: collapse; width: 100%;\">"]
-
-      result.append("  <tbody>")
-
-      # Render headers as bold first row instead of <th> tags for Canvas compatibility
-      if self.headers:
-        result.append("    <tr>")
-        for i, header in enumerate(self.headers):
-          align_attr = ""
-          if self.alignments and i < len(self.alignments):
-            align_attr = f' align="{self.alignments[i]}"'
-          # Render header as bold content in regular <td> tag
-          rendered_header = header.render(output_format="html", **kwargs)
-          result.append(f"      <td style=\"padding: {'5px' if self.padding else '0x'}; font-weight: bold; {align_attr};\"><b>{rendered_header}</b></td>")
-        result.append("    </tr>")
-
-      # Render data rows
-      for row in self.data:
-        result.append("    <tr>")
-        for i, cell in enumerate(row):
-          if isinstance(cell, ContentAST.Element):
-            cell = cell.render(output_format="html", **kwargs)
-          align_attr = ""
-          if self.alignments and i < len(self.alignments):
-            align_attr = f' align="{self.alignments[i]}"'
-          result.append(f"      <td  style=\"padding: {'5px' if self.padding else '0x'} ; {align_attr};\">{cell}</td>")
-        result.append("    </tr>")
-      result.append("  </tbody>")
-      result.append("</table>")
-
-      return "\n".join(result)
-    
-    def render_latex(self, **kwargs):
-      # LaTeX table implementation
-      if self.alignments:
-        col_spec = "".join("l" if a == "left" else "r" if a == "right" else "c"
-                           for a in self.alignments)
-      else:
-        col_spec = '|'.join(["l"] * (len(self.headers) if self.headers else len(self.data[0])))
-
-      result = [f"\\begin{{tabular}}{{{col_spec}}}"]
-      if not self.hide_rules: result.append("\\toprule")
-
-      if self.headers:
-        # Now all headers are ContentAST elements, so render them consistently
-        rendered_headers = [header.render(output_format="latex", **kwargs) for header in self.headers]
-        result.append(" & ".join(rendered_headers) + " \\\\")
-        if not self.hide_rules: result.append("\\midrule")
-
-      for row in self.data:
-        # All data cells are now ContentAST elements, so render them consistently
-        rendered_row = [cell.render(output_format="latex", **kwargs) for cell in row]
-        result.append(" & ".join(rendered_row) + " \\\\")
-
-      if len(self.data) > 1 and not self.hide_rules:
-        result.append("\\bottomrule")
-      result.append("\\end{tabular}")
-
-      return "\n\n" + "\n".join(result)
-
-    def render_typst(self, **kwargs):
-      """
-      Render table in Typst format using native table() function.
-
-      Typst syntax:
-      #table(
-        columns: N,
-        align: (left, center, right),
-        [Header1], [Header2],
-        [Cell1], [Cell2]
-      )
-      """
-      # Determine number of columns
-      num_cols = len(self.headers) if self.headers else len(self.data[0])
-
-      # Build alignment specification
-      if self.alignments:
-        # Map alignment strings to Typst alignment
-        align_map = {"left": "left", "right": "right", "center": "center"}
-        aligns = [align_map.get(a, "left") for a in self.alignments]
-        align_spec = f"align: ({', '.join(aligns)})"
-      else:
-        align_spec = "align: left"
-
-      # Start table
-      result = [f"#table("]
-      result.append(f"  columns: {num_cols},")
-      result.append(f"  {align_spec},")
-
-      # Add stroke if not hiding rules
-      if not self.hide_rules:
-        result.append(f"  stroke: 0.5pt,")
-      else:
-        result.append(f"  stroke: none,")
-
-      # Collect all rows (headers + data) and calculate column widths for alignment
-      all_rows = []
-
-      # Render headers
-      if self.headers:
-        header_cells = []
-        for header in self.headers:
-          rendered = header.render(output_format="typst", **kwargs).strip()
-          header_cells.append(f"[*{rendered}*]")
-        all_rows.append(header_cells)
-
-      # Render data rows
-      for row in self.data:
-        row_cells = []
-        for cell in row:
-          rendered = cell.render(output_format="typst", **kwargs).strip()
-          row_cells.append(f"[{rendered}]")
-        all_rows.append(row_cells)
-
-      # Calculate max width for each column
-      col_widths = [0] * num_cols
-      for row in all_rows:
-        for i, cell in enumerate(row):
-          col_widths[i] = max(col_widths[i], len(cell))
-
-      # Format rows with padding
-      for row in all_rows:
-        padded_cells = []
-        for i, cell in enumerate(row):
-          padded_cells.append(cell.ljust(col_widths[i]))
-        result.append(f"  {', '.join(padded_cells)},")
-
-      result.append(")")
-
-      return "\n" + "\n".join(result) + "\n"
-
   class Picture(Element):
     """
     Image/diagram container with proper sizing and captioning.
@@ -1476,120 +1012,394 @@ class ContentAST:
       result.append("\\end{figure}")
       return "\n".join(result)
   
-  class RepeatedProblemPart(Element):
+  class Table(Element):
     """
-    Multi-part problem renderer for questions with labeled subparts (a), (b), (c), etc.
+    Structured data table with cross-format rendering and proper formatting.
 
-    Creates the specialized alignat* LaTeX format for multipart math problems
-    where each subpart is labeled and aligned properly. Used primarily for
-    vector math questions that need multiple similar calculations.
+    Creates properly formatted tables that work in PDF, Canvas, and Markdown.
+    Automatically handles headers, alignment, and responsive formatting.
+    All data is converted to ContentAST elements for consistent rendering.
 
     When to use:
-    - Questions with multiple subparts that need (a), (b), (c) labeling
-    - Vector math problems with repeated calculations
-    - Any math problem where subparts should be aligned
+    - Structured data presentation (comparison tables, data sets)
+    - Answer choices in tabular format
+    - Organized information display
+    - Memory layout diagrams, process tables, etc.
 
     Features:
-    - Automatic subpart labeling with (a), (b), (c), etc.
-    - Proper LaTeX alignat* formatting for PDF
-    - HTML fallback with organized layout
-    - Flexible content support (equations, matrices, etc.)
+    - Automatic alignment control (left, right, center)
+    - Optional headers with proper formatting
+    - Canvas-compatible HTML output
+    - LaTeX booktabs for professional PDF tables
 
     Example:
-        # Create subparts for vector dot products
-        subparts = [
-            (ContentAST.Matrix([[1], [2]]), "\\cdot", ContentAST.Matrix([[3], [4]])),
-            (ContentAST.Matrix([[5], [6]]), "\\cdot", ContentAST.Matrix([[7], [8]]))
+        # Basic data table
+        data = [
+            ["Process A", "4MB", "Running"],
+            ["Process B", "2MB", "Waiting"]
         ]
-        repeated_part = ContentAST.RepeatedProblemPart(subparts)
-        body.add_element(repeated_part)
+        headers = ["Process", "Memory", "Status"]
+        table = ContentAST.Table(data=data, headers=headers, alignments=["left", "right", "center"])
+        body.add_element(table)
+
+        # Mixed content table
+        data = [
+            [ContentAST.Text("x"), ContentAST.Equation("x^2", inline=True)],
+            [ContentAST.Text("y"), ContentAST.Equation("y^2", inline=True)]
+        ]
     """
-    def __init__(self, subpart_contents):
-      """
-      Create a repeated problem part with multiple subquestions.
-
-      Args:
-          subpart_contents: List of content for each subpart.
-                           Each item can be:
-                           - A string (rendered as equation)
-                           - A ContentAST.Element
-                           - A tuple/list of elements to be joined
-      """
+    
+    def __init__(self, data, headers=None, alignments=None, padding=False, transpose=False, hide_rules=False):
+      # todo: fix alignments
+      # todo: implement transpose
       super().__init__()
-      self.subpart_contents = subpart_contents
-
+      
+      # Normalize data to ContentAST elements
+      self.data = []
+      for row in data:
+        normalized_row = []
+        for cell in row:
+          if isinstance(cell, ContentAST.Element):
+            normalized_row.append(cell)
+          else:
+            normalized_row.append(ContentAST.Text(str(cell)))
+        self.data.append(normalized_row)
+      
+      # Normalize headers to ContentAST elements
+      if headers:
+        self.headers = []
+        for header in headers:
+          if isinstance(header, ContentAST.Element):
+            self.headers.append(header)
+          else:
+            self.headers.append(ContentAST.Text(str(header)))
+      else:
+        self.headers = None
+      
+      self.alignments = alignments
+      self.padding = padding,
+      self.hide_rules = hide_rules
+    
     def render_markdown(self, **kwargs):
+      # Basic markdown table implementation
       result = []
-      for i, content in enumerate(self.subpart_contents):
-        letter = chr(ord('a') + i)  # Convert to (a), (b), (c), etc.
-        if isinstance(content, str):
-          result.append(f"({letter}) {content}")
-        elif isinstance(content, (list, tuple)):
-          content_str = " ".join(str(item) for item in content)
-          result.append(f"({letter}) {content_str}")
+      
+      if self.headers:
+        result.append("| " + " | ".join(str(h) for h in self.headers) + " |")
+        
+        if self.alignments:
+          align_row = []
+          for align in self.alignments:
+            if align == "left":
+              align_row.append(":---")
+            elif align == "right":
+              align_row.append("---:")
+            else:  # center
+              align_row.append(":---:")
+          result.append("| " + " | ".join(align_row) + " |")
         else:
-          result.append(f"({letter}) {str(content)}")
-      return "\n\n".join(result)
-
+          result.append("| " + " | ".join(["---"] * len(self.headers)) + " |")
+      
+      for row in self.data:
+        result.append("| " + " | ".join(str(cell) for cell in row) + " |")
+      
+      return "\n".join(result)
+    
     def render_html(self, **kwargs):
-      result = []
-      for i, content in enumerate(self.subpart_contents):
-        letter = chr(ord('a') + i)
-        if isinstance(content, str):
-          result.append(f"<p>({letter}) {content}</p>")
-        elif isinstance(content, (list, tuple)):
-          rendered_items = []
-          for item in content:
-            if hasattr(item, 'render'):
-              rendered_items.append(item.render('html', **kwargs))
-            else:
-              rendered_items.append(str(item))
-          content_str = " ".join(rendered_items)
-          result.append(f"<p>({letter}) {content_str}</p>")
-        else:
-          if hasattr(content, 'render'):
-            content_str = content.render('html', **kwargs)
-          else:
-            content_str = str(content)
-          result.append(f"<p>({letter}) {content_str}</p>")
+      # HTML table implementation
+      result = ["<table border=\"1\" style=\"border-collapse: collapse; width: 100%;\">"]
+      
+      result.append("  <tbody>")
+      
+      # Render headers as bold first row instead of <th> tags for Canvas compatibility
+      if self.headers:
+        result.append("    <tr>")
+        for i, header in enumerate(self.headers):
+          align_attr = ""
+          if self.alignments and i < len(self.alignments):
+            align_attr = f' align="{self.alignments[i]}"'
+          # Render header as bold content in regular <td> tag
+          rendered_header = header.render(output_format="html", **kwargs)
+          result.append(
+            f"      <td style=\"padding: {'5px' if self.padding else '0x'}; font-weight: bold; {align_attr};\"><b>{rendered_header}</b></td>"
+          )
+        result.append("    </tr>")
+      
+      # Render data rows
+      for row in self.data:
+        result.append("    <tr>")
+        for i, cell in enumerate(row):
+          if isinstance(cell, ContentAST.Element):
+            cell = cell.render(output_format="html", **kwargs)
+          align_attr = ""
+          if self.alignments and i < len(self.alignments):
+            align_attr = f' align="{self.alignments[i]}"'
+          result.append(f"      <td  style=\"padding: {'5px' if self.padding else '0x'} ; {align_attr};\">{cell}</td>")
+        result.append("    </tr>")
+      result.append("  </tbody>")
+      result.append("</table>")
+      
       return "\n".join(result)
-
+    
     def render_latex(self, **kwargs):
-      if not self.subpart_contents:
-        return ""
+      # LaTeX table implementation
+      if self.alignments:
+        col_spec = "".join(
+          "l" if a == "left" else "r" if a == "right" else "c"
+          for a in self.alignments
+        )
+      else:
+        col_spec = '|'.join(["l"] * (len(self.headers) if self.headers else len(self.data[0])))
+      
+      result = [f"\\begin{{tabular}}{{{col_spec}}}"]
+      if not self.hide_rules: result.append("\\toprule")
+      
+      if self.headers:
+        # Now all headers are ContentAST elements, so render them consistently
+        rendered_headers = [header.render(output_format="latex", **kwargs) for header in self.headers]
+        result.append(" & ".join(rendered_headers) + " \\\\")
+        if not self.hide_rules: result.append("\\midrule")
+      
+      for row in self.data:
+        # All data cells are now ContentAST elements, so render them consistently
+        rendered_row = [cell.render(output_format="latex", **kwargs) for cell in row]
+        result.append(" & ".join(rendered_row) + " \\\\")
+      
+      if len(self.data) > 1 and not self.hide_rules:
+        result.append("\\bottomrule")
+      result.append("\\end{tabular}")
+      
+      return "\n\n" + "\n".join(result)
+    
+    def render_typst(self, **kwargs):
+      """
+      Render table in Typst format using native table() function.
 
-      # Start alignat environment - use 2 columns for alignment
-      result = [r"\begin{alignat*}{2}"]
+      Typst syntax:
+      #table(
+        columns: N,
+        align: (left, center, right),
+        [Header1], [Header2],
+        [Cell1], [Cell2]
+      )
+      """
+      # Determine number of columns
+      num_cols = len(self.headers) if self.headers else len(self.data[0])
+      
+      # Build alignment specification
+      if self.alignments:
+        # Map alignment strings to Typst alignment
+        align_map = {"left": "left", "right": "right", "center": "center"}
+        aligns = [align_map.get(a, "left") for a in self.alignments]
+        align_spec = f"align: ({', '.join(aligns)})"
+      else:
+        align_spec = "align: left"
+      
+      # Start table
+      result = [f"#table("]
+      result.append(f"  columns: {num_cols},")
+      result.append(f"  {align_spec},")
+      
+      # Add stroke if not hiding rules
+      if not self.hide_rules:
+        result.append(f"  stroke: 0.5pt,")
+      else:
+        result.append(f"  stroke: none,")
+      
+      # Collect all rows (headers + data) and calculate column widths for alignment
+      all_rows = []
+      
+      # Render headers
+      if self.headers:
+        header_cells = []
+        for header in self.headers:
+          rendered = header.render(output_format="typst", **kwargs).strip()
+          header_cells.append(f"[*{rendered}*]")
+        all_rows.append(header_cells)
+      
+      # Render data rows
+      for row in self.data:
+        row_cells = []
+        for cell in row:
+          rendered = cell.render(output_format="typst", **kwargs).strip()
+          row_cells.append(f"[{rendered}]")
+        all_rows.append(row_cells)
+      
+      # Calculate max width for each column
+      col_widths = [0] * num_cols
+      for row in all_rows:
+        for i, cell in enumerate(row):
+          col_widths[i] = max(col_widths[i], len(cell))
+      
+      # Format rows with padding
+      for row in all_rows:
+        padded_cells = []
+        for i, cell in enumerate(row):
+          padded_cells.append(cell.ljust(col_widths[i]))
+        result.append(f"  {', '.join(padded_cells)},")
+      
+      result.append(")")
+      
+      return "\n" + "\n".join(result) + "\n"
+  
+  ## Containers
+  class Section(Element):
+    """
+    Primary container for question content - USE THIS for get_body() and get_explanation().
 
-      for i, content in enumerate(self.subpart_contents):
-        letter = chr(ord('a') + i)
-        spacing = r"\\[6pt]" if i < len(self.subpart_contents) - 1 else r" \\"
+    This is the most important ContentAST class for question developers.
+    It serves as the main container for organizing question content
+    and should be the return type for your get_body() and get_explanation() methods.
 
-        if isinstance(content, str):
-          # Treat as raw LaTeX equation content
-          result.append(f"({letter})\\;& {content} &=&\\; {spacing}")
-        elif isinstance(content, (list, tuple)):
-          # Join multiple elements (e.g., matrix, operator, matrix)
-          rendered_items = []
-          for item in content:
-            if hasattr(item, 'render'):
-              rendered_items.append(item.render('latex', **kwargs))
-            elif isinstance(item, str):
-              rendered_items.append(item)
-            else:
-              rendered_items.append(str(item))
-          content_str = " ".join(rendered_items)
-          result.append(f"({letter})\\;& {content_str} &=&\\; {spacing}")
+    CRITICAL: Always use ContentAST.Section as the container for:
+    - Question body content (return from get_body())
+    - Question explanation/solution content (return from get_explanation())
+    - Any grouped content that needs to render together
+
+    When to use:
+    - As the root container in get_body() and get_explanation() methods
+    - Grouping related content elements
+    - Organizing complex question content
+
+    Example:
+        def get_body(self):
+            body = ContentAST.Section()
+            body.add_element(ContentAST.Paragraph(["Calculate the determinant:"]))
+
+            matrix_data = [[1, 2], [3, 4]]
+            body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="v"))
+
+            body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
+            return body
+    """
+    
+    def render_typst(self, **kwargs):
+      """Render section by directly calling render on each child element."""
+      return "".join(element.render("typst", **kwargs) for element in self.elements)
+  
+  class Paragraph(Element):
+    """
+    Text block container with proper spacing and paragraph formatting.
+
+    IMPORTANT: Use this for grouping text content, especially in question bodies.
+    Automatically handles spacing between paragraphs and combines multiple
+    lines/elements into a cohesive text block.
+
+    When to use:
+    - Question instructions or problem statements
+    - Multi-line text content
+    - Grouping related text elements
+    - Any text that should be visually separated as a paragraph
+
+    When NOT to use:
+    - Single words or short phrases (use ContentAST.Text)
+    - Mathematical content (use ContentAST.Equation)
+    - Structured data (use ContentAST.Table)
+
+    Example:
+        # Multi-line question text
+        body.add_element(ContentAST.Paragraph([
+            "Consider the following system:",
+            "- Process A requires 4MB memory",
+            "- Process B requires 2MB memory",
+            "How much total memory is needed?"
+        ]))
+
+        # Mixed content paragraph
+        para = ContentAST.Paragraph([
+            "The equation ",
+            ContentAST.Equation("x^2 + 1 = 0", inline=True),
+            " has no real solutions."
+        ])
+    """
+    
+    def __init__(self, lines_or_elements: List[str | ContentAST.Element] = None):
+      super().__init__(add_spacing_before=True)
+      for line in lines_or_elements:
+        if isinstance(line, str):
+          self.elements.append(ContentAST.Text(line))
         else:
-          # Single element (ContentAST element or string)
-          if hasattr(content, 'render'):
-            content_str = content.render('latex', **kwargs)
-          else:
-            content_str = str(content)
-          result.append(f"({letter})\\;& {content_str} &=&\\; {spacing}")
+          self.elements.append(line)
+    
+    def render(self, output_format, **kwargs):
+      # Add in new lines to break these up visually
+      return "\n\n" + super().render(output_format, **kwargs)
+    
+    def add_line(self, line: str):
+      self.elements.append(ContentAST.Text(line))
+  
+  class Answer(Element):
+    """
+    Answer input field that renders as blanks in PDF and shows answers in HTML.
 
-      result.append(r"\end{alignat*}")
-      return "\n".join(result)
+    CRITICAL: Use this for ALL answer inputs in questions.
+    Creates appropriate input fields that work across both PDF and Canvas formats.
+    In PDF, renders as blank lines for students to fill in.
+    In HTML/Canvas, can display the answer for checking.
+
+    When to use:
+    - Any place where students need to input an answer
+    - Numerical answers, short text answers, etc.
+    - Questions requiring fill-in-the-blank responses
+
+    Example:
+        # Basic answer field
+        body.add_element(ContentAST.Answer(
+            answer=self.answer,
+            label="Result",
+            unit="MB"
+        ))
+
+        # Multiple choice or complex answers
+        body.add_element(ContentAST.Answer(
+            answer=[self.answer_a, self.answer_b],
+            label="Choose the best answer"
+        ))
+    """
+    
+    def __init__(self, answer: Answer = None, label: str = "", unit: str = "", blank_length=5):
+      super().__init__()
+      self.answer = answer
+      self.label = label
+      self.unit = unit
+      self.length = blank_length
+    
+    def render_markdown(self, **kwargs):
+      if not isinstance(self.answer, list):
+        key_to_display = self.answer.key
+      else:
+        key_to_display = self.answer[0].key
+      return f"{self.label + (':' if len(self.label) > 0 else '')} [{key_to_display}] {self.unit}".strip()
+    
+    def render_html(self, show_answers=False, **kwargs):
+      if show_answers and self.answer:
+        # Show actual answer value using formatted display string
+        if not isinstance(self.answer, list):
+          answer_display = self.answer.get_display_string()
+        else:
+          answer_display = ", ".join(a.get_display_string() for a in self.answer)
+        
+        label_part = f"{self.label}:" if self.label else ""
+        unit_part = f" {self.unit}" if self.unit else ""
+        return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
+      else:
+        # Default behavior: show [key]
+        return self.render_markdown(**kwargs)
+    
+    def render_latex(self, **kwargs):
+      return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
+    
+    def render_typst(self, **kwargs):
+      """Render answer blank as an underlined space in Typst."""
+      # Use the fillline function defined in TYPST_HEADER
+      # Width is based on self.length (in cm)
+      blank_width = self.length * 0.75  # Convert character length to cm
+      blank = f"#fillline(width: {blank_width}cm)"
+      
+      label_part = f"{self.label}:" if self.label else ""
+      unit_part = f" {self.unit}" if self.unit else ""
+      
+      return f"{label_part} {blank}{unit_part}".strip()
 
   class TableGroup(Element):
     """
@@ -1777,3 +1587,207 @@ class ContentAST:
         r"}"
       )
       return content
+
+  ## Specialized Elements
+  class RepeatedProblemPart(Element):
+    """
+    Multi-part problem renderer for questions with labeled subparts (a), (b), (c), etc.
+
+    Creates the specialized alignat* LaTeX format for multipart math problems
+    where each subpart is labeled and aligned properly. Used primarily for
+    vector math questions that need multiple similar calculations.
+
+    When to use:
+    - Questions with multiple subparts that need (a), (b), (c) labeling
+    - Vector math problems with repeated calculations
+    - Any math problem where subparts should be aligned
+
+    Features:
+    - Automatic subpart labeling with (a), (b), (c), etc.
+    - Proper LaTeX alignat* formatting for PDF
+    - HTML fallback with organized layout
+    - Flexible content support (equations, matrices, etc.)
+
+    Example:
+        # Create subparts for vector dot products
+        subparts = [
+            (ContentAST.Matrix([[1], [2]]), "\\cdot", ContentAST.Matrix([[3], [4]])),
+            (ContentAST.Matrix([[5], [6]]), "\\cdot", ContentAST.Matrix([[7], [8]]))
+        ]
+        repeated_part = ContentAST.RepeatedProblemPart(subparts)
+        body.add_element(repeated_part)
+    """
+    def __init__(self, subpart_contents):
+      """
+      Create a repeated problem part with multiple subquestions.
+
+      Args:
+          subpart_contents: List of content for each subpart.
+                           Each item can be:
+                           - A string (rendered as equation)
+                           - A ContentAST.Element
+                           - A tuple/list of elements to be joined
+      """
+      super().__init__()
+      self.subpart_contents = subpart_contents
+
+    def render_markdown(self, **kwargs):
+      result = []
+      for i, content in enumerate(self.subpart_contents):
+        letter = chr(ord('a') + i)  # Convert to (a), (b), (c), etc.
+        if isinstance(content, str):
+          result.append(f"({letter}) {content}")
+        elif isinstance(content, (list, tuple)):
+          content_str = " ".join(str(item) for item in content)
+          result.append(f"({letter}) {content_str}")
+        else:
+          result.append(f"({letter}) {str(content)}")
+      return "\n\n".join(result)
+
+    def render_html(self, **kwargs):
+      result = []
+      for i, content in enumerate(self.subpart_contents):
+        letter = chr(ord('a') + i)
+        if isinstance(content, str):
+          result.append(f"<p>({letter}) {content}</p>")
+        elif isinstance(content, (list, tuple)):
+          rendered_items = []
+          for item in content:
+            if hasattr(item, 'render'):
+              rendered_items.append(item.render('html', **kwargs))
+            else:
+              rendered_items.append(str(item))
+          content_str = " ".join(rendered_items)
+          result.append(f"<p>({letter}) {content_str}</p>")
+        else:
+          if hasattr(content, 'render'):
+            content_str = content.render('html', **kwargs)
+          else:
+            content_str = str(content)
+          result.append(f"<p>({letter}) {content_str}</p>")
+      return "\n".join(result)
+
+    def render_latex(self, **kwargs):
+      if not self.subpart_contents:
+        return ""
+
+      # Start alignat environment - use 2 columns for alignment
+      result = [r"\begin{alignat*}{2}"]
+
+      for i, content in enumerate(self.subpart_contents):
+        letter = chr(ord('a') + i)
+        spacing = r"\\[6pt]" if i < len(self.subpart_contents) - 1 else r" \\"
+
+        if isinstance(content, str):
+          # Treat as raw LaTeX equation content
+          result.append(f"({letter})\\;& {content} &=&\\; {spacing}")
+        elif isinstance(content, (list, tuple)):
+          # Join multiple elements (e.g., matrix, operator, matrix)
+          rendered_items = []
+          for item in content:
+            if hasattr(item, 'render'):
+              rendered_items.append(item.render('latex', **kwargs))
+            elif isinstance(item, str):
+              rendered_items.append(item)
+            else:
+              rendered_items.append(str(item))
+          content_str = " ".join(rendered_items)
+          result.append(f"({letter})\\;& {content_str} &=&\\; {spacing}")
+        else:
+          # Single element (ContentAST element or string)
+          if hasattr(content, 'render'):
+            content_str = content.render('latex', **kwargs)
+          else:
+            content_str = str(content)
+          result.append(f"({letter})\\;& {content_str} &=&\\; {spacing}")
+
+      result.append(r"\end{alignat*}")
+      return "\n".join(result)
+
+  class OnlyLatex(Element):
+    """
+    Container element that only renders content in LaTeX/PDF output format.
+
+    Use this when you need LaTeX-specific content that should not appear
+    in HTML/Canvas or Markdown outputs. Content is completely hidden
+    from non-LaTeX formats.
+
+    When to use:
+    - LaTeX-specific formatting that has no HTML equivalent
+    - PDF-only instructions or content
+    - Complex LaTeX commands that break HTML rendering
+
+    Example:
+        # LaTeX-only spacing or formatting
+        latex_only = ContentAST.OnlyLatex()
+        latex_only.add_element(ContentAST.Text("\\newpage"))
+
+        # Add to main content - only appears in PDF
+        body.add_element(latex_only)
+    """
+    
+    def render(self, output_format, **kwargs):
+      if output_format != "latex":
+        return ""
+      return super().render(output_format, **kwargs)
+  
+  class OnlyHtml(Element):
+    """
+    Container element that only renders content in HTML/Canvas output format.
+
+    Use this when you need HTML-specific content that should not appear
+    in LaTeX/PDF or Markdown outputs. Content is completely hidden
+    from non-HTML formats.
+
+    When to use:
+    - Canvas-specific instructions or formatting
+    - HTML-only interactive elements
+    - Content that doesn't translate well to PDF
+
+    Example:
+        # HTML-only instructions
+        html_only = ContentAST.OnlyHtml()
+        html_only.add_element(ContentAST.Text("Click submit when done"))
+
+        # Add to main content - only appears in Canvas
+        body.add_element(html_only)
+    """
+    
+    def render(self, output_format, **kwargs):
+      if output_format != "html":
+        return ""
+      return super().render(output_format, **kwargs)
+  
+  class TextHTML(Text):
+    """
+    Convenience class for HTML-only text content.
+
+    Identical to ContentAST.Text with hide_from_latex=True.
+    Use when you need text that only appears in Canvas/HTML output.
+
+    Example:
+        # Text that only appears in Canvas
+        canvas_instruction = ContentAST.TextHTML("Submit your answer above")
+    """
+    
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.hide_from_html = False
+      self.hide_from_latex = True
+  
+  class TextLatex(Text):
+    """
+    Convenience class for LaTeX-only text content.
+
+    Identical to ContentAST.Text with hide_from_html=True.
+    Use when you need text that only appears in PDF output.
+
+    Example:
+        # Text that only appears in PDF
+        pdf_instruction = ContentAST.TextLatex("Write your answer in the space below")
+    """
+    
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.hide_from_html = True
+      self.hide_from_latex = False
