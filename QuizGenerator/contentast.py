@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import textwrap
 from io import BytesIO
 from typing import List, Callable
@@ -116,7 +117,7 @@ class ContentAST:
           log.warning(f"Specified conversion format '{output_format}' not recognized by pypandoc. Defaulting to markdown")
         return None
     
-    def render(self, output_format, **kwargs):
+    def render(self, output_format, **kwargs) -> str:
       method_name = f"render_{output_format}"
       if hasattr(self, method_name):
         return getattr(self, method_name)(**kwargs)
@@ -127,7 +128,17 @@ class ContentAST:
       return " ".join(element.render("markdown", **kwargs) for element in self.elements)
     
     def render_html(self, **kwargs):
-      html = " ".join(element.render("html", **kwargs) for element in self.elements)
+      
+      html_parts = []
+      for element in self.elements:
+        try:
+          html_parts.append(element.render("html", **kwargs))
+        except AttributeError:
+          log.error(f"That's the one: \"{element.__class__}\" \"{element}\"")
+          exit(8)
+          
+      html = " ".join(html_parts)
+      #html = " ".join(element.render("html", **kwargs) for element in self.elements)
       return f"{'<br>' if self.add_spacing_before else ''}{html}"
     
     def render_latex(self, **kwargs):
@@ -246,6 +257,8 @@ class ContentAST:
     """)
 
     TYPST_HEADER = textwrap.dedent("""
+    #import "@preview/wrap-it:0.1.1": wrap-content
+
     // Quiz document settings
     #set page(
       paper: "us-letter",
@@ -271,37 +284,26 @@ class ContentAST:
     #let question(points, content, spacing: 3cm, qr_code: none) = {
       block(breakable: false)[
         #line(length: 100%, stroke: 1pt)
-        #v(0.0cm)
+        #v(0cm)
         #question_num.step()
-
+    
         *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
         #v(0.25cm)
-        // Content on the left, QR pinned right
+    
         #if qr_code != none {
-          grid(
-            columns: (1fr, auto),
-            column-gutter: 0.8em,
-            [
-              #content
-            ],
-            [
-              #align(top + right)[
-                #v(0.0cm)
-                #image(qr_code, width: 1.5cm)
-              ]
-            ],
-          )
+          let fig = figure(image(qr_code, width: 2cm))
+          // let fig = square(fill: teal, radius: 0.5em, width: 8em) // for debugging
+          wrap-content(fig, align: top + right)[
+            #content
+          ]
         } else {
           content
         }
-
+    
         #v(spacing)
       ]
     }
 
-
-
-    
     // Fill-in line for inline answer blanks (tables, etc.)
     #let fillline(width: 5cm, height: 1.2em, stroke: 0.5pt) = {
       box(width: width, height: height, baseline: 0.25em)[
@@ -370,7 +372,7 @@ class ContentAST:
 
       # Render all elements
       typst += "".join(element.render("typst", **kwargs) for element in self.elements)
-
+      
       return typst
   
   class Question(Element):
@@ -399,6 +401,7 @@ class ContentAST:
 
         question = ContentAST.Question(body=body, explanation=explanation, value=5)
     """
+    
     def __init__(
         self,
         body: ContentAST.Section,
@@ -407,7 +410,7 @@ class ContentAST:
         value=1,
         interest=1.0,
         spacing=0,
-        topic = None,
+        topic=None,
         question_number=None
     ):
       super().__init__()
@@ -417,27 +420,29 @@ class ContentAST:
       self.value = value
       self.interest = interest
       self.spacing = spacing
-      self.topic = topic # todo: remove this bs.
+      self.topic = topic  # todo: remove this bs.
       self.question_number = question_number  # For QR code generation
     
     def render(self, output_format, **kwargs):
       # Special handling for latex and typst - use dedicated render methods
       if output_format == "typst":
         return self.render_typst(**kwargs)
-
+      
       # Generate content from all elements
       content = self.body.render(output_format, **kwargs)
-
+      
       # If output format is latex, add in minipage and question environments
       if output_format == "latex":
         # Build question header - either with or without QR code
         if self.question_number is not None:
           try:
             from QuizGenerator.qrcode_generator import QuestionQRCode
-
+            
             # Build extra_data dict with regeneration metadata if available
             extra_data = {}
-            if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(self, 'question_version'):
+            if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(
+                self, 'question_version'
+            ):
               if self.question_class_name and self.generation_seed is not None and self.question_version:
                 extra_data['question_type'] = self.question_class_name
                 extra_data['seed'] = self.generation_seed
@@ -445,8 +450,8 @@ class ContentAST:
                 # Include question-specific configuration parameters if available
                 if hasattr(self, 'config_params') and self.config_params:
                   extra_data['config'] = self.config_params
-
-            qr_path = QuestionQRCode.generate_png_path(
+            
+            qr_path = QuestionQRCode.generate_qr_pdf(
               self.question_number,
               self.value,
               **extra_data
@@ -454,13 +459,15 @@ class ContentAST:
             # Build custom question header with QR code centered
             # Format: Question N:  [QR code centered]  __ / points
             question_header = (
-              r"\vspace{0.5cm}" + "\n"
-              r"\noindent\textbf{Question " + str(self.question_number) + r":} \hfill "
-              r"\rule{0.5cm}{0.15mm} / " + str(int(self.value)) + "\n"
-              r"\raisebox{-1cm}{"  # Reduced lift to minimize extra space above
-              rf"\includegraphics[width={QuestionQRCode.DEFAULT_SIZE_CM}cm]{{{qr_path}}}"
-              r"} "
-              r"\par\vspace{-1cm}"
+                r"\vspace{0.5cm}" + "\n"
+                                    r"\noindent\textbf{Question " + str(self.question_number) + r":} \hfill "
+                                                                                                r"\rule{0.5cm}{0.15mm} / " + str(
+              int(self.value)
+            ) + "\n"
+                r"\raisebox{-1cm}{"  # Reduced lift to minimize extra space above
+                rf"\includegraphics[width={QuestionQRCode.DEFAULT_SIZE_CM}cm]{{{qr_path}}}"
+                r"} "
+                r"\par\vspace{-1cm}"
             )
           except Exception as e:
             log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
@@ -469,7 +476,7 @@ class ContentAST:
         else:
           # Use standard question macro if no question number
           question_header = r"\question{" + str(int(self.value)) + r"}"
-
+        
         latex_lines = [
           r"\noindent\begin{minipage}{\textwidth}",
           r"\noindent\makebox[\linewidth]{\rule{\paperwidth}{1pt}}",
@@ -482,24 +489,26 @@ class ContentAST:
           "\n\n",
         ]
         content = '\n'.join(latex_lines)
-
+      
       log.debug(f"content: \n{content}")
-
+      
       return content
-
+    
     def render_typst(self, **kwargs):
       """Render question in Typst format with proper formatting"""
       # Render question body
       content = self.body.render("typst", **kwargs)
-
+      
       # Generate QR code if question number is available
       qr_param = ""
       if self.question_number is not None:
         try:
-
+          
           # Build extra_data dict with regeneration metadata if available
           extra_data = {}
-          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(self, 'question_version'):
+          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(
+              self, 'question_version'
+          ):
             if self.question_class_name and self.generation_seed is not None and self.question_version:
               extra_data['question_type'] = self.question_class_name
               extra_data['seed'] = self.generation_seed
@@ -507,31 +516,30 @@ class ContentAST:
               # Include question-specific configuration parameters if available
               if hasattr(self, 'config_params') and self.config_params:
                 extra_data['config'] = self.config_params
-
+          
           # Generate QR code PNG
-          qr_path = QuestionQRCode.generate_png_path(
+          qr_path = QuestionQRCode.generate_qr_pdf(
             self.question_number,
             self.value,
+            scale=1,
             **extra_data
           )
-
+          
           # Add QR code parameter to question function call
           qr_param = f'qr_code: "{qr_path}"'
-
+        
         except Exception as e:
           log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
-
+      
       # Use the question function which handles all formatting including non-breaking
       return textwrap.dedent(f"""
-        #question(
+      #question(
           {int(self.value)},
           spacing: {self.spacing}cm{'' if not qr_param else ", "}
           {qr_param}
         )[
-          {content}
-        ]
-        """)
-
+      """) + content + "\n]"
+      
   # Individual elements
   class Text(Element):
     """
@@ -594,8 +602,27 @@ class ContentAST:
       if self.hide_from_latex:
         return ""
 
+      content = re.sub(
+        textwrap.dedent("""
+        ```
+        (.*)
+        ```
+        """),
+        r"""
+        #box(
+          raw(
+            "\1",
+            block: true
+          )
+        )
+        """,
+        self.content,
+        flags=re.DOTALL
+      )
+
       # In Typst, # starts code/function calls, so we need to escape it
-      content = self.content.replace("#", r"\#")
+      content = content.replace("# ", r"\# ")
+      # content = self.content
 
       # Apply emphasis if needed
       if self.emphasis:
@@ -670,7 +697,7 @@ class ContentAST:
       # Use raw block with 11pt font size
       # Escape backticks in the content
       escaped_content = self.content.replace("`", r"\`")
-      return f"#text(size: 8pt)[```\n{escaped_content}\n```]"
+      return f"#box[#text(size: 8pt)[```\n{escaped_content}\n```]]"
 
   class Equation(Element):
     """
@@ -1196,7 +1223,7 @@ class ContentAST:
         align_spec = "align: left"
       
       # Start table
-      result = [f"#table("]
+      result = [f"table("]
       result.append(f"  columns: {num_cols},")
       result.append(f"  {align_spec},")
       
@@ -1240,7 +1267,7 @@ class ContentAST:
       
       result.append(")")
       
-      return "\n" + "\n".join(result) + "\n"
+      return "\n#box(" + "\n".join(result) + "\n)"
   
   ## Containers
   class Section(Element):

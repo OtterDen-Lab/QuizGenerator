@@ -119,7 +119,8 @@ class QuestionRegistry:
           raise ValueError(f"Unknown question type: {question_type}")
 
     new_question : Question = cls._registry[question_key](**kwargs)
-    new_question.refresh()
+    # Note: Don't call refresh() here - it will be called by get_question()
+    # Calling it here would consume RNG calls and break QR code regeneration
     return new_question
     
     
@@ -142,6 +143,123 @@ class QuestionRegistry:
 
     load_modules_recursively(package_path, package_name)
     cls._scanned = True
+
+
+class RegenerableChoiceMixin:
+  """
+  Mixin for questions that need to make random choices from enums/lists that are:
+  1. Different across multiple refreshes (when the same Question instance is reused for multiple PDFs)
+  2. Reproducible from QR code config_params
+
+  The Problem:
+  ------------
+  When generating multiple PDFs, Quiz.from_yaml() creates Question instances ONCE.
+  These instances are then refresh()ed multiple times with different RNG seeds.
+  If a question randomly selects an algorithm/policy in __init__(), all PDFs get the same choice
+  because __init__() only runs once with an unseeded RNG.
+
+  The Solution:
+  -------------
+  1. In __init__(): Register choices with fixed values (if provided) or None (for random)
+  2. In refresh(): Make random selections using the seeded RNG, store in config_params
+  3. Result: Each refresh gets a different random choice, and it's captured for QR codes
+
+  Usage Example:
+  --------------
+  class SchedulingQuestion(Question, RegenerableChoiceMixin):
+      class Kind(enum.Enum):
+          FIFO = enum.auto()
+          SJF = enum.auto()
+
+      def __init__(self, scheduler_kind=None, **kwargs):
+          # Register the choice BEFORE calling super().__init__()
+          self.register_choice('scheduler_kind', self.Kind, scheduler_kind, kwargs)
+          super().__init__(**kwargs)
+
+      def refresh(self, **kwargs):
+          super().refresh(**kwargs)
+          # Get the choice (randomly selected or from config_params)
+          self.scheduler_algorithm = self.get_choice('scheduler_kind', self.Kind)
+          # ... rest of refresh logic
+  """
+
+  def __init__(self, *args, **kwargs):
+    # Initialize the choices registry if it doesn't exist
+    if not hasattr(self, '_regenerable_choices'):
+      self._regenerable_choices = {}
+    super().__init__(*args, **kwargs)
+
+  def register_choice(self, param_name: str, enum_class: type[enum.Enum], fixed_value: str | None, kwargs_dict: dict):
+    """
+    Register a choice parameter that needs to be regenerable.
+
+    Args:
+        param_name: The parameter name (e.g., 'scheduler_kind', 'policy')
+        enum_class: The enum class to choose from (e.g., SchedulingQuestion.Kind)
+        fixed_value: The fixed value if provided, or None for random selection
+        kwargs_dict: The kwargs dictionary to update (for config_params capture)
+
+    This should be called in __init__() BEFORE super().__init__().
+    """
+    # Store the enum class for later use
+    if not hasattr(self, '_regenerable_choices'):
+      self._regenerable_choices = {}
+
+    self._regenerable_choices[param_name] = {
+      'enum_class': enum_class,
+      'fixed_value': fixed_value
+    }
+
+    # Add to kwargs so config_params captures it
+    if fixed_value is not None:
+      kwargs_dict[param_name] = fixed_value
+
+  def get_choice(self, param_name: str, enum_class: type[enum.Enum]) -> enum.Enum:
+    """
+    Get the choice for a registered parameter.
+    Should be called in refresh() AFTER super().refresh().
+
+    Args:
+        param_name: The parameter name registered earlier
+        enum_class: The enum class to choose from
+
+    Returns:
+        The selected enum value (either fixed or randomly chosen)
+    """
+    choice_info = self._regenerable_choices.get(param_name)
+    if choice_info is None:
+      raise ValueError(f"Choice '{param_name}' not registered. Call register_choice() in __init__() first.")
+
+    # Check for temporary fixed value (set during backoff loop in get_question())
+    fixed_value = choice_info.get('_temp_fixed_value', choice_info['fixed_value'])
+
+    # CRITICAL: Always consume an RNG call to keep RNG state synchronized between
+    # original generation and QR code regeneration. During original generation,
+    # we pick randomly. During regeneration, we already know the answer from
+    # config_params, but we still need to consume the RNG call.
+    enum_list = list(enum_class)
+    random_choice = self.rng.choice(enum_list)
+
+    if fixed_value is None:
+      # No fixed value - use the random choice we just picked
+      self.config_params[param_name] = random_choice.name
+      return random_choice
+    else:
+      # Fixed value provided - ignore the random choice, use the fixed value
+      # (but we still consumed the RNG call above to keep state synchronized)
+      try:
+        # Handle both string names and enum values
+        if isinstance(fixed_value, enum_class):
+          return fixed_value
+        else:
+          return enum_class[fixed_value.upper()]
+      except (KeyError, AttributeError):
+        log.warning(
+          f"Invalid {param_name} '{fixed_value}'. Valid options are: {[k.name for k in enum_class]}. Defaulting to random"
+        )
+        # Use the random choice we already made
+        self.config_params[param_name] = random_choice.name
+        return random_choice
 
 
 class Question(abc.ABC):
@@ -305,16 +423,39 @@ class Question(abc.ABC):
     :param kwargs:
     :return: (ContentAST.Question) Containing question.
     """
-    # todo: would it make sense to refresh here?
+    # Generate the question, retrying with incremented seeds until we get an interesting one
     with timer("question_refresh", question_name=self.name, question_type=self.__class__.__name__):
       base_seed = kwargs.get("rng_seed", None)
-      self.refresh(rng_seed=base_seed)
-      backoff_counter = 1
-      while not self.is_interesting():
+
+      # Pre-select any regenerable choices using the base seed
+      # This ensures the policy/algorithm stays constant across backoff attempts
+      if hasattr(self, '_regenerable_choices') and self._regenerable_choices:
+        # Seed a temporary RNG with the base seed to make the choices
+        choice_rng = random.Random(base_seed)
+        for param_name, choice_info in self._regenerable_choices.items():
+          if choice_info['fixed_value'] is None:
+            # No fixed value - pick randomly and store it as fixed for this get_question() call
+            enum_class = choice_info['enum_class']
+            random_choice = choice_rng.choice(list(enum_class))
+            # Temporarily set this as the fixed value so all refresh() calls use it
+            choice_info['_temp_fixed_value'] = random_choice.name
+            # Store in config_params
+            self.config_params[param_name] = random_choice.name
+
+      backoff_counter = 0
+      is_interesting = False
+      while not is_interesting:
         # Increment seed for each backoff attempt to maintain deterministic behavior
-        backoff_seed = None if base_seed is None else base_seed + backoff_counter
-        self.refresh(rng_seed=backoff_seed, hard_refresh=False)
+        current_seed = None if base_seed is None else base_seed + backoff_counter
+        self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0))
+        is_interesting = self.is_interesting()
         backoff_counter += 1
+
+      # Clear temporary fixed values
+      if hasattr(self, '_regenerable_choices') and self._regenerable_choices:
+        for param_name, choice_info in self._regenerable_choices.items():
+          if '_temp_fixed_value' in choice_info:
+            del choice_info['_temp_fixed_value']
 
     with timer("question_body", question_name=self.name, question_type=self.__class__.__name__):
       body = self.get_body()
@@ -336,7 +477,9 @@ class Question(abc.ABC):
     question_ast.question_class_name = self.__class__.__name__
     question_ast.generation_seed = actual_seed
     question_ast.question_version = self.VERSION
-    question_ast.config_params = self.config_params
+    # Make a copy of config_params so each question AST has its own
+    # (important when the same Question instance is reused for multiple PDFs)
+    question_ast.config_params = dict(self.config_params)
 
     return question_ast
   
@@ -371,21 +514,25 @@ class Question(abc.ABC):
     :param rng_seed: random number generator seed to use when regenerating question
     :param *args:
     :param **kwargs:
+    :return: bool - True if the generated question is interesting, False otherwise
     """
     self.answers = {}
-    # todo: maybe have it randomly generate a seed every time, or use the time, and return this
-    self.rng.seed(None if rng_seed is None else rng_seed + self.rng_seed_offset)
-    # self.rng.seed(self.rng_seed_offset + (rng_seed or 0))
+    # Seed the RNG directly with the provided seed (no offset)
+    self.rng.seed(rng_seed)
+    # Note: We don't call is_interesting() here because child classes need to
+    # generate their workloads first. Child classes should call it at the end
+    # of their refresh() and return the result.
+    return self.is_interesting()  # Default: assume interesting if no override
     
   def is_interesting(self) -> bool:
     return True
   
   def get__canvas(self, course: canvasapi.course.Course, quiz : canvasapi.quiz.Quiz, interest_threshold=1.0, *args, **kwargs):
-
+    log.debug("get__canvas")
     # Get the AST for the question
     with timer("question_get_ast", question_name=self.name, question_type=self.__class__.__name__):
       questionAST = self.get_question(**kwargs)
-
+    log.debug("got question ast")
     # Get the answers and type of question
     question_type, answers = self.get_answers(*args, **kwargs)
 
@@ -423,6 +570,7 @@ class Question(abc.ABC):
       "answers": answers,
       "neutral_comments_html": explanation_html
     }
+
 
 class QuestionGroup():
   

@@ -10,7 +10,7 @@ import math
 from typing import List, Optional
 
 from QuizGenerator.contentast import ContentAST
-from QuizGenerator.question import Question, Answer, QuestionRegistry
+from QuizGenerator.question import Question, Answer, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
@@ -109,7 +109,7 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
 
 
 @QuestionRegistry.register()
-class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
+class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin, BodyTemplatesMixin):
   class Kind(enum.Enum):
     FIFO = enum.auto()
     LRU = enum.auto()
@@ -176,33 +176,29 @@ class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
       return (was_hit, evicted, self.cache_state)
   
   def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    self.num_elements = kwargs.get("num_elements", 5)
-    self.cache_size = kwargs.get("cache_size", 3)
-    self.num_requests = kwargs.get("num_requests", 10)
-    
-    # First set a random algo, then try to see if we should use a different one
-    self.cache_policy_generator = (lambda: self.rng.choice(list(self.Kind)))
-    
+    # Store parameters in kwargs for config_params BEFORE calling super().__init__()
+    kwargs['num_elements'] = kwargs.get("num_elements", 5)
+    kwargs['cache_size'] = kwargs.get("cache_size", 3)
+    kwargs['num_requests'] = kwargs.get("num_requests", 10)
+
+    # Register the regenerable choice using the mixin
     policy_str = (kwargs.get("policy") or kwargs.get("algo"))
-    if policy_str:
-      try:
-        self.cache_policy_generator = (lambda: self.Kind[policy_str.upper()])
-      except KeyError:
-        log.warning(
-          f"Invalid cache policy '{policy_str}'. Valid options are: {[k.name for k in self.Kind]}. Defaulting to random"
-        )
-    
-    self.cache_policy = self.cache_policy_generator()
-  
+    self.register_choice('policy', self.Kind, policy_str, kwargs)
+
+    super().__init__(*args, **kwargs)
+
+    self.num_elements = self.config_params.get("num_elements", 5)
+    self.cache_size = self.config_params.get("cache_size", 3)
+    self.num_requests = self.config_params.get("num_requests", 10)
+
   def refresh(self, previous: Optional[CachingQuestion] = None, *args, hard_refresh: bool = False, **kwargs):
-    # Check to see if we are using the existing caching policy or a brand new one
-    if not hard_refresh:
-      self.rng_seed_offset += 1
-    else:
-      self.cache_policy = self.cache_policy_generator()
+    # Call parent refresh which seeds RNG and calls is_interesting()
+    # Note: We ignore the parent's return value since we need to generate the workload first
     super().refresh(*args, **kwargs)
-    
+
+    # Use the mixin to get the cache policy (randomly selected or fixed)
+    self.cache_policy = self.get_choice('policy', self.Kind)
+
     self.requests = (
         list(range(self.cache_size))  # Prime the cache with the compulsory misses
         + self.rng.choices(
@@ -250,6 +246,9 @@ class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
         "answer__hit_rate": Answer.auto_float("answer__hit_rate", self.hit_rate)
       }
     )
+
+    # Return whether this workload is interesting
+    return self.is_interesting()
   
   def get_body(self, **kwargs) -> ContentAST.Section:
     # Create table data for cache simulation
@@ -288,12 +287,12 @@ class CachingQuestion(MemoryQuestion, TableQuestionMixin, BodyTemplatesMixin):
       "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
     )
     
-    instructions = ContentAST.OnlyHtml(
+    instructions = ContentAST.OnlyHtml([
       "For the cache state, please enter the cache contents in the order suggested in class, "
       "which means separated by commas with spaces (e.g. \"1, 2, 3\") "
       "and with the left-most being the next to be evicted. "
       "In the case where there is a tie, order by increasing number."
-    )
+    ])
     
     body = self.create_fill_in_table_body(intro_text, instructions, cache_table)
     body.add_element(hit_rate_block)

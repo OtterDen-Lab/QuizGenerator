@@ -240,8 +240,8 @@ class QuestionQRCode:
         return json.dumps(data, separators=(',', ':'))
 
     @classmethod
-    def generate_png_path(cls, question_number: int, points_value: float,
-                         scale: int = 4, **extra_data) -> str:
+    def generate_qr_pdf(cls, question_number: int, points_value: float,
+                         scale: int = 10, **extra_data) -> str:
         """
         Generate QR code and save as PNG file, returning the file path.
 
@@ -267,43 +267,14 @@ class QuestionQRCode:
         temp_dir = Path(tempfile.gettempdir()) / "quiz_qrcodes"
         temp_dir.mkdir(exist_ok=True)
 
-        png_path = temp_dir / f"qr_q{question_number}.png"
+        qr_path = temp_dir / f"qr_q{question_number}.pdf"
 
         # Save as PNG with appropriate scale
-        qr.save(str(png_path), scale=scale, border=1)
+        qr.save(str(qr_path), scale=scale, border=0)
 
-        log.debug(f"Generated QR code for question {question_number} at {png_path}")
+        log.debug(f"Generated QR code for question {question_number} at {qr_path}")
 
-        return str(png_path)
-
-    @classmethod
-    def generate_png_bytes(cls, question_number: int, points_value: float,
-                          scale: int = 4, **extra_data) -> bytes:
-        """
-        Generate QR code and return as PNG bytes.
-
-        Useful for in-memory operations or when you need the raw image data.
-
-        Args:
-            question_number: Sequential question number
-            points_value: Point value of the question
-            scale: Scale factor for PNG generation
-            **extra_data: Additional metadata
-
-        Returns:
-            PNG image data as bytes
-        """
-        qr_data = cls.generate_qr_data(question_number, points_value, **extra_data)
-
-        # Generate QR code with high error correction
-        qr = segno.make(qr_data, error=cls.ERROR_CORRECTION)
-
-        # Save to BytesIO
-        buffer = BytesIO()
-        qr.save(buffer, kind='png', scale=scale, border=1)
-        buffer.seek(0)
-
-        return buffer.read()
+        return str(qr_path)
 
     @classmethod
     def cleanup_temp_files(cls):

@@ -223,7 +223,7 @@ def generate_typst(typst_text, remove_previous=False):
 
     # Compile with typst
     output_pdf = os.path.join(os.getcwd(), 'out', os.path.basename(tmp_typ.name).replace('.typ', '.pdf'))
-
+    
     # Use --root to set the filesystem root so absolute paths work correctly
     p = subprocess.Popen(
       ['typst', 'compile', '--root', '/', tmp_typ.name, output_pdf],
