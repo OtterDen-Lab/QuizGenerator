@@ -447,7 +447,8 @@ class Question(abc.ABC):
       while not is_interesting:
         # Increment seed for each backoff attempt to maintain deterministic behavior
         current_seed = None if base_seed is None else base_seed + backoff_counter
-        is_interesting = self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0))
+        self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0))
+        is_interesting = self.is_interesting()
         backoff_counter += 1
 
       # Clear temporary fixed values
@@ -521,17 +522,17 @@ class Question(abc.ABC):
     # Note: We don't call is_interesting() here because child classes need to
     # generate their workloads first. Child classes should call it at the end
     # of their refresh() and return the result.
-    return True  # Default: assume interesting if no override
+    return self.is_interesting()  # Default: assume interesting if no override
     
   def is_interesting(self) -> bool:
     return True
   
   def get__canvas(self, course: canvasapi.course.Course, quiz : canvasapi.quiz.Quiz, interest_threshold=1.0, *args, **kwargs):
-
+    log.debug("get__canvas")
     # Get the AST for the question
     with timer("question_get_ast", question_name=self.name, question_type=self.__class__.__name__):
       questionAST = self.get_question(**kwargs)
-
+    log.debug("got question ast")
     # Get the answers and type of question
     question_type, answers = self.get_answers(*args, **kwargs)
 
