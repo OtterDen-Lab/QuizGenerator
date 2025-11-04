@@ -1758,36 +1758,3 @@ class ContentAST:
         return ""
       return super().render(output_format, **kwargs)
   
-  class TextHTML(Text):
-    """
-    Convenience class for HTML-only text content.
-
-    Identical to ContentAST.Text with hide_from_latex=True.
-    Use when you need text that only appears in Canvas/HTML output.
-
-    Example:
-        # Text that only appears in Canvas
-        canvas_instruction = ContentAST.TextHTML("Submit your answer above")
-    """
-    
-    def __init__(self, *args, **kwargs):
-      super().__init__(*args, **kwargs)
-      self.hide_from_html = False
-      self.hide_from_latex = True
-  
-  class TextLatex(Text):
-    """
-    Convenience class for LaTeX-only text content.
-
-    Identical to ContentAST.Text with hide_from_html=True.
-    Use when you need text that only appears in PDF output.
-
-    Example:
-        # Text that only appears in PDF
-        pdf_instruction = ContentAST.TextLatex("Write your answer in the space below")
-    """
-    
-    def __init__(self, *args, **kwargs):
-      super().__init__(*args, **kwargs)
-      self.hide_from_html = True
-      self.hide_from_latex = False
