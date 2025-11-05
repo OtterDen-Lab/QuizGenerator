@@ -169,7 +169,7 @@ class ContentAST:
     def is_mergeable(self, other: ContentAST.Element):
       return False
   
-  ## Big Containers
+  ## Big containers
   class Document(Element):
     """
     Root document container for complete quiz documents with proper headers and structure.
@@ -275,7 +275,7 @@ class ContentAST:
     // Paragraph spacing
     #set par(
       spacing: 1.0em,
-      leading: 0.5em,
+      leading: 0.0em,
     )
 
     // Question counter and command
@@ -288,12 +288,13 @@ class ContentAST:
         #question_num.step()
     
         *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
-        #v(0.25cm)
+        #v(0.0cm)
     
         #if qr_code != none {
           let fig = figure(image(qr_code, width: 2cm))
           // let fig = square(fill: teal, radius: 0.5em, width: 8em) // for debugging
           wrap-content(fig, align: top + right)[
+            #h(100%)    // force the wrapper to fill line width
             #content
           ]
         } else {
@@ -538,9 +539,9 @@ class ContentAST:
           spacing: {self.spacing}cm{'' if not qr_param else ", "}
           {qr_param}
         )[
-      """) + content + "\n]"
+      """) + content + "\n]\n\n"
       
-  ## Individual Elements
+  # Individual elements
   class Text(Element):
     """
     Basic text content with automatic format conversion and selective visibility.
@@ -569,8 +570,7 @@ class ContentAST:
         # HTML-only text (hidden from PDF)
         web_note = ContentAST.Text("Click submit", hide_from_latex=True)
     """
-    
-    def __init__(self, content: str, *, hide_from_latex=False, hide_from_html=False, emphasis=False):
+    def __init__(self, content : str, *, hide_from_latex=False, hide_from_html=False, emphasis=False):
       super().__init__()
       self.content = content
       self.hide_from_latex = hide_from_latex
@@ -579,7 +579,7 @@ class ContentAST:
     
     def render_markdown(self, **kwargs):
       return f"{'***' if self.emphasis else ''}{self.content}{'***' if self.emphasis else ''}"
-    
+
     def render_html(self, **kwargs):
       if self.hide_from_html:
         return ""
@@ -596,19 +596,15 @@ class ContentAST:
       # Escape # to prevent markdown header conversion in LaTeX
       content = super().convert_markdown(self.content.replace("#", r"\#"), "latex") or self.content
       return content
-    
+
     def render_typst(self, **kwargs):
       """Render text to Typst, escaping special characters."""
       # Hide HTML-only text from Typst (since Typst generates PDFs like LaTeX)
       if self.hide_from_latex:
         return ""
-      
+
       content = re.sub(
-        textwrap.dedent("""
-        ```
-        (.*)
-        ```
-        """),
+        r"```(.*)```",
         r"""
         #box(
           raw(
@@ -620,17 +616,17 @@ class ContentAST:
         self.content,
         flags=re.DOTALL
       )
-      
+
       # In Typst, # starts code/function calls, so we need to escape it
       content = content.replace("# ", r"\# ")
       # content = self.content
-      
+
       # Apply emphasis if needed
       if self.emphasis:
         content = f"*{content}*"
-      
+
       return content
-    
+
     def is_mergeable(self, other: ContentAST.Element):
       if not isinstance(other, ContentAST.Text):
         return False
@@ -671,7 +667,6 @@ class ContentAST:
         # Terminal output
         terminal = ContentAST.Code("$ ls -la\ntotal 24\ndrwxr-xr-x 3 user")
     """
-    
     def __init__(self, lines, **kwargs):
       super().__init__(lines)
       self.make_normal = kwargs.get("make_normal", False)
@@ -681,25 +676,26 @@ class ContentAST:
       return content
     
     def render_html(self, **kwargs):
+      
       return super().convert_markdown(textwrap.indent(self.content, "\t"), "html") or self.content
     
     def render_latex(self, **kwargs):
       content = super().convert_markdown(self.render_markdown(), "latex") or self.content
       if self.make_normal:
         content = (
-            r"{\normal "
-            + content +
-            r"}"
+          r"{\normal "
+          + content +
+          r"}"
         )
       return content
-    
+
     def render_typst(self, **kwargs):
       """Render code block in Typst with smaller monospace font."""
       # Use raw block with 11pt font size
       # Escape backticks in the content
       escaped_content = self.content.replace("`", r"\`")
       return f"#box[#text(size: 8pt)[```\n{escaped_content}\n```]]"
-  
+
   class Equation(Element):
     """
     Mathematical equation renderer with LaTeX input and cross-format output.
@@ -728,7 +724,6 @@ class ContentAST:
         # Complex equations
         body.add_element(ContentAST.Equation(r"\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}"))
     """
-    
     def __init__(self, latex, inline=False):
       super().__init__()
       self.latex = latex
@@ -739,57 +734,108 @@ class ContentAST:
         return f"${self.latex}$"
       else:
         return r"$$ \displaystyle " + f"{self.latex}" + r" \; $$"
-    
+
     def render_html(self, **kwargs):
       if self.inline:
         return fr"\({self.latex}\)"
       else:
         return f"<div class='math'>$$ \\displaystyle {self.latex} \\; $$</div>"
-    
+
     def render_latex(self, **kwargs):
       if self.inline:
         return f"${self.latex}$~"
       else:
         return f"\\begin{{flushleft}}${self.latex}$\\end{{flushleft}}"
-    
+
     def render_typst(self, **kwargs):
       """
       Render equation in Typst format.
 
-      Typst uses LaTeX-like math syntax with $ delimiters.
+      Typst uses LaTeX-like math syntax with $ delimiters, but with different
+      symbol names. This method converts LaTeX math to Typst-compatible syntax.
       Inline: $equation$
       Display: $ equation $
       """
+      # Convert LaTeX to Typst-compatible math
+      typst_math = self._latex_to_typst(self.latex)
+
       if self.inline:
         # Inline math in Typst
-        return f"${self.latex}$"
+        return f"${typst_math}$"
       else:
         # Display math in Typst
-        return f"$ {self.latex} $"
-    
+        return f"$ {typst_math} $"
+
+    @staticmethod
+    def _latex_to_typst(latex_str: str) -> str:
+      """
+      Convert LaTeX math syntax to Typst math syntax.
+
+      Typst uses different conventions:
+      - Greek letters: 'alpha' not '\alpha'
+      - No \left/\right: auto-sizing parentheses
+      - Operators: 'nabla' not '\nabla', 'times' not '\times'
+      """
+      import re
+
+      # Remove \left and \right (Typst uses auto-sizing)
+      latex_str = latex_str.replace(r'\left', '').replace(r'\right', '')
+
+      # Remove unnecessary braces in subscripts/superscripts
+      # Typst doesn't need braces for single characters: x_0 not x_{0}
+      # Match patterns like _{0}, ^{2}, _{10} (but keep multi-char like _{new})
+      latex_str = re.sub(r'_\{(\d+)\}', r'_\1', latex_str)  # _{0} -> _0
+      latex_str = re.sub(r'\^\{(\d+)\}', r'^\1', latex_str)  # ^{2} -> ^2
+
+      # Convert LaTeX Greek letters to Typst syntax (remove backslash)
+      greek_letters = [
+        'alpha', 'beta', 'gamma', 'delta', 'epsilon', 'zeta', 'eta', 'theta',
+        'iota', 'kappa', 'lambda', 'mu', 'nu', 'xi', 'pi', 'rho', 'sigma',
+        'tau', 'phi', 'chi', 'psi', 'omega',
+        'Gamma', 'Delta', 'Theta', 'Lambda', 'Xi', 'Pi', 'Sigma', 'Phi', 'Psi', 'Omega'
+      ]
+
+      for letter in greek_letters:
+        # Use word boundaries to avoid replacing parts of other commands
+        latex_str = re.sub(rf'\\{letter}\b', letter, latex_str)
+
+      # Convert LaTeX operators to Typst syntax
+      latex_str = latex_str.replace(r'\nabla', 'nabla')
+      latex_str = latex_str.replace(r'\times', 'times')
+      latex_str = latex_str.replace(r'\cdot', 'dot')
+      latex_str = latex_str.replace(r'\partial', 'diff')
+
+      # Handle matrix environments
+      if r'\begin{matrix}' in latex_str:
+        matrix_pattern = r'\[\\begin\{matrix\}(.*?)\\end\{matrix\}\]'
+
+        def replace_matrix(match):
+          content = match.group(1)
+          elements = content.split(r'\\')
+          elements = [e.strip() for e in elements if e.strip()]
+          return f"vec({', '.join(elements)})"
+
+        latex_str = re.sub(matrix_pattern, replace_matrix, latex_str)
+
+      return latex_str
+
     @classmethod
-    def make_block_equation__multiline_equals(cls, lhs: str, rhs: List[str]):
+    def make_block_equation__multiline_equals(cls, lhs : str, rhs : List[str]):
       equation_lines = []
-      equation_lines.extend(
-        [
-          r"\begin{array}{l}",
-          f"{lhs} = {rhs[0]} \\\\",
-        ]
-      )
-      equation_lines.extend(
-        [
-          f"\\phantom{{{lhs}}} = {eq} \\\\"
-          for eq in rhs[1:]
-        ]
-      )
-      equation_lines.extend(
-        [
-          r"\end{array}",
-        ]
-      )
+      equation_lines.extend([
+        r"\begin{array}{l}",
+        f"{lhs} = {rhs[0]} \\\\",
+      ])
+      equation_lines.extend([
+        f"\\phantom{{{lhs}}} = {eq} \\\\"
+        for eq in rhs[1:]
+      ])
+      equation_lines.extend([
+        r"\end{array}",
+      ])
       
       return cls('\n'.join(equation_lines))
-  
+
   class Matrix(Element):
     """
     Mathematical matrix renderer for consistent cross-format display.
@@ -820,7 +866,6 @@ class ContentAST:
         - "B": curly braces {matrix}
         - "V": double vertical bars ||matrix|| - for norms
     """
-    
     def __init__(self, data, bracket_type="p", inline=False):
       """
       Creates a matrix element that renders consistently across output formats.
@@ -836,7 +881,7 @@ class ContentAST:
       self.data = data
       self.bracket_type = bracket_type
       self.inline = inline
-    
+
     @staticmethod
     def to_latex(data, bracket_type="p"):
       """
@@ -858,43 +903,43 @@ class ContentAST:
         rows.append(" & ".join(str(cell) for cell in row))
       matrix_content = r" \\ ".join(rows)
       return f"\\begin{{{bracket_type}matrix}} {matrix_content} \\end{{{bracket_type}matrix}}"
-    
+
     def render_markdown(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
       rows = []
       for row in self.data:
         rows.append(" & ".join(str(cell) for cell in row))
       matrix_content = r" \\ ".join(rows)
-      
+
       if self.inline and self.bracket_type == "p":
         return f"$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$"
       else:
         return f"$$\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}$$"
-    
+
     def render_html(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
       rows = []
       for row in self.data:
         rows.append(" & ".join(str(cell) for cell in row))
       matrix_content = r" \\ ".join(rows)
-      
+
       if self.inline:
         return f"<span class='math'>$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$</span>"
       else:
         return f"<div class='math'>$$\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}$$</div>"
-    
+
     def render_latex(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
       rows = []
       for row in self.data:
         rows.append(" & ".join(str(cell) for cell in row))
       matrix_content = r" \\ ".join(rows)
-      
+
       if self.inline and self.bracket_type == "p":
         return f"$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$"
       else:
         return f"\\[\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\]"
-  
+
   class Picture(Element):
     """
     Image/diagram container with proper sizing and captioning.
@@ -926,18 +971,39 @@ class ContentAST:
         )
         body.add_element(picture)
     """
-    
     def __init__(self, img_data, caption=None, width=None):
       super().__init__()
       self.img_data = img_data
       self.caption = caption
       self.width = width
-    
+      self.path = None  # Will be set when image is saved
+
+    def _ensure_image_saved(self):
+      """Save image data to file if not already saved."""
+      if self.path is None:
+        import os
+        import uuid
+
+        # Create imgs directory if it doesn't exist (use absolute path)
+        img_dir = os.path.abspath("imgs")
+        if not os.path.exists(img_dir):
+          os.makedirs(img_dir)
+
+        # Generate unique filename
+        filename = f"image-{uuid.uuid4()}.png"
+        self.path = os.path.join(img_dir, filename)
+
+        # Save BytesIO data to file
+        with open(self.path, 'wb') as f:
+          self.img_data.seek(0)  # Reset buffer position
+          f.write(self.img_data.read())
+
     def render_markdown(self, **kwargs):
+      self._ensure_image_saved()
       if self.caption:
         return f"![{self.caption}]({self.path})"
       return f"![]({self.path})"
-    
+
     def render_html(
         self,
         upload_func: Callable[[BytesIO], str] = lambda _: "",
@@ -954,17 +1020,19 @@ class ContentAST:
       return img
     
     def render_latex(self, **kwargs):
+      self._ensure_image_saved()
+
       options = []
       if self.width:
         options.append(f"width={self.width}")
-      
+
       result = ["\\begin{figure}[h]"]
       result.append(f"\\centering")
       result.append(f"\\includegraphics[{','.join(options)}]{{{self.path}}}")
-      
+
       if self.caption:
         result.append(f"\\caption{{{self.caption}}}")
-      
+
       result.append("\\end{figure}")
       return "\n".join(result)
   
@@ -1152,7 +1220,7 @@ class ContentAST:
         align_spec = "align: left"
       
       # Start table
-      result = [f"#table("]
+      result = [f"table("]
       result.append(f"  columns: {num_cols},")
       result.append(f"  {align_spec},")
       
@@ -1170,7 +1238,7 @@ class ContentAST:
         header_cells = []
         for header in self.headers:
           rendered = header.render(output_format="typst", **kwargs).strip()
-          header_cells.append(f"[{rendered}]")
+          header_cells.append(f"[*{rendered}*]")
         all_rows.append(header_cells)
       
       # Render data rows
@@ -1196,7 +1264,7 @@ class ContentAST:
       
       result.append(")")
       
-      return "\n#box()[" + "\n".join(result) + "]\n"
+      return "\n#box(" + "\n".join(result) + "\n)"
   
   ## Containers
   class Section(Element):
@@ -1228,6 +1296,7 @@ class ContentAST:
             body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
             return body
     """
+    
     def render_typst(self, **kwargs):
       """Render section by directly calling render on each child element."""
       return "".join(element.render("typst", **kwargs) for element in self.elements)
@@ -1267,19 +1336,19 @@ class ContentAST:
             " has no real solutions."
         ])
     """
-
-    def __init__(self, lines_or_elements: List[str|ContentAST.Element] = None):
+    
+    def __init__(self, lines_or_elements: List[str | ContentAST.Element] = None):
       super().__init__(add_spacing_before=True)
       for line in lines_or_elements:
         if isinstance(line, str):
           self.elements.append(ContentAST.Text(line))
         else:
           self.elements.append(line)
-      
+    
     def render(self, output_format, **kwargs):
       # Add in new lines to break these up visually
       return "\n\n" + super().render(output_format, **kwargs)
-  
+    
     def add_line(self, line: str):
       self.elements.append(ContentAST.Text(line))
   
@@ -1311,6 +1380,7 @@ class ContentAST:
             label="Choose the best answer"
         ))
     """
+    
     def __init__(self, answer: Answer = None, label: str = "", unit: str = "", blank_length=5):
       super().__init__()
       self.answer = answer
@@ -1332,7 +1402,7 @@ class ContentAST:
           answer_display = self.answer.get_display_string()
         else:
           answer_display = ", ".join(a.get_display_string() for a in self.answer)
-
+        
         label_part = f"{self.label}:" if self.label else ""
         unit_part = f" {self.unit}" if self.unit else ""
         return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
@@ -1342,17 +1412,17 @@ class ContentAST:
     
     def render_latex(self, **kwargs):
       return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
-
+    
     def render_typst(self, **kwargs):
       """Render answer blank as an underlined space in Typst."""
       # Use the fillline function defined in TYPST_HEADER
       # Width is based on self.length (in cm)
       blank_width = self.length * 0.75  # Convert character length to cm
       blank = f"#fillline(width: {blank_width}cm)"
-
+      
       label_part = f"{self.label}:" if self.label else ""
       unit_part = f" {self.unit}" if self.unit else ""
-
+      
       return f"{label_part} {blank}{unit_part}".strip()
 
   class TableGroup(Element):
@@ -1542,7 +1612,7 @@ class ContentAST:
       )
       return content
 
-  # Specialized Elements
+  ## Specialized Elements
   class RepeatedProblemPart(Element):
     """
     Multi-part problem renderer for questions with labeled subparts (a), (b), (c), etc.
@@ -1706,17 +1776,9 @@ class ContentAST:
         # Add to main content - only appears in Canvas
         body.add_element(html_only)
     """
-
-    def __init__(self, lines_or_elements: List[str|ContentAST.Element] = None):
-      super().__init__(add_spacing_before=True)
-      for line in lines_or_elements:
-        if isinstance(line, str):
-          self.elements.append(ContentAST.Text(line))
-        else:
-          self.elements.append(line)
-          
+    
     def render(self, output_format, **kwargs):
-      log.debug(f"Rendering (OnlyHTML): {self.elements}")
       if output_format != "html":
         return ""
       return super().render(output_format, **kwargs)
+  
