@@ -222,22 +222,22 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
 
   def _generate_parameter_table(self, include_activations=False, include_training_context=False):
     """
-    Generate a table showing all network parameters.
+    Generate side-by-side tables showing all network parameters.
 
     Args:
       include_activations: If True, include computed activation values
       include_training_context: If True, include target, loss, etc. (for backprop questions)
 
     Returns:
-      ContentAST.Table with network parameters
+      ContentAST.TableGroup with network parameters in two side-by-side tables
     """
-    table_data = []
-    table_data.append(["Parameter", "Symbol", "Value"])
+    # Left table: Inputs & Weights
+    left_data = []
+    left_data.append(["Symbol", "Value"])
 
     # Input values
     for i in range(self.num_inputs):
-      table_data.append([
-        f"Input {i+1}",
+      left_data.append([
         ContentAST.Equation(f"x_{i+1}", inline=True),
         f"{self.X[i]:.1f}"
       ])
@@ -245,50 +245,48 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     # Weights from input to hidden
     for j in range(self.num_hidden):
       for i in range(self.num_inputs):
-        table_data.append([
-          f"Weight from x_{i+1} to h_{j+1}",
+        left_data.append([
           ContentAST.Equation(f"w_{{{j+1}{i+1}}}", inline=True),
           f"{self.W1[j, i]:.1f}"
         ])
 
-    # Hidden layer biases
-    if self.use_bias:
-      for j in range(self.num_hidden):
-        table_data.append([
-          f"Bias for h_{j+1}",
-          ContentAST.Equation(f"b_{j+1}", inline=True),
-          f"{self.b1[j]:.1f}"
-        ])
-
     # Weights from hidden to output
     for i in range(self.num_hidden):
-      table_data.append([
-        f"Weight from h_{i+1} to output",
+      left_data.append([
         ContentAST.Equation(f"w_{i+3}", inline=True),
         f"{self.W2[0, i]:.1f}"
       ])
 
+    # Right table: Biases, Activations, Training context
+    right_data = []
+    right_data.append(["Symbol", "Value"])
+
+    # Hidden layer biases
+    if self.use_bias:
+      for j in range(self.num_hidden):
+        right_data.append([
+          ContentAST.Equation(f"b_{j+1}", inline=True),
+          f"{self.b1[j]:.1f}"
+        ])
+
     # Output bias
     if self.use_bias:
-      table_data.append([
-        "Bias for output",
-        ContentAST.Equation(r"b_{out}", inline=True),
+      right_data.append([
+        ContentAST.Equation(r"b_{\mathrm{out}}", inline=True),
         f"{self.b2[0]:.1f}"
       ])
 
     # Hidden layer activations (if computed and requested)
     if include_activations and self.a1 is not None:
       for i in range(self.num_hidden):
-        table_data.append([
-          f"Hidden activation {i+1}",
+        right_data.append([
           ContentAST.Equation(f"h_{i+1}", inline=True),
           f"{self.a1[i]:.4f}"
         ])
 
     # Output activation (if computed and requested)
     if include_activations and self.a2 is not None:
-      table_data.append([
-        "Output",
+      right_data.append([
         ContentAST.Equation(r"\hat{y}", inline=True),
         f"{self.a2[0]:.4f}"
       ])
@@ -296,20 +294,23 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     # Training context (target, loss - for backprop questions)
     if include_training_context:
       if self.y_target is not None:
-        table_data.append([
-          "Target value",
+        right_data.append([
           ContentAST.Equation("y", inline=True),
           f"{self.y_target:.2f}"
         ])
 
       if self.loss is not None:
-        table_data.append([
-          "Loss (MSE)",
+        right_data.append([
           ContentAST.Equation("L", inline=True),
           f"{self.loss:.4f}"
         ])
 
-    return ContentAST.Table(data=table_data)
+    # Create table group
+    table_group = ContentAST.TableGroup()
+    table_group.add_table(ContentAST.Table(data=left_data), label="Inputs & Weights")
+    table_group.add_table(ContentAST.Table(data=right_data), label="Biases & Results")
+
+    return table_group
 
   def _generate_network_diagram(self, show_weights=True, show_activations=False):
     """
