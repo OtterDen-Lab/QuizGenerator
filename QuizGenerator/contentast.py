@@ -275,7 +275,7 @@ class ContentAST:
     // Paragraph spacing
     #set par(
       spacing: 1.0em,
-      leading: 0.5em,
+      leading: 0.0em,
     )
 
     // Question counter and command
@@ -288,12 +288,13 @@ class ContentAST:
         #question_num.step()
     
         *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
-        #v(0.25cm)
+        #v(0.0cm)
     
         #if qr_code != none {
           let fig = figure(image(qr_code, width: 2cm))
           // let fig = square(fill: teal, radius: 0.5em, width: 8em) // for debugging
           wrap-content(fig, align: top + right)[
+            #h(100%)    // force the wrapper to fill line width
             #content
           ]
         } else {
@@ -538,7 +539,7 @@ class ContentAST:
           spacing: {self.spacing}cm{'' if not qr_param else ", "}
           {qr_param}
         )[
-      """) + content + "\n]"
+      """) + content + "\n]\n\n"
       
   # Individual elements
   class Text(Element):
@@ -603,11 +604,7 @@ class ContentAST:
         return ""
 
       content = re.sub(
-        textwrap.dedent("""
-        ```
-        (.*)
-        ```
-        """),
+        r"```(.*)```",
         r"""
         #box(
           raw(
