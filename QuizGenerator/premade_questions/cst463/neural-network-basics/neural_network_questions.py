@@ -272,7 +272,7 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     # Output bias
     if self.use_bias:
       right_data.append([
-        ContentAST.Equation(r"b_{\mathrm{out}}", inline=True),
+        ContentAST.Equation(r"b_{out}", inline=True),
         f"{self.b2[0]:.1f}"
       ])
 
@@ -416,7 +416,7 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       if show_weights:
         label_x = hidden_x + 0.3
         label_y = bias2_y + (output_y[0] - bias2_y) * 0.2
-        bias_label = r'$b_{\mathrm{out}}$'
+        bias_label = r'$b_{out}$'
         ax.text(label_x, label_y, bias_label, fontsize=8,
                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
@@ -743,10 +743,6 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     )
 
     # Network parameters and forward pass results table
-    body.add_element(ContentAST.Paragraph([
-      "**Network parameters and forward pass results:**"
-    ]))
-
     body.add_element(self._generate_parameter_table(include_activations=True, include_training_context=True))
 
     # Activation function reminder
