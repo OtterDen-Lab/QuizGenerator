@@ -32,8 +32,10 @@ log = logging.getLogger(__name__)
 SPACING_PRESETS = {
     "NONE": 0,
     "SHORT": 4,
+    "MEDIUM": 6,
     "LONG": 9,
     "PAGE": 99,  # Special value that will be handled during bin-packing
+    "EXTRA_PAGE": 199,  # Special value that adds a full blank page after the question
 }
 
 

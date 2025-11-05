@@ -287,10 +287,11 @@ class ContentAST:
         #line(length: 100%, stroke: 1pt)
         #v(0cm)
         #question_num.step()
-    
+
         *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
         #v(0.0cm)
-    
+
+        /*
         #if qr_code != none {
           let fig = figure(image(qr_code, width: 2cm))
           // let fig = square(fill: teal, radius: 0.5em, width: 8em) // for debugging
@@ -301,9 +302,31 @@ class ContentAST:
         } else {
           content
         }
-    
-        #v(spacing)
+        */
+        
+        #grid(
+          columns: (1fr, auto),
+          gutter: 1em,
+          align: top,
+        )[
+          #content
+          #v(spacing)
+        ][
+          #image(qr_code, width: 2cm)
+        ]
+        #if spacing >= 199cm {
+        
+          "Note: the next page is left blank for you to show work."
+        }
+
       ]
+        // Check if spacing >= 199cm (EXTRA_PAGE preset)
+        // If so, add both spacing and a pagebreak for a full blank page
+        if spacing >= 199cm {
+          
+          pagebreak()
+          pagebreak()
+        }
     }
 
     // Fill-in line for inline answer blanks (tables, etc.)
@@ -605,11 +628,10 @@ class ContentAST:
         return ""
 
       content = re.sub(
-        r"```(.*)```",
+        r"```\s*(.*)\s*```",
         r"""
         #box(
-          raw(
-            "\1",
+          raw("\1",
             block: true
           )
         )
