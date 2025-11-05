@@ -160,6 +160,13 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     self.z2 = self.W2 @ self.a1 + self.b2
     self.a2 = self._apply_activation(self.z2, self.ACTIVATION_LINEAR)  # Linear output
 
+    # Round all computed values to display precision to ensure students can reproduce calculations
+    # We display z and a values with 4 decimal places
+    self.z1 = np.round(self.z1, 4)
+    self.a1 = np.round(self.a1, 4)
+    self.z2 = np.round(self.z2, 4)
+    self.a2 = np.round(self.a2, 4)
+
     return self.a2
 
   def _compute_loss(self, y_target):
@@ -692,7 +699,11 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Generate target and compute loss
     # Target should be different from output to create meaningful gradients
     self.y_target = float(self.a2[0] + self.rng.uniform(1, 3) * self.rng.choice([-1, 1]))
+    # Round target to display precision (2 decimal places)
+    self.y_target = round(self.y_target, 2)
     self._compute_loss(self.y_target)
+    # Round loss to display precision (4 decimal places)
+    self.loss = round(self.loss, 4)
     self._compute_output_gradient()
 
     # Create answer fields for specific weight gradients
@@ -1003,7 +1014,11 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     # Generate target and compute loss
     self.y_target = float(self.a2[0] + self.rng.uniform(1, 3) * self.rng.choice([-1, 1]))
+    # Round target to display precision (2 decimal places)
+    self.y_target = round(self.y_target, 2)
     self._compute_loss(self.y_target)
+    # Round loss to display precision (4 decimal places)
+    self.loss = round(self.loss, 4)
     self._compute_output_gradient()
 
     # Set learning rate (use small value for stability)
