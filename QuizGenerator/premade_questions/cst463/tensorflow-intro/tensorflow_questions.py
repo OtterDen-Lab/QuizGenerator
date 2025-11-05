@@ -118,10 +118,6 @@ class ParameterCountingQuestion(Question):
       ]))
 
     # Questions
-    body.add_element(ContentAST.Paragraph([
-      "Calculate the following:"
-    ]))
-
     # Answer table
     table_data = []
     table_data.append(["Parameter Type", "Count"])
@@ -811,12 +807,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       "Current weights: ",
       ContentAST.Equation(f"{format_vector(self.current_weights)}", inline=True)
     ]))
-
-    body.add_element(ContentAST.Paragraph([
-      "Gradient at current position: ",
-      ContentAST.Equation(f"{format_vector(self.gradients)}", inline=True)
-    ]))
-
+    
     body.add_element(ContentAST.Paragraph([
       "Previous velocity: ",
       ContentAST.Equation(f"{format_vector(self.prev_velocity)}", inline=True)

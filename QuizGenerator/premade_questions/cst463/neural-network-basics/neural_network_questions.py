@@ -117,8 +117,7 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     """Randomly select an activation function."""
     activations = [
       self.ACTIVATION_SIGMOID,
-      self.ACTIVATION_RELU,
-      self.ACTIVATION_LINEAR
+      self.ACTIVATION_RELU
     ]
     self.activation_function = self.rng.choice(activations)
 
@@ -307,8 +306,8 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
 
     # Create table group
     table_group = ContentAST.TableGroup()
-    table_group.add_table(ContentAST.Table(data=left_data), label="Inputs & Weights")
-    table_group.add_table(ContentAST.Table(data=right_data), label="Biases & Results")
+    table_group.add_table(ContentAST.Table(data=left_data))
+    table_group.add_table(ContentAST.Table(data=right_data))
 
     return table_group
 
@@ -568,21 +567,11 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     )
 
     # Network parameters table
-    body.add_element(ContentAST.Paragraph([
-      "**Network parameters:**"
-    ]))
-
     body.add_element(self._generate_parameter_table(include_activations=False))
 
-    # Activation function formula
+    # Activation function
     body.add_element(ContentAST.Paragraph([
-      f"**Activation function:** ",
-      ContentAST.Equation(self._get_activation_formula(), inline=True)
-    ]))
-
-    # Answer table
-    body.add_element(ContentAST.Paragraph([
-      "**Calculate the following values:**"
+      f"**Activation function:** {self._get_activation_name()}"
     ]))
 
     # Create table for answers
@@ -745,15 +734,9 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Network parameters and forward pass results table
     body.add_element(self._generate_parameter_table(include_activations=True, include_training_context=True))
 
-    # Activation function reminder
+    # Activation function
     body.add_element(ContentAST.Paragraph([
-      f"**Activation function:** ",
-      ContentAST.Equation(self._get_activation_formula(), inline=True)
-    ]))
-
-    # Answer table
-    body.add_element(ContentAST.Paragraph([
-      "Calculate the following gradients:"
+      f"**Activation function:** {self._get_activation_name()}"
     ]))
 
     table_data = []
@@ -1095,13 +1078,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ]))
 
     body.add_element(ContentAST.Paragraph([
-      f"Activation: {self._get_activation_name()} - ",
-      ContentAST.Equation(self._get_activation_formula(), inline=True)
-    ]))
-
-    # Answer table
-    body.add_element(ContentAST.Paragraph([
-      "Calculate the following values for this training step:"
+      f"**Activation function:** {self._get_activation_name()}"
     ]))
 
     table_data = []
