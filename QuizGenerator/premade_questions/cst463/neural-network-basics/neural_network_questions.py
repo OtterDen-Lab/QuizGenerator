@@ -574,22 +574,24 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       f"**Activation function:** {self._get_activation_name()}"
     ]))
 
-    # Create table for answers
-    table_data = []
-    table_data.append(["Value", "Your Answer"])
-
+    # Create answer block
+    answers = []
     for i in range(self.num_hidden):
-      table_data.append([
-        ContentAST.Paragraph([ContentAST.Equation(f"h_{i+1}", inline=True), f" (hidden neuron {i+1} output)"]),
-        ContentAST.Answer(self.answers[f"h{i+1}"])
-      ])
+      answers.append(
+        ContentAST.Answer(
+          answer=self.answers[f"h{i+1}"],
+          label=f"h_{i+1} (hidden neuron {i+1} output)"
+        )
+      )
 
-    table_data.append([
-      ContentAST.Paragraph([ContentAST.Equation(r"\hat{y}", inline=True), " (network output)"]),
-      ContentAST.Answer(self.answers["y_pred"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["y_pred"],
+        label="ŷ (network output)"
+      )
+    )
 
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ContentAST.AnswerBlock(answers))
 
     return body
 
@@ -739,26 +741,32 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       f"**Activation function:** {self._get_activation_name()}"
     ]))
 
-    table_data = []
-    table_data.append(["Gradient", "Description", "Your Answer"])
+    body.add_element(ContentAST.Paragraph([
+      "**Calculate the following gradients:**"
+    ]))
+
+    # Create answer block
+    answers = []
 
     # W2 gradients
     for i in range(self.num_hidden):
-      table_data.append([
-        ContentAST.Equation(f"∂L / ∂w_{i+3}", inline=True),
-        ContentAST.Paragraph([f"Weight from ", ContentAST.Equation(f"h_{i+1}", inline=True), " to output"]),
-        ContentAST.Answer(self.answers[f"dL_dw2_{i}"])
-      ])
+      answers.append(
+        ContentAST.Answer(
+          answer=self.answers[f"dL_dw2_{i}"],
+          label=f"∂L/∂w_{i+3} (weight from h_{i+1} to output)"
+        )
+      )
 
     # W1 gradients (first hidden neuron)
     for j in range(self.num_inputs):
-      table_data.append([
-        ContentAST.Equation(f"∂L / ∂w_{{1{j+1}}}", inline=True),
-        ContentAST.Paragraph([f"Weight from ", ContentAST.Equation(f"x_{j+1}", inline=True), " to ", ContentAST.Equation("h_1", inline=True)]),
-        ContentAST.Answer(self.answers[f"dL_dw1_0{j}"])
-      ])
+      answers.append(
+        ContentAST.Answer(
+          answer=self.answers[f"dL_dw1_0{j}"],
+          label=f"∂L/∂w_1{j+1} (weight from x_{j+1} to h_1)"
+        )
+      )
 
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ContentAST.AnswerBlock(answers))
 
     return body
 
@@ -897,21 +905,22 @@ class EnsembleAveragingQuestion(Question):
       "To create an ensemble, calculate the combined prediction using the following methods:"
     ]))
 
-    # Answer table
-    table_data = []
-    table_data.append(["Method", "Combined Prediction"])
+    # Create answer block
+    answers = []
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["mean"],
+        label="Mean (average)"
+      )
+    )
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["median"],
+        label="Median"
+      )
+    )
 
-    table_data.append([
-      "Mean (average)",
-      ContentAST.Answer(self.answers["mean"])
-    ])
-
-    table_data.append([
-      "Median",
-      ContentAST.Answer(self.answers["median"])
-    ])
-
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ContentAST.AnswerBlock(answers))
 
     return body
 
@@ -1081,46 +1090,56 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       f"**Activation function:** {self._get_activation_name()}"
     ]))
 
-    table_data = []
-    table_data.append(["Step", "Calculation", "Your Answer"])
+    body.add_element(ContentAST.Paragraph([
+      "**Complete the following training steps:**"
+    ]))
 
-    table_data.append([
-      "1. Forward Pass",
-      ContentAST.Paragraph(["Network output ", ContentAST.Equation(r"\hat{y}", inline=True)]),
-      ContentAST.Answer(self.answers["y_pred"])
-    ])
+    # Create answer block
+    answers = []
 
-    table_data.append([
-      "2. Loss",
-      ContentAST.Paragraph(["MSE: ", ContentAST.Equation(r"L = (1/2)(y - \hat{y})^2", inline=True)]),
-      ContentAST.Answer(self.answers["loss"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["y_pred"],
+        label="1. Forward Pass - Network output ŷ"
+      )
+    )
 
-    table_data.append([
-      "3. Gradient",
-      ContentAST.Paragraph([ContentAST.Equation(r"∂L / ∂w_3", inline=True), " (weight ", ContentAST.Equation("h_1", inline=True), " ", ContentAST.Equation(r"\to", inline=True), " ", ContentAST.Equation(r"\hat{y}", inline=True), ")"]),
-      ContentAST.Answer(self.answers["grad_w3"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["loss"],
+        label="2. Loss - MSE: L = (1/2)(y - ŷ)²"
+      )
+    )
 
-    table_data.append([
-      "4. Gradient",
-      ContentAST.Paragraph([ContentAST.Equation(r"∂L / ∂w_{11}", inline=True), " (weight ", ContentAST.Equation("x_1", inline=True), " ", ContentAST.Equation(r"\to", inline=True), " ", ContentAST.Equation("h_1", inline=True), ")"]),
-      ContentAST.Answer(self.answers["grad_w11"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["grad_w3"],
+        label="3. Gradient ∂L/∂w₃ (weight h₁ → ŷ)"
+      )
+    )
 
-    table_data.append([
-      "5. Update",
-      ContentAST.Paragraph(["New ", ContentAST.Equation("w_3", inline=True), ": ", ContentAST.Equation(r"w_3' = w_3 - α(∂L / ∂w_3)", inline=True)]),
-      ContentAST.Answer(self.answers["new_w3"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["grad_w11"],
+        label="4. Gradient ∂L/∂w₁₁ (weight x₁ → h₁)"
+      )
+    )
 
-    table_data.append([
-      "6. Update",
-      ContentAST.Paragraph(["New ", ContentAST.Equation("w_{11}", inline=True), " after update"]),
-      ContentAST.Answer(self.answers["new_w11"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["new_w3"],
+        label="5. Updated w₃: w₃' = w₃ - α(∂L/∂w₃)"
+      )
+    )
 
-    body.add_element(ContentAST.Table(data=table_data))
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["new_w11"],
+        label="6. Updated w₁₁: w₁₁' = w₁₁ - α(∂L/∂w₁₁)"
+      )
+    )
+
+    body.add_element(ContentAST.AnswerBlock(answers))
 
     return body
 
