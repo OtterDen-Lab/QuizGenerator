@@ -11,6 +11,7 @@ import markdown
 from QuizGenerator.misc import log, Answer
 
 from QuizGenerator.qrcode_generator import QuestionQRCode
+import re
 
 class ContentAST:
   """
@@ -768,7 +769,7 @@ class ContentAST:
 
     @staticmethod
     def _latex_to_typst(latex_str: str) -> str:
-      """
+      r"""
       Convert LaTeX math syntax to Typst math syntax.
 
       Typst uses different conventions:
@@ -776,16 +777,15 @@ class ContentAST:
       - No \left/\right: auto-sizing parentheses
       - Operators: 'nabla' not '\nabla', 'times' not '\times'
       """
-      import re
 
       # Remove \left and \right (Typst uses auto-sizing)
       latex_str = latex_str.replace(r'\left', '').replace(r'\right', '')
 
-      # Remove unnecessary braces in subscripts/superscripts
-      # Typst doesn't need braces for single characters: x_0 not x_{0}
-      # Match patterns like _{0}, ^{2}, _{10} (but keep multi-char like _{new})
-      latex_str = re.sub(r'_\{(\d+)\}', r'_\1', latex_str)  # _{0} -> _0
-      latex_str = re.sub(r'\^\{(\d+)\}', r'^\1', latex_str)  # ^{2} -> ^2
+      # Convert subscripts and superscripts from LaTeX to Typst
+      # LaTeX uses braces: b_{out}, x_{10}, x^{2}
+      # Typst uses parentheses for multi-char: b_(out), x_(10), x^(2)
+      latex_str = re.sub(r'_{([^}]+)}', r'_("\1")', latex_str)  # _{...} -> _(...)
+      latex_str = re.sub(r'\^{([^}]+)}', r'^("\1")', latex_str)  # ^{...} -> ^(...)
 
       # Convert LaTeX Greek letters to Typst syntax (remove backslash)
       greek_letters = [
