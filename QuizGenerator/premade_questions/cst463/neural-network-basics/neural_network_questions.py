@@ -323,10 +323,10 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       BytesIO buffer containing PNG image
     """
     # Create figure with tight layout and equal aspect ratio
-    fig = plt.figure(figsize=(8, 4))
+    fig = plt.figure(figsize=(8, 2.5))
     ax = fig.add_subplot(111)
-    ax.set_xlim(0, 4)
-    ax.set_ylim(-0.5, 2.5)
+    # ax.set_xlim(0, 4)
+    # ax.set_ylim(0.2, 1.8)  # Tighter vertical bounds
     ax.set_aspect('equal', adjustable='box')  # Keep circles circular
     ax.axis('off')
 
@@ -380,8 +380,8 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
         if show_weights:
           label_x = input_x + 0.3
           label_y = input_y[i] + (hidden_y[j] - input_y[i]) * 0.2
-          # Always show just the label (symbol)
-          weight_label = f'w_{{{j+1}{i+1}}}'
+          # Use LaTeX math mode for proper subscript rendering
+          weight_label = f'$w_{{{j+1}{i+1}}}$'
           ax.text(label_x, label_y, weight_label, fontsize=8,
                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
@@ -393,7 +393,7 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
         if show_weights:
           label_x = input_x + 0.3
           label_y = bias1_y + (hidden_y[j] - bias1_y) * 0.2
-          bias_label = f'b_{{{j+1}}}'
+          bias_label = f'$b_{{{j+1}}}$'
           ax.text(label_x, label_y, bias_label, fontsize=8,
                   bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
@@ -404,7 +404,7 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       if show_weights:
         label_x = hidden_x + 0.3
         label_y = hidden_y[i] + (output_y[0] - hidden_y[i]) * 0.2
-        weight_label = f'w_{{{i+3}}}'
+        weight_label = f'$w_{{{i+3}}}$'
         ax.text(label_x, label_y, weight_label, fontsize=8,
                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
@@ -415,7 +415,7 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       if show_weights:
         label_x = hidden_x + 0.3
         label_y = bias2_y + (output_y[0] - bias2_y) * 0.2
-        bias_label = 'b_{out}'
+        bias_label = r'$b_{\mathrm{out}}$'
         ax.text(label_x, label_y, bias_label, fontsize=8,
                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
@@ -462,10 +462,10 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     label = r'$\hat{y}$' if not show_activations else f'$\\hat{{y}}$={self.a2[0]:.2f}'
     ax.text(output_x + r + 0.15, y, label, fontsize=10, ha='left', va='center')
 
-    # Save to buffer
+    # Save to buffer with minimal padding
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight',
-                facecolor='white', edgecolor='none', pad_inches=0.05)
+                facecolor='white', edgecolor='none', pad_inches=0.0)
     plt.close(fig)
     buffer.seek(0)
 

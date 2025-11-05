@@ -228,7 +228,6 @@ class ActivationFunctionComputationQuestion(Question):
   ACTIVATION_SIGMOID = "sigmoid"
   ACTIVATION_TANH = "tanh"
   ACTIVATION_SOFTMAX = "softmax"
-  ACTIVATION_LEAKY_RELU = "leaky_relu"
 
   def __init__(self, *args, **kwargs):
     kwargs["topic"] = kwargs.get("topic", Question.Topic.ML_OPTIMIZATION)
@@ -256,7 +255,6 @@ class ActivationFunctionComputationQuestion(Question):
         self.ACTIVATION_SIGMOID,
         self.ACTIVATION_TANH,
         self.ACTIVATION_SOFTMAX,
-        self.ACTIVATION_LEAKY_RELU
       ]
       self.activation = self.rng.choice(activations)
 
@@ -286,9 +284,6 @@ class ActivationFunctionComputationQuestion(Question):
       sum_exp = sum(exp_vals)
       return [e / sum_exp for e in exp_vals]
 
-    elif self.activation == self.ACTIVATION_LEAKY_RELU:
-      return [x if x > 0 else self.leaky_alpha * x for x in inputs]
-
     else:
       raise ValueError(f"Unknown activation: {self.activation}")
 
@@ -299,7 +294,6 @@ class ActivationFunctionComputationQuestion(Question):
       self.ACTIVATION_SIGMOID: "Sigmoid",
       self.ACTIVATION_TANH: "Tanh",
       self.ACTIVATION_SOFTMAX: "Softmax",
-      self.ACTIVATION_LEAKY_RELU: "Leaky ReLU"
     }
     return names.get(self.activation, "Unknown")
 
@@ -316,9 +310,6 @@ class ActivationFunctionComputationQuestion(Question):
 
     elif self.activation == self.ACTIVATION_SOFTMAX:
       return r"\text{softmax}(x_i) = \frac{e^{x_i}}{\sum_j e^{x_j}}"
-
-    elif self.activation == self.ACTIVATION_LEAKY_RELU:
-      return f"\\text{{LeakyReLU}}(x) = \\begin{{cases}} x & x > 0 \\\\ {self.leaky_alpha}x & x \\leq 0 \\end{{cases}}"
 
     return ""
 
@@ -453,18 +444,6 @@ class ActivationFunctionComputationQuestion(Question):
             f"\\tanh({x:.1f}) = {y:.4f}",
             inline=False
           ))
-
-        elif self.activation == self.ACTIVATION_LEAKY_RELU:
-          if x > 0:
-            explanation.add_element(ContentAST.Equation(
-              f"\\text{{LeakyReLU}}({x:.1f}) = {x:.1f} = {y:.4f}",
-              inline=False
-            ))
-          else:
-            explanation.add_element(ContentAST.Equation(
-              f"\\text{{LeakyReLU}}({x:.1f}) = {self.leaky_alpha} \\times {x:.1f} = {y:.4f}",
-              inline=False
-            ))
 
     return explanation
 
