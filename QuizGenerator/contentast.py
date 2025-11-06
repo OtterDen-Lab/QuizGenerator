@@ -802,6 +802,9 @@ class ContentAST:
 
       # Remove \left and \right (Typst uses auto-sizing)
       latex_str = latex_str.replace(r'\left', '').replace(r'\right', '')
+      
+      # Hat Notation
+      latex_str = re.sub(r'\\hat{([^}]+)}', r'hat("\1")', latex_str)  # \hat{...} -> hat(...)
 
       # Convert subscripts and superscripts from LaTeX to Typst
       # LaTeX uses braces: b_{out}, x_{10}, x^{2}

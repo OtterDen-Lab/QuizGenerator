@@ -1108,6 +1108,9 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     body.add_element(ContentAST.Paragraph([
       "**Complete the following training steps:**"
     ]))
+    
+    # Network parameters table
+    body.add_element(self._generate_parameter_table(include_activations=False))
 
     # Create answer block
     answers = []
