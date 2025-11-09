@@ -136,7 +136,8 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
           "question_type": str,
           "seed": int,
           "version": str,
-          "answers": dict
+          "answers": dict,
+          "explanation_markdown": str  # Markdown-formatted explanation for students
       }
   """
   question_num = qr_data.get('q')
@@ -203,7 +204,11 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
     # Generate HTML answer key for grading
     question_html = question_ast.body.render("html", show_answers=True)
     result['answer_key_html'] = question_html
-    
+
+    # Generate markdown explanation for students
+    explanation_markdown = question_ast.explanation.render("markdown")
+    result['explanation_markdown'] = explanation_markdown
+
     log.info(f"  Successfully regenerated question with {len(canvas_answers)} answer(s)")
     
     return result
@@ -236,7 +241,8 @@ def regenerate_from_encrypted(encrypted_data: str, points: float = 1.0) -> Dict[
           "kwargs": dict,  # Question-specific config params (if any)
           "answers": dict,  # Canvas-formatted answers
           "answer_objects": dict,  # Raw Answer objects with values/tolerances
-          "answer_key_html": str  # HTML rendering of question with answers shown
+          "answer_key_html": str,  # HTML rendering of question with answers shown
+          "explanation_markdown": str  # Markdown-formatted explanation for students
       }
 
   Raises:
@@ -308,7 +314,10 @@ def regenerate_from_metadata(
     
     # Generate HTML answer key for grading
     question_html = question_ast.body.render("html", show_answers=True)
-    
+
+    # Generate markdown explanation for students
+    explanation_markdown = question_ast.explanation.render("markdown")
+
     result = {
       "question_type": question_type,
       "seed": seed,
@@ -319,7 +328,8 @@ def regenerate_from_metadata(
         "data": canvas_answers
       },
       "answer_objects": question.answers,
-      "answer_key_html": question_html
+      "answer_key_html": question_html,
+      "explanation_markdown": explanation_markdown
     }
     
     # Include kwargs in result if provided
@@ -367,7 +377,10 @@ def display_answer_summary(question_data: Dict[str, Any]) -> None:
   
   if 'answer_key_html' in question_data:
     print("\nHTML answer key available in result['answer_key_html']")
-  
+
+  if 'explanation_markdown' in question_data:
+    print("Markdown explanation available in result['explanation_markdown']")
+
   print("=" * 60)
 
 

@@ -463,7 +463,8 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     # Question description
     body.add_element(ContentAST.Paragraph([
       f"Given the neural network below with {self._get_activation_name()} activation "
-      f"in the hidden layer, calculate the forward pass for the given input values."
+      f"in the hidden layer and linear activation (f(z) = z) in the output layer, "
+      f"calculate the forward pass for the given input values."
     ]))
 
     # Network diagram
@@ -483,10 +484,16 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     body.add_element(ContentAST.Paragraph(["Input values: "] + input_vals))
 
-    # Activation function formula
+    # Activation function formulas
     body.add_element(ContentAST.Paragraph([
-      f"Activation function: ",
+      f"Hidden layer activation: ",
       ContentAST.Equation(self._get_activation_formula(), inline=True)
+    ]))
+
+    body.add_element(ContentAST.Paragraph([
+      f"Output layer activation: ",
+      ContentAST.Equation(r"f(z) = z", inline=True),
+      " (linear)"
     ]))
 
     # Answer table
@@ -564,7 +571,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     # Output layer
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 3: Calculate output**"
+      "**Step 3: Calculate output (with linear activation)**"
     ]))
 
     terms = []
@@ -581,9 +588,13 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     ))
 
     explanation.add_element(ContentAST.Equation(
-      f"\\hat{{y}} = z_{{out}} = {self.a2[0]:.4f}",
+      f"\\hat{{y}} = f(z_{{out}}) = z_{{out}} = {self.a2[0]:.4f}",
       inline=False
     ))
+
+    explanation.add_element(ContentAST.Paragraph([
+      "(Note: The output layer uses linear activation, so the output can be any real number)"
+    ]))
 
     return explanation
 
