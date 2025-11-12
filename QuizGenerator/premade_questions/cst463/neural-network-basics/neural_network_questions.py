@@ -117,8 +117,7 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     """Randomly select an activation function."""
     activations = [
       self.ACTIVATION_SIGMOID,
-      self.ACTIVATION_RELU,
-      self.ACTIVATION_LINEAR
+      self.ACTIVATION_RELU
     ]
     self.activation_function = self.rng.choice(activations)
 
@@ -160,6 +159,13 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     # Output layer
     self.z2 = self.W2 @ self.a1 + self.b2
     self.a2 = self._apply_activation(self.z2, self.ACTIVATION_LINEAR)  # Linear output
+
+    # Round all computed values to display precision to ensure students can reproduce calculations
+    # We display z and a values with 4 decimal places
+    self.z1 = np.round(self.z1, 4)
+    self.a1 = np.round(self.a1, 4)
+    self.z2 = np.round(self.z2, 4)
+    self.a2 = np.round(self.a2, 4)
 
     return self.a2
 
@@ -220,6 +226,98 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       return r"f(z) = z"
     return ""
 
+  def _generate_parameter_table(self, include_activations=False, include_training_context=False):
+    """
+    Generate side-by-side tables showing all network parameters.
+
+    Args:
+      include_activations: If True, include computed activation values
+      include_training_context: If True, include target, loss, etc. (for backprop questions)
+
+    Returns:
+      ContentAST.TableGroup with network parameters in two side-by-side tables
+    """
+    # Left table: Inputs & Weights
+    left_data = []
+    left_data.append(["Symbol", "Value"])
+
+    # Input values
+    for i in range(self.num_inputs):
+      left_data.append([
+        ContentAST.Equation(f"x_{i+1}", inline=True),
+        f"{self.X[i]:.1f}"
+      ])
+
+    # Weights from input to hidden
+    for j in range(self.num_hidden):
+      for i in range(self.num_inputs):
+        left_data.append([
+          ContentAST.Equation(f"w_{{{j+1}{i+1}}}", inline=True),
+          f"{self.W1[j, i]:.1f}"
+        ])
+
+    # Weights from hidden to output
+    for i in range(self.num_hidden):
+      left_data.append([
+        ContentAST.Equation(f"w_{i+3}", inline=True),
+        f"{self.W2[0, i]:.1f}"
+      ])
+
+    # Right table: Biases, Activations, Training context
+    right_data = []
+    right_data.append(["Symbol", "Value"])
+
+    # Hidden layer biases
+    if self.use_bias:
+      for j in range(self.num_hidden):
+        right_data.append([
+          ContentAST.Equation(f"b_{j+1}", inline=True),
+          f"{self.b1[j]:.1f}"
+        ])
+
+    # Output bias
+    if self.use_bias:
+      right_data.append([
+        ContentAST.Equation(r"b_{out}", inline=True),
+        f"{self.b2[0]:.1f}"
+      ])
+
+    # Hidden layer activations (if computed and requested)
+    if include_activations and self.a1 is not None:
+      for i in range(self.num_hidden):
+        right_data.append([
+          ContentAST.Equation(f"h_{i+1}", inline=True),
+          f"{self.a1[i]:.4f}"
+        ])
+
+    # Output activation (if computed and requested)
+    if include_activations and self.a2 is not None:
+      right_data.append([
+        ContentAST.Equation(r"\hat{y}", inline=True),
+        f"{self.a2[0]:.4f}"
+      ])
+
+    # Training context (target, loss - for backprop questions)
+    if include_training_context:
+      if self.y_target is not None:
+        right_data.append([
+          ContentAST.Equation("y", inline=True),
+          f"{self.y_target:.2f}"
+        ])
+
+      if self.loss is not None:
+        right_data.append([
+          ContentAST.Equation("L", inline=True),
+          f"{self.loss:.4f}"
+        ])
+
+    # Create table group
+    table_group = ContentAST.TableGroup()
+    table_group.add_table(ContentAST.Table(data=left_data))
+    table_group.add_table(ContentAST.Table(data=right_data))
+
+    return table_group
+
   def _generate_network_diagram(self, show_weights=True, show_activations=False):
     """
     Generate a simple, clean network diagram.
@@ -232,10 +330,8 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       BytesIO buffer containing PNG image
     """
     # Create figure with tight layout and equal aspect ratio
-    fig = plt.figure(figsize=(8, 4))
+    fig = plt.figure(figsize=(8, 2.5))
     ax = fig.add_subplot(111)
-    ax.set_xlim(0, 4)
-    ax.set_ylim(-0.5, 2.5)
     ax.set_aspect('equal', adjustable='box')  # Keep circles circular
     ax.axis('off')
 
@@ -289,9 +385,10 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
         if show_weights:
           label_x = input_x + 0.3
           label_y = input_y[i] + (hidden_y[j] - input_y[i]) * 0.2
-          weight_val = f'{self.W1[j, i]:.1f}' if not show_activations else f'w_{{{j+1}{i+1}}}'
-          ax.text(label_x, label_y, weight_val, fontsize=8,
-                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
+          # Use LaTeX math mode for proper subscript rendering
+          weight_label = f'$w_{{{j+1}{i+1}}}$'
+          ax.text(label_x, label_y, weight_label, fontsize=8,
+                  bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
     # Bias to hidden
     if self.use_bias:
@@ -301,9 +398,9 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
         if show_weights:
           label_x = input_x + 0.3
           label_y = bias1_y + (hidden_y[j] - bias1_y) * 0.2
-          weight_val = f'{self.b1[j]:.1f}' if not show_activations else f'b_{{{j+1}}}'
-          ax.text(label_x, label_y, weight_val, fontsize=8,
-                 bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
+          bias_label = f'$b_{{{j+1}}}$'
+          ax.text(label_x, label_y, bias_label, fontsize=8,
+                  bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
     # Hidden to output
     for i in range(self.num_hidden):
@@ -312,9 +409,9 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       if show_weights:
         label_x = hidden_x + 0.3
         label_y = hidden_y[i] + (output_y[0] - hidden_y[i]) * 0.2
-        weight_val = f'{self.W2[0, i]:.1f}' if not show_activations else f'w_{{{i+3}}}'
-        ax.text(label_x, label_y, weight_val, fontsize=8,
-               bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
+        weight_label = f'$w_{{{i+3}}}$'
+        ax.text(label_x, label_y, weight_label, fontsize=8,
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
     # Bias to output
     if self.use_bias:
@@ -323,9 +420,9 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
       if show_weights:
         label_x = hidden_x + 0.3
         label_y = bias2_y + (output_y[0] - bias2_y) * 0.2
-        weight_val = f'{self.b2[0]:.1f}' if not show_activations else 'b_{out}'
-        ax.text(label_x, label_y, weight_val, fontsize=8,
-               bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
+        bias_label = r'$b_{out}$'
+        ax.text(label_x, label_y, bias_label, fontsize=8,
+                bbox=dict(boxstyle='round,pad=0.2', facecolor='white', edgecolor='none'))
 
     # Draw nodes
     # Input nodes
@@ -370,10 +467,10 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
     label = r'$\hat{y}$' if not show_activations else f'$\\hat{{y}}$={self.a2[0]:.2f}'
     ax.text(output_x + r + 0.15, y, label, fontsize=10, ha='left', va='center')
 
-    # Save to buffer
+    # Save to buffer with minimal padding
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight',
-                facecolor='white', edgecolor='none', pad_inches=0.05)
+                facecolor='white', edgecolor='none', pad_inches=0.0)
     plt.close(fig)
     buffer.seek(0)
 
@@ -471,52 +568,36 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     body.add_element(
       ContentAST.Picture(
         img_data=self._generate_network_diagram(show_weights=True, show_activations=False),
-        caption=f"Neural network with {self._get_activation_name()} activation"
+        caption=f"Neural network architecture"
       )
     )
 
-    # Input values
-    input_vals = []
-    for i in range(self.num_inputs):
-      if i > 0:
-        input_vals.append(", ")
-      input_vals.append(ContentAST.Equation(f"x_{i+1} = {self.X[i]:.1f}", inline=True))
+    # Network parameters table
+    body.add_element(self._generate_parameter_table(include_activations=False))
 
-    body.add_element(ContentAST.Paragraph(["Input values: "] + input_vals))
-
-    # Activation function formulas
+    # Activation function
     body.add_element(ContentAST.Paragraph([
-      f"Hidden layer activation: ",
-      ContentAST.Equation(self._get_activation_formula(), inline=True)
+      f"**Activation function:** {self._get_activation_name()}"
     ]))
 
-    body.add_element(ContentAST.Paragraph([
-      f"Output layer activation: ",
-      ContentAST.Equation(r"f(z) = z", inline=True),
-      " (linear)"
-    ]))
-
-    # Answer table
-    body.add_element(ContentAST.Paragraph([
-      "Calculate the following values:"
-    ]))
-
-    # Create table for answers
-    table_data = []
-    table_data.append(["Value", "Your Answer"])
-
+    # Create answer block
+    answers = []
     for i in range(self.num_hidden):
-      table_data.append([
-        ContentAST.Paragraph([ContentAST.Equation(f"h_{i+1}", inline=True), f" (hidden neuron {i+1} output)"]),
-        ContentAST.Answer(self.answers[f"h{i+1}"])
-      ])
+      answers.append(
+        ContentAST.Answer(
+          answer=self.answers[f"h{i+1}"],
+          label=f"h_{i+1} (hidden neuron {i+1} output)"
+        )
+      )
 
-    table_data.append([
-      ContentAST.Paragraph([ContentAST.Equation(r"\hat{y}", inline=True), " (network output)"]),
-      ContentAST.Answer(self.answers["y_pred"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["y_pred"],
+        label="ŷ (network output)"
+      )
+    )
 
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ContentAST.AnswerBlock(answers))
 
     return body
 
@@ -621,7 +702,11 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Generate target and compute loss
     # Target should be different from output to create meaningful gradients
     self.y_target = float(self.a2[0] + self.rng.uniform(1, 3) * self.rng.choice([-1, 1]))
+    # Round target to display precision (2 decimal places)
+    self.y_target = round(self.y_target, 2)
     self._compute_loss(self.y_target)
+    # Round loss to display precision (4 decimal places)
+    self.loss = round(self.loss, 4)
     self._compute_output_gradient()
 
     # Create answer fields for specific weight gradients
@@ -654,65 +739,48 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       f"Calculate the gradients (∂L/∂w) for the specified weights using backpropagation."
     ]))
 
-    # Network diagram with activations
+    # Network diagram
     body.add_element(
       ContentAST.Picture(
-        img_data=self._generate_network_diagram(show_weights=True, show_activations=True),
-        caption=f"Neural network with computed activations"
+        img_data=self._generate_network_diagram(show_weights=True, show_activations=False),
+        caption=f"Neural network architecture"
       )
     )
 
-    # Show forward pass results
+    # Network parameters and forward pass results table
+    body.add_element(self._generate_parameter_table(include_activations=True, include_training_context=True))
+
+    # Activation function
     body.add_element(ContentAST.Paragraph([
-      "**Forward pass results:**"
+      f"**Activation function:** {self._get_activation_name()}"
     ]))
 
     body.add_element(ContentAST.Paragraph([
-      "Target: ",
-      ContentAST.Equation(f"y = {self.y_target:.2f}", inline=True)
+      "**Calculate the following gradients:**"
     ]))
 
-    body.add_element(ContentAST.Paragraph([
-      "Prediction: ",
-      ContentAST.Equation(f"\\hat{{y}} = {self.a2[0]:.4f}", inline=True)
-    ]))
-
-    body.add_element(ContentAST.Paragraph([
-      "Loss (MSE): ",
-      ContentAST.Equation(f"L = (1/2)(y - \\hat{{y}})^2 = {self.loss:.4f}", inline=True)
-    ]))
-
-    # Activation function reminder
-    body.add_element(ContentAST.Paragraph([
-      f"Activation function: ",
-      ContentAST.Equation(self._get_activation_formula(), inline=True)
-    ]))
-
-    # Answer table
-    body.add_element(ContentAST.Paragraph([
-      "Calculate the following gradients:"
-    ]))
-
-    table_data = []
-    table_data.append(["Gradient", "Description", "Your Answer"])
+    # Create answer block
+    answers = []
 
     # W2 gradients
     for i in range(self.num_hidden):
-      table_data.append([
-        ContentAST.Equation(f"∂L / ∂w_{i+3}", inline=True),
-        ContentAST.Paragraph([f"Weight from ", ContentAST.Equation(f"h_{i+1}", inline=True), " to output"]),
-        ContentAST.Answer(self.answers[f"dL_dw2_{i}"])
-      ])
+      answers.append(
+        ContentAST.Answer(
+          answer=self.answers[f"dL_dw2_{i}"],
+          label=f"∂L/∂w_{i+3} (weight from h_{i+1} to output)"
+        )
+      )
 
     # W1 gradients (first hidden neuron)
     for j in range(self.num_inputs):
-      table_data.append([
-        ContentAST.Equation(f"∂L / ∂w_{{1{j+1}}}", inline=True),
-        ContentAST.Paragraph([f"Weight from ", ContentAST.Equation(f"x_{j+1}", inline=True), " to ", ContentAST.Equation("h_1", inline=True)]),
-        ContentAST.Answer(self.answers[f"dL_dw1_0{j}"])
-      ])
+      answers.append(
+        ContentAST.Answer(
+          answer=self.answers[f"dL_dw1_0{j}"],
+          label=f"∂L/∂w_1{j+1} (weight from x_{j+1} to h_1)"
+        )
+      )
 
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ContentAST.AnswerBlock(answers))
 
     return body
 
@@ -851,21 +919,22 @@ class EnsembleAveragingQuestion(Question):
       "To create an ensemble, calculate the combined prediction using the following methods:"
     ]))
 
-    # Answer table
-    table_data = []
-    table_data.append(["Method", "Combined Prediction"])
+    # Create answer block
+    answers = []
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["mean"],
+        label="Mean (average)"
+      )
+    )
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["median"],
+        label="Median"
+      )
+    )
 
-    table_data.append([
-      "Mean (average)",
-      ContentAST.Answer(self.answers["mean"])
-    ])
-
-    table_data.append([
-      "Median",
-      ContentAST.Answer(self.answers["median"])
-    ])
-
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ContentAST.AnswerBlock(answers))
 
     return body
 
@@ -948,7 +1017,11 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     # Generate target and compute loss
     self.y_target = float(self.a2[0] + self.rng.uniform(1, 3) * self.rng.choice([-1, 1]))
+    # Round target to display precision (2 decimal places)
+    self.y_target = round(self.y_target, 2)
     self._compute_loss(self.y_target)
+    # Round loss to display precision (4 decimal places)
+    self.loss = round(self.loss, 4)
     self._compute_output_gradient()
 
     # Set learning rate (use small value for stability)
@@ -1032,55 +1105,62 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ]))
 
     body.add_element(ContentAST.Paragraph([
-      f"Activation: {self._get_activation_name()} - ",
-      ContentAST.Equation(self._get_activation_formula(), inline=True)
+      f"**Activation function:** {self._get_activation_name()}"
     ]))
 
-    # Answer table
     body.add_element(ContentAST.Paragraph([
-      "Calculate the following values for this training step:"
+      "**Complete the following training steps:**"
     ]))
+    
+    # Network parameters table
+    body.add_element(self._generate_parameter_table(include_activations=False))
 
-    table_data = []
-    table_data.append(["Step", "Calculation", "Your Answer"])
+    # Create answer block
+    answers = []
 
-    table_data.append([
-      "1. Forward Pass",
-      ContentAST.Paragraph(["Network output ", ContentAST.Equation(r"\hat{y}", inline=True)]),
-      ContentAST.Answer(self.answers["y_pred"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["y_pred"],
+        label="1. Forward Pass - Network output ŷ"
+      )
+    )
 
-    table_data.append([
-      "2. Loss",
-      ContentAST.Paragraph(["MSE: ", ContentAST.Equation(r"L = (1/2)(y - \hat{y})^2", inline=True)]),
-      ContentAST.Answer(self.answers["loss"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["loss"],
+        label="2. Loss - MSE: L = (1/2)(y - ŷ)²"
+      )
+    )
 
-    table_data.append([
-      "3. Gradient",
-      ContentAST.Paragraph([ContentAST.Equation(r"∂L / ∂w_3", inline=True), " (weight ", ContentAST.Equation("h_1", inline=True), " ", ContentAST.Equation(r"\to", inline=True), " ", ContentAST.Equation(r"\hat{y}", inline=True), ")"]),
-      ContentAST.Answer(self.answers["grad_w3"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["grad_w3"],
+        label="3. Gradient ∂L/∂w₃ (weight h₁ → ŷ)"
+      )
+    )
 
-    table_data.append([
-      "4. Gradient",
-      ContentAST.Paragraph([ContentAST.Equation(r"∂L / ∂w_{11}", inline=True), " (weight ", ContentAST.Equation("x_1", inline=True), " ", ContentAST.Equation(r"\to", inline=True), " ", ContentAST.Equation("h_1", inline=True), ")"]),
-      ContentAST.Answer(self.answers["grad_w11"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["grad_w11"],
+        label="4. Gradient ∂L/∂w₁₁ (weight x₁ → h₁)"
+      )
+    )
 
-    table_data.append([
-      "5. Update",
-      ContentAST.Paragraph(["New ", ContentAST.Equation("w_3", inline=True), ": ", ContentAST.Equation(r"w_3' = w_3 - α(∂L / ∂w_3)", inline=True)]),
-      ContentAST.Answer(self.answers["new_w3"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["new_w3"],
+        label="5. Updated w₃: w₃' = w₃ - α(∂L/∂w₃)"
+      )
+    )
 
-    table_data.append([
-      "6. Update",
-      ContentAST.Paragraph(["New ", ContentAST.Equation("w_{11}", inline=True), " after update"]),
-      ContentAST.Answer(self.answers["new_w11"])
-    ])
+    answers.append(
+      ContentAST.Answer(
+        answer=self.answers["new_w11"],
+        label="6. Updated w₁₁: w₁₁' = w₁₁ - α(∂L/∂w₁₁)"
+      )
+    )
 
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ContentAST.AnswerBlock(answers))
 
     return body
 
