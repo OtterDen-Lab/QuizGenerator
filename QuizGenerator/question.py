@@ -144,6 +144,42 @@ class QuestionRegistry:
           load_modules_recursively(subdir, subpackage_name)
 
     load_modules_recursively(package_path, package_name)
+
+    # Load user-registered questions via entry points (Option 1: Robust PyPI approach)
+    # Users can register custom questions in their package's pyproject.toml:
+    # [project.entry-points."quizgenerator.questions"]
+    # my_custom_question = "my_package.questions:CustomQuestion"
+    try:
+      # Python 3.10+ approach
+      from importlib.metadata import entry_points
+      eps = entry_points()
+      # Handle both Python 3.10+ (dict-like) and 3.12+ (select method)
+      if hasattr(eps, 'select'):
+        question_eps = eps.select(group='quizgenerator.questions')
+      else:
+        question_eps = eps.get('quizgenerator.questions', [])
+
+      for ep in question_eps:
+        try:
+          # Loading the entry point will trigger @QuestionRegistry.register() decorator
+          ep.load()
+          log.debug(f"Loaded custom question type from entry point: {ep.name}")
+        except Exception as e:
+          log.warning(f"Failed to load entry point '{ep.name}': {e}")
+    except ImportError:
+      # Python < 3.10 fallback using pkg_resources
+      try:
+        import pkg_resources
+        for ep in pkg_resources.iter_entry_points('quizgenerator.questions'):
+          try:
+            ep.load()
+            log.debug(f"Loaded custom question type from entry point: {ep.name}")
+          except Exception as e:
+            log.warning(f"Failed to load entry point '{ep.name}': {e}")
+      except ImportError:
+        # If pkg_resources isn't available either, just skip entry points
+        log.debug("Entry points not supported (importlib.metadata and pkg_resources unavailable)")
+
     cls._scanned = True
 
 

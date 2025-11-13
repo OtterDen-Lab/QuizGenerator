@@ -55,3 +55,13 @@ packages = ["QuizGenerator"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+# Entry point group for custom question types (for plugin developers)
+# Users can register custom question types in their own packages using:
+# [project.entry-points."quizgenerator.questions"]
+# my_custom_question = "my_package.module:MyQuestionClass"
+#
+# Example:
+# [project.entry-points."quizgenerator.questions"]
+# advanced_scheduling = "university_questions.os:AdvancedSchedulingQuestion"
+# memory_hierarchy = "university_questions.os:MemoryHierarchyQuestion"

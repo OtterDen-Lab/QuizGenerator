@@ -62,13 +62,30 @@ class Quiz:
   
   @classmethod
   def from_yaml(cls, path_to_yaml) -> List[Quiz]:
-    
+
     quizes_loaded : List[Quiz] = []
-    
+
     with open(path_to_yaml) as fid:
       list_of_exam_dicts = list(yaml.safe_load_all(fid))
-    
+
     for exam_dict in list_of_exam_dicts:
+      # Load custom question modules if specified (Option 3: Quick-and-dirty approach)
+      # Users can add custom question types by importing Python modules in their YAML:
+      # custom_modules:
+      #   - my_custom_questions.scheduling
+      #   - university_standard_questions
+      custom_modules = exam_dict.get("custom_modules", [])
+      if custom_modules:
+        import importlib
+        for module_name in custom_modules:
+          try:
+            importlib.import_module(module_name)
+            log.info(f"Loaded custom question module: {module_name}")
+          except ImportError as e:
+            log.error(f"Failed to import custom module '{module_name}': {e}")
+            raise
+
+
       # Get general quiz information from the dictionary
       name = exam_dict.get("name", f"Unnamed Exam ({datetime.now().strftime('%a %b %d %I:%M %p')})")
       practice = exam_dict.get("practice", False)
