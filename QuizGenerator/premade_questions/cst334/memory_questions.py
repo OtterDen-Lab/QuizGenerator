@@ -705,23 +705,23 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   
   def refresh(self, rng_seed=None, *args, **kwargs):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
-    
+
     self.num_bits_offset = self.rng.randint(self.MIN_OFFSET_BITS, self.MAX_OFFSET_BITS)
     self.num_bits_vpn = self.rng.randint(self.MIN_VPN_BITS, self.MAX_VPN_BITS)
     self.num_bits_pfn = self.rng.randint(max([self.MIN_PFN_BITS, self.num_bits_vpn]), self.MAX_PFN_BITS)
-    
+
     self.virtual_address = self.rng.randint(1, 2 ** (self.num_bits_vpn + self.num_bits_offset))
-    
+
     # Calculate these two
     self.offset = self.virtual_address % (2 ** (self.num_bits_offset))
     self.vpn = self.virtual_address // (2 ** (self.num_bits_offset))
-    
+
     # Generate this randomly
     self.pfn = self.rng.randint(0, 2 ** (self.num_bits_pfn))
-    
+
     # Calculate this
     self.physical_address = self.pfn * (2 ** self.num_bits_offset) + self.offset
-    
+
     if self.rng.choices([True, False], weights=[(self.PROBABILITY_OF_VALID), (1 - self.PROBABILITY_OF_VALID)], k=1)[0]:
       self.is_valid = True
       # Set our actual entry to be in the table and valid
@@ -734,9 +734,33 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       self.pte = self.pfn
       # self.physical_address_var = Variable("Physical Address", "INVALID")
       # self.pfn_var = Variable("PFN",  "INVALID")
-    
+
     # self.pte_var = VariableHex("PTE", self.pte, num_bits=(self.num_pfn_bits+1), default_presentation=VariableHex.PRESENTATION.BINARY)
-    
+
+    # Generate page table (moved from get_body to ensure deterministic generation)
+    table_size = self.rng.randint(5, 8)
+
+    lowest_possible_bottom = max([0, self.vpn - table_size])
+    highest_possible_bottom = min([2 ** self.num_bits_vpn - table_size, self.vpn])
+
+    table_bottom = self.rng.randint(lowest_possible_bottom, highest_possible_bottom)
+    table_top = table_bottom + table_size
+
+    self.page_table = {}
+    self.page_table[self.vpn] = self.pte
+
+    # Fill in the rest of the table
+    for vpn in range(table_bottom, table_top):
+      if vpn == self.vpn: continue
+      pte = self.page_table[self.vpn]
+      while pte in self.page_table.values():
+        pte = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+        if self.rng.choices([True, False], weights=[(1 - self.PROBABILITY_OF_VALID), self.PROBABILITY_OF_VALID], k=1)[0]:
+          # Randomly set it to be valid
+          pte += (2 ** (self.num_bits_pfn))
+      # Once we have a unique random entry, put it into the Page Table
+      self.page_table[vpn] = pte
+
     self.answers.update(
       {
         "answer__vpn": Answer.binary_hex("answer__vpn", self.vpn, length=self.num_bits_vpn),
@@ -744,7 +768,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1)),
       }
     )
-    
+
     if self.is_valid:
       self.answers.update(
         {
@@ -784,47 +808,22 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     }
     
     body.add_element(self.create_info_table(parameter_info))
-    
-    # Make values for Page Table
-    table_size = self.rng.randint(5, 8)
-    
-    lowest_possible_bottom = max([0, self.vpn - table_size])
-    highest_possible_bottom = min([2 ** self.num_bits_vpn - table_size, self.vpn])
-    
-    table_bottom = self.rng.randint(lowest_possible_bottom, highest_possible_bottom)
-    table_top = table_bottom + table_size
-    
-    page_table = {}
-    page_table[self.vpn] = self.pte
-    
-    # Fill in the rest of the table
-    # for vpn in range(2**self.num_vpn_bits):
-    for vpn in range(table_bottom, table_top):
-      if vpn == self.vpn: continue
-      pte = page_table[self.vpn]
-      while pte in page_table.values():
-        pte = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
-        if self.rng.choices([True, False], weights=[(1 - self.PROBABILITY_OF_VALID), self.PROBABILITY_OF_VALID], k=1)[
-          0]:
-          # Randomly set it to be valid
-          pte += (2 ** (self.num_bits_pfn))
-      # Once we have a unique random entry, put it into the Page Table
-      page_table[vpn] = pte
-    
+
+    # Use the page table generated in refresh() for deterministic output
     # Add in ellipses before and after page table entries, if appropriate
     value_matrix = []
-    
-    if min(page_table.keys()) != 0:
+
+    if min(self.page_table.keys()) != 0:
       value_matrix.append(["...", "..."])
-    
+
     value_matrix.extend(
       [
         [f"0b{vpn:0{self.num_bits_vpn}b}", f"0b{pte:0{(self.num_bits_pfn + 1)}b}"]
-        for vpn, pte in sorted(page_table.items())
+        for vpn, pte in sorted(self.page_table.items())
       ]
     )
-    
-    if (max(page_table.keys()) + 1) != 2 ** self.num_bits_vpn:
+
+    if (max(self.page_table.keys()) + 1) != 2 ** self.num_bits_vpn:
       value_matrix.append(["...", "..."])
     
     body.add_element(
