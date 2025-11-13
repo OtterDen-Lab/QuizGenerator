@@ -249,19 +249,33 @@ class RegenerableChoiceMixin:
     else:
       # Fixed value provided - ignore the random choice, use the fixed value
       # (but we still consumed the RNG call above to keep state synchronized)
-      try:
-        # Handle both string names and enum values
-        if isinstance(fixed_value, enum_class):
-          return fixed_value
-        else:
-          return enum_class[fixed_value.upper()]
-      except (KeyError, AttributeError):
-        log.warning(
-          f"Invalid {param_name} '{fixed_value}'. Valid options are: {[k.name for k in enum_class]}. Defaulting to random"
-        )
-        # Use the random choice we already made
-        self.config_params[param_name] = random_choice.name
-        return random_choice
+
+      # If already an enum instance, return it directly
+      if isinstance(fixed_value, enum_class):
+        return fixed_value
+
+      # If it's a string, look up the enum member by name
+      if isinstance(fixed_value, str):
+        try:
+          # Try exact match first (handles "RoundRobin", "FIFO", etc.)
+          return enum_class[fixed_value]
+        except KeyError:
+          # Try uppercase as fallback (handles "roundrobin" -> "ROUNDROBIN")
+          try:
+            return enum_class[fixed_value.upper()]
+          except KeyError:
+            log.warning(
+              f"Invalid {param_name} '{fixed_value}'. Valid options are: {[k.name for k in enum_class]}. Defaulting to random"
+            )
+            self.config_params[param_name] = random_choice.name
+            return random_choice
+
+      # Unexpected type
+      log.warning(
+        f"Invalid {param_name} type {type(fixed_value)}. Expected enum or string. Defaulting to random"
+      )
+      self.config_params[param_name] = random_choice.name
+      return random_choice
 
 
 class Question(abc.ABC):
@@ -530,7 +544,6 @@ class Question(abc.ABC):
     return True
   
   def get__canvas(self, course: canvasapi.course.Course, quiz : canvasapi.quiz.Quiz, interest_threshold=1.0, *args, **kwargs):
-    log.debug("get__canvas")
     # Get the AST for the question
     with timer("question_get_ast", question_name=self.name, question_type=self.__class__.__name__):
       questionAST = self.get_question(**kwargs)

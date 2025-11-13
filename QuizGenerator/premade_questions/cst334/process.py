@@ -290,14 +290,16 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     self.num_jobs = num_jobs
 
   def refresh(self, *args, **kwargs):
+    # Initialize job_stats before calling super().refresh() since parent's refresh
+    # will call is_interesting() which needs this attribute to exist
+    self.job_stats = {}
+
     # Call parent refresh which seeds RNG and calls is_interesting()
     # Note: We ignore the parent's return value since we need to generate the workload first
     super().refresh(*args, **kwargs)
 
     # Use the mixin to get the scheduler (randomly selected or fixed)
     self.scheduler_algorithm = self.get_choice('scheduler_kind', SchedulingQuestion.Kind)
-    
-    self.job_stats = {}
     
     # Get workload jobs
     jobs = self.get_workload(self.num_jobs)
