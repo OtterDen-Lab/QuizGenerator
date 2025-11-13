@@ -137,7 +137,7 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
           "seed": int,
           "version": str,
           "answers": dict,
-          "explanation_markdown": str  # Markdown-formatted explanation for students
+          "explanation_markdown": str | None  # Markdown explanation (None if not available)
       }
   """
   question_num = qr_data.get('q')
@@ -207,7 +207,11 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
 
     # Generate markdown explanation for students
     explanation_markdown = question_ast.explanation.render("markdown")
-    result['explanation_markdown'] = explanation_markdown
+    # Return None if explanation is empty or contains the default placeholder
+    if not explanation_markdown or "[Please reach out to your professor for clarification]" in explanation_markdown:
+      result['explanation_markdown'] = None
+    else:
+      result['explanation_markdown'] = explanation_markdown
 
     log.info(f"  Successfully regenerated question with {len(canvas_answers)} answer(s)")
     
@@ -242,7 +246,7 @@ def regenerate_from_encrypted(encrypted_data: str, points: float = 1.0) -> Dict[
           "answers": dict,  # Canvas-formatted answers
           "answer_objects": dict,  # Raw Answer objects with values/tolerances
           "answer_key_html": str,  # HTML rendering of question with answers shown
-          "explanation_markdown": str  # Markdown-formatted explanation for students
+          "explanation_markdown": str | None  # Markdown explanation (None if not available)
       }
 
   Raises:
@@ -317,6 +321,9 @@ def regenerate_from_metadata(
 
     # Generate markdown explanation for students
     explanation_markdown = question_ast.explanation.render("markdown")
+    # Return None if explanation is empty or contains the default placeholder
+    if not explanation_markdown or "[Please reach out to your professor for clarification]" in explanation_markdown:
+      explanation_markdown = None
 
     result = {
       "question_type": question_type,
@@ -378,7 +385,7 @@ def display_answer_summary(question_data: Dict[str, Any]) -> None:
   if 'answer_key_html' in question_data:
     print("\nHTML answer key available in result['answer_key_html']")
 
-  if 'explanation_markdown' in question_data:
+  if 'explanation_markdown' in question_data and question_data['explanation_markdown'] is not None:
     print("Markdown explanation available in result['explanation_markdown']")
 
   print("=" * 60)
