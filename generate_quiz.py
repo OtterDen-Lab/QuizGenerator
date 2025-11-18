@@ -7,7 +7,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 from dotenv import load_dotenv
-from lms_interface.canvas_interface import CanvasInterface, CanvasCourse
+from QuizGenerator.canvas.canvas_interface import CanvasInterface, CanvasCourse
 
 from QuizGenerator.quiz import Quiz
 
