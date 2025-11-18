@@ -27,16 +27,13 @@ dependencies = [
     "pylatex>=1.4.2",
     "docker>=6.1.3",
     "matplotlib",
-    "lms-interface",
     "sympy>=1.14.0",
     "markdown>=3.9",
     "segno>=1.6.0",
     "cryptography>=41.0.0",
     "graphviz>=0.21",
+    "canvasapi==3.2.0",
 ]
-
-[tool.uv.sources]
-lms-interface = { path = "../LMSInterface" }
 
 [project.optional-dependencies]
 dev = [
