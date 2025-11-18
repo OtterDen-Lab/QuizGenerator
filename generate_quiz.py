@@ -197,7 +197,7 @@ def generate_latex(latex_text, remove_previous=False):
   tmp_tex.close()
 
 
-def generate_typst(typst_text, remove_previous=False):
+def generate_typst(typst_text, remove_previous=False, name=''):
   """
   Generate PDF from Typst source code.
 
@@ -222,7 +222,7 @@ def generate_typst(typst_text, remove_previous=False):
     shutil.copy(tmp_typ.name, "debug.typ")
 
     # Compile with typst
-    output_pdf = os.path.join(os.getcwd(), 'out', os.path.basename(tmp_typ.name).replace('.typ', '.pdf'))
+    output_pdf = os.path.join(os.getcwd(), 'out', f"{name + '.' if len(name) > 0 else ''}" + os.path.basename(tmp_typ.name).replace('.typ', '.pdf'))
     
     # Use --root to set the filesystem root so absolute paths work correctly
     p = subprocess.Popen(
@@ -288,7 +288,7 @@ def generate_quiz(
       if use_typst:
         # Generate using Typst
         typst_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render("typst")
-        generate_typst(typst_text, remove_previous=(i==0))
+        generate_typst(typst_text, remove_previous=(i==0), name=f"{quiz.name.replace(' ', '-')}")
       else:
         # Generate using LaTeX (default)
         latex_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render_latex()

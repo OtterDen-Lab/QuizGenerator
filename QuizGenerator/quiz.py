@@ -81,6 +81,9 @@ class Quiz:
       # Track point values where order should be preserved (for layout optimization)
       preserve_order_point_values = set()
 
+      # Track YAML definition order for questions (for preserve_order functionality)
+      yaml_order_counter = 0
+
       for question_value, question_definitions in exam_dict["questions"].items():
         # todo: I can also add in "extra credit" and "mix-ins" as other keys to indicate extra credit or questions that can go anywhere
         log.info(f"Parsing {question_value} point questions")
@@ -135,28 +138,32 @@ class Quiz:
           
           # Check if it is a question group
           if question_config["group"]:
-            
+
             # todo: Find a way to allow for "num_to_pick" to ensure lack of duplicates when using duplicates.
             #    It's probably going to be somewhere in the instantiate and get_attr fields, with "_current_questions"
             #    But will require changing how we add concrete questions (but that'll just be everything returns a list
-            questions_for_exam.append(
-              QuestionGroup(
-                questions_in_group=[
-                  make_question(name, data | {"topic" : question_config["topic"]}) for name, data in q_data.items()
-                ],
-                pick_once=(not question_config["random_per_student"])
-              )
+            group = QuestionGroup(
+              questions_in_group=[
+                make_question(name, data | {"topic" : question_config["topic"]}) for name, data in q_data.items()
+              ],
+              pick_once=(not question_config["random_per_student"])
             )
+            # Assign YAML definition order for preserve_order functionality
+            group.yaml_order = yaml_order_counter
+            yaml_order_counter += 1
+            questions_for_exam.append(group)
           
           else: # Then this is just a single question
-            questions_for_exam.extend([
-              make_question(
+            for repeat_number in range(question_config["repeat"]):
+              new_q = make_question(
                 q_name,
                 q_data,
                 rng_seed_offset=repeat_number
               )
-              for repeat_number in range(question_config["repeat"])
-            ])
+              # Assign YAML definition order for preserve_order functionality
+              new_q.yaml_order = yaml_order_counter
+              yaml_order_counter += 1
+              questions_for_exam.append(new_q)
       log.debug(f"len(questions_for_exam): {len(questions_for_exam)}")
       quiz_from_yaml = cls(name, questions_for_exam, practice, description=description)
       quiz_from_yaml.set_sort_order(sort_order)
@@ -246,6 +253,7 @@ class Quiz:
     """
     Optimize question ordering to minimize PDF length while respecting point-value tiers.
     Uses bin-packing heuristics to reorder questions within each point-value group.
+    Tracks remaining page capacity across point tiers for better packing.
     """
     # Group questions by point value
     from collections import defaultdict
@@ -259,7 +267,14 @@ class Quiz:
 
     # For each point group, estimate heights and apply bin-packing optimization
     optimized_questions = []
-    is_first_page = True  # Track if we're packing the first page
+
+    # Track page state across tiers
+    base_page_capacity = 22.0  # cm (typical A4 page with margins)
+    first_page_capacity = base_page_capacity - 3.0  # First page has header (~3cm)
+
+    current_page_capacity = first_page_capacity  # Capacity for current page
+    current_page_used = 0.0  # How much of current page is used
+    is_first_page = True
 
     log.debug("Optimizing question order for PDF layout...")
 
@@ -268,21 +283,44 @@ class Quiz:
 
       # Check if this point tier should preserve order
       if points in preserve_order_for:
-        # Sort by topic only (preserve original order)
-        group.sort(key=lambda q: self.question_sort_order.index(q.topic))
-        optimized_questions.extend(group)
+        # Sort by YAML definition order (preserve original order from config file)
+        group.sort(key=lambda q: getattr(q, 'yaml_order', float('inf')))
+
+        # Add questions and track page usage for preserve_order sections
+        for q in group:
+          q_height = self._estimate_question_height(q, **kwargs)
+          if current_page_used + q_height > current_page_capacity:
+            # Start new page
+            current_page_capacity = base_page_capacity
+            current_page_used = q_height
+            is_first_page = False
+          else:
+            current_page_used += q_height
+          optimized_questions.append(q)
+
         log.debug(f"  {points}pt questions: {len(group)} questions (order preserved by config)")
-        # After adding preserved-order questions, we're likely past the first page
-        is_first_page = False
+        log.debug(f"    Current page used: {current_page_used:.1f}cm / {current_page_capacity:.1f}cm")
         continue
 
       # If only 1-2 questions, no optimization needed
       if len(group) <= 2:
         # Still sort by topic for consistency
         group.sort(key=lambda q: self.question_sort_order.index(q.topic))
-        optimized_questions.extend(group)
+
+        # Add questions and track page usage
+        for q in group:
+          q_height = self._estimate_question_height(q, **kwargs)
+          if current_page_used + q_height > current_page_capacity:
+            # Start new page
+            current_page_capacity = base_page_capacity
+            current_page_used = q_height
+            is_first_page = False
+          else:
+            current_page_used += q_height
+          optimized_questions.append(q)
+
         log.debug(f"  {points}pt questions: {len(group)} questions (no optimization needed)")
-        is_first_page = False
+        log.debug(f"    Current page used: {current_page_used:.1f}cm / {current_page_capacity:.1f}cm")
         continue
 
       # Estimate height for each question
@@ -295,27 +333,44 @@ class Quiz:
       for q, h in question_heights:
         log.debug(f"    {q.name}: {h:.1f}cm (spacing={q.spacing}cm)")
 
-      # Calculate page capacity in centimeters
-      # A typical A4 page with margins has ~25cm of usable height
-      # After accounting for headers and separators, estimate ~22cm per page
-      base_page_capacity = 22.0  # cm
+      log.debug(f"  Starting with {current_page_used:.1f}cm used on current page (capacity: {current_page_capacity:.1f}cm)")
 
-      # First page has header (title + name line) which takes ~3cm
-      first_page_capacity = base_page_capacity - 3.0 if is_first_page else base_page_capacity
-
-      # Better bin-packing strategy: interleave large and small questions
-      # Strategy: Start each page with the largest unplaced question, then fill with smaller ones
+      # Bin-packing with cross-tier awareness
+      # Strategy: Try to fill remaining space on current page, then start new pages with best-fit packing
       bins = []
       placed = [False] * len(question_heights)
+      remaining_on_current_page = current_page_capacity - current_page_used
 
+      # First, try to fill the remaining space on the current page with smaller questions
+      if remaining_on_current_page > 0 and current_page_used > 0:
+        current_page_bin = []
+        current_page_height = 0
+
+        # Try to fit questions into remaining space (prefer smaller questions)
+        for i in range(len(question_heights) - 1, -1, -1):  # Iterate from smallest to largest
+          question, height = question_heights[i]
+          if not placed[i] and current_page_height + height <= remaining_on_current_page:
+            current_page_bin.append(question)
+            current_page_height += height
+            placed[i] = True
+
+        if current_page_bin:
+          bins.append((current_page_bin, current_page_used + current_page_height))
+          log.debug(f"    Filled remaining {remaining_on_current_page:.1f}cm with {len(current_page_bin)} questions")
+          current_page_used = current_page_used + current_page_height
+          is_first_page = False
+        else:
+          # No questions fit in remaining space, start fresh page
+          current_page_used = 0
+
+      # Now pack remaining questions into new pages
       while not all(placed):
-        # Determine capacity for this page
-        page_capacity = first_page_capacity if len(bins) == 0 and is_first_page else base_page_capacity
-
-        # Find the largest unplaced question to start a new page
+        # Start a new page
+        page_capacity = base_page_capacity
         new_page = []
         page_height = 0
 
+        # Start with the largest unplaced question
         for i, (question, height) in enumerate(question_heights):
           if not placed[i]:
             new_page.append(question)
@@ -323,25 +378,31 @@ class Quiz:
             placed[i] = True
             break
 
-        # Now try to fill the remaining space with smaller questions
-        for i, (question, height) in enumerate(question_heights):
+        # Fill the remaining space with smaller questions
+        for i in range(len(question_heights) - 1, -1, -1):  # smallest to largest
+          question, height = question_heights[i]
           if not placed[i] and page_height + height <= page_capacity:
             new_page.append(question)
             page_height += height
             placed[i] = True
 
-        bins.append((new_page, page_height))
+        if new_page:
+          bins.append((new_page, page_height))
+          current_page_used = page_height
+        is_first_page = False
 
-      log.debug(f"  {points}pt questions: {len(group)} questions packed into {len(bins)} pages")
+      log.debug(f"  {points}pt questions: {len(group)} questions packed into {len(bins)} bins")
       for i, (page_questions, height) in enumerate(bins):
-        log.debug(f"    Page {i+1}: {height:.1f}cm with {len(page_questions)} questions: {[q.name for q in page_questions]}")
+        log.debug(f"    Bin {i+1}: {height:.1f}cm with {len(page_questions)} questions: {[q.name for q in page_questions]}")
 
       # Flatten bins back to ordered list
-      for bin_contents, _ in bins:
+      for bin_contents, bin_height in bins:
         optimized_questions.extend(bin_contents)
 
-      # After packing questions, we're no longer on the first page
-      is_first_page = False
+      # Update current page state to the last bin
+      if bins:
+        current_page_used = bins[-1][1]
+        current_page_capacity = base_page_capacity
 
     return optimized_questions
 
