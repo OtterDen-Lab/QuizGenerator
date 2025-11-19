@@ -342,21 +342,42 @@ class Quiz:
       remaining_on_current_page = current_page_capacity - current_page_used
 
       # First, try to fill the remaining space on the current page with smaller questions
+      # Use best-fit: prefer combinations that use more of the available space
       if remaining_on_current_page > 0 and current_page_used > 0:
         current_page_bin = []
         current_page_height = 0
 
-        # Try to fit questions into remaining space (prefer smaller questions)
-        for i in range(len(question_heights) - 1, -1, -1):  # Iterate from smallest to largest
-          question, height = question_heights[i]
-          if not placed[i] and current_page_height + height <= remaining_on_current_page:
+        # Try to fit questions into remaining space using greedy best-fit
+        # Strategy: Keep trying to add the largest question that still fits
+        while True:
+          best_fit_idx = None
+          best_fit_height = 0
+
+          # Find the largest question that fits in remaining space
+          for i in range(len(question_heights)):  # Largest to smallest
+            question, height = question_heights[i]
+            remaining_space = remaining_on_current_page - current_page_height
+            if not placed[i] and height <= remaining_space:
+              # Prefer the largest question that fits
+              if height > best_fit_height:
+                best_fit_idx = i
+                best_fit_height = height
+
+          # If we found a question that fits, add it
+          if best_fit_idx is not None:
+            question, height = question_heights[best_fit_idx]
             current_page_bin.append(question)
             current_page_height += height
-            placed[i] = True
+            placed[best_fit_idx] = True
+          else:
+            # No more questions fit
+            break
 
         if current_page_bin:
+          # Store the total page height for this bin (includes previous content + new questions)
           bins.append((current_page_bin, current_page_used + current_page_height))
           log.debug(f"    Filled remaining {remaining_on_current_page:.1f}cm with {len(current_page_bin)} questions")
+          # Update current_page_used to reflect that this page is now full
           current_page_used = current_page_used + current_page_height
           is_first_page = False
         else:
@@ -400,8 +421,16 @@ class Quiz:
         optimized_questions.extend(bin_contents)
 
       # Update current page state to the last bin
+      # Note: bins[0] might be filling remaining space on previous page (includes current_page_used)
+      # Later bins are new pages, so their height is just the questions on that page
       if bins:
-        current_page_used = bins[-1][1]
+        if len(bins) == 1 and current_page_used > 0:
+          # Only one bin and it was filling remaining space on current page
+          current_page_used = bins[-1][1]
+        else:
+          # Multiple bins or fresh page - last bin is a new page
+          # The height in bins[-1][1] is just the questions added to that bin (from line 391 or 410)
+          current_page_used = bins[-1][1]
         current_page_capacity = base_page_capacity
 
     return optimized_questions

@@ -515,8 +515,6 @@ class ContentAST:
         ]
         content = '\n'.join(latex_lines)
       
-      log.debug(f"content: \n{content}")
-      
       return content
     
     def render_typst(self, **kwargs):
