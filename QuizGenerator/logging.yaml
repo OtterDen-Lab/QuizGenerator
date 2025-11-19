@@ -16,13 +16,13 @@ formatters:
 handlers:
   console:
     class: logging.StreamHandler
-    level: DEBUG
+    level: INFO
     formatter: standard
     stream: ext://sys.stdout
 
   file:
     class: logging.FileHandler
-    level: DEBUG
+    level: INFO
     formatter: detailed
     filename: ${LOG_FILE:-teachingtools.log}
     mode: a
