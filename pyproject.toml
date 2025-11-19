@@ -29,11 +29,8 @@ dependencies = [
     "python-dotenv==1.0.1",
     "PyYAML==6.0.1",
     "requests==2.32.2",
-    "pandas",
     "pypandoc~=1.6.3",
     "pytablewriter~=1.2.0",
-    "fuzzywuzzy",
-    "colorama",
     "pylatex>=1.4.2",
     "matplotlib",
     "sympy>=1.14.0",
@@ -49,6 +46,9 @@ Homepage = "https://github.com/OtterDen-Lab/QuizGenerator"
 Documentation = "https://github.com/OtterDen-Lab/QuizGenerator/tree/main/documentation"
 Repository = "https://github.com/OtterDen-Lab/QuizGenerator"
 "Bug Tracker" = "https://github.com/OtterDen-Lab/QuizGenerator/issues"
+
+[project.scripts]
+quizgen = "QuizGenerator.generate:main"
 
 [project.optional-dependencies]
 grading = [
