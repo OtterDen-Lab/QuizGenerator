@@ -205,35 +205,6 @@ def generate_quiz(
     
     quiz.describe()
 
-  # Generate performance report if Canvas questions were generated
-  if num_canvas > 0:
-    print("\n" + "="*80)
-    print("PERFORMANCE ANALYSIS REPORT")
-    print("="*80)
-    PerformanceTracker.report_summary(min_duration=0.01)  # Show operations taking >10ms
-
-    # Show detailed breakdown for slowest operations
-    print("\n" + "="*60)
-    print("DETAILED TIMING BREAKDOWN")
-    print("="*60)
-
-    slow_operations = ["canvas_prepare_question", "canvas_api_upload", "ast_render_body", "question_body"]
-    for op in slow_operations:
-      metrics = PerformanceTracker.get_metrics_by_operation(op)
-      if metrics:
-        print(f"\n{op.upper()}:")
-        # Show stats by question type
-        by_type = {}
-        for m in metrics:
-          qtype = m.question_type or "unknown"
-          if qtype not in by_type:
-            by_type[qtype] = []
-          by_type[qtype].append(m.duration)
-
-        for qtype, durations in by_type.items():
-          avg = sum(durations) / len(durations)
-          print(f"  {qtype}: {len(durations)} calls, avg {avg:.3f}s (range: {min(durations):.3f}s - {max(durations):.3f}s)")
-
 def main():
 
   args = parse_args()
