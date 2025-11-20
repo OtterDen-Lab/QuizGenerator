@@ -555,10 +555,15 @@ class Question(abc.ABC):
     )
   
   def get_answers(self, *args, **kwargs) -> Tuple[Answer.AnswerKind, List[Dict[str,Any]]]:
-    return (
-      self.answer_kind,
-      list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
-    )
+    if len(self.answers.values()) > 0:
+      return (
+        self.answer_kind,
+        list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
+      )
+    else:
+      return (
+        Answer.AnswerKind.ESSAY, []
+      )
 
   def refresh(self, rng_seed=None, *args, **kwargs):
     """If it is necessary to regenerate aspects between usages, this is the time to do it.
