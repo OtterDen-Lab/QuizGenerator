@@ -6,7 +6,7 @@ import enum
 import itertools
 import logging
 import math
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Any
 
 import fractions
 
@@ -23,11 +23,12 @@ class Answer:
   
   class AnswerKind(enum.Enum):
     BLANK = "fill_in_multiple_blanks_question"
-    MULTIPLE_ANSWER = "multiple_answers_question"  # todo: have baffles?
+    MULTIPLE_ANSWER = "multiple_answers_question"
     ESSAY = "essay_question"
     MULTIPLE_DROPDOWN = "multiple_dropdowns_question"
+    NUMERICAL_QUESTION = "numerical_question" # note: these can only be single answers as far as I can tell
     
-  class VariableKind(enum.Enum): # todo: use these for generate variations?
+  class VariableKind(enum.Enum):
     STR = enum.auto()
     INT = enum.auto()
     FLOAT = enum.auto()
@@ -66,7 +67,7 @@ class Answer:
     self.baffles = baffles
     self.pdf_only = pdf_only
   
-  def get_for_canvas(self) -> List[Dict]:
+  def get_for_canvas(self, single_answer=False) -> List[Dict]:
     # If this answer is marked as PDF-only, don't send it to Canvas
     if self.pdf_only:
       return []
@@ -131,18 +132,29 @@ class Answer:
       Answer.VariableKind.FLOAT,
       Answer.VariableKind.INT
     ]:
-      # Use the accepted_strings helper with settings that match the original AUTOFLOAT behavior
-      answer_strings = self.__class__.accepted_strings(
-        self.value,
-        allow_integer=True,
-        allow_simple_fraction=True,
-        max_denominator=3*4*5,  # For process questions, these are the numbers of jobs we'd have
-        allow_mixed=True,
-        include_spaces=False,
-        include_fixed_even_if_integer=True
-      )
-
-      canvas_answers = [
+      if single_answer:
+        canvas_answers = [
+          {
+            "numerical_answer_type": "exact_answer",
+            "answer_text": round(self.value, self.DEFAULT_ROUNDING_DIGITS),
+            "answer_exact": round(self.value, self.DEFAULT_ROUNDING_DIGITS),
+            "answer_error_margin": 0.1,
+            "answer_weight": 100 if self.correct else 0,
+          }
+        ]
+      else:
+        # Use the accepted_strings helper with settings that match the original AUTOFLOAT behavior
+        answer_strings = self.__class__.accepted_strings(
+          self.value,
+          allow_integer=True,
+          allow_simple_fraction=True,
+          max_denominator=3*4*5,  # For process questions, these are the numbers of jobs we'd have
+          allow_mixed=True,
+          include_spaces=False,
+          include_fixed_even_if_integer=True
+        )
+  
+        canvas_answers = [
         {
           "blank_id": self.key,
           "answer_text": answer_string,
@@ -477,4 +489,3 @@ class Answer:
           outs.add(f"{sign}{whole} {rem}/{b}")
     
     return sorted(outs, key=lambda s: (len(s), s))
-
