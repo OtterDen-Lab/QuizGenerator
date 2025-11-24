@@ -25,6 +25,8 @@ def parse_args():
     default=os.path.join(Path.home(), '.env'),
     help="Path to .env file specifying canvas details"
   )
+  
+  parser.add_argument("--debug", action="store_true", help="Set logging level to debug")
 
   parser.add_argument("--quiz_yaml", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "example_files/exam_generation.yaml"))
   parser.add_argument("--seed", type=int, default=None,
@@ -211,6 +213,21 @@ def main():
   
   # Load environment variables
   load_dotenv(args.env)
+  
+  if args.debug:
+    # Set root logger to DEBUG
+    logging.getLogger().setLevel(logging.DEBUG)
+
+    # Set all handlers to DEBUG level
+    for handler in logging.getLogger().handlers:
+      handler.setLevel(logging.DEBUG)
+
+    # Set named loggers to DEBUG
+    for logger_name in ['QuizGenerator', 'lms_interface', '__main__']:
+      logger = logging.getLogger(logger_name)
+      logger.setLevel(logging.DEBUG)
+      for handler in logger.handlers:
+        handler.setLevel(logging.DEBUG)
 
   if args.command == "TEST":
     test()

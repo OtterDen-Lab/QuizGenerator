@@ -439,7 +439,8 @@ class ContentAST:
         interest=1.0,
         spacing=0,
         topic=None,
-        question_number=None
+        question_number=None,
+        **kwargs
     ):
       super().__init__()
       self.name = name
@@ -450,14 +451,21 @@ class ContentAST:
       self.spacing = spacing
       self.topic = topic  # todo: remove this bs.
       self.question_number = question_number  # For QR code generation
+      
+      self.default_kwargs = kwargs
     
     def render(self, output_format, **kwargs):
+      updated_kwargs = self.default_kwargs
+      updated_kwargs.update(kwargs)
+      
+      log.debug(f"updated_kwargs: {updated_kwargs}")
+      
       # Special handling for latex and typst - use dedicated render methods
       if output_format == "typst":
         return self.render_typst(**kwargs)
       
       # Generate content from all elements
-      content = self.body.render(output_format, **kwargs)
+      content = self.body.render(output_format, **updated_kwargs)
       
       # If output format is latex, add in minipage and question environments
       if output_format == "latex":
@@ -1423,7 +1431,11 @@ class ContentAST:
         key_to_display = self.answer[0].key
       return f"{self.label + (':' if len(self.label) > 0 else '')} [{key_to_display}] {self.unit}".strip()
     
-    def render_html(self, show_answers=False, **kwargs):
+    def render_html(self, show_answers=False, can_be_numerical=False, **kwargs):
+      log.debug(f"can_be_numerical: {can_be_numerical}")
+      log.debug(f"kwargs: {kwargs}")
+      if can_be_numerical:
+        return f"Calculate {self.label}"
       if show_answers and self.answer:
         # Show actual answer value using formatted display string
         if not isinstance(self.answer, list):

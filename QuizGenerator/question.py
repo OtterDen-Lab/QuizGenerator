@@ -11,6 +11,7 @@ import itertools
 import os
 import pathlib
 import pkgutil
+import pprint
 import random
 import re
 import uuid
@@ -522,7 +523,9 @@ class Question(abc.ABC):
       explanation=explanation,
       value=self.points_value,
       spacing=self.spacing,
-      topic=self.topic
+      topic=self.topic,
+      
+      can_be_numerical=self.can_be_numerical()
     )
 
     # Attach regeneration metadata to the question AST
@@ -534,7 +537,7 @@ class Question(abc.ABC):
     question_ast.config_params = dict(self.config_params)
 
     return question_ast
-  
+   
   @abc.abstractmethod
   def get_body(self, **kwargs) -> ContentAST.Section:
     """
@@ -555,16 +558,20 @@ class Question(abc.ABC):
     )
   
   def get_answers(self, *args, **kwargs) -> Tuple[Answer.AnswerKind, List[Dict[str,Any]]]:
-    if len(self.answers.values()) > 0:
+    if self.can_be_numerical():
+      return (
+        Answer.AnswerKind.NUMERICAL_QUESTION,
+        list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in self.answers.values()]))
+      )
+    elif len(self.answers.values()) > 0:
       return (
         self.answer_kind,
         list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
       )
-    else:
-      return (
-        Answer.AnswerKind.ESSAY, []
-      )
-
+    return (
+      Answer.AnswerKind.ESSAY, []
+    )
+    
   def refresh(self, rng_seed=None, *args, **kwargs):
     """If it is necessary to regenerate aspects between usages, this is the time to do it.
     This base implementation simply resets everything.
@@ -626,7 +633,13 @@ class Question(abc.ABC):
       "answers": answers,
       "neutral_comments_html": explanation_html
     }
-
+  
+  def can_be_numerical(self):
+    if (len(self.answers.values()) == 1
+          and list(self.answers.values())[0].variable_kind in [Answer.VariableKind.FLOAT, Answer.VariableKind.AUTOFLOAT]
+    ):
+      return True
+    return False
 
 class QuestionGroup():
   
