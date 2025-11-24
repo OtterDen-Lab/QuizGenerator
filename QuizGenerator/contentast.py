@@ -75,7 +75,10 @@ class ContentAST:
         html_output = section.render("html")
     """
     def __init__(self, elements=None, add_spacing_before=False):
-      self.elements : List[ContentAST.Element] = elements or []
+      self.elements : List[ContentAST.Element] = [
+        e if isinstance(e, ContentAST.Element) else ContentAST.Text(e)
+        for e in (elements if elements else [])
+      ]
       self.add_spacing_before = add_spacing_before
     
     def __str__(self):

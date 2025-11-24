@@ -190,6 +190,8 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     self.num_elements = self.config_params.get("num_elements", 5)
     self.cache_size = self.config_params.get("cache_size", 3)
     self.num_requests = self.config_params.get("num_requests", 10)
+    
+    self.hit_rate = 0. # placeholder
 
   def refresh(self, previous: Optional[CachingQuestion] = None, *args, hard_refresh: bool = False, **kwargs):
     # Call parent refresh which seeds RNG and calls is_interesting()
