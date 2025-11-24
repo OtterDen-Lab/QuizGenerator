@@ -200,7 +200,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     self.cache_policy = self.get_choice('policy', self.Kind)
 
     self.requests = (
-        list(range(self.cache_size))  # Prime the cache with the compulsory misses
+        list(range(self.cache_size))  # Prime the cache with the capacity misses
         + self.rng.choices(
       population=list(range(self.cache_size - 1)), k=1
     )  # Add in one request to an earlier  that will differentiate clearly between FIFO and LRU
@@ -274,7 +274,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     hit_rate_block = ContentAST.AnswerBlock(
       ContentAST.Answer(
         answer=self.answers["answer__hit_rate"],
-        label=f"Hit rate, excluding compulsory misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
+        label=f"Hit rate, excluding capacity misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
         unit="%"
       )
     )
@@ -324,7 +324,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
           "To calculate the hit rate we calculate the percentage of requests "
           "that were cache hits out of the total number of requests. "
           f"In this case we are counting only all but {self.cache_size} requests, "
-          f"since we are excluding compulsory misses."
+          f"since we are excluding capacity misses."
         ]
       )
     )
