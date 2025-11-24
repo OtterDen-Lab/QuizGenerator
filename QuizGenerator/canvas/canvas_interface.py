@@ -159,7 +159,12 @@ class CanvasCourse(LMSWrapper):
 
         question_fingerprint = question_for_canvas["question_text"]
         try:
-          question_fingerprint += ''.join([str(a["answer_text"]) for a in question_for_canvas["answers"]])
+          question_fingerprint += ''.join([
+            '|'.join([
+              f"{k}:{a[k]}" for k in sorted(a.keys())
+            ])
+            for a in question_for_canvas["answers"]
+          ])
         except TypeError as e:
           log.error(e)
           log.warning("Continuing anyway")

@@ -16,6 +16,7 @@ import argparse
 import re
 import shutil
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 
@@ -106,15 +107,15 @@ __vendored_date__ = "{datetime.now().strftime('%Y-%m-%d')}"
     return True
 
 
-def update_generate_quiz_imports(repo_root: Path, dry_run: bool = False):
+def update_generate_quiz_imports(target_dir: Path, dry_run: bool = False):
     """Update imports in generate_quiz.py"""
-    generate_quiz = repo_root / "generate_quiz.py"
+    generate_quiz = target_dir / "generate.py"
 
     if not generate_quiz.exists():
         print(f"  ❌ Warning: {generate_quiz} not found")
         return False
 
-    print(f"\n📝 Updating imports in generate_quiz.py")
+    print(f"\n📝 Updating imports in generate.py")
 
     content = generate_quiz.read_text()
 
@@ -236,7 +237,7 @@ def verify_structure(repo_root: Path, dry_run: bool = False):
         "QuizGenerator/canvas/__init__.py",
         "QuizGenerator/canvas/canvas_interface.py",
         "QuizGenerator/canvas/classes.py",
-        "generate_quiz.py",
+        "QuizGenerator/generate.py",
         "pyproject.toml",
     ]
 
@@ -306,7 +307,7 @@ def main():
     success = True
     success &= copy_lms_files(lms_source, target_dir, args.dry_run)
     success &= update_canvas_init(target_dir, version, args.dry_run)
-    success &= update_generate_quiz_imports(repo_root, args.dry_run)
+    success &= update_generate_quiz_imports((repo_root / "QuizGenerator"), args.dry_run)
     success &= update_pyproject_toml(repo_root, lms_path, args.dry_run)
 
     if not args.dry_run:
@@ -320,8 +321,8 @@ def main():
         print("\nNext steps:")
         print("  1. Review changes: git diff")
         print("  2. Check dependencies in pyproject.toml")
-        print("  3. Test: uv sync && python generate_quiz.py --help")
-        print("  4. Commit: git add QuizGenerator/canvas/ generate_quiz.py pyproject.toml")
+        print("  3. Test: uv sync && python QuizGenerator/generate.py --help")
+        print("  4. Commit: git add QuizGenerator/canvas/ QuizGenerator/generate.py pyproject.toml")
     else:
         print("⚠️  Completed with warnings - please review output above")
         return 1
