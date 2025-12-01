@@ -76,9 +76,10 @@ class WeightCounting(Question, abc.ABC):
     refresh_success = False
     while not refresh_success:
       try:
-        self.model = self.get_model()
+        self.model, self.fields = self.get_model()
         refresh_success = True
-      except ValueError:
+      except ValueError as e:
+        log.error(e)
         log.info(f"Regenerating {self.__class__.__name__} due to improper configuration")
         continue
     
@@ -106,13 +107,7 @@ class WeightCounting(Question, abc.ABC):
         ContentAST.Code(
           self.model_to_python(
             self.model,
-            fields=[
-              "filters",
-              "kernel_size",
-              "strides",
-              "padding",
-              "pool_size"
-            ]
+            fields=self.fields
           )
         )
       ]
@@ -133,8 +128,7 @@ class WeightCounting(Question, abc.ABC):
 @QuestionRegistry.register("cst463.WeightCounting-CNN")
 class WeightCounting_CNN(WeightCounting):
   
-  def get_model(self) -> keras.Model:
-    
+  def get_model(self) -> tuple[keras.Model, list[str]]:
     input_size = self.rng.choice(np.arange(28, 32))
     cnn_num_filters = self.rng.choice(2 ** np.arange(8))
     cnn_kernel_size = self.rng.choice(1 + np.arange(10))
@@ -162,9 +156,34 @@ class WeightCounting_CNN(WeightCounting):
         )
       ]
     )
-    return model
-  
-  
+    return model, ["filters", "kernel_size", "strides", "padding", "pool_size"]
+
+
+@QuestionRegistry.register("cst463.WeightCounting-RNN")
+class WeightCounting_RNN(WeightCounting):
+  def get_model(self) -> tuple[keras.Model, list[str]]:
+    timesteps = int(self.rng.choice(np.arange(20, 41)))
+    feature_size = int(self.rng.choice(np.arange(8, 65)))
+
+    rnn_units = int(self.rng.choice(2 ** np.arange(4, 9)))
+    rnn_type = self.rng.choice(["SimpleRNN"])
+    return_sequences = bool(self.rng.choice([True, False]))
+
+    num_output_size = int(self.rng.choice([1, 10, 32, 100]))
+
+    RNNLayer = getattr(keras.layers, rnn_type)
+
+    model = keras.models.Sequential([
+      keras.layers.Input((timesteps, feature_size)),
+      RNNLayer(
+        units=rnn_units,
+        return_sequences=return_sequences,
+      ),
+      keras.layers.Dense(num_output_size),
+    ])
+    return model, ["units", "return_sequences"]
+
+
 @QuestionRegistry.register()
 class ConvolutionCalculation(Question):
   pass
