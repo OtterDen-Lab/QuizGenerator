@@ -1,4 +1,4 @@
-
+import abc
 import logging
 import math
 import keras
@@ -10,8 +10,11 @@ from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)
 
-@QuestionRegistry.register("cst463.CNN.WeightCounting")
-class WeightCounting(Question):
+
+class WeightCounting(Question, abc.ABC):
+  @abc.abstractmethod
+  def get_model(self) -> keras.Model:
+    pass
   
   @staticmethod
   def model_to_python(model: keras.Model, fields=[]):
@@ -36,6 +39,69 @@ class WeightCounting(Question):
       )
     lines.append("])")
     return "\n".join(lines)
+  
+  def refresh(self, *args, **kwargs):
+    super().refresh(*args, **kwargs)
+    
+    refresh_success = False
+    while not refresh_success:
+      try:
+        self.model = self.get_model()
+        refresh_success = True
+      except ValueError:
+        log.info(f"Regenerating {self.__class__.__name__} due to improper configuration")
+        continue
+    
+    self.num_parameters = self.model.count_params()
+    self.answers["num_parameters"] = Answer.integer(
+      "num_parameters",
+      self.num_parameters
+    )
+    
+    return True
+  
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    body = ContentAST.Section()
+    
+    body.add_element(
+      ContentAST.Paragraph(
+        [
+          ContentAST.Text("Given the below model, how many parameters does it use?")
+        ]
+      )
+    )
+    
+    body.add_elements(
+      [
+        ContentAST.Code(
+          self.model_to_python(
+            self.model,
+            fields=[
+              "filters",
+              "kernel_size",
+              "strides",
+              "padding",
+              "pool_size"
+            ]
+          )
+        )
+      ]
+    )
+    
+    return body
+  
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    explanation = ContentAST.Section()
+    
+    explanation.add_element(
+      ContentAST.Text(self.model.summary())
+    )
+    
+    return explanation
+
+
+@QuestionRegistry.register("cst463.WeightCounting-CNN")
+class WeightCounting_CNN(WeightCounting):
   
   def get_model(self) -> keras.Model:
     
@@ -67,63 +133,8 @@ class WeightCounting(Question):
       ]
     )
     return model
-
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
-    refresh_success = False
-    while not refresh_success:
-      try:
-        self.model = self.get_model()
-        refresh_success = True
-      except ValueError:
-        log.info(f"Regenerating {self.__class__.__name__} due to improper configuration")
-        continue
-    
-    self.num_parameters = self.model.count_params()
-    self.answers["num_parameters"] = Answer.integer(
-      "num_parameters",
-      self.num_parameters
-    )
-    
-    return True
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
-    body = ContentAST.Section()
-    
-    body.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Given the below model, how many parameters does it use?")
-      ])
-    )
-    
-    body.add_elements([
-      ContentAST.Code(
-        self.model_to_python(
-          self.model,
-          fields=[
-            "filters",
-            "kernel_size",
-            "strides",
-            "padding",
-            "pool_size"
-          ]
-        )
-      )
-    ])
-    
-    return body
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
-    explanation = ContentAST.Section()
-    
-    explanation.add_element(
-      ContentAST.Text(self.model.summary())
-    )
-    
-    return explanation
-    
-
 @QuestionRegistry.register()
 class ConvolutionCalculation(Question):
   pass
