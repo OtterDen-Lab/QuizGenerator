@@ -102,15 +102,13 @@ class WeightCounting(Question, abc.ABC):
       )
     )
     
-    body.add_elements(
-      [
-        ContentAST.Code(
-          self.model_to_python(
-            self.model,
-            fields=self.fields
-          )
+    body.add_element(
+      ContentAST.Code(
+        self.model_to_python(
+          self.model,
+          fields=self.fields
         )
-      ]
+      )
     )
     
     return body
