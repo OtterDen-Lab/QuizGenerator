@@ -63,26 +63,12 @@ class word2vec__skipgram(Question, TableQuestionMixin):
     body = ContentAST.Section()
     
     body.add_element(
-      ContentAST.Text("Given the below information about a word2vec embedding, please calculate the probabilities of each word and select the most likely word.")
-    )
-    body.add_element(
-      ContentAST.Paragraph([
-        f"The target word is: `{self.center_word}`.",
-        f"The context words are: {', '.join([f'`{w}`' for w in self.context_words])}."
-      ])
+      ContentAST.Text(f"Given center word: `{self.center_word}` with embedding {self.center_emb}, , compute the skip-gram probabilities for each context word and identify the most likely one.")
     )
     body.add_elements([
-      ContentAST.Element([ContentAST.Text(f"`{w}` : "), e]) for w, e in zip(self.context_words, self.context_embs)
+      ContentAST.Paragraph([ContentAST.Text(f"`{w}` : "), ContentAST.Text(e)]) for w, e in zip(self.context_words, self.context_embs)
     ])
     
-    body.add_element(
-      self.create_info_table(
-        {
-          "center_emb": self.center_emb,
-          "context_embs": self.context_embs,
-        }
-      )
-    )
     
     log.debug(f"output: {self.logits}")
     log.debug(f"weights: {self.probs}")
