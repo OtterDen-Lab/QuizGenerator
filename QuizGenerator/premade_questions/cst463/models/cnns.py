@@ -17,7 +17,9 @@ class WeightCounting(Question, abc.ABC):
     pass
   
   @staticmethod
-  def model_to_python(model: keras.Model, fields=[]):
+  def model_to_python(model: keras.Model, fields=None, include_input=True):
+    if fields is None:
+      fields = []
     
     def sanitize(v):
       """Convert numpy types to pure Python."""
@@ -31,12 +33,40 @@ class WeightCounting(Question, abc.ABC):
     
     lines = []
     lines.append("keras.models.Sequential([")
+    
+    # ---- Emit an Input line if we can ----
+    # model.input_shape is like (None, H, W, C) or (None, D)
+    if include_input and getattr(model, "input_shape", None) is not None:
+      input_shape = sanitize(model.input_shape[1:])  # drop batch dimension
+      # If it's a 1D shape like (784,), keep as tuple; if scalar, still fine.
+      lines.append(f"  keras.layers.Input(shape={input_shape!r}),")
+    
+    # ---- Emit all other layers ----
     for layer in model.layers:
+      # If user explicitly had an Input layer, we don't want to duplicate it
+      if isinstance(layer, keras.layers.InputLayer):
+        # You *could* handle it specially here, but usually we just skip
+        continue
+      
       cfg = layer.get_config()
-      args = ",\n    ".join(f"{k}={sanitize(v)}" for k, v in cfg.items() if k in fields)
+      
+      # If fields is empty, include everything; otherwise filter by fields.
+      if fields:
+        items = [(k, v) for k, v in cfg.items() if k in fields]
+      else:
+        items = cfg.items()
+      
+      arg_lines = [
+        f"{k}={sanitize(v)!r}"  # !r so strings get quotes, etc.
+        for k, v in items
+      ]
+      args = ",\n    ".join(arg_lines)
+      
       lines.append(
-        f"  keras.layers.{layer.__class__.__name__}({'\n    ' if len(args) else ''}{args}{'\n  ' if len(args) else ''}),"
+        f"  keras.layers.{layer.__class__.__name__}("
+        f"{'\n    ' if args else ''}{args}{'\n  ' if args else ''}),"
       )
+    
     lines.append("])")
     return "\n".join(lines)
   
