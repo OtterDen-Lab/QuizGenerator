@@ -1383,7 +1383,7 @@ class ContentAST:
     
     def render(self, output_format, **kwargs):
       # Add in new lines to break these up visually
-      return "\n\n" + super().render(output_format, **kwargs)
+      return "\n\n" + super().render(output_format, **kwargs) + "\n\n"
     
     def add_line(self, line: str):
       self.elements.append(ContentAST.Text(line))
