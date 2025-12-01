@@ -51,10 +51,10 @@ class RNNForwardPass(Question, TableQuestionMixin):
     hidden_dim = 2
     
     # Small integer weights for hand calculation
-    self.x_seq = np.random.randint(0, 3, size=(seq_len, input_dim))
-    self.W_xh = np.random.randint(-1, 2, size=(input_dim, hidden_dim))
-    self.W_hh = np.random.randint(-1, 2, size=(hidden_dim, hidden_dim))
-    self.b_h = np.random.randint(-1, 2, size=hidden_dim)
+    self.x_seq = self.rng.randint(0, 3, size=(seq_len, input_dim))
+    self.W_xh = self.rng.randint(-1, 2, size=(input_dim, hidden_dim))
+    self.W_hh = self.rng.randint(-1, 2, size=(hidden_dim, hidden_dim))
+    self.b_h = self.rng.randint(-1, 2, size=hidden_dim)
     self.h_0 = np.zeros(hidden_dim)
     
     self.h_states = self.rnn_forward(self.x_seq, self.W_xh, self.W_hh, self.b_h, self.h_0)
