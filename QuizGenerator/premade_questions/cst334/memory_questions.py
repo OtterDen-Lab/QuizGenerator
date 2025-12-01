@@ -638,7 +638,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
             f"Since we are in the {self.segment} segment, "
             f"we see from our table that our bounds are {self.bounds[self.segment]}. "
             f"Remember that our check for our {self.segment} segment is: ",
-            f"`if (offset > bounds({self.segment})) : INVALID`",
+            f"`if (offset >= bounds({self.segment})) : INVALID`",
             "which becomes"
             f"`if ({self.offset:0b} > {self.bounds[self.segment]:0b}) : INVALID`"
           ]
