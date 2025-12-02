@@ -111,13 +111,51 @@ class WeightCounting(Question, abc.ABC):
       )
     )
     
+    body.add_element(
+      ContentAST.Answer(self.answers["num_parameters"], "Number of Parameters")
+    )
+    
     return body
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
     explanation = ContentAST.Section()
     
+    def markdown_summary(model) -> ContentAST.Table:
+      # Ensure the model is built by running build() or calling it once
+      if not model.built:
+        try:
+          model.build(model.input_shape)
+        except:
+          pass  # Some subclassed models need real data to build
+      
+      data = []
+      
+      total_params = 0
+      
+      for layer in model.layers:
+        name = layer.name
+        ltype = layer.__class__.__name__
+        
+        # Try to extract output shape
+        try:
+          outshape = tuple(layer.output.shape)
+        except:
+          outshape = "?"
+        
+        params = layer.count_params()
+        total_params += params
+        
+        data.append([name, ltype, outshape, params])
+        
+      data.append(["**Total**", "", "", f"**{total_params}**"])
+      return ContentAST.Table(data=data, headers=["Layer", "Type", "Output Shape", "Params"])
+      
+    
+    summary_lines = []
+    self.model.summary(print_fn=lambda x: summary_lines.append(x))
     explanation.add_element(
-      ContentAST.Text(self.model.summary())
+      # ContentAST.Text('\n'.join(summary_lines))
+      markdown_summary(self.model)
     )
     
     return explanation
