@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import abc
+import enum
 import re
 import textwrap
 from io import BytesIO
@@ -12,6 +14,7 @@ from QuizGenerator.misc import log, Answer
 
 from QuizGenerator.qrcode_generator import QuestionQRCode
 import re
+
 
 class ContentAST:
   """
@@ -45,7 +48,13 @@ class ContentAST:
     body.add_element(ContentAST.Text("\\\\begin{bmatrix} 1 & 2 \\\\\\\\ 3 & 4 \\\\end{bmatrix}"))
   """
   
-  class Element:
+  class OutputFormat(enum.StrEnum):
+    HTML = "html"
+    TYPST = "typst"
+    LATEX = "latex"
+    MARKDOWN = "markdown"
+    
+  class Element(abc.ABC):
     """
     Base class for all ContentAST elements providing cross-format rendering.
 
@@ -75,81 +84,92 @@ class ContentAST:
         html_output = section.render("html")
     """
     def __init__(self, elements=None, add_spacing_before=False):
-      self.elements : List[ContentAST.Element] = [
-        e if isinstance(e, ContentAST.Element) else ContentAST.Text(e)
-        for e in (elements if elements else [])
-      ]
-      self.add_spacing_before = add_spacing_before
+      pass
+      # self.elements : List[ContentAST.Element] = [
+      #   e if isinstance(e, ContentAST.Element) else ContentAST.Text(e)
+      #   for e in (elements if elements else [])
+      # ]
+      # self.add_spacing_before = add_spacing_before
     
     def __str__(self):
       return self.render_markdown()
     
-    def add_element(self, element):
-      self.elements.append(element)
-    
-    def add_elements(self, elements, new_paragraph=False):
-      if new_paragraph:
-        self.elements.append(ContentAST.Text(""))
-      self.elements.extend(elements)
-
-    def convert_markdown(self, str_to_convert, output_format):
-      if output_format == "html":
-        # Fast in-process HTML conversion using Python markdown library
-        try:
-          # Convert markdown to HTML using fast Python library
-          html_output = markdown.markdown(str_to_convert)
-
-          # Strip surrounding <p> tags for inline content (matching old behavior)
-          if html_output.startswith("<p>") and html_output.endswith("</p>"):
-            html_output = html_output[3:-4]
-
-          return html_output.strip()
-        except Exception as e:
-          log.warning(f"Markdown conversion failed: {e}. Returning original content.")
-          return str_to_convert
-      else:
-        # Keep using Pandoc for LaTeX and other formats (less critical path)
-        try:
-          output = pypandoc.convert_text(
-            str_to_convert,
-            output_format,
-            format='md',
-            extra_args=["-M2GB", "+RTS", "-K64m", "-RTS"]
-          )
-          return output
-        except RuntimeError as e:
-          log.warning(f"Specified conversion format '{output_format}' not recognized by pypandoc. Defaulting to markdown")
-        return None
-    
-    def render(self, output_format, **kwargs) -> str:
+    def render(self, output_format : ContentAST.OutputFormat, **kwargs) -> str:
+      # Render using the appropriate method, if it exists
       method_name = f"render_{output_format}"
       if hasattr(self, method_name):
         return getattr(self, method_name)(**kwargs)
       
       return self.render_markdown(**kwargs)  # Fallback to markdown
     
+    @abc.abstractmethod
     def render_markdown(self, **kwargs):
-      return " ".join(element.render("markdown", **kwargs) for element in self.elements)
+      pass
+    
+    @abc.abstractmethod
+    def render_html(self, **kwargs):
+      pass
+    
+    @abc.abstractmethod
+    def render_latex(self, **kwargs):
+      pass
+
+    @abc.abstractmethod
+    def render_typst(self, **kwargs):
+      pass
+
+    def is_mergeable(self, other: ContentAST.Element):
+      return False
+  
+  class Container(Element):
+    """Elements that contain other elements.  Generally are formatting of larger pieces."""
+    def __init__(self, elements=None, **kwargs):
+      super().__init__(**kwargs)
+      self.elements : List[ContentAST.Element] = elements if elements is not None else []
+    
+    def add_element(self, element):
+      self.elements.append(element)
+    
+    def add_elements(self, elements):
+      self.elements.extend(elements)
+    
+    @staticmethod
+    def render_element(element, output_format: ContentAST.OutputFormat, **kwargs):
+      if isinstance(element, ContentAST.Element):
+        return element.render(output_format, **kwargs)
+      log.warning("Element is not ContentAST.Element.  Defaulting to forcing to a string.")
+      return f"{element}"
+    
+    def render_markdown(self, **kwargs):
+      return " ".join([
+        self.render_element(element, output_format=ContentAST.OutputFormat.MARKDOWN)
+        for element in self.elements
+      ])
     
     def render_html(self, **kwargs):
-      
-      html_parts = []
       for element in self.elements:
-        try:
-          html_parts.append(element.render("html", **kwargs))
-        except AttributeError:
-          log.error(f"That's the one: \"{element.__class__}\" \"{element}\"")
-          exit(8)
-          
-      html = " ".join(html_parts)
-      #html = " ".join(element.render("html", **kwargs) for element in self.elements)
-      return f"{'<br>' if self.add_spacing_before else ''}{html}"
+        log.debug(f"element: {element}")
+      return " ".join([
+        self.render_element(element, output_format=ContentAST.OutputFormat.HTML)
+        for element in self.elements
+      ])
     
     def render_latex(self, **kwargs):
+      return "".join([
+        self.render_element(element, output_format=ContentAST.OutputFormat.LATEX)
+        for element in self.elements
+      ])
+      
       latex = "".join(element.render("latex", **kwargs) for element in self.elements)
       return f"{'\n\n\\vspace{0.5cm}' if self.add_spacing_before else ''}{latex}"
-
+    
     def render_typst(self, **kwargs):
+
+      return " ".join([
+        self.render_element(element, output_format=ContentAST.OutputFormat.TYPST)
+        for element in self.elements
+      ])
+      
       """
       Default Typst rendering using markdown → typst conversion via pandoc.
 
@@ -160,21 +180,67 @@ class ContentAST:
       """
       # Render to markdown first
       markdown_content = self.render_markdown(**kwargs)
-
+      
       # Convert markdown to Typst via pandoc
       typst_content = self.convert_markdown(markdown_content, 'typst')
-
+      
       # Add spacing if needed (Typst equivalent of \vspace)
       if self.add_spacing_before:
         return f"\n{typst_content}"
-
+      
       return typst_content if typst_content else markdown_content
 
-    def is_mergeable(self, other: ContentAST.Element):
-      return False
+  class Leaf(Element):
+    """Elements that are just themselves."""
+    def __init__(self, content : str, **kwargs):
+      super().__init__(**kwargs)
+      self.content = content
+
+    @staticmethod
+    def convert_markdown(str_to_convert, output_format : ContentAST.OutputFormat):
+      try:
+        match output_format:
+          
+          case ContentAST.OutputFormat.MARKDOWN:
+            return str_to_convert
+          
+          case ContentAST.OutputFormat.HTML:
+            html_output = markdown.markdown(str_to_convert)
+            
+            # Strip surrounding <p> tags so we can control paragraphs
+            if html_output.startswith("<p>") and html_output.endswith("</p>"):
+              html_output = html_output[3:-4]
+            
+            return html_output.strip()
+          
+          case _:
+            output = pypandoc.convert_text(
+              str_to_convert,
+              output_format,
+              format='md',
+              extra_args=["-M2GB", "+RTS", "-K64m", "-RTS"]
+            )
+            return output
+      except Exception as e:
+        log.warning(f"Specified conversion failed. Defaulting to markdown")
+        log.warning(e)
+      
+      return str(str_to_convert)
+      
+    def render_markdown(self, **kwargs):
+      return self.convert_markdown(self.content, ContentAST.OutputFormat.MARKDOWN)
+    
+    def render_html(self, **kwargs):
+      return self.convert_markdown(self.content, ContentAST.OutputFormat.HTML)
+    
+    def render_latex(self, **kwargs):
+      return self.convert_markdown(self.content, ContentAST.OutputFormat.LATEX)
+    
+    def render_typst(self, **kwargs):
+      return self.convert_markdown(self.content, ContentAST.OutputFormat.TYPST) #.replace("#", r"\#")
   
-  ## Big containers
-  class Document(Element):
+  ## Top-ish Level containers
+  class Document(Container):
     """
     Root document container for complete quiz documents with proper headers and structure.
 
@@ -379,7 +445,7 @@ class ContentAST:
 
       """)
 
-      latex += "\n".join(element.render("latex", **kwargs) for element in self.elements)
+      latex += "\n".join(element.render(ContentAST.OutputFormat.LATEX, **kwargs) for element in self.elements)
 
       latex += r"\end{document}"
 
@@ -399,11 +465,11 @@ class ContentAST:
       typst += f"#v(0.5cm)\n"
 
       # Render all elements
-      typst += "".join(element.render("typst", **kwargs) for element in self.elements)
+      typst += "".join(element.render(ContentAST.OutputFormat.TYPST, **kwargs) for element in self.elements)
       
       return typst
   
-  class Question(Element):
+  class Question(Container):
     """
     Complete question container with body, explanation, and metadata.
 
@@ -533,7 +599,7 @@ class ContentAST:
     def render_typst(self, **kwargs):
       """Render question in Typst format with proper formatting"""
       # Render question body
-      content = self.body.render("typst", **kwargs)
+      content = self.body.render(ContentAST.OutputFormat.TYPST, **kwargs)
       
       # Generate QR code if question number is available
       qr_param = ""
@@ -575,9 +641,40 @@ class ContentAST:
           {qr_param}
         )[
       """) + content + "\n]\n\n"
-      
+  
+  class Section(Container):
+    """
+    Primary container for question content - USE THIS for get_body() and get_explanation().
+
+    This is the most important ContentAST class for question developers.
+    It serves as the main container for organizing question content
+    and should be the return type for your get_body() and get_explanation() methods.
+
+    CRITICAL: Always use ContentAST.Section as the container for:
+    - Question body content (return from get_body())
+    - Question explanation/solution content (return from get_explanation())
+    - Any grouped content that needs to render together
+
+    When to use:
+    - As the root container in get_body() and get_explanation() methods
+    - Grouping related content elements
+    - Organizing complex question content
+
+    Example:
+        def get_body(self):
+            body = ContentAST.Section()
+            body.add_element(ContentAST.Paragraph(["Calculate the determinant:"]))
+
+            matrix_data = [[1, 2], [3, 4]]
+            body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="v"))
+
+            body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
+            return body
+    """
+    pass
+  
   # Individual elements
-  class Text(Element):
+  class Text(Leaf):
     """
     Basic text content with automatic format conversion and selective visibility.
 
@@ -606,8 +703,7 @@ class ContentAST:
         web_note = ContentAST.Text("Click submit", hide_from_latex=True)
     """
     def __init__(self, content : str, *, hide_from_latex=False, hide_from_html=False, emphasis=False):
-      super().__init__()
-      self.content = content
+      super().__init__(content)
       self.hide_from_latex = hide_from_latex
       self.hide_from_html = hide_from_html
       self.emphasis = emphasis
@@ -618,26 +714,19 @@ class ContentAST:
     def render_html(self, **kwargs):
       if self.hide_from_html:
         return ""
-      # If the super function returns None then we just return content as is
-      conversion_results = super().convert_markdown(self.content.replace("#", r"\#"), "html").strip()
-      if conversion_results is not None:
-        if conversion_results.startswith("<p>") and conversion_results.endswith("</p>"):
-          conversion_results = conversion_results[3:-4]
-      return conversion_results or self.content
-    
+      return self.convert_markdown(self.content,ContentAST.OutputFormat.HTML)
+      
     def render_latex(self, **kwargs):
       if self.hide_from_latex:
         return ""
-      # Escape # to prevent markdown header conversion in LaTeX
-      content = super().convert_markdown(self.content.replace("#", r"\#"), "latex") or self.content
-      return content
+      return self.convert_markdown(self.content.replace("#", r"\#"), ContentAST.OutputFormat.LATEX)
 
     def render_typst(self, **kwargs):
       """Render text to Typst, escaping special characters."""
-      # Hide HTML-only text from Typst (since Typst generates PDFs like LaTeX)
       if self.hide_from_latex:
         return ""
 
+      # This is for when we are passing in a code block via a FromText question
       content = re.sub(
         r"```\s*(.*)\s*```",
         r"""
@@ -653,12 +742,9 @@ class ContentAST:
 
       # In Typst, # starts code/function calls, so we need to escape it
       content = content.replace("# ", r"\# ")
-      # content = self.content
-
-      # Apply emphasis if needed
+      
       if self.emphasis:
         content = f"*{content}*"
-
       return content
 
     def is_mergeable(self, other: ContentAST.Element):
@@ -706,31 +792,25 @@ class ContentAST:
       self.make_normal = kwargs.get("make_normal", False)
     
     def render_markdown(self, **kwargs):
-      content = "```\n" + self.content + "\n```"
+      content = "```" + self.content.rstrip() + "\n```"
       return content
     
     def render_html(self, **kwargs):
-      
-      return super().convert_markdown(textwrap.indent(self.content, "\t"), "html") or self.content
+      return self.convert_markdown(textwrap.indent(self.content, "\t"), ContentAST.OutputFormat.HTML)
     
     def render_latex(self, **kwargs):
-      content = super().convert_markdown(self.render_markdown(), "latex") or self.content
-      if self.make_normal:
-        content = (
-          r"{\normal "
-          + content +
-          r"}"
-        )
-      return content
+      return self.convert_markdown(self.render_markdown(), ContentAST.OutputFormat.LATEX)
 
     def render_typst(self, **kwargs):
       """Render code block in Typst with smaller monospace font."""
       # Use raw block with 11pt font size
       # Escape backticks in the content
       escaped_content = self.content.replace("`", r"\`")
-      return f"#box[#text(size: 8pt)[```\n{escaped_content}\n```]]"
+      
+      # Try to reduce individual pathway to ensure consistency
+      return ContentAST.Text(f"```\n{escaped_content.rstrip()}\n```").render_typst()
 
-  class Equation(Element):
+  class Equation(Leaf):
     """
     Mathematical equation renderer with LaTeX input and cross-format output.
 
@@ -759,7 +839,7 @@ class ContentAST:
         body.add_element(ContentAST.Equation(r"\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}"))
     """
     def __init__(self, latex, inline=False):
-      super().__init__()
+      super().__init__("[equation]")
       self.latex = latex
       self.inline = inline
     
@@ -872,7 +952,7 @@ class ContentAST:
       
       return cls('\n'.join(equation_lines))
 
-  class Matrix(Element):
+  class Matrix(Leaf):
     """
     Mathematical matrix renderer for consistent cross-format display.
 
@@ -913,7 +993,7 @@ class ContentAST:
           bracket_type: Bracket style - "b" for [], "p" for (), "v" for |, etc.
           inline: Whether to use inline (smaller) matrix formatting
       """
-      super().__init__()
+      super().__init__("[matrix]")
       self.data = data
       self.bracket_type = bracket_type
       self.inline = inline
@@ -976,7 +1056,7 @@ class ContentAST:
       else:
         return f"\\[\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\]"
 
-  class Picture(Element):
+  class Picture(Leaf):
     """
     Image/diagram container with proper sizing and captioning.
 
@@ -1008,7 +1088,7 @@ class ContentAST:
         body.add_element(picture)
     """
     def __init__(self, img_data, caption=None, width=None):
-      super().__init__()
+      super().__init__("[picture]")
       self.img_data = img_data
       self.caption = caption
       self.width = width
@@ -1072,7 +1152,137 @@ class ContentAST:
       result.append("\\end{figure}")
       return "\n".join(result)
   
-  class Table(Element):
+  class Answer(Leaf):
+    """
+    Answer input field that renders as blanks in PDF and shows answers in HTML.
+
+    CRITICAL: Use this for ALL answer inputs in questions.
+    Creates appropriate input fields that work across both PDF and Canvas formats.
+    In PDF, renders as blank lines for students to fill in.
+    In HTML/Canvas, can display the answer for checking.
+
+    When to use:
+    - Any place where students need to input an answer
+    - Numerical answers, short text answers, etc.
+    - Questions requiring fill-in-the-blank responses
+
+    Example:
+        # Basic answer field
+        body.add_element(ContentAST.Answer(
+            answer=self.answer,
+            label="Result",
+            unit="MB"
+        ))
+
+        # Multiple choice or complex answers
+        body.add_element(ContentAST.Answer(
+            answer=[self.answer_a, self.answer_b],
+            label="Choose the best answer"
+        ))
+    """
+    
+    def __init__(self, answer: Answer = None, label: str = "", unit: str = "", blank_length=5):
+      super().__init__(label)
+      self.answer = answer
+      self.label = label
+      self.unit = unit
+      self.length = blank_length
+    
+    def render_markdown(self, **kwargs):
+      if not isinstance(self.answer, list):
+        key_to_display = self.answer.key
+      else:
+        key_to_display = self.answer[0].key
+      return f"{self.label + (':' if len(self.label) > 0 else '')} [{key_to_display}] {self.unit}".strip()
+    
+    def render_html(self, show_answers=False, can_be_numerical=False, **kwargs):
+      log.debug(f"can_be_numerical: {can_be_numerical}")
+      log.debug(f"kwargs: {kwargs}")
+      if can_be_numerical:
+        return f"Calculate {self.label}"
+      if show_answers and self.answer:
+        # Show actual answer value using formatted display string
+        if not isinstance(self.answer, list):
+          answer_display = self.answer.get_display_string()
+        else:
+          answer_display = ", ".join(a.get_display_string() for a in self.answer)
+        
+        label_part = f"{self.label}:" if self.label else ""
+        unit_part = f" {self.unit}" if self.unit else ""
+        return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
+      else:
+        # Default behavior: show [key]
+        return self.render_markdown(**kwargs)
+    
+    def render_latex(self, **kwargs):
+      return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
+    
+    def render_typst(self, **kwargs):
+      """Render answer blank as an underlined space in Typst."""
+      # Use the fillline function defined in TYPST_HEADER
+      # Width is based on self.length (in cm)
+      blank_width = self.length * 0.75  # Convert character length to cm
+      blank = f"#fillline(width: {blank_width}cm)"
+      
+      label_part = f"{self.label}:" if self.label else ""
+      unit_part = f" {self.unit}" if self.unit else ""
+      
+      return f"{label_part} {blank}{unit_part}".strip()
+  
+  ## Containers
+  
+  class Paragraph(Container):
+    """
+    Text block container with proper spacing and paragraph formatting.
+
+    IMPORTANT: Use this for grouping text content, especially in question bodies.
+    Automatically handles spacing between paragraphs and combines multiple
+    lines/elements into a cohesive text block.
+
+    When to use:
+    - Question instructions or problem statements
+    - Multi-line text content
+    - Grouping related text elements
+    - Any text that should be visually separated as a paragraph
+
+    When NOT to use:
+    - Single words or short phrases (use ContentAST.Text)
+    - Mathematical content (use ContentAST.Equation)
+    - Structured data (use ContentAST.Table)
+
+    Example:
+        # Multi-line question text
+        body.add_element(ContentAST.Paragraph([
+            "Consider the following system:",
+            "- Process A requires 4MB memory",
+            "- Process B requires 2MB memory",
+            "How much total memory is needed?"
+        ]))
+
+        # Mixed content paragraph
+        para = ContentAST.Paragraph([
+            "The equation ",
+            ContentAST.Equation("x^2 + 1 = 0", inline=True),
+            " has no real solutions."
+        ])
+    """
+    
+    def __init__(self, lines_or_elements: List[str | ContentAST.Element] = None):
+      super().__init__(add_spacing_before=True)
+      for line in lines_or_elements:
+        if isinstance(line, str):
+          self.elements.append(ContentAST.Text(line))
+        else:
+          self.elements.append(line)
+    
+    def render(self, output_format, **kwargs):
+      # Add in new lines to break these up visually
+      return "\n\n" + super().render(output_format, **kwargs) + "\n\n"
+    
+    def add_line(self, line: str):
+      self.elements.append(ContentAST.Text(line))
+  
+  class Table(Container):
     """
     Structured data table with cross-format rendering and proper formatting.
 
@@ -1302,170 +1512,7 @@ class ContentAST:
       
       return "\n#box(" + "\n".join(result) + "\n)"
   
-  ## Containers
-  class Section(Element):
-    """
-    Primary container for question content - USE THIS for get_body() and get_explanation().
-
-    This is the most important ContentAST class for question developers.
-    It serves as the main container for organizing question content
-    and should be the return type for your get_body() and get_explanation() methods.
-
-    CRITICAL: Always use ContentAST.Section as the container for:
-    - Question body content (return from get_body())
-    - Question explanation/solution content (return from get_explanation())
-    - Any grouped content that needs to render together
-
-    When to use:
-    - As the root container in get_body() and get_explanation() methods
-    - Grouping related content elements
-    - Organizing complex question content
-
-    Example:
-        def get_body(self):
-            body = ContentAST.Section()
-            body.add_element(ContentAST.Paragraph(["Calculate the determinant:"]))
-
-            matrix_data = [[1, 2], [3, 4]]
-            body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="v"))
-
-            body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
-            return body
-    """
-    
-    def render_typst(self, **kwargs):
-      """Render section by directly calling render on each child element."""
-      return "".join(element.render("typst", **kwargs) for element in self.elements)
-  
-  class Paragraph(Element):
-    """
-    Text block container with proper spacing and paragraph formatting.
-
-    IMPORTANT: Use this for grouping text content, especially in question bodies.
-    Automatically handles spacing between paragraphs and combines multiple
-    lines/elements into a cohesive text block.
-
-    When to use:
-    - Question instructions or problem statements
-    - Multi-line text content
-    - Grouping related text elements
-    - Any text that should be visually separated as a paragraph
-
-    When NOT to use:
-    - Single words or short phrases (use ContentAST.Text)
-    - Mathematical content (use ContentAST.Equation)
-    - Structured data (use ContentAST.Table)
-
-    Example:
-        # Multi-line question text
-        body.add_element(ContentAST.Paragraph([
-            "Consider the following system:",
-            "- Process A requires 4MB memory",
-            "- Process B requires 2MB memory",
-            "How much total memory is needed?"
-        ]))
-
-        # Mixed content paragraph
-        para = ContentAST.Paragraph([
-            "The equation ",
-            ContentAST.Equation("x^2 + 1 = 0", inline=True),
-            " has no real solutions."
-        ])
-    """
-    
-    def __init__(self, lines_or_elements: List[str | ContentAST.Element] = None):
-      super().__init__(add_spacing_before=True)
-      for line in lines_or_elements:
-        if isinstance(line, str):
-          self.elements.append(ContentAST.Text(line))
-        else:
-          self.elements.append(line)
-    
-    def render(self, output_format, **kwargs):
-      # Add in new lines to break these up visually
-      return "\n\n" + super().render(output_format, **kwargs) + "\n\n"
-    
-    def add_line(self, line: str):
-      self.elements.append(ContentAST.Text(line))
-  
-  class Answer(Element):
-    """
-    Answer input field that renders as blanks in PDF and shows answers in HTML.
-
-    CRITICAL: Use this for ALL answer inputs in questions.
-    Creates appropriate input fields that work across both PDF and Canvas formats.
-    In PDF, renders as blank lines for students to fill in.
-    In HTML/Canvas, can display the answer for checking.
-
-    When to use:
-    - Any place where students need to input an answer
-    - Numerical answers, short text answers, etc.
-    - Questions requiring fill-in-the-blank responses
-
-    Example:
-        # Basic answer field
-        body.add_element(ContentAST.Answer(
-            answer=self.answer,
-            label="Result",
-            unit="MB"
-        ))
-
-        # Multiple choice or complex answers
-        body.add_element(ContentAST.Answer(
-            answer=[self.answer_a, self.answer_b],
-            label="Choose the best answer"
-        ))
-    """
-    
-    def __init__(self, answer: Answer = None, label: str = "", unit: str = "", blank_length=5):
-      super().__init__()
-      self.answer = answer
-      self.label = label
-      self.unit = unit
-      self.length = blank_length
-    
-    def render_markdown(self, **kwargs):
-      if not isinstance(self.answer, list):
-        key_to_display = self.answer.key
-      else:
-        key_to_display = self.answer[0].key
-      return f"{self.label + (':' if len(self.label) > 0 else '')} [{key_to_display}] {self.unit}".strip()
-    
-    def render_html(self, show_answers=False, can_be_numerical=False, **kwargs):
-      log.debug(f"can_be_numerical: {can_be_numerical}")
-      log.debug(f"kwargs: {kwargs}")
-      if can_be_numerical:
-        return f"Calculate {self.label}"
-      if show_answers and self.answer:
-        # Show actual answer value using formatted display string
-        if not isinstance(self.answer, list):
-          answer_display = self.answer.get_display_string()
-        else:
-          answer_display = ", ".join(a.get_display_string() for a in self.answer)
-        
-        label_part = f"{self.label}:" if self.label else ""
-        unit_part = f" {self.unit}" if self.unit else ""
-        return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
-      else:
-        # Default behavior: show [key]
-        return self.render_markdown(**kwargs)
-    
-    def render_latex(self, **kwargs):
-      return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
-    
-    def render_typst(self, **kwargs):
-      """Render answer blank as an underlined space in Typst."""
-      # Use the fillline function defined in TYPST_HEADER
-      # Width is based on self.length (in cm)
-      blank_width = self.length * 0.75  # Convert character length to cm
-      blank = f"#fillline(width: {blank_width}cm)"
-      
-      label_part = f"{self.label}:" if self.label else ""
-      unit_part = f" {self.unit}" if self.unit else ""
-      
-      return f"{label_part} {blank}{unit_part}".strip()
-
-  class TableGroup(Element):
+  class TableGroup(Container):
     """
     Container for displaying multiple tables side-by-side in LaTeX, stacked in HTML.
 
@@ -1653,7 +1700,7 @@ class ContentAST:
       return content
 
   ## Specialized Elements
-  class RepeatedProblemPart(Element):
+  class RepeatedProblemPart(Container):
     """
     Multi-part problem renderer for questions with labeled subparts (a), (b), (c), etc.
 
@@ -1768,7 +1815,7 @@ class ContentAST:
       result.append(r"\end{alignat*}")
       return "\n".join(result)
 
-  class OnlyLatex(Element):
+  class OnlyLatex(Container):
     """
     Container element that only renders content in LaTeX/PDF output format.
 
@@ -1790,12 +1837,12 @@ class ContentAST:
         body.add_element(latex_only)
     """
     
-    def render(self, output_format, **kwargs):
+    def render(self, output_format: ContentAST.OutputFormat, **kwargs):
       if output_format != "latex":
         return ""
-      return super().render(output_format, **kwargs)
+      return super().render(output_format=output_format, **kwargs)
   
-  class OnlyHtml(Element):
+  class OnlyHtml(Container):
     """
     Container element that only renders content in HTML/Canvas output format.
 
