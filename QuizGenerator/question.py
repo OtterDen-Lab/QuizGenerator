@@ -21,7 +21,7 @@ import yaml
 from typing import List, Dict, Any, Tuple, Optional
 import canvasapi.course, canvasapi.quiz
 
-from QuizGenerator.misc import OutputFormat, Answer
+from QuizGenerator.misc import Answer
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.performance import timer, PerformanceTracker
 

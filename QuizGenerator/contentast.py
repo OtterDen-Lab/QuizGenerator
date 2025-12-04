@@ -10,11 +10,13 @@ from typing import List, Callable
 import pypandoc
 import markdown
 
-from QuizGenerator.misc import log, Answer
+from QuizGenerator.misc import Answer
 
 from QuizGenerator.qrcode_generator import QuestionQRCode
 import re
 
+import logging
+log = logging.getLogger(__name__)
 
 class ContentAST:
   """

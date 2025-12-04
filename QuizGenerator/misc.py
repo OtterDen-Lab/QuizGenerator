@@ -10,12 +10,8 @@ from typing import List, Dict, Tuple, Any
 
 import fractions
 
+
 log = logging.getLogger(__name__)
-
-
-class OutputFormat(enum.Enum):
-  LATEX = enum.auto(),
-  CANVAS = enum.auto()
 
 
 class Answer:
@@ -38,6 +34,7 @@ class Answer:
     AUTOFLOAT = enum.auto()
     LIST = enum.auto()
     VECTOR = enum.auto()
+    MATRIX = enum.auto()
     
     
   def __init__(
@@ -277,6 +274,9 @@ class Answer:
     else:
       # Default: use display or value
       return str(self.display if hasattr(self, 'display') else self.value)
+
+  # def get_ast_element(self) -> ContentAST.Answer:
+  #   pass
 
   # Factory methods for common answer types
   @classmethod
