@@ -10,7 +10,7 @@ from typing import List, Callable
 import pypandoc
 import markdown
 
-from QuizGenerator.misc import Answer
+# from QuizGenerator.misc import Answer
 
 from QuizGenerator.qrcode_generator import QuestionQRCode
 import re
@@ -984,7 +984,7 @@ class ContentAST:
         - "B": curly braces {matrix}
         - "V": double vertical bars ||matrix|| - for norms
     """
-    def __init__(self, data, bracket_type="p", inline=False):
+    def __init__(self, data, *, bracket_type="p", inline=False, name=None):
       """
       Creates a matrix element that renders consistently across output formats.
 
@@ -999,6 +999,7 @@ class ContentAST:
       self.data = data
       self.bracket_type = bracket_type
       self.inline = inline
+      self.name = name
 
     @staticmethod
     def to_latex(data, bracket_type="p"):
@@ -1044,7 +1045,8 @@ class ContentAST:
       if self.inline:
         return f"<span class='math'>$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$</span>"
       else:
-        return f"<div class='math'>$$\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}$$</div>"
+        name_str = f"\\text{{{self.name}}} = " if self.name else ""
+        return f"<div class='math'>$${name_str}\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}$$</div>"
 
     def render_latex(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
@@ -1183,7 +1185,7 @@ class ContentAST:
         ))
     """
     
-    def __init__(self, answer: Answer = None, label: str = "", unit: str = "", blank_length=5):
+    def __init__(self, answer, label: str = "", unit: str = "", blank_length=5):
       super().__init__(label)
       self.answer = answer
       self.label = label
@@ -1198,8 +1200,6 @@ class ContentAST:
       return f"{self.label + (':' if len(self.label) > 0 else '')} [{key_to_display}] {self.unit}".strip()
     
     def render_html(self, show_answers=False, can_be_numerical=False, **kwargs):
-      log.debug(f"can_be_numerical: {can_be_numerical}")
-      log.debug(f"kwargs: {kwargs}")
       if can_be_numerical:
         return f"Calculate {self.label}"
       if show_answers and self.answer:
