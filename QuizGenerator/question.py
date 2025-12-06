@@ -500,7 +500,8 @@ class Question(abc.ABC):
       while not is_interesting:
         # Increment seed for each backoff attempt to maintain deterministic behavior
         current_seed = None if base_seed is None else base_seed + backoff_counter
-        self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0))
+        # Pass config_params to refresh so custom kwargs from YAML are available
+        self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0), **self.config_params)
         is_interesting = self.is_interesting()
         backoff_counter += 1
 
