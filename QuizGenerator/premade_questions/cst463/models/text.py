@@ -74,7 +74,7 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
       ])
     )
     body.add_elements([
-      ContentAST.Paragraph([ContentAST.Text(f"`{w}` : "), ContentAST.Text(e)]) for w, e in zip(self.context_words, self.context_embs)
+      ContentAST.Paragraph([ContentAST.Text(f"`{w}` : "), str(e)]) for w, e in zip(self.context_words, self.context_embs)
     ])
     
     body.add_elements([
@@ -120,7 +120,7 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     )
 
     for i, (word, emb) in enumerate(zip(self.context_words, self.context_embs)):
-      emb_str = "[" + ", ".join([f"{x:.{digits}f}" for x in emb]) + "]"
+      emb_str = "[" + ", ".join([f"{x:.2f}" for x in emb]) + "]"
       explanation.add_element(
         ContentAST.Paragraph([
           f"`{word}`: {emb_str}"
@@ -142,15 +142,15 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     )
 
     context_emb = self.context_embs[0]
-    dot_product_terms = " + ".join([f"({self.center_emb[j]:.{digits}f} \\times {context_emb[j]:.{digits}f})"
+    dot_product_terms = " + ".join([f"({self.center_emb[j]:.2f} \\times {context_emb[j]:.2f})"
                                     for j in range(len(self.center_emb))])
     logit_val = self.logits[0]
 
     explanation.add_element(
-      ContentAST.Equation(f"{dot_product_terms} = {logit_val:.{digits}f}")
+      ContentAST.Equation(f"{dot_product_terms} = {logit_val:.2f}")
     )
 
-    logits_str = "[" + ", ".join([f"{x:.{digits}f}" for x in self.logits]) + "]"
+    logits_str = "[" + ", ".join([f"{x:.2f}" for x in self.logits]) + "]"
     explanation.add_element(
       ContentAST.Paragraph([
         f"All logits: {logits_str}"

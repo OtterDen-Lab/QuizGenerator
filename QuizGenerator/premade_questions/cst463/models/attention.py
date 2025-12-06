@@ -118,7 +118,9 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
 
     explanation.add_element(
       ContentAST.Paragraph([
-        f"Raw scores (scaling by {ContentAST.Equation(f'\\sqrt{{{d_k}}}', inline=True)} prevents extremely large values):"
+        "Raw scores (scaling by ",
+        ContentAST.Equation(f'\\sqrt{{{d_k}}}', inline=True),
+        " prevents extremely large values):"
       ])
     )
     explanation.add_element(ContentAST.Matrix(np.round(scores, digits)))
