@@ -54,7 +54,7 @@ class ConvolutionCalculation(MatrixQuestion):
     
     # num_input_channels = 1
     input_size = kwargs.get("input_size", 4)
-    num_filters = kwargs.get("num_filters", 3)
+    num_filters = kwargs.get("num_filters", 1)
     
     # Small sizes for hand calculation
     self.image = self.get_rounded_matrix((input_size, input_size))
