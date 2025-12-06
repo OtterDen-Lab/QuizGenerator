@@ -4,16 +4,19 @@ import math
 import keras
 import numpy as np
 
+from QuizGenerator.misc import MatrixAnswer
 from QuizGenerator.question import Question, QuestionRegistry, Answer
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
+from .matrices import MatrixQuestion
+
 log = logging.getLogger(__name__)
 
 
 @QuestionRegistry.register("cst463.attention.forward-pass")
-class AttentionForwardPass(Question, TableQuestionMixin):
+class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
   
   @staticmethod
   def simple_attention(Q, K, V):
@@ -39,21 +42,27 @@ class AttentionForwardPass(Question, TableQuestionMixin):
   
   def refresh(self, *args, **kwargs):
     super().refresh(*args, **kwargs)
-    self.rng = np.random.RandomState(kwargs.get("rng_seed", None))
     
-    seq_len = 3
-    d_k = 2  # key/query dimension
-    d_v = 2  # value dimension
+    seq_len = kwargs.get("seq_len", 3)
+    d_k = kwargs.get("key_dimension", 1)  # key/query dimension
+    d_v = kwargs.get("value_dimension", 1)  # value dimension
     
     # Small integer matrices
     self.Q = self.rng.randint(0, 3, size=(seq_len, d_k))
     self.K = self.rng.randint(0, 3, size=(seq_len, d_k))
     self.V = self.rng.randint(0, 3, size=(seq_len, d_v))
+
+    self.Q = self.get_rounded_matrix((seq_len, d_k), 0, 3)
+    self.K = self.get_rounded_matrix((seq_len, d_k), 0, 3)
+    self.V = self.get_rounded_matrix((seq_len, d_v), 0, 3)
     
     self.output, self.weights = self.simple_attention(self.Q, self.K, self.V)
     
     ## Answers:
     # Q, K, V, output, weights
+    
+    self.answers["weights"] = MatrixAnswer("weights", self.output)
+    self.answers["output"] = MatrixAnswer("output", self.output)
     
     return True
   
@@ -72,6 +81,11 @@ class AttentionForwardPass(Question, TableQuestionMixin):
         }
       )
     )
+    
+    body.add_elements([
+      self.answers["weights"].get_ast_element(label=f"Weights"),
+      self.answers["output"].get_ast_element(label=f"Output"),
+    ])
     
     log.debug(f"output: {self.output}")
     log.debug(f"weights: {self.weights}")
