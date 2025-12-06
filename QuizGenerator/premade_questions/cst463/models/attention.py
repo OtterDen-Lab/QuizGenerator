@@ -94,6 +94,98 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
     explanation = ContentAST.Section()
-    
+    digits = Answer.DEFAULT_ROUNDING_DIGITS
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Self-attention uses scaled dot-product attention to compute a weighted combination of values based on query-key similarity."
+      ])
+    )
+
+    # Step 1: Compute attention scores
+    explanation.add_element(
+      ContentAST.Paragraph([
+        ContentAST.Text("Step 1: Compute attention scores", emphasis=True)
+      ])
+    )
+
+    d_k = self.Q.shape[1]
+    explanation.add_element(
+      ContentAST.Equation(f"\\text{{scores}} = \\frac{{Q K^T}}{{\\sqrt{{d_k}}}} = \\frac{{Q K^T}}{{\\sqrt{{{d_k}}}}}")
+    )
+
+    scores = self.Q @ self.K.T / np.sqrt(d_k)
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"Raw scores (scaling by {ContentAST.Equation(f'\\sqrt{{{d_k}}}', inline=True)} prevents extremely large values):"
+      ])
+    )
+    explanation.add_element(ContentAST.Matrix(np.round(scores, digits)))
+
+    # Step 2: Apply softmax
+    explanation.add_element(
+      ContentAST.Paragraph([
+        ContentAST.Text("Step 2: Apply softmax to get attention weights", emphasis=True)
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Equation(r"\alpha_{ij} = \frac{\exp(\text{score}_{ij})}{\sum_k \exp(\text{score}_{ik})}")
+    )
+
+    # Show ONE example row
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Example: Row 0 softmax computation"
+      ])
+    )
+
+    row_scores = scores[0]
+    exp_scores = np.exp(row_scores)
+    sum_exp = exp_scores.sum()
+    weights_row = exp_scores / sum_exp
+
+    exp_terms = " + ".join([f"e^{{{s:.{digits}f}}}" for s in row_scores])
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"Denominator = {exp_terms} = {sum_exp:.{digits}f}"
+      ])
+    )
+
+    # Format array with proper rounding
+    weights_str = "[" + ", ".join([f"{w:.{digits}f}" for w in weights_row]) + "]"
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"Resulting weights: {weights_str}"
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Complete attention weight matrix:"
+      ])
+    )
+    explanation.add_element(ContentAST.Matrix(np.round(self.weights, digits)))
+
+    # Step 3: Weighted sum of values
+    explanation.add_element(
+      ContentAST.Paragraph([
+        ContentAST.Text("Step 3: Compute weighted sum of values", emphasis=True)
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Equation(r"\text{output} = \text{weights} \times V")
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Final output:"
+      ])
+    )
+    explanation.add_element(ContentAST.Matrix(np.round(self.output, digits)))
+
     return explanation
 

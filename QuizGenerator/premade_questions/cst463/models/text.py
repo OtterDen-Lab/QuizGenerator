@@ -90,6 +90,110 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
     explanation = ContentAST.Section()
-    
+    digits = Answer.DEFAULT_ROUNDING_DIGITS
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "In the skip-gram model, we predict context words given a center word by computing dot products between embeddings and applying softmax."
+      ])
+    )
+
+    # Step 1: Show embeddings
+    explanation.add_element(
+      ContentAST.Paragraph([
+        ContentAST.Text("Step 1: Given embeddings", emphasis=True)
+      ])
+    )
+
+    # Format center embedding
+    center_emb_str = "[" + ", ".join([f"{x:.{digits}f}" for x in self.center_emb]) + "]"
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"Center word `{self.center_word}`: {center_emb_str}"
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Context words:"
+      ])
+    )
+
+    for i, (word, emb) in enumerate(zip(self.context_words, self.context_embs)):
+      emb_str = "[" + ", ".join([f"{x:.{digits}f}" for x in emb]) + "]"
+      explanation.add_element(
+        ContentAST.Paragraph([
+          f"`{word}`: {emb_str}"
+        ])
+      )
+
+    # Step 2: Compute logits (dot products)
+    explanation.add_element(
+      ContentAST.Paragraph([
+        ContentAST.Text("Step 2: Compute logits (dot products)", emphasis=True)
+      ])
+    )
+
+    # Show ONE example
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"Example: Logit for `{self.context_words[0]}`"
+      ])
+    )
+
+    context_emb = self.context_embs[0]
+    dot_product_terms = " + ".join([f"({self.center_emb[j]:.{digits}f} \\times {context_emb[j]:.{digits}f})"
+                                    for j in range(len(self.center_emb))])
+    logit_val = self.logits[0]
+
+    explanation.add_element(
+      ContentAST.Equation(f"{dot_product_terms} = {logit_val:.{digits}f}")
+    )
+
+    logits_str = "[" + ", ".join([f"{x:.{digits}f}" for x in self.logits]) + "]"
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"All logits: {logits_str}"
+      ])
+    )
+
+    # Step 3: Apply softmax
+    explanation.add_element(
+      ContentAST.Paragraph([
+        ContentAST.Text("Step 3: Apply softmax to get probabilities", emphasis=True)
+      ])
+    )
+
+    exp_logits = np.exp(self.logits)
+    sum_exp = exp_logits.sum()
+
+    exp_terms = " + ".join([f"e^{{{l:.{digits}f}}}" for l in self.logits])
+
+    explanation.add_element(
+      ContentAST.Equation(f"\\text{{denominator}} = {exp_terms} = {sum_exp:.{digits}f}")
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Probabilities:"
+      ])
+    )
+
+    for i, (word, prob) in enumerate(zip(self.context_words, self.probs)):
+      explanation.add_element(
+        ContentAST.Equation(f"P(\\text{{{word}}}) = \\frac{{e^{{{self.logits[i]:.{digits}f}}}}}{{{sum_exp:.{digits}f}}} = {prob:.{digits}f}")
+      )
+
+    # Step 4: Identify most likely
+    most_likely_idx = np.argmax(self.probs)
+    most_likely_word = self.context_words[most_likely_idx]
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        ContentAST.Text("Conclusion:", emphasis=True),
+        f" The most likely context word is `{most_likely_word}` with probability {self.probs[most_likely_idx]:.{digits}f}"
+      ])
+    )
+
     return explanation
 

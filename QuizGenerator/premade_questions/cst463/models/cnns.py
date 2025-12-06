@@ -51,16 +51,18 @@ class ConvolutionCalculation(MatrixQuestion):
   
   def refresh(self, *args, **kwargs):
     super().refresh(*args, **kwargs)
-    
+
     # num_input_channels = 1
     input_size = kwargs.get("input_size", 4)
     num_filters = kwargs.get("num_filters", 1)
-    
+    self.stride = kwargs.get("stride", 1)
+    self.padding = kwargs.get("padding", 0)
+
     # Small sizes for hand calculation
     self.image = self.get_rounded_matrix((input_size, input_size))
     self.kernel = self.get_rounded_matrix((3, 3, num_filters), -1, 1)
-    
-    self.result = self.conv2d_multi_channel(self.image, self.kernel, stride=1, padding=0)
+
+    self.result = self.conv2d_multi_channel(self.image, self.kernel, stride=self.stride, padding=self.padding)
     
     self.answers = {
       f"result_{i}" : MatrixAnswer(f"result_{i}", self.result[:,:,i])
@@ -91,7 +93,7 @@ class ConvolutionCalculation(MatrixQuestion):
     body.add_element(
       ContentAST.Paragraph(
         [
-          "Calculate the output of the convolution operation.  Assume stride = 1 and padding = 0."
+          f"Calculate the output of the convolution operation.  Assume stride = {self.stride} and padding = {self.padding}."
         ]
       )
     )
@@ -108,5 +110,73 @@ class ConvolutionCalculation(MatrixQuestion):
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
     explanation = ContentAST.Section()
-    
+    digits = Answer.DEFAULT_ROUNDING_DIGITS
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "To compute a 2D convolution, we slide the filter across the input image and compute the element-wise product at each position, then sum the results."
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"With stride={self.stride} and padding={self.padding}: ",
+        f"stride controls how many pixels the filter moves each step, ",
+        f"and padding adds zeros around the border {'(no border in this case)' if self.padding == 0 else f'({self.padding} pixels)'}."
+      ])
+    )
+
+    # For each filter, show one detailed example computation
+    for f_idx in range(self.kernel.shape[-1]):
+      explanation.add_element(
+        ContentAST.Paragraph([
+          ContentAST.Text(f"Filter {f_idx}:", emphasis=True)
+        ])
+      )
+
+      # Show the filter (rounded)
+      explanation.add_element(
+        ContentAST.Matrix(np.round(self.kernel[:, :, f_idx], digits), name=f"Filter {f_idx}")
+      )
+
+      # Show ONE example computation (position 0,0)
+      explanation.add_element(
+        ContentAST.Paragraph([
+          "Example computation at position (0, 0):"
+        ])
+      )
+
+      # Account for padding when extracting receptive field
+      if self.padding > 0:
+        padded_image = np.pad(self.image, ((self.padding, self.padding), (self.padding, self.padding)), mode='constant')
+        receptive_field = padded_image[0:3, 0:3]
+      else:
+        receptive_field = self.image[0:3, 0:3]
+
+      computation_steps = []
+      for r in range(3):
+        row_terms = []
+        for c in range(3):
+          img_val = receptive_field[r, c]
+          kernel_val = self.kernel[r, c, f_idx]
+          row_terms.append(f"({img_val:.2f} \\times {kernel_val:.2f})")
+        computation_steps.append(" + ".join(row_terms))
+
+      equation_str = " + ".join(computation_steps)
+      result_val = self.result[0, 0, f_idx]
+
+      explanation.add_element(
+        ContentAST.Equation(f"{equation_str} = {result_val:.2f}")
+      )
+
+      # Show the complete output matrix (rounded)
+      explanation.add_element(
+        ContentAST.Paragraph([
+          "Complete output:"
+        ])
+      )
+      explanation.add_element(
+        ContentAST.Matrix(np.round(self.result[:, :, f_idx], digits))
+      )
+
     return explanation

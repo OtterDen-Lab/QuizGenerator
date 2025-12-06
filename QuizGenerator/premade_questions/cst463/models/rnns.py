@@ -96,6 +96,79 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
     explanation = ContentAST.Section()
-    
+    digits = Answer.DEFAULT_ROUNDING_DIGITS
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "For an RNN forward pass, we compute the hidden state at each time step using:"
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Equation(r"h_t = \tanh(x_t W_{xh} + h_{t-1} W_{hh} + b_h)")
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Where the input contributes via ", ContentAST.Equation("W_{xh}", inline=True),
+        ", the previous hidden state contributes via ", ContentAST.Equation("W_{hh}", inline=True),
+        ", and ", ContentAST.Equation("b_h", inline=True), " is the bias."
+      ])
+    )
+
+    # Show ONE detailed example (first timestep)
+    explanation.add_element(
+      ContentAST.Paragraph([
+        ContentAST.Text("Example: Timestep 0", emphasis=True)
+      ])
+    )
+
+    # Compute step 0
+    x_contribution = self.x_seq[0] @ self.W_xh
+    h_contribution = self.h_0 @ self.W_hh
+    pre_activation = x_contribution + h_contribution + self.b_h
+    h_0_result = np.tanh(pre_activation)
+
+    # Format arrays with proper rounding
+    def format_array(arr):
+      if arr.ndim == 0:
+        return f"{arr:.{digits}f}"
+      return "[" + ", ".join([f"{x:.{digits}f}" for x in arr.flatten()]) + "]"
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"Input contribution: {ContentAST.Equation('x_0 W_{xh}', inline=True)} = {format_array(x_contribution)}"
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"Hidden contribution: {ContentAST.Equation('h_{{-1}} W_{{hh}}', inline=True)} (initial state) = {format_array(h_contribution)}"
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"Pre-activation: {format_array(pre_activation)}"
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        f"After tanh: {ContentAST.Equation('h_0', inline=True)} = {format_array(h_0_result)}"
+      ])
+    )
+
+    # Show complete output sequence (rounded)
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Complete hidden state sequence (each row is one timestep):"
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Matrix(np.round(self.h_states, digits))
+    )
+
     return explanation
 
