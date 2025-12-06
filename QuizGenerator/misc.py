@@ -280,16 +280,6 @@ class Answer:
 
   def get_ast_element(self, label=None):
     from QuizGenerator.contentast import ContentAST
-    if self.variable_kind == Answer.VariableKind.MATRIX:
-      # Then we need to return the entire large element that we are construct, a table full of answers.
-      data = None # Data should be the answer ASTs
-      data = [
-        [ ContentAST.Answer(value=self.value[i,j]) for i in self.value.shape[0] ]
-         for j in self.value.shape[1]
-      ]
-      for i, j in np.ndindex(self.value.shape):
-        data
-      table = ContentAST.Table(data)
     
     return ContentAST.Answer(answer=self, label=label) # todo fix label
 
@@ -421,7 +411,7 @@ class Answer:
   
   @classmethod
   def matrix(cls, key: str, value: np.array|List, **kwargs ):
-    return cls(
+    return MatrixAnswer(
       key=key,
       value=value,
       variable_kind=cls.VariableKind.MATRIX
@@ -553,6 +543,8 @@ class MatrixAnswer(Answer):
   
   def get_ast_element(self, label=None):
     from QuizGenerator.contentast import ContentAST
+    
+    log.debug(f"self.value: {self.value}")
     
     data = [
       [

@@ -4,6 +4,7 @@ import math
 import keras
 import numpy as np
 
+from .matrices import MatrixQuestion
 from QuizGenerator.question import Question, QuestionRegistry, Answer
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.constants import MathRanges
@@ -13,7 +14,7 @@ log = logging.getLogger(__name__)
 
 
 @QuestionRegistry.register("cst463.rnn.forward-pass")
-class RNNForwardPass(Question, TableQuestionMixin):
+class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
   
   @staticmethod
   def rnn_forward(x_seq, W_xh, W_hh, b_h, h_0, activation='tanh'):
@@ -46,21 +47,23 @@ class RNNForwardPass(Question, TableQuestionMixin):
     super().refresh(*args, **kwargs)
     self.rng = np.random.RandomState(kwargs.get("rng_seed", None))
     
-    seq_len = 3
-    input_dim = 2
-    hidden_dim = 2
+    seq_len = kwargs.get("seq_len", 3)
+    input_dim =  kwargs.get("input_dim", 1)
+    hidden_dim = kwargs.get("hidden_dim", 1)
     
     # Small integer weights for hand calculation
-    self.x_seq = self.rng.randint(0, 3, size=(seq_len, input_dim))
-    self.W_xh = self.rng.randint(-1, 2, size=(input_dim, hidden_dim))
-    self.W_hh = self.rng.randint(-1, 2, size=(hidden_dim, hidden_dim))
-    self.b_h = self.rng.randint(-1, 2, size=hidden_dim)
+    self.x_seq = self.get_rounded_matrix((seq_len, input_dim)) # self.rng.randint(0, 3, size=(seq_len, input_dim))
+    self.W_xh = self.get_rounded_matrix((input_dim, hidden_dim), -1, 2)
+    self.W_hh = self.get_rounded_matrix((hidden_dim, hidden_dim), -1, 2)
+    self.b_h = self.get_rounded_matrix((hidden_dim,), -1, 2)
     self.h_0 = np.zeros(hidden_dim)
     
-    self.h_states = self.rnn_forward(self.x_seq, self.W_xh, self.W_hh, self.b_h, self.h_0)
+    self.h_states = self.rnn_forward(self.x_seq, self.W_xh, self.W_hh, self.b_h, self.h_0) #.reshape((seq_len,-1))
     
     ## Answers:
     # x_seq, W_xh, W_hh, b_h, h_0, h_states
+    
+    self.answers["output_sequence"] = Answer.matrix(key="output_sequence", value=self.h_states)
     
     return True
   
@@ -68,21 +71,26 @@ class RNNForwardPass(Question, TableQuestionMixin):
     body = ContentAST.Section()
     
     body.add_element(
-      ContentAST.Text("Given the below information about an RNN, please calculate the output sequence.")
+      ContentAST.Paragraph([
+        ContentAST.Text("Given the below information about an RNN, please calculate the output sequence."),
+        "Assume that you are using a tanh activation function."
+      ])
     )
     body.add_element(
       self.create_info_table(
         {
-          "x_seq": self.x_seq,
-          "W_xh" : self.W_xh,
-          "W_hh" : self.W_hh,
-          "b_h"  : self.b_h,
-          "h_0"  : self.h_0,
+          ContentAST.Container(["Input sequence, ", ContentAST.Equation("x_{seq}", inline=True)]) : ContentAST.Matrix(self.x_seq),
+          ContentAST.Container(["Input weights, ",  ContentAST.Equation("W_{xh}", inline=True)])  : ContentAST.Matrix(self.W_xh),
+          ContentAST.Container(["Hidden weights, ", ContentAST.Equation("W_{hh}", inline=True)])  : ContentAST.Matrix(self.W_hh),
+          ContentAST.Container(["Bias, ",           ContentAST.Equation("b_{h}", inline=True)])   : ContentAST.Matrix(self.b_h),
+          ContentAST.Container(["Hidden states, ",  ContentAST.Equation("h_{0}", inline=True)])   : ContentAST.Matrix(self.h_0),
         }
       )
     )
     
-    log.debug(f"h_states: {self.h_states}")
+    body.add_element(
+      self.answers["output_sequence"].get_ast_element(label=f"Hidden states")
+    )
     
     return body
   

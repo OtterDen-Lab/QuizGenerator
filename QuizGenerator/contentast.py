@@ -7,6 +7,7 @@ import textwrap
 from io import BytesIO
 from typing import List, Callable
 
+import numpy
 import pypandoc
 import markdown
 
@@ -989,14 +990,28 @@ class ContentAST:
       Creates a matrix element that renders consistently across output formats.
 
       Args:
-          data: Matrix data as List[List[numbers/strings]]
-                For vectors: [[v1], [v2], [v3]] (column vector)
-                For matrices: [[a, b], [c, d]]
+          data: Matrix data as List[List[numbers/strings]] or numpy ndarray (1D or 2D)
+                For vectors: [[v1], [v2], [v3]] (column vector) or np.array([v1, v2, v3])
+                For matrices: [[a, b], [c, d]] or np.array([[a, b], [c, d]])
           bracket_type: Bracket style - "b" for [], "p" for (), "v" for |, etc.
           inline: Whether to use inline (smaller) matrix formatting
       """
       super().__init__("[matrix]")
-      self.data = data
+
+      # Convert numpy ndarray to list format if needed
+      import numpy as np
+      if isinstance(data, np.ndarray):
+        if data.ndim == 1:
+          # 1D array: convert to column vector [[v1], [v2], [v3]]
+          self.data = [[val] for val in data]
+        elif data.ndim == 2:
+          # 2D array: convert to list of lists
+          self.data = data.tolist()
+        else:
+          raise ValueError(f"Matrix only supports 1D or 2D arrays, got {data.ndim}D")
+      else:
+        self.data = data
+
       self.bracket_type = bracket_type
       self.inline = inline
       self.name = name
@@ -1038,7 +1053,11 @@ class ContentAST:
     def render_html(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
       rows = []
-      for row in self.data:
+      if isinstance(self.data, numpy.ndarray):
+        data = self.data.tolist()
+      else:
+        data = self.data
+      for row in data:
         rows.append(" & ".join(str(cell) for cell in row))
       matrix_content = r" \\ ".join(rows)
 
@@ -1280,6 +1299,9 @@ class ContentAST:
     def render(self, output_format, **kwargs):
       # Add in new lines to break these up visually
       return "\n\n" + super().render(output_format, **kwargs) + "\n\n"
+    
+    def render_html(self, **kwargs):
+      return super().render_html(**kwargs) + "<br>"
     
     def add_line(self, line: str):
       self.elements.append(ContentAST.Text(line))
