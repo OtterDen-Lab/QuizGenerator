@@ -156,7 +156,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
 
     # Output layer
     self.z2 = self.W2 @ self.a1 + self.b2
-    self.a2 = self._apply_activation(self.z2, self.ACTIVATION_LINEAR)  # Linear output
+    self.a2 = self._apply_activation(self.z2, self.ACTIVATION_SIGMOID)  # Sigmoid output for binary classification
 
     # Round all computed values to display precision to ensure students can reproduce calculations
     # We display z and a values with 4 decimal places
@@ -168,21 +168,31 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     return self.a2
 
   def _compute_loss(self, y_target):
-    """Compute MSE loss."""
+    """Compute binary cross-entropy loss."""
     self.y_target = y_target
-    self.loss = 0.5 * (y_target - self.a2[0]) ** 2
+    # BCE: L = -[y log(ŷ) + (1-y) log(1-ŷ)]
+    # Add small epsilon to prevent log(0)
+    epsilon = 1e-15
+    y_pred = np.clip(self.a2[0], epsilon, 1 - epsilon)
+    self.loss = -(y_target * np.log(y_pred) + (1 - y_target) * np.log(1 - y_pred))
     return self.loss
 
   def _compute_output_gradient(self):
     """Compute gradient of loss w.r.t. output."""
-    # For MSE loss: dL/da2 = -(y - a2)
-    self.dL_da2 = -(self.y_target - self.a2[0])
+    # For BCE loss with sigmoid activation, the gradient simplifies beautifully:
+    # dL/dz2 = ŷ - y (this is the combined derivative of BCE loss and sigmoid activation)
+    #
+    # Derivation:
+    # BCE: L = -[y log(ŷ) + (1-y) log(1-ŷ)]
+    # dL/dŷ = -[y/ŷ - (1-y)/(1-ŷ)]
+    # Sigmoid: ŷ = σ(z), dŷ/dz = ŷ(1-ŷ)
+    # Chain rule: dL/dz = dL/dŷ * dŷ/dz = ŷ - y
 
-    # For linear output activation: da2/dz2 = 1
-    self.da2_dz2 = 1.0
+    self.dL_dz2 = self.a2[0] - self.y_target
 
-    # Chain rule: dL/dz2 = dL/da2 * da2/dz2
-    self.dL_dz2 = self.dL_da2 * self.da2_dz2
+    # Store intermediate values for explanation purposes
+    self.dL_da2 = -(self.y_target / self.a2[0] - (1 - self.y_target) / (1 - self.a2[0]))
+    self.da2_dz2 = self.a2[0] * (1 - self.a2[0])
 
     return self.dL_dz2
 
@@ -300,7 +310,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
       if self.y_target is not None:
         right_data.append([
           ContentAST.Equation("y", inline=True),
-          f"{self.y_target:.2f}"
+          f"{int(self.y_target)}"  # Binary target (0 or 1)
         ])
 
       if self.loss is not None:
@@ -558,7 +568,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     # Question description
     body.add_element(ContentAST.Paragraph([
       f"Given the neural network below with {self._get_activation_name()} activation "
-      f"in the hidden layer and linear activation (f(z) = z) in the output layer, "
+      f"in the hidden layer and sigmoid activation in the output layer (for binary classification), "
       f"calculate the forward pass for the given input values."
     ]))
 
@@ -575,7 +585,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     # Activation function
     body.add_element(ContentAST.Paragraph([
-      f"**Activation function:** {self._get_activation_name()}"
+      f"**Hidden layer activation:** {self._get_activation_name()}"
     ]))
 
     # Create answer block
@@ -584,14 +594,14 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       answers.append(
         ContentAST.Answer(
           answer=self.answers[f"h{i+1}"],
-          label=f"h_{i+1} (hidden neuron {i+1} output)"
+          label=f"h_{i+1}"
         )
       )
 
     answers.append(
       ContentAST.Answer(
         answer=self.answers["y_pred"],
-        label="ŷ (network output)"
+        label="ŷ"
       )
     )
 
@@ -650,7 +660,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     # Output layer
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 3: Calculate output (with linear activation)**"
+      "**Step 3: Calculate output (with sigmoid activation)**"
     ]))
 
     terms = []
@@ -667,12 +677,13 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     ))
 
     explanation.add_element(ContentAST.Equation(
-      f"\\hat{{y}} = f(z_{{out}}) = z_{{out}} = {self.a2[0]:.4f}",
+      f"\\hat{{y}} = \\sigma(z_{{out}}) = \\frac{{1}}{{1 + e^{{-{self.z2[0]:.4f}}}}} = {self.a2[0]:.4f}",
       inline=False
     ))
 
     explanation.add_element(ContentAST.Paragraph([
-      "(Note: The output layer uses linear activation, so the output can be any real number)"
+      "(Note: The output layer uses sigmoid activation for binary classification, "
+      "so the output is between 0 and 1, representing the probability of class 1)"
     ]))
 
     return explanation
@@ -697,11 +708,12 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Run forward pass
     self._forward_pass()
 
-    # Generate target and compute loss
-    # Target should be different from output to create meaningful gradients
-    self.y_target = float(self.a2[0] + self.rng.uniform(1, 3) * self.rng.choice([-1, 1]))
-    # Round target to display precision (2 decimal places)
-    self.y_target = round(self.y_target, 2)
+    # Generate binary target (0 or 1)
+    # Choose the opposite of what the network predicts to create meaningful gradients
+    if self.a2[0] > 0.5:
+      self.y_target = 0
+    else:
+      self.y_target = 1
     self._compute_loss(self.y_target)
     # Round loss to display precision (4 decimal places)
     self.loss = round(self.loss, 4)
@@ -733,7 +745,8 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Question description
     body.add_element(ContentAST.Paragraph([
       f"Given the neural network below with {self._get_activation_name()} activation "
-      f"in the hidden layer, a forward pass has been completed with the values shown. "
+      f"in the hidden layer and sigmoid activation in the output layer (for binary classification), "
+      f"a forward pass has been completed with the values shown. "
       f"Calculate the gradients (∂L/∂w) for the specified weights using backpropagation."
     ]))
 
@@ -750,7 +763,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
 
     # Activation function
     body.add_element(ContentAST.Paragraph([
-      f"**Activation function:** {self._get_activation_name()}"
+      f"**Hidden layer activation:** {self._get_activation_name()}"
     ]))
 
     body.add_element(ContentAST.Paragraph([
@@ -765,7 +778,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       answers.append(
         ContentAST.Answer(
           answer=self.answers[f"dL_dw2_{i}"],
-          label=f"∂L/∂w_{i+3} (weight from h_{i+1} to output)"
+          label=f"∂L/∂w_{i+3}"
         )
       )
 
@@ -774,7 +787,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       answers.append(
         ContentAST.Answer(
           answer=self.answers[f"dL_dw1_0{j}"],
-          label=f"∂L/∂w_1{j+1} (weight from x_{j+1} to h_1)"
+          label=f"∂L/∂w_1{j+1}"
         )
       )
 
@@ -795,13 +808,18 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     ]))
 
     explanation.add_element(ContentAST.Paragraph([
-      "For MSE loss with linear output activation:"
+      "For binary cross-entropy loss with sigmoid output activation, "
+      "the gradient with respect to the pre-activation simplifies beautifully:"
     ]))
 
     explanation.add_element(ContentAST.Equation(
-      f"\\frac{{\\partial L}}{{\\partial \\hat{{y}}}} = -(y - \\hat{{y}}) = -({self.y_target:.2f} - {self.a2[0]:.4f}) = {self.dL_da2:.4f}",
+      f"\\frac{{\\partial L}}{{\\partial z_{{out}}}} = \\hat{{y}} - y = {self.a2[0]:.4f} - {int(self.y_target)} = {self.dL_dz2:.4f}",
       inline=False
     ))
+
+    explanation.add_element(ContentAST.Paragraph([
+      "(This elegant result comes from combining the BCE loss derivative and sigmoid activation derivative)"
+    ]))
 
     # W2 gradients
     explanation.add_element(ContentAST.Paragraph([
@@ -815,7 +833,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     for i in range(self.num_hidden):
       grad = self._compute_gradient_W2(i)
       explanation.add_element(ContentAST.Equation(
-        f"\\frac{{\\partial L}}{{\\partial w_{i+3}}} = \\frac{{\\partial L}}{{\\partial \\hat{{y}}}} \\cdot \\frac{{\\partial \\hat{{y}}}}{{\\partial w_{i+3}}} = {self.dL_da2:.4f} \\cdot {self.a1[i]:.4f} = {grad:.4f}",
+        f"\\frac{{\\partial L}}{{\\partial w_{i+3}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot \\frac{{\\partial z_{{out}}}}{{\\partial w_{i+3}}} = {self.dL_dz2:.4f} \\cdot {self.a1[i]:.4f} = {grad:.4f}",
         inline=False
       ))
 
@@ -837,14 +855,14 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       grad = self._compute_gradient_W1(0, j)
 
       if self.activation_function == self.ACTIVATION_SIGMOID:
-        act_deriv_str = f"\\sigma(z_1)(1-\\sigma(z_1)) = {self.a1[0]:.4f}(1-{self.a1[0]:.4f}) = {da1_dz1:.4f}"
+        act_deriv_str = f"\\sigma'(z_1) = h_1(1-h_1) = {self.a1[0]:.4f}(1-{self.a1[0]:.4f}) = {da1_dz1:.4f}"
       elif self.activation_function == self.ACTIVATION_RELU:
-        act_deriv_str = f"\\mathbb{{1}}(z_1 > 0) = {da1_dz1:.4f}"
+        act_deriv_str = f"\\text{{ReLU}}'(z_1) = \\mathbb{{1}}(z_1 > 0) = {da1_dz1:.4f}"
       else:
         act_deriv_str = f"1"
 
       explanation.add_element(ContentAST.Equation(
-        f"\\frac{{\\partial L}}{{\\partial w_{{1{j+1}}}}} = \\frac{{\\partial L}}{{\\partial \\hat{{y}}}} \\cdot w_{3} \\cdot {act_deriv_str} \\cdot x_{j+1} = {self.dL_da2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[j]:.1f} = {grad:.4f}",
+        f"\\frac{{\\partial L}}{{\\partial w_{{1{j+1}}}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot w_{3} \\cdot {act_deriv_str} \\cdot x_{j+1} = {self.dL_dz2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[j]:.1f} = {grad:.4f}",
         inline=False
       ))
 
@@ -1013,10 +1031,12 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     # Run forward pass
     self._forward_pass()
 
-    # Generate target and compute loss
-    self.y_target = float(self.a2[0] + self.rng.uniform(1, 3) * self.rng.choice([-1, 1]))
-    # Round target to display precision (2 decimal places)
-    self.y_target = round(self.y_target, 2)
+    # Generate binary target (0 or 1)
+    # Choose the opposite of what the network predicts to create meaningful gradients
+    if self.a2[0] > 0.5:
+      self.y_target = 0
+    else:
+      self.y_target = 1
     self._compute_loss(self.y_target)
     # Round loss to display precision (4 decimal places)
     self.loss = round(self.loss, 4)
@@ -1068,15 +1088,16 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     # Question description
     body.add_element(ContentAST.Paragraph([
-      f"Given the neural network below, perform one complete training step (forward pass, "
-      f"loss calculation, backpropagation, and weight update) for the given input and target."
+      f"Given the neural network below with {self._get_activation_name()} activation "
+      f"in the hidden layer and sigmoid activation in the output layer (for binary classification), "
+      f"perform one complete training step (forward pass, loss calculation, "
+      f"backpropagation, and weight update) for the given input and target."
     ]))
 
     # Network diagram
     body.add_element(
       ContentAST.Picture(
-        img_data=self._generate_network_diagram(show_weights=True, show_activations=False),
-        caption=f"Neural network (before training)"
+        img_data=self._generate_network_diagram(show_weights=True, show_activations=False)
       )
     )
 
@@ -1094,7 +1115,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     body.add_element(ContentAST.Paragraph([
       "Target: ",
-      ContentAST.Equation(f"y = {self.y_target:.2f}", inline=True)
+      ContentAST.Equation(f"y = {int(self.y_target)}", inline=True)
     ]))
 
     body.add_element(ContentAST.Paragraph([
@@ -1103,13 +1124,9 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ]))
 
     body.add_element(ContentAST.Paragraph([
-      f"**Activation function:** {self._get_activation_name()}"
+      f"**Hidden layer activation:** {self._get_activation_name()}"
     ]))
 
-    body.add_element(ContentAST.Paragraph([
-      "**Complete the following training steps:**"
-    ]))
-    
     # Network parameters table
     body.add_element(self._generate_parameter_table(include_activations=False))
 
@@ -1126,35 +1143,35 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     answers.append(
       ContentAST.Answer(
         answer=self.answers["loss"],
-        label="2. Loss - MSE: L = (1/2)(y - ŷ)²"
+        label="2. Loss"
       )
     )
 
     answers.append(
       ContentAST.Answer(
         answer=self.answers["grad_w3"],
-        label="3. Gradient ∂L/∂w₃ (weight h₁ → ŷ)"
+        label="3. Gradient ∂L/∂w₃"
       )
     )
 
     answers.append(
       ContentAST.Answer(
         answer=self.answers["grad_w11"],
-        label="4. Gradient ∂L/∂w₁₁ (weight x₁ → h₁)"
+        label="4. Gradient ∂L/∂w₁₁"
       )
     )
 
     answers.append(
       ContentAST.Answer(
         answer=self.answers["new_w3"],
-        label="5. Updated w₃: w₃' = w₃ - α(∂L/∂w₃)"
+        label="5. Updated w₃:"
       )
     )
 
     answers.append(
       ContentAST.Answer(
         answer=self.answers["new_w11"],
-        label="6. Updated w₁₁: w₁₁' = w₁₁ - α(∂L/∂w₁₁)"
+        label="6. Updated w₁₁:"
       )
     )
 
@@ -1192,22 +1209,41 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       inline=False
     ))
 
-    # Output
+    # Output (pre-activation)
     z2 = self.W2[0, 0] * self.a1[0] + self.W2[0, 1] * self.a1[1] + self.b2[0]
     explanation.add_element(ContentAST.Equation(
-      f"\\hat{{y}} = w_3 h_1 + w_4 h_2 + b_2 = {self.W2[0,0]:.1f} \\cdot {self.a1[0]:.4f} + {self.W2[0,1]:.1f} \\cdot {self.a1[1]:.4f} + {self.b2[0]:.1f} = {self.a2[0]:.4f}",
+      f"z_{{out}} = w_3 h_1 + w_4 h_2 + b_2 = {self.W2[0,0]:.1f} \\cdot {self.a1[0]:.4f} + {self.W2[0,1]:.1f} \\cdot {self.a1[1]:.4f} + {self.b2[0]:.1f} = {self.z2[0]:.4f}",
+      inline=False
+    ))
+
+    # Output (sigmoid activation)
+    explanation.add_element(ContentAST.Equation(
+      f"\\hat{{y}} = \\sigma(z_{{out}}) = \\frac{{1}}{{1 + e^{{-{self.z2[0]:.4f}}}}} = {self.a2[0]:.4f}",
       inline=False
     ))
 
     # Step 2: Loss
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 2: Calculate Loss**"
+      "**Step 2: Calculate Loss (Binary Cross-Entropy)**"
     ]))
 
+    # Show the full BCE formula first
     explanation.add_element(ContentAST.Equation(
-      f"L = \\frac{{1}}{{2}}(y - \\hat{{y}})^2 = \\frac{{1}}{{2}}({self.y_target:.2f} - {self.a2[0]:.4f})^2 = {self.loss:.4f}",
+      f"L = -[y \\log(\\hat{{y}}) + (1-y) \\log(1-\\hat{{y}})]",
       inline=False
     ))
+
+    # Then evaluate it
+    if self.y_target == 1:
+      explanation.add_element(ContentAST.Equation(
+        f"L = -[1 \\cdot \\log({self.a2[0]:.4f}) + 0 \\cdot \\log(1-{self.a2[0]:.4f})] = -\\log({self.a2[0]:.4f}) = {self.loss:.4f}",
+        inline=False
+      ))
+    else:
+      explanation.add_element(ContentAST.Equation(
+        f"L = -[0 \\cdot \\log({self.a2[0]:.4f}) + 1 \\cdot \\log(1-{self.a2[0]:.4f})] = -\\log({1-self.a2[0]:.4f}) = {self.loss:.4f}",
+        inline=False
+      ))
 
     # Step 3: Gradients
     explanation.add_element(ContentAST.Paragraph([
@@ -1215,17 +1251,17 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ]))
 
     explanation.add_element(ContentAST.Paragraph([
-      "Loss gradient:"
+      "For BCE with sigmoid, the output layer gradient simplifies to:"
     ]))
 
     explanation.add_element(ContentAST.Equation(
-      f"\\frac{{\\partial L}}{{\\partial \\hat{{y}}}} = -(y - \\hat{{y}}) = {self.dL_da2:.4f}",
+      f"\\frac{{\\partial L}}{{\\partial z_{{out}}}} = \\hat{{y}} - y = {self.a2[0]:.4f} - {int(self.y_target)} = {self.dL_dz2:.4f}",
       inline=False
     ))
 
     grad_w3 = self._compute_gradient_W2(0)
     explanation.add_element(ContentAST.Equation(
-      f"\\frac{{\\partial L}}{{\\partial w_3}} = \\frac{{\\partial L}}{{\\partial \\hat{{y}}}} \\cdot h_1 = {self.dL_da2:.4f} \\cdot {self.a1[0]:.4f} = {grad_w3:.4f}",
+      f"\\frac{{\\partial L}}{{\\partial w_3}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot h_1 = {self.dL_dz2:.4f} \\cdot {self.a1[0]:.4f} = {grad_w3:.4f}",
       inline=False
     ))
 
@@ -1233,8 +1269,15 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     dz2_da1 = self.W2[0, 0]
     da1_dz1 = self._activation_derivative(self.z1[0])
 
+    if self.activation_function == self.ACTIVATION_SIGMOID:
+      act_deriv_str = f"h_1(1-h_1)"
+    elif self.activation_function == self.ACTIVATION_RELU:
+      act_deriv_str = f"\\text{{ReLU}}'(z_1)"
+    else:
+      act_deriv_str = f"1"
+
     explanation.add_element(ContentAST.Equation(
-      f"\\frac{{\\partial L}}{{\\partial w_{{11}}}} = \\frac{{\\partial L}}{{\\partial \\hat{{y}}}} \\cdot w_3 \\cdot \\sigma'(z_1) \\cdot x_1 = {self.dL_da2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[0]:.1f} = {grad_w11:.4f}",
+      f"\\frac{{\\partial L}}{{\\partial w_{{11}}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot w_3 \\cdot {act_deriv_str} \\cdot x_1 = {self.dL_dz2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[0]:.1f} = {grad_w11:.4f}",
       inline=False
     ))
 
