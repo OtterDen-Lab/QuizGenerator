@@ -16,6 +16,13 @@ from QuizGenerator.contentast import ContentAST
 log = logging.getLogger(__name__)
 
 
+def fix_negative_zero(value):
+  """Convert -0.0 to 0.0 to avoid confusing display."""
+  if isinstance(value, (int, float)):
+    return 0.0 if value == 0 else value
+  return value
+
+
 class Answer:
   DEFAULT_ROUNDING_DIGITS = 4
   
@@ -256,13 +263,16 @@ class Answer:
 
     elif self.variable_kind == Answer.VariableKind.AUTOFLOAT:
       # Round to default precision for readability
-      return f"{round(self.value, self.DEFAULT_ROUNDING_DIGITS)}"
+      rounded = round(self.value, self.DEFAULT_ROUNDING_DIGITS)
+      return f"{fix_negative_zero(rounded)}"
 
     elif self.variable_kind == Answer.VariableKind.FLOAT:
       # Round to default precision
       if isinstance(self.value, (list, tuple)):
-        return f"{round(self.value[0], self.DEFAULT_ROUNDING_DIGITS)}"
-      return f"{round(self.value, self.DEFAULT_ROUNDING_DIGITS)}"
+        rounded = round(self.value[0], self.DEFAULT_ROUNDING_DIGITS)
+        return f"{fix_negative_zero(rounded)}"
+      rounded = round(self.value, self.DEFAULT_ROUNDING_DIGITS)
+      return f"{fix_negative_zero(rounded)}"
 
     elif self.variable_kind == Answer.VariableKind.INT:
       return str(int(self.value))
@@ -272,7 +282,7 @@ class Answer:
 
     elif self.variable_kind == Answer.VariableKind.VECTOR:
       # Format as comma-separated rounded values
-      return ", ".join(str(round(v, self.DEFAULT_ROUNDING_DIGITS)) for v in self.value)
+      return ", ".join(str(fix_negative_zero(round(v, self.DEFAULT_ROUNDING_DIGITS))) for v in self.value)
 
     else:
       # Default: use display or value

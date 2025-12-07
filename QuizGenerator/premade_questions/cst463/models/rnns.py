@@ -118,9 +118,10 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
 
     # Format arrays with proper rounding
     def format_array(arr):
+      from QuizGenerator.misc import fix_negative_zero
       if arr.ndim == 0:
-        return f"{arr:.{digits}f}"
-      return "[" + ", ".join([f"{x:.{digits}f}" for x in arr.flatten()]) + "]"
+        return f"{fix_negative_zero(arr):.{digits}f}"
+      return "[" + ", ".join([f"{fix_negative_zero(x):.{digits}f}" for x in arr.flatten()]) + "]"
 
     # Show detailed examples for first 2 timesteps (or just 1 if seq_len == 1)
     seq_len = len(self.x_seq)
