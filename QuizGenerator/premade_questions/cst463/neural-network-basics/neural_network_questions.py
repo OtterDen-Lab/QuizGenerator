@@ -15,11 +15,12 @@ import matplotlib.patches as mpatches
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
+from ..models.matrices import MatrixQuestion
 
 log = logging.getLogger(__name__)
 
 
-class SimpleNeuralNetworkBase(Question, abc.ABC):
+class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
   """
   Base class for simple neural network questions.
 
@@ -73,45 +74,42 @@ class SimpleNeuralNetworkBase(Question, abc.ABC):
 
   def _generate_network(self, weight_range=(-2, 2), input_range=(-3, 3)):
     """Generate random network parameters and input."""
-    # Generate weights (using small values for numerical stability)
-    self.W1 = np.array([
-      [self.rng.uniform(weight_range[0], weight_range[1])
-       for _ in range(self.num_inputs)]
-      for _ in range(self.num_hidden)
-    ])
+    # Generate weights using MatrixQuestion's rounded matrix method
+    self.W1 = self.get_rounded_matrix(
+      (self.num_hidden, self.num_inputs),
+      low=weight_range[0],
+      high=weight_range[1]
+    )
 
-    self.W2 = np.array([
-      [self.rng.uniform(weight_range[0], weight_range[1])
-       for _ in range(self.num_hidden)]
-      for _ in range(self.num_outputs)
-    ])
+    self.W2 = self.get_rounded_matrix(
+      (self.num_outputs, self.num_hidden),
+      low=weight_range[0],
+      high=weight_range[1]
+    )
 
     # Generate biases
     if self.use_bias:
-      self.b1 = np.array([
-        self.rng.uniform(weight_range[0], weight_range[1])
-        for _ in range(self.num_hidden)
-      ])
-      self.b2 = np.array([
-        self.rng.uniform(weight_range[0], weight_range[1])
-        for _ in range(self.num_outputs)
-      ])
+      self.b1 = self.get_rounded_matrix(
+        (self.num_hidden,),
+        low=weight_range[0],
+        high=weight_range[1]
+      )
+      self.b2 = self.get_rounded_matrix(
+        (self.num_outputs,),
+        low=weight_range[0],
+        high=weight_range[1]
+      )
     else:
       self.b1 = np.zeros(self.num_hidden)
       self.b2 = np.zeros(self.num_outputs)
 
-    # Round weights to make calculations cleaner
-    self.W1 = np.round(self.W1 * 2) / 2  # Round to nearest 0.5
-    self.W2 = np.round(self.W2 * 2) / 2
-    self.b1 = np.round(self.b1 * 2) / 2
-    self.b2 = np.round(self.b2 * 2) / 2
-
-    # Generate input values
-    self.X = np.array([
-      self.rng.uniform(input_range[0], input_range[1])
-      for _ in range(self.num_inputs)
-    ])
-    self.X = np.round(self.X)  # Use integer inputs for simplicity
+    # Generate input values (keep as integers for simplicity)
+    self.X = self.get_rounded_matrix(
+      (self.num_inputs,),
+      low=input_range[0],
+      high=input_range[1],
+      digits_to_round=0  # Round to integers
+    )
 
   def _select_activation_function(self):
     """Randomly select an activation function."""
