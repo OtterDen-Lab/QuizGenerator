@@ -1079,6 +1079,40 @@ class ContentAST:
       else:
         return f"\\[\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\]"
 
+    def render_typst(self, **kwargs):
+      """Render matrix in Typst format using mat() and vec() functions."""
+      # Build matrix content with semicolons separating rows
+      rows = []
+      for row in self.data:
+        rows.append(", ".join(str(cell) for cell in row))
+
+      # Check if it's a vector (single column)
+      is_vector = all(len(row) == 1 for row in self.data)
+
+      if is_vector:
+        # Use vec() for vectors
+        matrix_content = ", ".join(str(row[0]) for row in self.data)
+        result = f"vec({matrix_content})"
+      else:
+        # Use mat() for matrices with semicolons separating rows
+        matrix_content = "; ".join(rows)
+        result = f"mat({matrix_content})"
+
+      # Add bracket delimiters if needed
+      if self.bracket_type == "b":  # square brackets
+        result = f"mat(delim: \"[\", {matrix_content})" if not is_vector else f"vec(delim: \"[\", {matrix_content})"
+      elif self.bracket_type == "v":  # vertical bars (determinant)
+        result = f"mat(delim: \"|\", {matrix_content})"
+      elif self.bracket_type == "B":  # curly braces
+        result = f"mat(delim: \"{{\", {matrix_content})"
+      # "p" (parentheses) is the default, no need to specify
+
+      # Wrap in math mode
+      if self.inline:
+        return f"${result}$"
+      else:
+        return f"$ {result} $"
+
   class Picture(Leaf):
     """
     Image/diagram container with proper sizing and captioning.
