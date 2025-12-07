@@ -98,11 +98,15 @@ class ConvolutionCalculation(MatrixQuestion):
       )
     )
     
+    body.add_element(ContentAST.LineBreak())
+    
     body.add_elements([
-      self.answers[f"result_{i}"].get_ast_element(label=f"Result of filter {i}")
+      ContentAST.Container([
+        self.answers[f"result_{i}"].get_ast_element(label=f"Result of filter {i}"),
+        ContentAST.LineBreak()
+      ])
       for i in range(self.result.shape[-1])
-    ]
-    )
+    ])
     
     
     

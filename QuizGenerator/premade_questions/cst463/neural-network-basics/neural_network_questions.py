@@ -191,7 +191,10 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     self.dL_dz2 = self.a2[0] - self.y_target
 
     # Store intermediate values for explanation purposes
-    self.dL_da2 = -(self.y_target / self.a2[0] - (1 - self.y_target) / (1 - self.a2[0]))
+    # Clip to prevent division by zero (same epsilon as in loss calculation)
+    epsilon = 1e-15
+    y_pred_clipped = np.clip(self.a2[0], epsilon, 1 - epsilon)
+    self.dL_da2 = -(self.y_target / y_pred_clipped - (1 - self.y_target) / (1 - y_pred_clipped))
     self.da2_dz2 = self.a2[0] * (1 - self.a2[0])
 
     return self.dL_dz2

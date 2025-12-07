@@ -111,6 +111,8 @@ class WeightCounting(Question, abc.ABC):
       )
     )
     
+    body.add_element(ContentAST.LineBreak())
+    
     body.add_element(
       ContentAST.Answer(self.answers["num_parameters"], "Number of Parameters")
     )

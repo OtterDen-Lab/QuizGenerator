@@ -83,12 +83,11 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     )
     
     body.add_elements([
+      ContentAST.LineBreak(),
       self.answers["weights"].get_ast_element(label=f"Weights"),
+      ContentAST.LineBreak(),
       self.answers["output"].get_ast_element(label=f"Output"),
     ])
-    
-    log.debug(f"output: {self.output}")
-    log.debug(f"weights: {self.weights}")
     
     return body
   

@@ -78,7 +78,9 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     ])
     
     body.add_elements([
+      ContentAST.LineBreak(),
       self.answers["logits"].get_ast_element("Logits"),
+      ContentAST.LineBreak(),
       self.answers["center_word"].get_ast_element("Center word")
     ])
     

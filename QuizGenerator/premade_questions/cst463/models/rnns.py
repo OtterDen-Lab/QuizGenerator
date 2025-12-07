@@ -88,6 +88,8 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
       )
     )
     
+    body.add_element(ContentAST.LineBreak())
+    
     body.add_element(
       self.answers["output_sequence"].get_ast_element(label=f"Hidden states")
     )

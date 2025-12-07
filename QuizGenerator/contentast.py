@@ -140,7 +140,7 @@ class ContentAST:
     def render_element(element, output_format: ContentAST.OutputFormat, **kwargs):
       if isinstance(element, ContentAST.Element):
         return element.render(output_format, **kwargs)
-      log.warning("Element is not ContentAST.Element.  Defaulting to forcing to a string.")
+      log.warning(f"Element ({element}) is not ContentAST.Element.  Defaulting to forcing to a string.")
       return f"{element}"
     
     def render_markdown(self, **kwargs):
@@ -1305,6 +1305,10 @@ class ContentAST:
       unit_part = f" {self.unit}" if self.unit else ""
       
       return f"{label_part} {blank}{unit_part}".strip()
+  
+  class LineBreak(Text):
+    def __init__(self, *args, **kwargs):
+      super().__init__("\n\n")
   
   ## Containers
   
