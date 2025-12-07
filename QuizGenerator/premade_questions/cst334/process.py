@@ -15,7 +15,6 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-from QuizGenerator.misc import OutputFormat
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.question import Question, Answer, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
@@ -380,7 +379,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     # Return whether this workload is interesting
     return self.is_interesting()
   
-  def get_body(self, output_format: OutputFormat|None = None, *args, **kwargs) -> ContentAST.Section:
+  def get_body(self, *args, **kwargs) -> ContentAST.Section:
     # Create table data for scheduling results
     table_rows = []
     for job_id in sorted(self.job_stats.keys()):

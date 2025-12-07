@@ -32,8 +32,17 @@ class TableQuestionMixin:
     Returns:
         ContentAST.Table with the information formatted
     """
+    # Don't convert ContentAST elements to strings - let them render properly
+    table_data = []
+    for key, value in info_dict.items():
+      # Keep ContentAST elements as-is, convert others to strings
+      if isinstance(value, ContentAST.Element):
+        table_data.append([key, value])
+      else:
+        table_data.append([key, str(value)])
+
     return ContentAST.Table(
-      data=[[key, str(value)] for key, value in info_dict.items()],
+      data=table_data,
       transpose=transpose
     )
   

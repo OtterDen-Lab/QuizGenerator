@@ -6,16 +6,21 @@ import enum
 import itertools
 import logging
 import math
+import numpy as np
 from typing import List, Dict, Tuple, Any
 
 import fractions
 
+from QuizGenerator.contentast import ContentAST
+
 log = logging.getLogger(__name__)
 
 
-class OutputFormat(enum.Enum):
-  LATEX = enum.auto(),
-  CANVAS = enum.auto()
+def fix_negative_zero(value):
+  """Convert -0.0 to 0.0 to avoid confusing display."""
+  if isinstance(value, (int, float)):
+    return 0.0 if value == 0 else value
+  return value
 
 
 class Answer:
@@ -38,6 +43,7 @@ class Answer:
     AUTOFLOAT = enum.auto()
     LIST = enum.auto()
     VECTOR = enum.auto()
+    MATRIX = enum.auto()
     
     
   def __init__(
@@ -200,6 +206,7 @@ class Answer:
         }
         for possible_state in [self.value] #itertools.permutations(self.value)
       ]
+    
     else:
       # For string answers, check if value is a list of acceptable alternatives
       if isinstance(self.value, list):
@@ -256,13 +263,16 @@ class Answer:
 
     elif self.variable_kind == Answer.VariableKind.AUTOFLOAT:
       # Round to default precision for readability
-      return f"{round(self.value, self.DEFAULT_ROUNDING_DIGITS)}"
+      rounded = round(self.value, self.DEFAULT_ROUNDING_DIGITS)
+      return f"{fix_negative_zero(rounded)}"
 
     elif self.variable_kind == Answer.VariableKind.FLOAT:
       # Round to default precision
       if isinstance(self.value, (list, tuple)):
-        return f"{round(self.value[0], self.DEFAULT_ROUNDING_DIGITS)}"
-      return f"{round(self.value, self.DEFAULT_ROUNDING_DIGITS)}"
+        rounded = round(self.value[0], self.DEFAULT_ROUNDING_DIGITS)
+        return f"{fix_negative_zero(rounded)}"
+      rounded = round(self.value, self.DEFAULT_ROUNDING_DIGITS)
+      return f"{fix_negative_zero(rounded)}"
 
     elif self.variable_kind == Answer.VariableKind.INT:
       return str(int(self.value))
@@ -272,11 +282,16 @@ class Answer:
 
     elif self.variable_kind == Answer.VariableKind.VECTOR:
       # Format as comma-separated rounded values
-      return ", ".join(str(round(v, self.DEFAULT_ROUNDING_DIGITS)) for v in self.value)
+      return ", ".join(str(fix_negative_zero(round(v, self.DEFAULT_ROUNDING_DIGITS))) for v in self.value)
 
     else:
       # Default: use display or value
       return str(self.display if hasattr(self, 'display') else self.value)
+
+  def get_ast_element(self, label=None):
+    from QuizGenerator.contentast import ContentAST
+    
+    return ContentAST.Answer(answer=self, label=label) # todo fix label
 
   # Factory methods for common answer types
   @classmethod
@@ -404,9 +419,18 @@ class Answer:
       **kwargs
     )
   
+  @classmethod
+  def matrix(cls, key: str, value: np.array|List, **kwargs ):
+    return MatrixAnswer(
+      key=key,
+      value=value,
+      variable_kind=cls.VariableKind.MATRIX
+    )
+  
   @staticmethod
   def _to_fraction(x):
     """Convert int/float/decimal.Decimal/fractions.Fraction/str('a/b' or decimal) to fractions.Fraction exactly."""
+    log.debug(f"x: {x} {x.__class__}")
     if isinstance(x, fractions.Fraction):
       return x
     if isinstance(x, int):
@@ -489,3 +513,67 @@ class Answer:
           outs.add(f"{sign}{whole} {rem}/{b}")
     
     return sorted(outs, key=lambda s: (len(s), s))
+  
+
+class MatrixAnswer(Answer):
+  def get_for_canvas(self, single_answer=False) -> List[Dict]:
+    canvas_answers = []
+    
+    """
+    The core idea is that we will walk through and generate each one for X_i,j
+
+    The big remaining question is how we will get all these names to the outside world.
+    It might have to be a pretty big challenge, or rather re-write.
+    """
+    
+    # The core idea is that we will be walking through and generating a per-index set of answers.
+    # Boy will this get messy.  Poor canvas.
+    for i, j in np.ndindex(self.value.shape):
+      entry_strings = self.__class__.accepted_strings(
+        self.value[i,j],
+        allow_integer=True,
+        allow_simple_fraction=True,
+        max_denominator=3 * 4 * 5,
+        allow_mixed=True,
+        include_spaces=False,
+        include_fixed_even_if_integer=True
+      )
+      canvas_answers.extend(
+        [
+          {
+            "blank_id": f"{self.key}_{i}_{j}",  # Give each an index associated with it so we can track it
+            "answer_text": answer_string,
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for answer_string in entry_strings
+        ]
+      )
+    
+    return canvas_answers
+  
+  def get_ast_element(self, label=None):
+    from QuizGenerator.contentast import ContentAST
+    
+    log.debug(f"self.value: {self.value}")
+    
+    data = [
+      [
+        ContentAST.Answer(
+          Answer.float_value(
+            key=f"{self.key}_{i}_{j}",
+            value=self.value[i,j]
+          )
+        )
+        for i in range(self.value.shape[0])
+      ]
+      for j in range(self.value.shape[1])
+    ]
+    table = ContentAST.Table(data)
+    
+    if label is not None:
+      return ContentAST.Container([
+        ContentAST.Text(f"{label} = "),
+        table
+      ])
+    else:
+      return table

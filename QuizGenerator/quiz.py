@@ -14,7 +14,6 @@ from typing import List, Dict, Optional
 
 import yaml
 
-from QuizGenerator.misc import OutputFormat
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.question import Question, QuestionRegistry, QuestionGroup
 
