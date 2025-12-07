@@ -145,21 +145,21 @@ class ContentAST:
     
     def render_markdown(self, **kwargs):
       return " ".join([
-        self.render_element(element, output_format=ContentAST.OutputFormat.MARKDOWN)
+        self.render_element(element, output_format=ContentAST.OutputFormat.MARKDOWN, **kwargs)
         for element in self.elements
       ])
-    
+
     def render_html(self, **kwargs):
       for element in self.elements:
         log.debug(f"element: {element}")
       return " ".join([
-        self.render_element(element, output_format=ContentAST.OutputFormat.HTML)
+        self.render_element(element, output_format=ContentAST.OutputFormat.HTML, **kwargs)
         for element in self.elements
       ])
-    
+
     def render_latex(self, **kwargs):
       return "".join([
-        self.render_element(element, output_format=ContentAST.OutputFormat.LATEX)
+        self.render_element(element, output_format=ContentAST.OutputFormat.LATEX, **kwargs)
         for element in self.elements
       ])
       
@@ -169,7 +169,7 @@ class ContentAST:
     def render_typst(self, **kwargs):
 
       return " ".join([
-        self.render_element(element, output_format=ContentAST.OutputFormat.TYPST)
+        self.render_element(element, output_format=ContentAST.OutputFormat.TYPST, **kwargs)
         for element in self.elements
       ])
       
@@ -1174,7 +1174,29 @@ class ContentAST:
 
       result.append("\\end{figure}")
       return "\n".join(result)
-  
+
+    def render_typst(self, **kwargs):
+      self._ensure_image_saved()
+
+      # Build the image function call
+      img_params = []
+      if self.width:
+        img_params.append(f'width: {self.width}')
+
+      params_str = ', '.join(img_params) if img_params else ''
+
+      # Use Typst's figure and image functions
+      result = []
+      result.append("#figure(")
+      result.append(f'  image("{self.path}"{", " + params_str if params_str else ""}),')
+
+      if self.caption:
+        result.append(f'  caption: [{self.caption}]')
+
+      result.append(")")
+
+      return "\n".join(result)
+
   class Answer(Leaf):
     """
     Answer input field that renders as blanks in PDF and shows answers in HTML.
