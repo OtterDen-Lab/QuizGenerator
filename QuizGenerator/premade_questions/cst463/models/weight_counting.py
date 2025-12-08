@@ -194,7 +194,7 @@ class WeightCounting_CNN(WeightCounting):
         )
       ]
     )
-    return model, ["filters", "kernel_size", "strides", "padding", "pool_size"]
+    return model, ["units", "filters", "kernel_size", "strides", "padding", "pool_size"]
 
 
 @QuestionRegistry.register("cst463.WeightCounting-RNN")
