@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import abc
+import difflib
 import logging
 
 from QuizGenerator.question import Question, Answer, QuestionRegistry
@@ -365,31 +366,85 @@ class VSFS_states(IOQuestion):
   def get_explanation(self) -> ContentAST.Section:
     explanation = ContentAST.Section()
     
-    explanation.add_element(
+    log.debug(f"self.start_state: {self.start_state}")
+    log.debug(f"self.end_state: {self.end_state}")
+    
+    explanation.add_elements([
       ContentAST.Paragraph([
-        "These questions are based on the VSFS simulator that our book mentions.  "
-        "We will be discussing the interpretation of this in class, but you can also find information "
-        "<a href=\"https://github.com/chyyuu/os_tutorial_lab/blob/master/ostep/ostep13-vsfs.md\">here</a>, "
-        "as well as simulator code.  Please note that the code uses python 2.",
-        "",
-        "In general, I recommend looking for differences between the two outputs.  Recommended steps would be:",
-        "<ol>"
-        
-        "<li> Check to see if there are differences between the bitmaps "
-        "that could indicate a file/directroy were created or removed.</li>",
-        
-        "<li>Check the listed inodes to see if any entries have changed.  "
-        "This might be a new entry entirely or a reference count changing.  "
-        "If the references increased then this was likely a link or creation, "
-        "and if it decreased then it is likely an unlink.</li>",
-        
-        "<li>Look at the data blocks to see if a new entry has "
-        "been added to a directory or a new block has been mapped.</li>",
-        
-        "</ol>",
-        "These steps can usually help you quickly identify "
-        "what has occured in the simulation and key you in to the right answer."
+        "The key thing to pay attention to when solving these problems is where there are differences between the start state and the end state.",
+        "In this particular problem, we can see that these lines are different:"
       ])
+    ])
+    
+    chunk_to_add = []
+    lines_that_changed = []
+    for start_line, end_line in zip(self.start_state.split('\n'), self.end_state.split('\n')):
+      if start_line == end_line:
+        continue
+      lines_that_changed.append((start_line, end_line))
+      chunk_to_add.append(
+        f" - `{start_line}` -> `{end_line}`"
+      )
+    
+    explanation.add_element(
+      ContentAST.Paragraph(chunk_to_add)
+    )
+    
+    chunk_to_add = [
+      "A great place to start is to check to see if the bitmaps have changed as this can quickly tell us a lot of information"
+    ]
+    
+    inode_bitmap_lines = list(filter(lambda s: "inode bitmap" in s[0], lines_that_changed))
+    data_bitmap_lines = list(filter(lambda s: "data bitmap" in s[0], lines_that_changed))
+    
+    def get_bitmap(line: str) -> str:
+      log.debug(f"line: {line}")
+      return line.split()[-1]
+    
+    def highlight_changes(a: str, b: str) -> str:
+      matcher = difflib.SequenceMatcher(None, a, b)
+      result = []
+      
+      for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        if tag == "equal":
+          result.append(b[j1:j2])
+        elif tag in ("insert", "replace"):
+          result.append(f"***{b[j1:j2]}***")
+        # for "delete", do nothing since text is removed
+      
+      return "".join(result)
+    
+    if len(inode_bitmap_lines) > 0:
+      inode_bitmap_lines = inode_bitmap_lines[0]
+      chunk_to_add.append(f"The inode bitmap lines have changed from {get_bitmap(inode_bitmap_lines[0])} to {get_bitmap(inode_bitmap_lines[1])}.")
+      if get_bitmap(inode_bitmap_lines[0]).count('1') < get_bitmap(inode_bitmap_lines[1]).count('1'):
+        chunk_to_add.append("We can see that we have added an inode, so we have either called `creat` or `mkdir`.")
+      else:
+        chunk_to_add.append("We can see that we have removed an inode, so we have called `unlink`.")
+    
+    if len(data_bitmap_lines) > 0:
+      data_bitmap_lines = data_bitmap_lines[0]
+      chunk_to_add.append(f"The inode bitmap lines have changed from {get_bitmap(data_bitmap_lines[0])} to {get_bitmap(data_bitmap_lines[1])}.")
+      if get_bitmap(data_bitmap_lines[0]).count('1') < get_bitmap(data_bitmap_lines[1]).count('1'):
+        chunk_to_add.append("We can see that we have added a data block, so we have either called `mkdir` or `write`.")
+      else:
+        chunk_to_add.append("We can see that we have removed a data block, so we have `unlink`ed a file.")
+    
+    if len(data_bitmap_lines) == 0 and len(inode_bitmap_lines) == 0:
+      chunk_to_add.append("If they have not changed, then we know we must have eithered called `link` or `unlink` and must check the references.")
+      
+    explanation.add_element(
+      ContentAST.Paragraph(chunk_to_add)
+    )
+    
+    explanation.add_elements([
+      ContentAST.Paragraph(["The overall changes are highlighted with `*` symbols below"])
+    ])
+    
+    explanation.add_element(
+      ContentAST.Code(
+        highlight_changes(self.start_state, self.end_state)
+      )
     )
     
     return explanation
