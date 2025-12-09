@@ -28,7 +28,7 @@ class ConvolutionCalculation(MatrixQuestion):
     
     # Add padding
     if padding > 0:
-      image = np.pad(image, ((padding, padding), (padding, padding), (0, 0)), mode='constant')
+      image = np.pad(image, ((padding, padding), (padding, padding)), mode='constant')
       H, W = H + 2 * padding, W + 2 * padding
     
     # Output dimensions

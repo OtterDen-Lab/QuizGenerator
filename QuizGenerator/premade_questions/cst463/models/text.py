@@ -60,7 +60,9 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # center_word, center_emb, context_words, context_embs, logits, probs
     self.answers["logits"] = Answer.vector_value(key="logits", value=self.logits)
-    self.answers["center_word"] = Answer.string(key="center_word", value=self.center_word)
+    most_likely_idx = np.argmax(self.probs)
+    most_likely_word = self.context_words[most_likely_idx]
+    self.answers["center_word"] = Answer.string(key="center_word", value=most_likely_word)
     
     
     return True
@@ -81,7 +83,7 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
       ContentAST.LineBreak(),
       self.answers["logits"].get_ast_element("Logits"),
       ContentAST.LineBreak(),
-      self.answers["center_word"].get_ast_element("Center word")
+      self.answers["center_word"].get_ast_element("Most likely context word")
     ])
     
     

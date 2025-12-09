@@ -564,9 +564,9 @@ class MatrixAnswer(Answer):
             value=self.value[i,j]
           )
         )
-        for i in range(self.value.shape[0])
+        for j in range(self.value.shape[1])
       ]
-      for j in range(self.value.shape[1])
+      for i in range(self.value.shape[0])
     ]
     table = ContentAST.Table(data)
     
