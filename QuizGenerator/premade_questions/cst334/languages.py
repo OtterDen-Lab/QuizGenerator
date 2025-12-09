@@ -60,11 +60,9 @@ class BNF:
         
     def get_grammar_string(self):
       lines = []
-      lines.append('```')
       for symbol in self.symbols:
         lines.append(f"{symbol.get_full_str()}")
-      
-      lines.append('```')
+
       return '\n'.join(lines)
       
   class Symbol:
@@ -342,25 +340,23 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
   def get_body(self, *args, **kwargs) -> ContentAST.Section:
     body = ContentAST.Section()
     
-    body.add_element(
+    body.add_elements([
       ContentAST.Paragraph([
-        ContentAST.OnlyHtml(
+        ContentAST.OnlyHtml([
           ContentAST.Text("Given the following grammar, which of the below strings are part of the language?")
-        ),
-        ContentAST.OnlyLatex(
+        ]),
+        ContentAST.OnlyLatex([
           ContentAST.Text(
             "Given the following grammar "
             "please circle any provided strings that are part of the language (or indicate clearly if there are none), "
             "and on each blank line provide generate a new, unique string that is part of the language."
           )
-        )
+        ])
       ])
-    )
+    ])
     
     body.add_element(
-      ContentAST.Paragraph([
-        self.grammar_good.get_grammar_string()
-      ])
+      ContentAST.Code(self.grammar_good.get_grammar_string())
     )
     
     # Add in some answers as latex-only options to be circled
@@ -374,7 +370,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     # For Latex-only, ask students to generate some more.
     body.add_element(
       ContentAST.OnlyLatex([
-        ContentAST.AnswerBlock([ContentAST.Answer() for _ in range(self.num_answer_blanks)])
+        ContentAST.AnswerBlock([ContentAST.Answer(Answer.string(f"blank_line_{i}", f"blank_line_{i}"), label=f"blank_line_{i}") for i in range(self.num_answer_blanks)])
       ])
     )
     
