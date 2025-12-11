@@ -51,6 +51,7 @@ Repository = "https://github.com/OtterDen-Lab/QuizGenerator"
 
 [project.scripts]
 quizgen = "QuizGenerator.generate:main"
+quizregen = "QuizGenerator.regenerate:main"
 
 [project.optional-dependencies]
 grading = [
