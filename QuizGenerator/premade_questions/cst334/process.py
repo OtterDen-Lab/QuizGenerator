@@ -406,7 +406,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     # Use mixin to create complete body
     intro_text = (
-      f"Given the below information, compute the required values if using <b>{self.scheduler_algorithm}</b> scheduling. "
+      f"Given the below information, compute the required values if using **{self.scheduler_algorithm}** scheduling. "
       f"Break any ties using the job number."
     )
 

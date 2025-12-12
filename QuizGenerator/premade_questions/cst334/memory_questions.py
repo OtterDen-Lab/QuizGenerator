@@ -283,7 +283,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     
     # Use mixin to create complete body
     intro_text = (
-      f"Assume we are using a <b>{self.cache_policy}</b> caching policy and a cache size of <b>{self.cache_size}</b>. "
+      f"Assume we are using a **{self.cache_policy}** caching policy and a cache size of **{self.cache_size}**. "
       "Given the below series of requests please fill in the table. "
       "For the hit/miss column, please write either \"hit\" or \"miss\". "
       "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
@@ -897,7 +897,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       explanation.add_element(
         ContentAST.Paragraph(
           [
-            f"In our PTE we see that the first bit is <b>{self.pte // (2 ** self.num_bits_pfn)}</b> meaning that the translation is <b>VALID</b>"
+            f"In our PTE we see that the first bit is **{self.pte // (2 ** self.num_bits_pfn)}** meaning that the translation is **VALID**"
           ]
         )
       )
@@ -905,7 +905,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       explanation.add_element(
         ContentAST.Paragraph(
           [
-            f"In our PTE we see that the first bit is <b>{self.pte // (2 ** self.num_bits_pfn)}</b> meaning that the translation is <b>INVALID</b>.",
+            f"In our PTE we see that the first bit is **{self.pte // (2 ** self.num_bits_pfn)}** meaning that the translation is **INVALID**.",
             "Therefore, we just write \"INVALID\" as our answer.",
             "If it were valid we would complete the below steps.",
             "<hr>"
@@ -1150,7 +1150,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     body.add_element(
       ContentAST.Paragraph([
         "Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.",
-        "This problem uses <b>two-level (hierarchical) paging</b>.",
+        "This problem uses **two-level (hierarchical) paging**.",
         "Remember, we typically have the MSB representing valid or invalid."
       ])
     )
@@ -1278,7 +1278,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Step 1: Extract PDI, PTI, Offset
     explanation.add_element(
       ContentAST.Paragraph([
-        f"<b>Step 1: Extract components from Virtual Address</b>",
+        f"**Step 1: Extract components from Virtual Address**",
         f"Virtual Address = PDI | PTI | Offset",
         f"<tt>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</tt> = "
         f"<tt>0b{self.pdi:0{self.num_bits_pdi}b}</tt> | "
@@ -1290,7 +1290,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Step 2: Look up PD Entry
     explanation.add_element(
       ContentAST.Paragraph([
-        f"<b>Step 2: Look up Page Directory Entry</b>",
+        f"**Step 2: Look up Page Directory Entry**",
         f"Using PDI = <tt>0b{self.pdi:0{self.num_bits_pdi}b}</tt>, we find PD Entry = <tt>0b{self.pd_entry:0{self.num_bits_pfn + 1}b}</tt>"
       ])
     )
@@ -1299,8 +1299,8 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     pd_valid_bit = self.pd_entry // (2 ** self.num_bits_pfn)
     explanation.add_element(
       ContentAST.Paragraph([
-        f"<b>Step 3: Check Page Directory Entry validity</b>",
-        f"The MSB (valid bit) is <b>{pd_valid_bit}</b>, so this PD Entry is <b>{'VALID' if self.pd_valid else 'INVALID'}</b>."
+        f"**Step 3: Check Page Directory Entry validity**",
+        f"The MSB (valid bit) is **{pd_valid_bit}**, so this PD Entry is **{'VALID' if self.pd_valid else 'INVALID'}**."
       ])
     )
 
@@ -1308,7 +1308,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       explanation.add_element(
         ContentAST.Paragraph([
           "Since the Page Directory Entry is invalid, the translation fails here.",
-          "We write <b>INVALID</b> for all remaining fields.",
+          "We write **INVALID** for all remaining fields.",
           "If it were valid, we would continue with the steps below.",
           "<hr>"
         ])
@@ -1317,7 +1317,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Step 4: Extract PT number (if PD valid)
     explanation.add_element(
       ContentAST.Paragraph([
-        f"<b>Step 4: Extract Page Table Number</b>",
+        f"**Step 4: Extract Page Table Number**",
         "We remove the valid bit from the PD Entry to get the Page Table Number:"
       ])
     )
@@ -1333,14 +1333,14 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     if self.pd_valid:
       explanation.add_element(
         ContentAST.Paragraph([
-          f"This tells us to use <b>Page Table #{self.page_table_number}</b>."
+          f"This tells us to use **Page Table #{self.page_table_number}**."
         ])
       )
 
       # Step 5: Look up PTE
       explanation.add_element(
         ContentAST.Paragraph([
-          f"<b>Step 5: Look up Page Table Entry</b>",
+          f"**Step 5: Look up Page Table Entry**",
           f"Using PTI = <tt>0b{self.pti:0{self.num_bits_pti}b}</tt> in Page Table #{self.page_table_number}, "
           f"we find PTE = <tt>0b{self.pte:0{self.num_bits_pfn + 1}b}</tt>"
         ])
@@ -1350,8 +1350,8 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       pt_valid_bit = self.pte // (2 ** self.num_bits_pfn)
       explanation.add_element(
         ContentAST.Paragraph([
-          f"<b>Step 6: Check Page Table Entry validity</b>",
-          f"The MSB (valid bit) is <b>{pt_valid_bit}</b>, so this PTE is <b>{'VALID' if self.pt_valid else 'INVALID'}</b>."
+          f"**Step 6: Check Page Table Entry validity**",
+          f"The MSB (valid bit) is **{pt_valid_bit}**, so this PTE is **{'VALID' if self.pt_valid else 'INVALID'}**."
         ])
       )
 
@@ -1359,7 +1359,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
         explanation.add_element(
           ContentAST.Paragraph([
             "Since the Page Table Entry is invalid, the translation fails.",
-            "We write <b>INVALID</b> for PFN and Physical Address.",
+            "We write **INVALID** for PFN and Physical Address.",
             "If it were valid, we would continue with the steps below.",
             "<hr>"
           ])
@@ -1368,7 +1368,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       # Step 7: Extract PFN
       explanation.add_element(
         ContentAST.Paragraph([
-          f"<b>Step 7: Extract PFN</b>",
+          f"**Step 7: Extract PFN**",
           "We remove the valid bit from the PTE to get the PFN:"
         ])
       )
@@ -1384,7 +1384,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       # Step 8: Construct physical address
       explanation.add_element(
         ContentAST.Paragraph([
-          f"<b>Step 8: Construct Physical Address</b>",
+          f"**Step 8: Construct Physical Address**",
           "Physical Address = PFN | Offset"
         ])
       )

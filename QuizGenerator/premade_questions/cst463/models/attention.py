@@ -60,8 +60,8 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     
     ## Answers:
     # Q, K, V, output, weights
-    
-    self.answers["weights"] = MatrixAnswer("weights", self.output)
+
+    self.answers["weights"] = MatrixAnswer("weights", self.weights)
     self.answers["output"] = MatrixAnswer("output", self.output)
     
     return True

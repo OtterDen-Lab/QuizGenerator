@@ -102,7 +102,7 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
 
     explanation.add_element(
       ContentAST.Paragraph([
-        "For an RNN forward pass, we compute the hidden state at each time step using:"
+    "For an RNN forward pass, we compute the hidden state at each time step using:"
       ])
     )
 
