@@ -76,14 +76,21 @@ def parse_spacing(spacing_value) -> float:
 
 class QuestionRegistry:
   _registry = {}
+  _class_name_to_registered_name = {}  # Reverse mapping: ClassName -> registered_name
   _scanned = False
-  
+
   @classmethod
   def register(cls, question_type=None):
     def decorator(subclass):
       # Use the provided name or fall back to the class name
       name = question_type.lower() if question_type else subclass.__name__.lower()
       cls._registry[name] = subclass
+
+      # Build reverse mapping from class name to registered name
+      # This allows looking up by class name when QR codes store the class name
+      class_name = subclass.__name__.lower()
+      cls._class_name_to_registered_name[class_name] = name
+
       return subclass
     return decorator
     
@@ -97,29 +104,40 @@ class QuestionRegistry:
     # Check to see if it's in the registry
     question_key = question_type.lower()
     if question_key not in cls._registry:
-      # Try stripping common course prefixes and module paths for backward compatibility
-      for prefix in ['cst334.', 'cst463.']:
-        if question_key.startswith(prefix):
-          stripped_name = question_key[len(prefix):]
-          if stripped_name in cls._registry:
-            question_key = stripped_name
-            break
-          # Also try extracting just the final class name after dots
-          if '.' in stripped_name:
-            final_name = stripped_name.split('.')[-1]
+      # Try the reverse mapping from class name to registered name
+      # This handles cases where QR codes store class name (e.g., "RNNForwardPass")
+      # but the question is registered with a custom name (e.g., "cst463.rnn.forward-pass")
+      if question_key in cls._class_name_to_registered_name:
+        question_key = cls._class_name_to_registered_name[question_key]
+        log.debug(f"Resolved class name '{question_type}' to registered name '{question_key}'")
+      else:
+        # Try stripping common course prefixes and module paths for backward compatibility
+        for prefix in ['cst334.', 'cst463.']:
+          if question_key.startswith(prefix):
+            stripped_name = question_key[len(prefix):]
+            if stripped_name in cls._registry:
+              question_key = stripped_name
+              break
+            # Also try extracting just the final class name after dots
+            if '.' in stripped_name:
+              final_name = stripped_name.split('.')[-1]
+              if final_name in cls._registry:
+                question_key = final_name
+                break
+        else:
+          # As a final fallback, try just the last part after dots
+          if '.' in question_key:
+            final_name = question_key.split('.')[-1]
             if final_name in cls._registry:
               question_key = final_name
-              break
-      else:
-        # As a final fallback, try just the last part after dots
-        if '.' in question_key:
-          final_name = question_key.split('.')[-1]
-          if final_name in cls._registry:
-            question_key = final_name
+            elif final_name in cls._class_name_to_registered_name:
+              # Try the class name reverse mapping on the final part
+              question_key = cls._class_name_to_registered_name[final_name]
+              log.debug(f"Resolved class name '{final_name}' to registered name '{question_key}'")
+            else:
+              raise ValueError(f"Unknown question type: {question_type}")
           else:
             raise ValueError(f"Unknown question type: {question_type}")
-        else:
-          raise ValueError(f"Unknown question type: {question_type}")
 
     new_question : Question = cls._registry[question_key](**kwargs)
     # Note: Don't call refresh() here - it will be called by get_question()
@@ -530,7 +548,8 @@ class Question(abc.ABC):
     )
 
     # Attach regeneration metadata to the question AST
-    question_ast.question_class_name = self.__class__.__name__
+    # Use the registered name instead of class name for better QR code regeneration
+    question_ast.question_class_name = self._get_registered_name()
     question_ast.generation_seed = actual_seed
     question_ast.question_version = self.VERSION
     # Make a copy of config_params so each question AST has its own
@@ -641,6 +660,26 @@ class Question(abc.ABC):
     ):
       return True
     return False
+
+  def _get_registered_name(self) -> str:
+    """
+    Get the registered name for this question class.
+
+    Returns the name used when registering the question with @QuestionRegistry.register(),
+    which may be different from the class name (e.g., "cst463.rnn.forward-pass" vs "RNNForwardPass").
+
+    This is used for QR code generation to ensure regeneration works correctly.
+    Falls back to class name if not found in registry (shouldn't happen in practice).
+    """
+    class_name_lower = self.__class__.__name__.lower()
+    registered_name = QuestionRegistry._class_name_to_registered_name.get(class_name_lower)
+
+    if registered_name is None:
+      # Fallback to class name if not found (shouldn't happen but be defensive)
+      log.warning(f"Question {self.__class__.__name__} not found in registry reverse mapping, using class name")
+      return self.__class__.__name__
+
+    return registered_name
 
 class QuestionGroup():
   
