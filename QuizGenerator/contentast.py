@@ -850,7 +850,7 @@ class ContentAST:
       if self.inline:
         return f"${self.latex}$"
       else:
-        return r"$$ \displaystyle " + f"{self.latex}" + r" \; $$"
+        return r"$\displaystyle " + f"{self.latex}" + r"$"
 
     def render_html(self, **kwargs):
       if self.inline:
@@ -1048,7 +1048,7 @@ class ContentAST:
       if self.inline and self.bracket_type == "p":
         return f"$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$"
       else:
-        return f"$$\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}$$"
+        return f"$\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}$"
 
     def render_html(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"

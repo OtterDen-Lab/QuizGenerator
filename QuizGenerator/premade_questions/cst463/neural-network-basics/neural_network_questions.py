@@ -49,6 +49,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     # Configuration
     self.activation_function = None
     self.use_bias = kwargs.get("use_bias", True)
+    self.param_digits = kwargs.get("param_digits", 1)  # Precision for weights/biases
 
     # Network parameters (weights and biases)
     self.W1 = None  # Input to hidden weights (num_hidden x num_inputs)
@@ -75,16 +76,19 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
   def _generate_network(self, weight_range=(-2, 2), input_range=(-3, 3)):
     """Generate random network parameters and input."""
     # Generate weights using MatrixQuestion's rounded matrix method
+    # Use param_digits to match display precision in tables and explanations
     self.W1 = self.get_rounded_matrix(
       (self.num_hidden, self.num_inputs),
       low=weight_range[0],
-      high=weight_range[1]
+      high=weight_range[1],
+      digits_to_round=self.param_digits
     )
 
     self.W2 = self.get_rounded_matrix(
       (self.num_outputs, self.num_hidden),
       low=weight_range[0],
-      high=weight_range[1]
+      high=weight_range[1],
+      digits_to_round=self.param_digits
     )
 
     # Generate biases
@@ -92,12 +96,14 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
       self.b1 = self.get_rounded_matrix(
         (self.num_hidden,),
         low=weight_range[0],
-        high=weight_range[1]
+        high=weight_range[1],
+        digits_to_round=self.param_digits
       )
       self.b2 = self.get_rounded_matrix(
         (self.num_outputs,),
         low=weight_range[0],
-        high=weight_range[1]
+        high=weight_range[1],
+        digits_to_round=self.param_digits
       )
     else:
       self.b1 = np.zeros(self.num_hidden)
@@ -256,7 +262,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     for i in range(self.num_inputs):
       left_data.append([
         ContentAST.Equation(f"x_{i+1}", inline=True),
-        f"{self.X[i]:.1f}"
+        f"{self.X[i]:.1f}"  # Inputs are always integers or 1 decimal
       ])
 
     # Weights from input to hidden
@@ -264,14 +270,14 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
       for i in range(self.num_inputs):
         left_data.append([
           ContentAST.Equation(f"w_{{{j+1}{i+1}}}", inline=True),
-          f"{self.W1[j, i]:.1f}"
+          f"{self.W1[j, i]:.{self.param_digits}f}"
         ])
 
     # Weights from hidden to output
     for i in range(self.num_hidden):
       left_data.append([
         ContentAST.Equation(f"w_{i+3}", inline=True),
-        f"{self.W2[0, i]:.1f}"
+        f"{self.W2[0, i]:.{self.param_digits}f}"
       ])
 
     # Right table: Biases, Activations, Training context
@@ -283,14 +289,14 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
       for j in range(self.num_hidden):
         right_data.append([
           ContentAST.Equation(f"b_{j+1}", inline=True),
-          f"{self.b1[j]:.1f}"
+          f"{self.b1[j]:.{self.param_digits}f}"
         ])
 
     # Output bias
     if self.use_bias:
       right_data.append([
         ContentAST.Equation(r"b_{out}", inline=True),
-        f"{self.b2[0]:.1f}"
+        f"{self.b2[0]:.{self.param_digits}f}"
       ])
 
     # Hidden layer activations (if computed and requested)
@@ -628,11 +634,11 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       # Build equation for z_i
       terms = []
       for j in range(self.num_inputs):
-        terms.append(f"({self.W1[i,j]:.1f})({self.X[j]:.1f})")
+        terms.append(f"({self.W1[i,j]:.{self.param_digits}f})({self.X[j]:.1f})")
 
       z_calc = " + ".join(terms)
       if self.use_bias:
-        z_calc += f" + {self.b1[i]:.1f}"
+        z_calc += f" + {self.b1[i]:.{self.param_digits}f}"
 
       explanation.add_element(ContentAST.Equation(
         f"z_{i+1} = {z_calc} = {self.z1[i]:.4f}",
@@ -668,11 +674,11 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     terms = []
     for j in range(self.num_hidden):
-      terms.append(f"({self.W2[0,j]:.1f})({self.a1[j]:.4f})")
+      terms.append(f"({self.W2[0,j]:.{self.param_digits}f})({self.a1[j]:.4f})")
 
     z_out_calc = " + ".join(terms)
     if self.use_bias:
-      z_out_calc += f" + {self.b2[0]:.1f}"
+      z_out_calc += f" + {self.b2[0]:.{self.param_digits}f}"
 
     explanation.add_element(ContentAST.Equation(
       f"z_{{out}} = {z_out_calc} = {self.z2[0]:.4f}",
@@ -1197,7 +1203,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     # Hidden layer
     z1_0 = self.W1[0, 0] * self.X[0] + self.W1[0, 1] * self.X[1] + self.b1[0]
     explanation.add_element(ContentAST.Equation(
-      f"z_1 = w_{{11}} x_1 + w_{{12}} x_2 + b_1 = {self.W1[0,0]:.1f} \\cdot {self.X[0]:.1f} + {self.W1[0,1]:.1f} \\cdot {self.X[1]:.1f} + {self.b1[0]:.1f} = {self.z1[0]:.4f}",
+      f"z_1 = w_{{11}} x_1 + w_{{12}} x_2 + b_1 = {self.W1[0,0]:.{self.param_digits}f} \\cdot {self.X[0]:.1f} + {self.W1[0,1]:.{self.param_digits}f} \\cdot {self.X[1]:.1f} + {self.b1[0]:.{self.param_digits}f} = {self.z1[0]:.4f}",
       inline=False
     ))
 
@@ -1215,7 +1221,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     # Output (pre-activation)
     z2 = self.W2[0, 0] * self.a1[0] + self.W2[0, 1] * self.a1[1] + self.b2[0]
     explanation.add_element(ContentAST.Equation(
-      f"z_{{out}} = w_3 h_1 + w_4 h_2 + b_2 = {self.W2[0,0]:.1f} \\cdot {self.a1[0]:.4f} + {self.W2[0,1]:.1f} \\cdot {self.a1[1]:.4f} + {self.b2[0]:.1f} = {self.z2[0]:.4f}",
+      f"z_{{out}} = w_3 h_1 + w_4 h_2 + b_2 = {self.W2[0,0]:.{self.param_digits}f} \\cdot {self.a1[0]:.4f} + {self.W2[0,1]:.{self.param_digits}f} \\cdot {self.a1[1]:.4f} + {self.b2[0]:.{self.param_digits}f} = {self.z2[0]:.4f}",
       inline=False
     ))
 
@@ -1291,13 +1297,13 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     new_w3 = self.new_W2[0, 0]
     explanation.add_element(ContentAST.Equation(
-      f"w_3^{{new}} = w_3 - \\alpha \\frac{{\\partial L}}{{\\partial w_3}} = {self.W2[0,0]:.1f} - {self.learning_rate} \\cdot {grad_w3:.4f} = {new_w3:.4f}",
+      f"w_3^{{new}} = w_3 - \\alpha \\frac{{\\partial L}}{{\\partial w_3}} = {self.W2[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w3:.4f} = {new_w3:.4f}",
       inline=False
     ))
 
     new_w11 = self.new_W1[0, 0]
     explanation.add_element(ContentAST.Equation(
-      f"w_{{11}}^{{new}} = w_{{11}} - \\alpha \\frac{{\\partial L}}{{\\partial w_{{11}}}} = {self.W1[0,0]:.1f} - {self.learning_rate} \\cdot {grad_w11:.4f} = {new_w11:.4f}",
+      f"w_{{11}}^{{new}} = w_{{11}} - \\alpha \\frac{{\\partial L}}{{\\partial w_{{11}}}} = {self.W1[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w11:.4f} = {new_w11:.4f}",
       inline=False
     ))
 
