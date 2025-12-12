@@ -5,6 +5,7 @@ import random
 import shutil
 import subprocess
 import tempfile
+import re
 from pathlib import Path
 from dotenv import load_dotenv
 from QuizGenerator.canvas.canvas_interface import CanvasInterface
@@ -65,12 +66,20 @@ def test():
   print("="*60)
   
   
-def generate_latex(latex_text, remove_previous=False):
+def generate_latex(latex_text, remove_previous=False, name_prefix=None):
+  """
+  Generate PDF from LaTeX source code.
 
+  Args:
+    latex_text: The LaTeX source code to compile
+    remove_previous: Whether to remove the 'out' directory before generating
+    name_prefix: Optional prefix for the temporary filename (e.g., quiz name)
+  """
   if remove_previous:
     if os.path.exists('out'): shutil.rmtree('out')
 
-  tmp_tex = tempfile.NamedTemporaryFile('w')
+  prefix = f"{sanitize_filename(name_prefix)}-" if name_prefix else "tmp"
+  tmp_tex = tempfile.NamedTemporaryFile('w', prefix=prefix)
 
   tmp_tex.write(latex_text)
 
@@ -98,11 +107,38 @@ def generate_latex(latex_text, remove_previous=False):
   tmp_tex.close()
 
 
-def generate_typst(typst_text, remove_previous=False):
+def sanitize_filename(name):
+  """
+  Sanitize a quiz name for use as a filename prefix.
+
+  Converts spaces to underscores, removes special characters,
+  and limits length to avoid overly long filenames.
+
+  Example: "CST 334 Exam 4 (Fall 25)" -> "CST_334_Exam_4_Fall_25"
+  """
+  # Replace spaces with underscores
+  sanitized = name.replace(' ', '_')
+
+  # Remove characters that aren't alphanumeric, underscore, or hyphen
+  sanitized = re.sub(r'[^\w\-]', '', sanitized)
+
+  # Limit length to avoid overly long filenames (keep first 50 chars)
+  if len(sanitized) > 50:
+    sanitized = sanitized[:50]
+
+  return sanitized
+
+
+def generate_typst(typst_text, remove_previous=False, name_prefix=None):
   """
   Generate PDF from Typst source code.
 
   Similar to generate_latex, but uses typst compiler instead of latexmk.
+
+  Args:
+    typst_text: The Typst source code to compile
+    remove_previous: Whether to remove the 'out' directory before generating
+    name_prefix: Optional prefix for the temporary filename (e.g., quiz name)
   """
   if remove_previous:
     if os.path.exists('out'):
@@ -111,8 +147,9 @@ def generate_typst(typst_text, remove_previous=False):
   # Ensure output directory exists
   os.makedirs('out', exist_ok=True)
 
-  # Create temporary Typst file
-  tmp_typ = tempfile.NamedTemporaryFile('w', suffix='.typ', delete=False)
+  # Create temporary Typst file with optional name prefix
+  prefix = f"{sanitize_filename(name_prefix)}-" if name_prefix else "tmp"
+  tmp_typ = tempfile.NamedTemporaryFile('w', suffix='.typ', delete=False, prefix=prefix)
 
   try:
     tmp_typ.write(typst_text)
@@ -190,11 +227,11 @@ def generate_quiz(
       if use_typst:
         # Generate using Typst
         typst_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render("typst")
-        generate_typst(typst_text, remove_previous=(i==0))
+        generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name)
       else:
         # Generate using LaTeX (default)
         latex_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render_latex()
-        generate_latex(latex_text, remove_previous=(i==0))
+        generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name)
 
     if num_canvas > 0:
       canvas_course.push_quiz_to_canvas(

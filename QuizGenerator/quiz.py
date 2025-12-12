@@ -279,6 +279,25 @@ class Quiz:
 
     log.debug("Optimizing question order for PDF layout...")
 
+    def get_spacing_priority(question):
+      """
+      Get placement priority based on spacing. Lower values = higher priority.
+      Order: LONG (9), MEDIUM (6), SHORT (4), NONE (0), then PAGE (99), EXTRA_PAGE (199)
+      """
+      spacing = question.spacing
+      if spacing >= 199:  # EXTRA_PAGE
+        return 5
+      elif spacing >= 99:  # PAGE
+        return 4
+      elif spacing >= 9:  # LONG
+        return 0
+      elif spacing >= 6:  # MEDIUM
+        return 1
+      elif spacing >= 4:  # SHORT
+        return 2
+      else:  # NONE or custom small values
+        return 3
+
     for points in sorted(point_groups.keys(), reverse=True):
       group = point_groups[points]
 
@@ -294,8 +313,8 @@ class Quiz:
 
       # If only 1-2 questions, no optimization needed
       if len(group) <= 2:
-        # Still sort by topic for consistency
-        group.sort(key=lambda q: self.question_sort_order.index(q.topic))
+        # Sort by spacing priority first, then topic
+        group.sort(key=lambda q: (get_spacing_priority(q), self.question_sort_order.index(q.topic)))
         optimized_questions.extend(group)
         log.debug(f"  {points}pt questions: {len(group)} questions (no optimization needed)")
         is_first_bin_overall = False
@@ -304,9 +323,11 @@ class Quiz:
       # Estimate height for each question, preserving original index for stable sorting
       question_heights = [(i, q, self._estimate_question_height(q, **kwargs)) for i, q in enumerate(group)]
 
-      # Sort by height descending, then by original index for deterministic ordering
-      # This ensures that questions with identical heights maintain their input order
-      question_heights.sort(key=lambda x: (-x[2], x[0]))
+      # Sort by:
+      # 1. Spacing priority (LONG, MEDIUM, SHORT, NONE, then PAGE, EXTRA_PAGE)
+      # 2. Height descending (within same spacing category)
+      # 3. Original index (for deterministic ordering)
+      question_heights.sort(key=lambda x: (get_spacing_priority(x[1]), -x[2], x[0]))
 
       log.debug(f"  Question heights for {points}pt questions:")
       for idx, q, h in question_heights:
@@ -388,9 +409,6 @@ class Quiz:
       # Flatten bins back to ordered list
       for bin_contents, _ in bins:
         optimized_questions.extend(bin_contents)
-
-      # After packing questions, we're no longer on the first page
-      is_first_page = False
 
     return optimized_questions
 
