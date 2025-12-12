@@ -84,8 +84,8 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     intro_text = "Given the information below, please calculate the following values."
 
     instructions = (
-      f"Make sure your answers are rounded to {Answer.DEFAULT_ROUNDING_DIGITS} decimal points "
-      f"(even if they are whole numbers), and do so after you finish all your calculations! "
+      f"Make sure that if you round your answers you use the unrounded values for your final calculations, "
+      f"otherwise you may introduce error into your calculations."
       f"(i.e. don't use your rounded answers to calculate your overall answer)"
     )
 
@@ -206,16 +206,11 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     # Use mixin to create complete body with both tables
     intro_text = "Given the information below, please calculate the following values."
 
-    instructions = (
-      "(hint: they should all be round numbers). "
-      "Remember, demonstrating you know the equations and what goes into them is generally sufficient."
-    )
-
     body = self.create_parameter_calculation_body(
       intro_text=intro_text,
       parameter_table=parameter_table,
       answer_table=answer_table,
-      additional_instructions=instructions
+      # additional_instructions=instructions
     )
 
     return body

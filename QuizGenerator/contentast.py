@@ -729,28 +729,40 @@ class ContentAST:
       if self.hide_from_latex:
         return ""
 
-      # This is for when we are passing in a code block via a FromText question
-      def escape_raw_content(match):
+      # Extract code blocks, render them, and replace with placeholders
+      # This prevents the # escaping from affecting content inside code blocks
+      code_blocks = []
+
+      def save_code_block(match):
         code_content = match.group(1).strip()
         # Escape quotes for Typst raw() function
         escaped_content = code_content.replace('"', r'\"')
-        return f"""
+        rendered_block = f"""
         #box(
           raw("{escaped_content}",
             block: true
           )
         )
         """
+        placeholder = f"__CODE_BLOCK_{len(code_blocks)}__"
+        code_blocks.append(rendered_block)
+        return placeholder
 
+      # Replace code blocks with placeholders
       content = re.sub(
         r"```\s*(.*)\s*```",
-        escape_raw_content,
+        save_code_block,
         self.content,
         flags=re.DOTALL
       )
 
-      # In Typst, # starts code/function calls, so we need to escape it
+      # In Typst, # starts code/function calls, so we need to escape it in regular text
+      # (but not in code blocks, which are now placeholders)
       content = content.replace("# ", r"\# ")
+
+      # Restore code blocks
+      for i, block in enumerate(code_blocks):
+        content = content.replace(f"__CODE_BLOCK_{i}__", block)
 
       if self.emphasis:
         content = f"*{content}*"

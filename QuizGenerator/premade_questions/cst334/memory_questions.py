@@ -276,7 +276,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     hit_rate_block = ContentAST.AnswerBlock(
       ContentAST.Answer(
         answer=self.answers["answer__hit_rate"],
-        label=f"Hit rate, excluding capacity misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
+        label=f"Hit rate, excluding non-capacity misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
         unit="%"
       )
     )

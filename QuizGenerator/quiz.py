@@ -275,7 +275,7 @@ class Quiz:
 
     # For each point group, estimate heights and apply bin-packing optimization
     optimized_questions = []
-    is_first_page = True  # Track if we're packing the first page
+    is_first_bin_overall = True  # Track if we're packing the very first bin of the entire exam
 
     log.debug("Optimizing question order for PDF layout...")
 
@@ -288,8 +288,8 @@ class Quiz:
         group.sort(key=lambda q: self.question_sort_order.index(q.topic))
         optimized_questions.extend(group)
         log.debug(f"  {points}pt questions: {len(group)} questions (order preserved by config)")
-        # After adding preserved-order questions, we're likely past the first page
-        is_first_page = False
+        # After adding preserved-order questions, we're no longer on the first bin
+        is_first_bin_overall = False
         continue
 
       # If only 1-2 questions, no optimization needed
@@ -298,17 +298,18 @@ class Quiz:
         group.sort(key=lambda q: self.question_sort_order.index(q.topic))
         optimized_questions.extend(group)
         log.debug(f"  {points}pt questions: {len(group)} questions (no optimization needed)")
-        is_first_page = False
+        is_first_bin_overall = False
         continue
 
-      # Estimate height for each question
-      question_heights = [(q, self._estimate_question_height(q, **kwargs)) for q in group]
+      # Estimate height for each question, preserving original index for stable sorting
+      question_heights = [(i, q, self._estimate_question_height(q, **kwargs)) for i, q in enumerate(group)]
 
-      # Sort by height descending to identify large and small questions
-      question_heights.sort(key=lambda x: x[1], reverse=True)
+      # Sort by height descending, then by original index for deterministic ordering
+      # This ensures that questions with identical heights maintain their input order
+      question_heights.sort(key=lambda x: (-x[2], x[0]))
 
       log.debug(f"  Question heights for {points}pt questions:")
-      for q, h in question_heights:
+      for idx, q, h in question_heights:
         log.debug(f"    {q.name}: {h:.1f}cm (spacing={q.spacing}cm)")
 
       # Calculate page capacity in centimeters
@@ -317,7 +318,7 @@ class Quiz:
       base_page_capacity = 22.0  # cm
 
       # First page has header (title + name line) which takes ~3cm
-      first_page_capacity = base_page_capacity - 3.0 if is_first_page else base_page_capacity
+      first_page_capacity = base_page_capacity - 3.0  # cm
 
       # Better bin-packing strategy: interleave large and small questions
       # Strategy: Start each page with the largest unplaced question, then fill with smaller ones
@@ -326,27 +327,59 @@ class Quiz:
 
       while not all(placed):
         # Determine capacity for this page
-        page_capacity = first_page_capacity if len(bins) == 0 and is_first_page else base_page_capacity
+        # Use first_page_capacity only for the very first bin of the entire exam
+        page_capacity = first_page_capacity if (len(bins) == 0 and is_first_bin_overall) else base_page_capacity
 
         # Find the largest unplaced question to start a new page
         new_page = []
         page_height = 0
 
-        for i, (question, height) in enumerate(question_heights):
-          if not placed[i]:
-            new_page.append(question)
-            page_height = height
-            placed[i] = True
-            break
+        # Special handling for first bin of entire exam: avoid questions with PAGE spacing (99+cm)
+        # to prevent them from pushing content to page 2
+        if len(bins) == 0 and is_first_bin_overall:
+          # Try to find a question without PAGE/EXTRA_PAGE spacing for the first page
+          # PAGE=99cm, EXTRA_PAGE=199cm - these need full pages
+          found_non_page_question = False
+          for i, (idx, question, height) in enumerate(question_heights):
+            if not placed[i] and question.spacing < 99:
+              new_page.append(question)
+              page_height = height
+              placed[i] = True
+              found_non_page_question = True
+              log.debug(f"    First bin (page 1): Selected {question.name} with spacing={question.spacing}cm")
+              break
+
+          # If all questions have PAGE spacing, fall back to normal behavior (use largest question)
+          if not found_non_page_question:
+            for i, (idx, question, height) in enumerate(question_heights):
+              if not placed[i]:
+                new_page.append(question)
+                page_height = height
+                placed[i] = True
+                log.debug(f"    First bin (page 1): All questions have PAGE spacing, using {question.name} (spacing={question.spacing}cm)")
+                break
+        else:
+          # Normal behavior for non-first pages
+          for i, (idx, question, height) in enumerate(question_heights):
+            if not placed[i]:
+              new_page.append(question)
+              page_height = height
+              placed[i] = True
+              break
 
         # Now try to fill the remaining space with smaller questions
-        for i, (question, height) in enumerate(question_heights):
+        for i, (idx, question, height) in enumerate(question_heights):
           if not placed[i] and page_height + height <= page_capacity:
             new_page.append(question)
             page_height += height
             placed[i] = True
 
         bins.append((new_page, page_height))
+
+        # After creating the first bin, we're no longer on the first page
+        if len(bins) == 1 and is_first_bin_overall:
+          is_first_bin_overall = False
+          log.debug(f"    First bin created, subsequent bins will use normal page capacity")
 
       log.debug(f"  {points}pt questions: {len(group)} questions packed into {len(bins)} pages")
       for i, (page_questions, height) in enumerate(bins):

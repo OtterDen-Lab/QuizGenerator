@@ -258,6 +258,8 @@ class AverageMemoryAccessTime(MathQuestion):
       )
     )
     
+    body.add_element(ContentAST.LineBreak())
+    
     body.add_element(
       ContentAST.AnswerBlock([
         ContentAST.Answer(
