@@ -13,6 +13,12 @@ CLI Usage:
     # Scan QR codes from a scanned exam page
     python grade_from_qr.py --image exam_page.jpg --all
 
+    # Decode an encrypted string directly
+    python -m QuizGenerator.regenerate --encrypted_str "EzE6JF86CDlf..."
+
+    # Decode with custom point value
+    python -m QuizGenerator.regenerate --encrypted_str "EzE6JF86CDlf..." --points 5.0
+
 API Usage (recommended for web UIs):
     from grade_from_qr import regenerate_from_encrypted
 
@@ -36,8 +42,21 @@ import argparse
 import json
 import sys
 import logging
+import os
 from pathlib import Path
 from typing import Dict, Any, Optional, List
+
+# Load environment variables from .env file
+try:
+  from dotenv import load_dotenv
+  # Try loading from current directory first, then home directory
+  if os.path.exists('.env'):
+    load_dotenv('.env')
+  else:
+    load_dotenv(os.path.join(os.path.expanduser("~"), ".env"))
+except ImportError:
+  # dotenv not available, will use system environment variables only
+  pass
 
 # Quiz generator imports (always available)
 from QuizGenerator.qrcode_generator import QuestionQRCode
@@ -401,6 +420,17 @@ def main():
     help='Path to image file containing QR code(s)'
   )
   parser.add_argument(
+    '--encrypted_str',
+    type=str,
+    help='Encrypted string from QR code to decode directly'
+  )
+  parser.add_argument(
+    '--points',
+    type=float,
+    default=1.0,
+    help='Point value for the question (default: 1.0, only used with --encrypted_str)'
+  )
+  parser.add_argument(
     '--all',
     action='store_true',
     help='Process all QR codes found in the image (default: only first one)'
@@ -415,44 +445,83 @@ def main():
     action='store_true',
     help='Enable verbose debug logging'
   )
-  
+
   args = parser.parse_args()
-  
+
   if args.verbose:
     logging.getLogger().setLevel(logging.DEBUG)
-  
-  if not args.image:
+
+  # Check for required arguments
+  if not args.image and not args.encrypted_str:
     parser.print_help()
-    print("\nERROR: --image is required")
+    print("\nERROR: Either --image or --encrypted_str is required")
     sys.exit(1)
-  
-  # Scan QR codes from image
-  qr_codes = scan_qr_from_image(args.image)
-  
-  if not qr_codes:
-    print("No QR codes found in image")
+
+  if args.image and args.encrypted_str:
+    print("ERROR: Cannot use both --image and --encrypted_str at the same time")
     sys.exit(1)
-  
-  # Process QR codes
-  if not args.all:
-    qr_codes = qr_codes[:1]
-    log.info("Processing only the first QR code (use --all to process all)")
-  
+
   results = []
-  
-  for qr_string in qr_codes:
-    # Parse QR data
-    qr_data = parse_qr_data(qr_string)
-    
-    if not qr_data:
-      continue
-    
-    # Regenerate question and answer
-    question_data = regenerate_question_answer(qr_data)
-    
-    if question_data:
+
+  # Handle direct encrypted string input
+  if args.encrypted_str:
+    try:
+      log.info(f"Decoding encrypted string (points={args.points})")
+      result = regenerate_from_encrypted(args.encrypted_str, args.points)
+
+      # Format result similar to regenerate_question_answer output
+      question_data = {
+        "question_number": "N/A",
+        "points": args.points,
+        "question_type": result["question_type"],
+        "seed": result["seed"],
+        "version": result["version"],
+        "answers": result["answers"],
+        "answer_objects": result["answer_objects"],
+        "answer_key_html": result["answer_key_html"],
+        "explanation_markdown": result.get("explanation_markdown")
+      }
+
+      if "kwargs" in result:
+        question_data["config"] = result["kwargs"]
+
       results.append(question_data)
       display_answer_summary(question_data)
+
+    except Exception as e:
+      log.error(f"Failed to decode encrypted string: {e}")
+      import traceback
+      if args.verbose:
+        log.debug(traceback.format_exc())
+      sys.exit(1)
+
+  # Handle image scanning
+  else:
+    # Scan QR codes from image
+    qr_codes = scan_qr_from_image(args.image)
+
+    if not qr_codes:
+      print("No QR codes found in image")
+      sys.exit(1)
+
+    # Process QR codes
+    if not args.all:
+      qr_codes = qr_codes[:1]
+      log.info("Processing only the first QR code (use --all to process all)")
+
+    for qr_string in qr_codes:
+      # Parse QR data
+      qr_data = parse_qr_data(qr_string)
+
+      if not qr_data:
+        continue
+
+      # Regenerate question and answer
+      question_data = regenerate_question_answer(qr_data)
+
+      if question_data:
+        results.append(question_data)
+        display_answer_summary(question_data)
   
   # Save to file if requested
   if args.output:
