@@ -222,6 +222,4 @@ class WeightCounting_RNN(WeightCounting):
     return model, ["units", "return_sequences"]
 
 
-@QuestionRegistry.register()
-class ConvolutionCalculation(Question):
-  pass
+# ConvolutionCalculation is implemented in cnns.py
