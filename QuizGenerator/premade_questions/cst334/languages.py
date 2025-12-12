@@ -362,17 +362,15 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     )
     
     # Add in some answers as latex-only options to be circled
-    body.add_element(
-      ContentAST.OnlyLatex([
-        ContentAST.Text(f"- `{str(answer)}`")
-        for answer in self.featured_answers
-      ])
-    )
+    latex_list = ContentAST.OnlyLatex([])
+    for answer in self.featured_answers:
+      latex_list.add_element(ContentAST.Paragraph([f"- `{str(answer)}`"]))
+    body.add_element(latex_list)
     
     # For Latex-only, ask students to generate some more.
     body.add_element(
       ContentAST.OnlyLatex([
-        ContentAST.AnswerBlock([ContentAST.Answer(Answer.string(f"blank_line_{i}", f"blank_line_{i}"), label=f"blank_line_{i}") for i in range(self.num_answer_blanks)])
+        ContentAST.AnswerBlock([ContentAST.Answer(Answer.string(f"blank_line_{i}", ""), label="") for i in range(self.num_answer_blanks)])
       ])
     )
     
