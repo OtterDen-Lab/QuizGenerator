@@ -155,115 +155,115 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
 
     super().__init__(*args, **kwargs)
 
-    if grammar_str_good is not None and grammar_str_bad is not None:
+    # Store whether grammars are fixed (provided) or should be randomized
+    self.fixed_grammars = grammar_str_good is not None and grammar_str_bad is not None
+    if self.fixed_grammars:
       self.grammar_str_good = grammar_str_good
       self.grammar_str_bad = grammar_str_bad
       self.include_spaces = kwargs.get("include_spaces", False)
       self.MAX_LENGTH = kwargs.get("max_length", 30)
-    else:
-      which_grammar = self.rng.choice(range(4))
-      
-      if which_grammar == 0:
-        # todo: make a few different kinds of grammars that could be picked
-        self.grammar_str_good = """
-          <expression> ::= <term> | <expression> + <term> | <expression> - <term>
-          <term>       ::= <factor> | <term> * <factor> | <term> / <factor>
-          <factor>     ::= <number>
-          <number>     ::= <digit> | <number> <digit>
-          <digit>      ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
-        """
-        # Adding in a plus to number
-        self.grammar_str_bad = """
-          <expression> ::= <term> | <expression> + <term> | <expression> - <term>
-          <term>       ::= <factor> | <term> * <factor> | <term> / <factor>
-          <factor>     ::= <number>
-          <number>     ::= <digit> + | <digit> <number>
-          <digit>      ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
-        """
-        self.include_spaces = False
-        self.MAX_LENGTH = 30
-      elif which_grammar == 1:
-        self.grammar_str_good = """
-          <sentence> ::= <subject> <verb> <object>
-          <subject> ::= The cat | A dog | The bird | A child | <adjective> <animal>
-          <animal> ::= cat | dog | bird | child
-          <adjective> ::= happy | sad | angry | playful
-          <verb> ::= chases | sees | hates | loves
-          <object> ::= the ball | the toy | the tree | <adjective> <object>
-        """
-        self.grammar_str_bad = """
-          <sentence> ::= <subject> <verb> <object>
-          <subject> ::= The human | The dog | A bird | Some child | A <adjective> <animal>
-          <animal> ::= cat | dog | bird | child
-          <adjective> ::= happy | sad | angry | playful
-          <verb> ::= chases | sees | hates | loves
-          <object> ::= the ball | the toy | the tree | <adjective> <object>
-        """
-        self.include_spaces = True
-        self.MAX_LENGTH = 100
-      elif which_grammar == 2:
-        self.grammar_str_good = """
-          <poem> ::= <line> | <line> <poem>
-          <line> ::= <subject> <verb> <object> <modifier>
-          <subject> ::= whispers | shadows | dreams | echoes | <compound-subject>
-          <compound-subject> ::= <subject> and <subject>
-          <verb> ::= dance | dissolve | shimmer | collapse | <compound-verb>
-          <compound-verb> ::= <verb> then <verb>
-          <object> ::= beneath | between | inside | around | <compound-object>
-          <compound-object> ::= <object> through <object>
-          <modifier> ::= silently | violently | mysteriously | endlessly | <recursive-modifier>
-          <recursive-modifier> ::= <modifier> and <modifier>
-        """
-        self.grammar_str_bad = """
-          <bad-poem> ::= <almost-valid-line> | <bad-poem> <bad-poem>
-          <almost-valid-line> ::= <tricky-subject> <tricky-verb> <tricky-object> <tricky-modifier>
-          <tricky-subject> ::= whispers | shadows and and | <duplicate-subject>
-          <duplicate-subject> ::= whispers whispers
-          <tricky-verb> ::= dance | <incorrect-verb-placement> | <verb-verb>
-          <incorrect-verb-placement> ::= dance dance
-          <verb-verb> ::= dance whispers
-          <tricky-object> ::= beneath | <object-verb-swap> | <duplicate-object>
-          <object-verb-swap> ::= dance beneath
-          <duplicate-object> ::= beneath beneath
-          <tricky-modifier> ::= silently | <modifier-subject-swap> | <duplicate-modifier>
-          <modifier-subject-swap> ::= whispers silently
-          <duplicate-modifier> ::= silently silently
-        """
-        self.include_spaces = True
-        self.MAX_LENGTH = 100
-      elif which_grammar == 3:
-        self.grammar_str_good = """
-          <A> ::= a <B> a |
-          <B> ::= b <C> b |
-          <C> ::= c <A> c |
-        """
-        self.grammar_str_bad = """
-          <A> ::= a <B> c
-          <B> ::= b <C> a |
-          <C> ::= c <A> b |
-        """
-        self.include_spaces = False
-        self.MAX_LENGTH = 100
-    
+      self.grammar_good = BNF.parse_bnf(self.grammar_str_good, self.rng)
+      self.grammar_bad = BNF.parse_bnf(self.grammar_str_bad, self.rng)
+
+    self.num_answer_options = kwargs.get("num_answer_options", 4)
+    self.num_answer_blanks = kwargs.get("num_answer_blanks", 4)
+
+  def _select_random_grammar(self):
+    """Select and set a random grammar. Called from refresh() to ensure each PDF gets different grammar."""
+    which_grammar = self.rng.choice(range(4))
+
+    if which_grammar == 0:
+      # todo: make a few different kinds of grammars that could be picked
+      self.grammar_str_good = """
+        <expression> ::= <term> | <expression> + <term> | <expression> - <term>
+        <term>       ::= <factor> | <term> * <factor> | <term> / <factor>
+        <factor>     ::= <number>
+        <number>     ::= <digit> | <number> <digit>
+        <digit>      ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+      """
+      # Adding in a plus to number
+      self.grammar_str_bad = """
+        <expression> ::= <term> | <expression> + <term> | <expression> - <term>
+        <term>       ::= <factor> | <term> * <factor> | <term> / <factor>
+        <factor>     ::= <number>
+        <number>     ::= <digit> + | <digit> <number>
+        <digit>      ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+      """
+      self.include_spaces = False
+      self.MAX_LENGTH = 30
+    elif which_grammar == 1:
+      self.grammar_str_good = """
+        <sentence> ::= <subject> <verb> <object>
+        <subject> ::= The cat | A dog | The bird | A child | <adjective> <animal>
+        <animal> ::= cat | dog | bird | child
+        <adjective> ::= happy | sad | angry | playful
+        <verb> ::= chases | sees | hates | loves
+        <object> ::= the ball | the toy | the tree | <adjective> <object>
+      """
+      self.grammar_str_bad = """
+        <sentence> ::= <subject> <verb> <object>
+        <subject> ::= The human | The dog | A bird | Some child | A <adjective> <animal>
+        <animal> ::= cat | dog | bird | child
+        <adjective> ::= happy | sad | angry | playful
+        <verb> ::= chases | sees | hates | loves
+        <object> ::= the ball | the toy | the tree | <adjective> <object>
+      """
+      self.include_spaces = True
+      self.MAX_LENGTH = 100
+    elif which_grammar == 2:
+      self.grammar_str_good = """
+        <poem> ::= <line> | <line> <poem>
+        <line> ::= <subject> <verb> <object> <modifier>
+        <subject> ::= whispers | shadows | dreams | echoes | <compound-subject>
+        <compound-subject> ::= <subject> and <subject>
+        <verb> ::= dance | dissolve | shimmer | collapse | <compound-verb>
+        <compound-verb> ::= <verb> then <verb>
+        <object> ::= beneath | between | inside | around | <compound-object>
+        <compound-object> ::= <object> through <object>
+        <modifier> ::= silently | violently | mysteriously | endlessly | <recursive-modifier>
+        <recursive-modifier> ::= <modifier> and <modifier>
+      """
+      self.grammar_str_bad = """
+        <bad-poem> ::= <almost-valid-line> | <bad-poem> <bad-poem>
+        <almost-valid-line> ::= <tricky-subject> <tricky-verb> <tricky-object> <tricky-modifier>
+        <tricky-subject> ::= whispers | shadows and and | <duplicate-subject>
+        <duplicate-subject> ::= whispers whispers
+        <tricky-verb> ::= dance | <incorrect-verb-placement> | <verb-verb>
+        <incorrect-verb-placement> ::= dance dance
+        <verb-verb> ::= dance whispers
+        <tricky-object> ::= beneath | <object-verb-swap> | <duplicate-object>
+        <object-verb-swap> ::= dance beneath
+        <duplicate-object> ::= beneath beneath
+        <tricky-modifier> ::= silently | <modifier-subject-swap> | <duplicate-modifier>
+        <modifier-subject-swap> ::= whispers silently
+        <duplicate-modifier> ::= silently silently
+      """
+      self.include_spaces = True
+      self.MAX_LENGTH = 100
+    elif which_grammar == 3:
+      self.grammar_str_good = """
+        <A> ::= a <B> a |
+        <B> ::= b <C> b |
+        <C> ::= c <A> c |
+      """
+      self.grammar_str_bad = """
+        <A> ::= a <B> c
+        <B> ::= b <C> a |
+        <C> ::= c <A> b |
+      """
+      self.include_spaces = False
+      self.MAX_LENGTH = 100
+
     self.grammar_good = BNF.parse_bnf(self.grammar_str_good, self.rng)
     self.grammar_bad = BNF.parse_bnf(self.grammar_str_bad, self.rng)
-    
-    self.num_answer_options = kwargs.get("num_answer_options", 4)
-    self.num_answer_blanks = kwargs.get("num_answer_blanks", 4)
   
   def refresh(self, *args, **kwargs):
     super().refresh(*args, **kwargs)
-    
-    self.answers = {}
-    
-    self.num_answer_options = kwargs.get("num_answer_options", 4)
-    self.num_answer_blanks = kwargs.get("num_answer_blanks", 4)
-    
-    self.refresh()
-  
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
+
+    # Re-select random grammar for each refresh if not using fixed grammars
+    if not self.fixed_grammars:
+      self._select_random_grammar()
+
     self.answers = {}
     
     self.answers.update(
@@ -340,20 +340,22 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
   def get_body(self, *args, **kwargs) -> ContentAST.Section:
     body = ContentAST.Section()
     
-    body.add_elements([
-      ContentAST.Paragraph([
-        ContentAST.OnlyHtml([
-          ContentAST.Text("Given the following grammar, which of the below strings are part of the language?")
-        ]),
-        ContentAST.OnlyLatex([
-          ContentAST.Text(
-            "Given the following grammar "
-            "please circle any provided strings that are part of the language (or indicate clearly if there are none), "
-            "and on each blank line provide generate a new, unique string that is part of the language."
-          )
+    body.add_element(
+      ContentAST.OnlyHtml([
+        ContentAST.Paragraph([
+          "Given the following grammar, which of the below strings are part of the language?"
         ])
       ])
-    ])
+    )
+    body.add_element(
+      ContentAST.OnlyLatex([
+        ContentAST.Paragraph([
+          "Given the following grammar "
+          "please circle any provided strings that are part of the language (or indicate clearly if there are none), "
+          "and on each blank line provide generate a new, unique string that is part of the language."
+        ])
+      ])
+    )
     
     body.add_element(
       ContentAST.Code(self.grammar_good.get_grammar_string())

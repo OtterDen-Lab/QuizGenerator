@@ -730,22 +730,28 @@ class ContentAST:
         return ""
 
       # This is for when we are passing in a code block via a FromText question
-      content = re.sub(
-        r"```\s*(.*)\s*```",
-        r"""
+      def escape_raw_content(match):
+        code_content = match.group(1).strip()
+        # Escape quotes for Typst raw() function
+        escaped_content = code_content.replace('"', r'\"')
+        return f"""
         #box(
-          raw("\1",
+          raw("{escaped_content}",
             block: true
           )
         )
-        """,
+        """
+
+      content = re.sub(
+        r"```\s*(.*)\s*```",
+        escape_raw_content,
         self.content,
         flags=re.DOTALL
       )
 
       # In Typst, # starts code/function calls, so we need to escape it
       content = content.replace("# ", r"\# ")
-      
+
       if self.emphasis:
         content = f"*{content}*"
       return content
@@ -1920,9 +1926,9 @@ class ContentAST:
         # Add to main content - only appears in PDF
         body.add_element(latex_only)
     """
-    
+
     def render(self, output_format: ContentAST.OutputFormat, **kwargs):
-      if output_format != "latex":
+      if output_format not in ("latex", "typst"):
         return ""
       return super().render(output_format=output_format, **kwargs)
   
