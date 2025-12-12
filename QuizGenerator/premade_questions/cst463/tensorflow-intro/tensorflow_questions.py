@@ -883,11 +883,18 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     ))
 
     # Show calculation for each component
+    digits = Answer.DEFAULT_ROUNDING_DIGITS
     for i in range(self.num_variables):
       var_name = f"x_{i}"
+      # Round all intermediate values to avoid floating point precision issues
+      beta_times_v = round(self.momentum_beta * self.prev_velocity[i], digits)
+      one_minus_beta = round(1 - self.momentum_beta, digits)
+      one_minus_beta_times_grad = round((1 - self.momentum_beta) * self.gradients[i], digits)
+
       explanation.add_element(ContentAST.Equation(
-        f"v'[{i}] = {self.momentum_beta} \\times {self.prev_velocity[i]:.2f} + "
-        f"{1 - self.momentum_beta} \\times {self.gradients[i]:.4f} = {self.new_velocity[i]:.4f}",
+        f"v'[{i}] = {self.momentum_beta} \\times {self.prev_velocity[i]:.{digits}f} + "
+        f"{one_minus_beta:.{digits}f} \\times {self.gradients[i]:.{digits}f} = "
+        f"{beta_times_v:.{digits}f} + {one_minus_beta_times_grad:.{digits}f} = {self.new_velocity[i]:.{digits}f}",
         inline=False
       ))
 
