@@ -171,3 +171,53 @@ questions:
       spacing: 0
       _config:
         repeat: 5
+
+---
+
+
+
+
+
+
+name: "(Ungraded) All Questions"
+practice: False
+questions:
+  1:
+    BitsAndBytes:
+      class: cst334.BitsAndBytes
+      
+    HexAndBinary:
+      class: cst334.HexAndBinary
+      
+    AverageMemoryAccessTime:
+      class: cst334.AverageMemoryAccessTime
+      
+    VirtualAddressParts:
+      class: cst334.VirtualAddressParts
+      
+    CachingQuestion:
+      class: cst334.CachingQuestion
+      num_elements: 5
+      cache_size: 3
+      num_requests: 10
+      
+    BaseAndBounds:
+      class: cst334.BaseAndBounds
+      
+    Segmentation:
+      class: cst334.Segmentation
+      
+    Paging:
+      class: cst334.Paging
+      
+    SchedulingQuestion:
+      class: cst334.SchedulingQuestion
+      
+    HardDriveAccessTime:
+      class: cst334.HardDriveAccessTime
+      
+    INodeAccesses:
+      class: cst334.INodeAccesses
+      
+    VSFS_states:
+      class: cst334.VSFS_states

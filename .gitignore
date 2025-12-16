@@ -11,3 +11,5 @@ debug.*
 .claude
 *.log
 dist/
+*.md
+*.yaml

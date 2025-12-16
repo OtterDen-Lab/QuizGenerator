@@ -197,3 +197,129 @@ questions:
       spacing: 0
       _config:
         repeat: 5
+
+---
+
+# CST463 Neural Network Forward Pass Practice
+name: "(Ungraded) Neural Network Forward Pass Practice"
+practice: False
+questions:
+  1:
+    ForwardPass:
+      class: cst463.ForwardPassQuestion
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Neural Network Backpropagation Practice
+name: "(Ungraded) Neural Network Backpropagation Practice"
+practice: False
+questions:
+  1:
+    BackpropGradient:
+      class: cst463.BackpropGradientQuestion
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Neural Network End-to-End Training Practice
+name: "(Ungraded) Neural Network End-to-End Training Practice"
+practice: False
+questions:
+  1:
+    EndToEndTraining:
+      class: cst463.EndToEndTrainingQuestion
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 CNN Weight Counting Practice
+name: "(Ungraded) CNN Weight Counting Practice"
+practice: False
+questions:
+  1:
+    WeightCountingCNN:
+      class: cst463.WeightCounting-CNN
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 RNN Weight Counting Practice
+name: "(Ungraded) RNN Weight Counting Practice"
+practice: False
+questions:
+  1:
+    WeightCountingRNN:
+      class: cst463.WeightCounting-RNN
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 CNN Convolution Practice
+name: "(Ungraded) CNN Convolution Practice"
+practice: False
+questions:
+  1:
+    Convolution:
+      class: cst463.cnn.convolution
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 RNN Forward Pass Practice
+name: "(Ungraded) RNN Forward Pass Practice"
+practice: False
+questions:
+  1:
+    RNNForwardPass:
+      class: cst463.rnn.forward-pass
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Attention Forward Pass Practice
+name: "(Ungraded) Attention Forward Pass Practice"
+practice: False
+questions:
+  1:
+    AttentionForwardPass:
+      class: cst463.attention.forward-pass
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
+# CST463 Word2Vec Skipgram Practice
+name: "(Ungraded) Word2Vec Skipgram Practice"
+practice: False
+questions:
+  1:
+    Word2VecSkipgram:
+      class: cst463.word2vec.skipgram
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 5
