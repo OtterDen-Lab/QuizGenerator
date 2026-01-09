@@ -29,6 +29,14 @@ import logging
 log = logging.getLogger(__name__)
 
 
+@dataclasses.dataclass
+class QuestionComponents:
+    """Bundle of question parts generated during construction."""
+    body: ContentAST.Element
+    answers: List[Answer]
+    explanation: ContentAST.Element
+
+
 # Spacing presets for questions
 SPACING_PRESETS = {
     "NONE": 0,
@@ -472,6 +480,9 @@ class Question(abc.ABC):
 
     self.rng_seed_offset = kwargs.get("rng_seed_offset", 0)
 
+    # Component caching for unified Answer architecture
+    self._components: QuestionComponents = None
+
     # To be used throughout when generating random things
     self.rng = random.Random()
 
@@ -569,28 +580,105 @@ class Question(abc.ABC):
   
   def get_explanation(self, **kwargs) -> ContentAST.Section:
     """
-    Gets the body of the question during generation
+    Gets the body of the question during generation (backward compatible wrapper).
+    Calls _get_explanation() and returns just the explanation.
     :param kwargs:
     :return: (ContentAST.Section) Containing question explanation or None
     """
+    # Try new pattern first
+    if hasattr(self, '_get_explanation') and callable(getattr(self, '_get_explanation')):
+      explanation, _ = self._get_explanation()
+      return explanation
+    # Fallback: default explanation
     return ContentAST.Section(
       [ContentAST.Text("[Please reach out to your professor for clarification]")]
     )
-  
+
+  def _get_body(self) -> Tuple[ContentAST.Element, List[Answer]]:
+    """
+    Build question body and collect answers (new pattern).
+    Questions should override this to return (body, answers) tuple.
+
+    Returns:
+        Tuple of (body_ast, answers_list)
+    """
+    # Fallback: call old get_body() and return empty answers
+    body = self.get_body()
+    return body, []
+
+  def _get_explanation(self) -> Tuple[ContentAST.Element, List[Answer]]:
+    """
+    Build question explanation and collect answers (new pattern).
+    Questions can override this to include answers in explanations.
+
+    Returns:
+        Tuple of (explanation_ast, answers_list)
+    """
+    return ContentAST.Section(
+      [ContentAST.Text("[Please reach out to your professor for clarification]")]
+    ), []
+
+  def build_question_components(self, **kwargs) -> QuestionComponents:
+    """
+    Build question components (body, answers, explanation) in single pass.
+
+    Calls _get_body() and _get_explanation() which return tuples of
+    (content, answers).
+    """
+    # Build body with its answers
+    body, body_answers = self._get_body()
+
+    # Build explanation with its answers
+    explanation, explanation_answers = self._get_explanation()
+
+    # Combine all answers
+    all_answers = body_answers + explanation_answers
+
+    return QuestionComponents(
+      body=body,
+      answers=all_answers,
+      explanation=explanation
+    )
+
   def get_answers(self, *args, **kwargs) -> Tuple[Answer.AnswerKind, List[Dict[str,Any]]]:
-    if self.can_be_numerical():
+    """
+    Return answers from cached components (new pattern) or self.answers dict (old pattern).
+    """
+    # Try component-based approach first (new pattern)
+    if self._components is None:
+      try:
+        self._components = self.build_question_components()
+      except Exception as e:
+        # If component building fails, fall back to dict
+        log.debug(f"Failed to build question components: {e}, falling back to dict")
+        pass
+
+    # Use components if available and non-empty
+    if self._components is not None and len(self._components.answers) > 0:
+      answers = self._components.answers
+      if self.can_be_numerical():
+        return (
+          Answer.AnswerKind.NUMERICAL_QUESTION,
+          list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in answers]))
+        )
       return (
-        Answer.AnswerKind.NUMERICAL_QUESTION,
-        list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in self.answers.values()]))
+        self.answer_kind,
+        list(itertools.chain(*[a.get_for_canvas() for a in answers]))
       )
-    elif len(self.answers.values()) > 0:
+
+    # Fall back to dict pattern (old pattern)
+    if len(self.answers.values()) > 0:
+      if self.can_be_numerical():
+        return (
+          Answer.AnswerKind.NUMERICAL_QUESTION,
+          list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in self.answers.values()]))
+        )
       return (
         self.answer_kind,
         list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
       )
-    return (
-      Answer.AnswerKind.ESSAY, []
-    )
+
+    return (Answer.AnswerKind.ESSAY, [])
     
   def refresh(self, rng_seed=None, *args, **kwargs):
     """If it is necessary to regenerate aspects between usages, this is the time to do it.
@@ -601,6 +689,7 @@ class Question(abc.ABC):
     :return: bool - True if the generated question is interesting, False otherwise
     """
     self.answers = {}
+    self._components = None  # Clear component cache
     # Seed the RNG directly with the provided seed (no offset)
     self.rng.seed(rng_seed)
     # Note: We don't call is_interesting() here because child classes need to
