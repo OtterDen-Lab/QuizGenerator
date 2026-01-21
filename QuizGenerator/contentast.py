@@ -1041,6 +1041,11 @@ class ContentAST:
       rendered = []
       for part in self.parts:
         if isinstance(part, str):
+          # Convert LaTeX operators to Typst if needed
+          if output_format == ContentAST.OutputFormat.TYPST:
+            part = part.replace(r'\cdot', ' dot ')
+            part = part.replace(r'\times', ' times ')
+            part = part.replace(r'\div', ' div ')
           rendered.append(part)
         elif isinstance(part, ContentAST.Element):
           # Use dedicated math_content methods if available (cleaner than stripping delimiters)

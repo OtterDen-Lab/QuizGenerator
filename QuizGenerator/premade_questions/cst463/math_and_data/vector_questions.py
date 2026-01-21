@@ -332,15 +332,24 @@ class VectorScalarMultiplication(VectorMathQuestion):
     """Override to handle scalar multiplication format."""
     subparts = []
     for data in self.subquestion_data:
-      vector_a_latex = self._format_vector(data['vector_a'])
-      # For scalar multiplication, we show scalar * vector as a single string
-      # Use the scalar from this specific subquestion's data
+      vector_elem = self._format_vector(data['vector_a'])
       scalar = data['scalar']
-      subparts.append(f"{scalar} \\cdot {vector_a_latex}")
+      # Return MathExpression for format-independent rendering
+      subparts.append(ContentAST.MathExpression([
+          f"{scalar} \\cdot ",
+          vector_elem
+      ], inline=True))
     return subparts
 
   def get_body(self):
+    """Override parent get_body() to use our custom formatting."""
+    body, _ = self._get_body()
+    return body
+
+  def _get_body(self):
+    """Build question body and collect answers (new pattern)."""
     body = ContentAST.Section()
+    answers = []
 
     body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
 
@@ -349,17 +358,36 @@ class VectorScalarMultiplication(VectorMathQuestion):
       subpart_data = self.generate_subquestion_data()
       repeated_part = self.create_repeated_problem_part(subpart_data)
       body.add_element(repeated_part)
+
+      # Collect all subpart answers
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        result = data['result']
+        for j in range(len(result)):
+          ans = Answer.integer(f"subpart_{letter}_{j}", result[j])
+          answers.append(ans)
     else:
-      # Single equation display
-      vector_a_latex = self._format_vector(self.vector_a)
-      body.add_element(ContentAST.Equation(f"{self.scalar} \\cdot {vector_a_latex} = ", inline=False))
+      # Single equation display using MathExpression
+      vector_elem = self._format_vector(self.vector_a)
+      body.add_element(ContentAST.MathExpression([
+          f"{self.scalar} \\cdot ",
+          vector_elem,
+          " = "
+      ]))
 
       # Canvas-only answer fields (hidden from PDF)
-      self._add_single_question_answers(body)
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
+      table_data = []
+      for i in range(self.dimension):
+        ans = Answer.integer(f"result_{i}", self.result[i])
+        answers.append(ans)
+        table_data.append([ans])
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
 
-    return body
+    return body, answers
 
-  def get_explanation(self):
+  def _get_explanation(self):
+    """Build question explanation (new pattern)."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["To multiply a vector by a scalar, we multiply each component by the scalar:"]))
@@ -370,16 +398,13 @@ class VectorScalarMultiplication(VectorMathQuestion):
         letter = chr(ord('a') + i)
         vector_a = data['vector_a']
         result = data['result']
-
-        # Get the scalar for this specific subpart
         scalar = data['scalar']
 
-        # Create LaTeX strings for multiline equation
+        # Use LaTeX syntax (will be converted by Equation._latex_to_typst for Typst output)
         vector_str = r" \\ ".join([str(v) for v in vector_a])
         multiplication_str = r" \\ ".join([f"{scalar} \\cdot {v}" for v in vector_a])
         result_str = r" \\ ".join([str(v) for v in result])
 
-        # Add explanation for this subpart
         explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
         explanation.add_element(
             ContentAST.Equation.make_block_equation__multiline_equals(
@@ -392,7 +417,6 @@ class VectorScalarMultiplication(VectorMathQuestion):
             )
         )
     else:
-      # Single part explanation - use the correct attributes
       vector_str = r" \\ ".join([str(v) for v in self.vector_a])
       multiplication_str = r" \\ ".join([f"{self.scalar} \\cdot {v}" for v in self.vector_a])
       result_str = r" \\ ".join([str(v) for v in self.result])
@@ -408,7 +432,7 @@ class VectorScalarMultiplication(VectorMathQuestion):
           )
       )
 
-    return explanation
+    return explanation, []  # Explanations don't have answers
 
 
 @QuestionRegistry.register()
@@ -432,26 +456,66 @@ class VectorDotProduct(VectorMathQuestion):
       "dot_product": Answer.integer("dot_product", result)
     }
 
-  def get_explanation(self):
+  def get_body(self):
+    """Override parent get_body() to use our custom formatting."""
+    body, _ = self._get_body()
+    return body
+
+  def _get_body(self):
+    """Build question body and collect answers (new pattern)."""
+    body = ContentAST.Section()
+    answers = []
+
+    body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
+
+    if self.is_multipart():
+      # Use multipart formatting with repeated problem parts
+      subpart_data = self.generate_subquestion_data()
+      repeated_part = self.create_repeated_problem_part(subpart_data)
+      body.add_element(repeated_part)
+
+      # Collect all subpart answers (scalar results)
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        result = data['result']
+        ans = Answer.integer(f"subpart_{letter}", result)
+        answers.append(ans)
+    else:
+      # Single equation display using MathExpression
+      vector_a_elem = self._format_vector(self.vector_a)
+      vector_b_elem = self._format_vector(self.vector_b)
+      body.add_element(ContentAST.MathExpression([
+          vector_a_elem,
+          " \\cdot ",
+          vector_b_elem,
+          " = "
+      ]))
+
+      # Canvas-only answer field (single scalar result)
+      ans = Answer.integer("dot_product", self.result)
+      answers.append(ans)
+      body.add_element(ContentAST.OnlyHtml([ans]))
+
+    return body, answers
+
+  def _get_explanation(self):
+    """Build question explanation (new pattern)."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["The dot product is calculated by multiplying corresponding components and summing the results:"]))
 
     if self.is_multipart():
-      # Handle multipart explanations
       for i, data in enumerate(self.subquestion_data):
         letter = chr(ord('a') + i)
         vector_a = data['vector_a']
         vector_b = data['vector_b']
         result = data['result']
 
-        # Create LaTeX strings for multiline equation
         vector_a_str = r" \\ ".join([str(v) for v in vector_a])
         vector_b_str = r" \\ ".join([str(v) for v in vector_b])
         products_str = " + ".join([f"({vector_a[j]} \\cdot {vector_b[j]})" for j in range(self.dimension)])
         calculation_str = " + ".join([str(vector_a[j] * vector_b[j]) for j in range(self.dimension)])
 
-        # Add explanation for this subpart
         explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
         explanation.add_element(
             ContentAST.Equation.make_block_equation__multiline_equals(
@@ -465,7 +529,6 @@ class VectorDotProduct(VectorMathQuestion):
             )
         )
     else:
-      # Single part explanation (original behavior)
       vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
       vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
       products_str = " + ".join([f"({self.vector_a[i]} \\cdot {self.vector_b[i]})" for i in range(self.dimension)])
@@ -483,7 +546,7 @@ class VectorDotProduct(VectorMathQuestion):
           )
       )
 
-    return explanation
+    return explanation, []  # Explanations don't have answers
 
 
 @QuestionRegistry.register()
