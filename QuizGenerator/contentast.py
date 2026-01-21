@@ -942,17 +942,48 @@ class ContentAST:
       latex_str = latex_str.replace(r'\cdot', 'dot')
       latex_str = latex_str.replace(r'\partial', 'diff')
 
-      # Handle matrix environments
-      if r'\begin{matrix}' in latex_str:
-        matrix_pattern = r'\[\\begin\{matrix\}(.*?)\\end\{matrix\}\]'
+      # Handle matrix environments (bmatrix, pmatrix, vmatrix, Vmatrix, Bmatrix, matrix)
+      # Map bracket types to Typst delimiters
+      bracket_map = {
+        'bmatrix': '\"[\"',   # square brackets
+        'pmatrix': '\"(\"',   # parentheses (default)
+        'vmatrix': '\"|\"',   # single vertical bars (determinant)
+        'Vmatrix': '\"||\"',  # double vertical bars (norm)
+        'Bmatrix': '\"{\"',   # curly braces
+        'matrix': None,       # no brackets
+      }
 
-        def replace_matrix(match):
-          content = match.group(1)
-          elements = content.split(r'\\')
-          elements = [e.strip() for e in elements if e.strip()]
-          return f"vec({', '.join(elements)})"
+      for env_type, delim in bracket_map.items():
+        pattern = rf'\\begin\{{{env_type}\}}(.*?)\\end\{{{env_type}\}}'
 
-        latex_str = re.sub(matrix_pattern, replace_matrix, latex_str)
+        def make_replacer(delimiter):
+          def replace_matrix(match):
+            content = match.group(1)
+            # Split rows by \\ and columns by &
+            rows = content.split(r'\\')
+            rows = [r.strip() for r in rows if r.strip()]
+
+            # Check if it's a vector (single column) or matrix
+            is_vector = all('&' not in row for row in rows)
+
+            if is_vector:
+              # Single column - use semicolons to separate rows in mat()
+              elements = "; ".join(rows)
+            else:
+              # Multiple columns - replace & with , and rows with ;
+              formatted_rows = [row.replace('&', ',').strip() for row in rows]
+              elements = "; ".join(formatted_rows)
+
+            if delimiter:
+              return f"mat(delim: {delimiter}, {elements})"
+            else:
+              return f"mat({elements})"
+          return replace_matrix
+
+        latex_str = re.sub(pattern, make_replacer(delim), latex_str, flags=re.DOTALL)
+
+      # Handle \left\| ... \right\| for norms
+      latex_str = re.sub(r'\\\|', '||', latex_str)
 
       return latex_str
 
@@ -972,6 +1003,120 @@ class ContentAST:
       ])
       
       return cls('\n'.join(equation_lines))
+
+  class MathExpression(Leaf):
+    """
+    Compose multiple math elements into a single format-independent expression.
+
+    This allows mixing ContentAST elements (like Matrix) with math operators
+    and symbols, with each part rendering appropriately for the target format.
+
+    Example:
+        # Vector magnitude: ||v|| =
+        body.add_element(ContentAST.MathExpression([
+            "||",
+            ContentAST.Matrix(data=[[1], [2], [3]], bracket_type="b"),
+            "|| = "
+        ]))
+
+        # Vector addition: a + b =
+        body.add_element(ContentAST.MathExpression([
+            ContentAST.Matrix(data=[[1], [2]], bracket_type="b"),
+            " + ",
+            ContentAST.Matrix(data=[[3], [4]], bracket_type="b"),
+            " = "
+        ]))
+
+    Parts can be:
+        - Strings: rendered as-is (math operators, symbols, etc.)
+        - ContentAST elements: call their render method for the target format
+    """
+    def __init__(self, parts, inline=False):
+      super().__init__("[math_expression]")
+      self.parts = parts  # List of strings and/or ContentAST elements
+      self.inline = inline
+
+    def _render_parts(self, output_format, **kwargs):
+      """Render all parts for the given output format."""
+      rendered = []
+      for part in self.parts:
+        if isinstance(part, str):
+          rendered.append(part)
+        elif isinstance(part, ContentAST.Element):
+          # Use dedicated math_content methods if available (cleaner than stripping delimiters)
+          if output_format == ContentAST.OutputFormat.HTML:
+            # For HTML (MathJax), use LaTeX math content
+            if hasattr(part, 'math_content_latex'):
+              rendered.append(part.math_content_latex())
+            else:
+              # Fallback: try to extract from render_html
+              html = part.render_html(**kwargs)
+              html = re.sub(r"<[^>]+>", "", html)
+              html = re.sub(r"^\$\$?\s*\\displaystyle\s*", "", html)
+              html = re.sub(r"^\$\$?\s*", "", html)
+              html = re.sub(r"\s*\$\$?$", "", html)
+              rendered.append(html)
+          elif output_format == ContentAST.OutputFormat.TYPST:
+            if hasattr(part, 'math_content_typst'):
+              rendered.append(part.math_content_typst())
+            else:
+              # Fallback: try to extract from render_typst
+              typst = part.render_typst(**kwargs)
+              typst = re.sub(r"^\s*\$\s*", "", typst)
+              typst = re.sub(r"\s*\$\s*$", "", typst)
+              rendered.append(typst)
+          elif output_format == ContentAST.OutputFormat.LATEX:
+            if hasattr(part, 'math_content_latex'):
+              rendered.append(part.math_content_latex())
+            else:
+              latex = part.render_latex(**kwargs)
+              latex = re.sub(r"^\\begin\{flushleft\}", "", latex)
+              latex = re.sub(r"\\end\{flushleft\}$", "", latex)
+              latex = re.sub(r"^\\\[", "", latex)
+              latex = re.sub(r"\\\]$", "", latex)
+              latex = re.sub(r"^\$", "", latex)
+              latex = re.sub(r"\$~?$", "", latex)
+              rendered.append(latex)
+          elif output_format == ContentAST.OutputFormat.MARKDOWN:
+            if hasattr(part, 'math_content_latex'):
+              rendered.append(part.math_content_latex())
+            else:
+              md = part.render_markdown(**kwargs)
+              md = re.sub(r"^\$", "", md)
+              md = re.sub(r"\$$", "", md)
+              rendered.append(md)
+        else:
+          # Convert to string as fallback
+          rendered.append(str(part))
+      return "".join(rendered)
+
+    def render_markdown(self, **kwargs):
+      content = self._render_parts(ContentAST.OutputFormat.MARKDOWN, **kwargs)
+      if self.inline:
+        return f"${content}$"
+      else:
+        return f"$\\displaystyle {content}$"
+
+    def render_html(self, **kwargs):
+      content = self._render_parts(ContentAST.OutputFormat.HTML, **kwargs)
+      if self.inline:
+        return f"\\({content}\\)"
+      else:
+        return f"<div class='math'>$$ \\displaystyle {content} \\; $$</div>"
+
+    def render_latex(self, **kwargs):
+      content = self._render_parts(ContentAST.OutputFormat.LATEX, **kwargs)
+      if self.inline:
+        return f"${content}$~"
+      else:
+        return f"\\begin{{flushleft}}${content}$\\end{{flushleft}}"
+
+    def render_typst(self, **kwargs):
+      content = self._render_parts(ContentAST.OutputFormat.TYPST, **kwargs)
+      if self.inline:
+        return f"${content}$"
+      else:
+        return f" $ {content} $ "
 
   class Matrix(Leaf):
     """
@@ -1055,6 +1200,42 @@ class ContentAST:
         rows.append(" & ".join(str(cell) for cell in row))
       matrix_content = r" \\ ".join(rows)
       return f"\\begin{{{bracket_type}matrix}} {matrix_content} \\end{{{bracket_type}matrix}}"
+
+    def math_content_latex(self):
+      """Return raw LaTeX math content without delimiters (for use in MathExpression)."""
+      return ContentAST.Matrix.to_latex(self.data, self.bracket_type)
+
+    def math_content_typst(self):
+      """Return raw Typst math content without delimiters (for use in MathExpression)."""
+      # Build matrix content
+      rows = []
+      for row in self.data:
+        rows.append(", ".join(str(cell) for cell in row))
+
+      # Check if it's a vector (single column)
+      is_vector = all(len(row) == 1 for row in self.data)
+
+      if is_vector:
+        # Use vec() for vectors
+        matrix_content = ", ".join(str(row[0]) for row in self.data)
+        result = f"vec({matrix_content})"
+      else:
+        # Use mat() for matrices with semicolons separating rows
+        matrix_content = "; ".join(rows)
+        result = f"mat({matrix_content})"
+
+      # Add bracket delimiters if needed
+      if self.bracket_type == "b":  # square brackets
+        matrix_content_inner = ", ".join(str(row[0]) for row in self.data) if is_vector else "; ".join(rows)
+        result = f"mat(delim: \"[\", {matrix_content_inner})" if not is_vector else f"vec(delim: \"[\", {matrix_content_inner})"
+      elif self.bracket_type == "v":  # vertical bars (determinant)
+        result = f"mat(delim: \"|\", {'; '.join(rows)})"
+      elif self.bracket_type == "V":  # double vertical bars (norm)
+        result = f"mat(delim: \"||\", {'; '.join(rows)})"
+      elif self.bracket_type == "B":  # curly braces
+        result = f"mat(delim: \"{{\", {'; '.join(rows)})"
+
+      return result
 
     def render_markdown(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
