@@ -54,7 +54,15 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ),
     })
   
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def _get_body(self, *args, **kwargs):
+    """Build question body and collect answers."""
+    answers = [
+      self.answers["answer__rotational_delay"],
+      self.answers["answer__access_delay"],
+      self.answers["answer__transfer_delay"],
+      self.answers["answer__disk_access_delay"],
+    ]
+
     # Create parameter info table using mixin
     parameter_info = {
       "Hard Drive Rotation Speed": f"{self.hard_drive_rotation_speed}RPM",
@@ -96,9 +104,14 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       additional_instructions=instructions
     )
 
+    return body, answers
+
+  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(*args, **kwargs)
     return body
-  
-  def get_explanation(self) -> ContentAST.Section:
+
+  def _get_explanation(self):
     explanation = ContentAST.Section()
     
     explanation.add_element(
@@ -150,6 +163,11 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
         f"= {self.number_of_reads} \\cdot {self.access_delay:0.2f} + {self.transfer_delay:0.2f} "
         f"= {self.disk_access_delay:0.2f}ms")
     ])
+    return explanation, []
+
+  def get_explanation(self) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation()
     return explanation
 
 
@@ -178,7 +196,15 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       "answer__inode_index_in_block": Answer.integer("answer__inode_index_in_block", self.inode_index_in_block),
     })
   
-  def get_body(self) -> ContentAST.Section:
+  def _get_body(self):
+    """Build question body and collect answers."""
+    answers = [
+      self.answers["answer__inode_address"],
+      self.answers["answer__inode_block"],
+      self.answers["answer__inode_address_in_block"],
+      self.answers["answer__inode_index_in_block"],
+    ]
+
     # Create parameter info table using mixin
     parameter_info = {
       "Block Size": f"{self.block_size} Bytes",
@@ -213,9 +239,14 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       # additional_instructions=instructions
     )
 
+    return body, answers
+
+  def get_body(self) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body()
     return body
-  
-  def get_explanation(self) -> ContentAST.Section:
+
+  def _get_explanation(self):
     explanation = ContentAST.Section()
     
     explanation.add_element(
@@ -287,7 +318,12 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
         f"{self.inode_index_in_block}"
       ]
     ))
-    
+
+    return explanation, []
+
+  def get_explanation(self) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation()
     return explanation
 
 
@@ -328,18 +364,21 @@ class VSFS_states(IOQuestion):
       baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']]))
     )
   
-  def get_body(self) -> ContentAST.Section:
+  def _get_body(self):
+    """Build question body and collect answers."""
+    answers = [self.answers["answer__cmd"]]
+
     body = ContentAST.Section()
-    
+
     body.add_element(ContentAST.Paragraph(["What operation happens between these two states?"]))
-    
+
     body.add_element(
       ContentAST.Code(
         self.start_state,
         make_small=True
       )
     )
-    
+
     body.add_element(
       ContentAST.AnswerBlock(
         ContentAST.Answer(
@@ -348,17 +387,22 @@ class VSFS_states(IOQuestion):
         )
       )
     )
-    
+
     body.add_element(
       ContentAST.Code(
         self.end_state,
         make_small=True
       )
     )
-    
+
+    return body, answers
+
+  def get_body(self) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body()
     return body
-  
-  def get_explanation(self) -> ContentAST.Section:
+
+  def _get_explanation(self):
     explanation = ContentAST.Section()
     
     log.debug(f"self.start_state: {self.start_state}")
@@ -441,6 +485,11 @@ class VSFS_states(IOQuestion):
         highlight_changes(self.start_state, self.end_state)
       )
     )
-    
+
+    return explanation, []
+
+  def get_explanation(self) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation()
     return explanation
   

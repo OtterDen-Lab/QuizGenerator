@@ -35,7 +35,10 @@ class BitsAndBytes(MathQuestion):
     else:
       self.answers = {"answer" : Answer.integer("num_bits", self.num_bits)}
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs):
+    """Build question body and collect answers."""
+    answers = [self.answers['answer']]
+
     body = ContentAST.Section()
     body.add_element(
       ContentAST.Paragraph([
@@ -45,7 +48,7 @@ class BitsAndBytes(MathQuestion):
         f"{'do we need to address our memory' if not self.from_binary else 'of memory can be addressed'}?"
       ])
     )
-    
+
     if self.from_binary:
       body.add_element(
         ContentAST.AnswerBlock(
@@ -66,10 +69,15 @@ class BitsAndBytes(MathQuestion):
           ),
         )
       )
-      
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
-  
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+
+  def _get_explanation(self, **kwargs):
     explanation = ContentAST.Section()
     
     explanation.add_element(
@@ -94,7 +102,12 @@ class BitsAndBytes(MathQuestion):
       explanation.add_element(
         ContentAST.Equation(f"log_{{2}}({self.num_bytes} \\text{{bytes}}) = \\textbf{{{self.num_bits}}}\\text{{bits}}")
       )
-    
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -119,9 +132,12 @@ class HexAndBinary(MathQuestion):
     else:
       self.answers['answer'] = Answer.string("binary_val", self.binary_val)
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs):
+    """Build question body and collect answers."""
+    answers = [self.answers['answer']]
+
     body = ContentAST.Section()
-    
+
     body.add_element(
       ContentAST.Paragraph([
         f"Given the number {self.hex_val if not self.from_binary else self.binary_val} "
@@ -129,7 +145,7 @@ class HexAndBinary(MathQuestion):
         "Please include base indicator all padding zeros as appropriate (e.g. 0x01 should be 0b00000001)",
       ])
     )
-    
+
     body.add_element(
       ContentAST.AnswerBlock([
         ContentAST.Answer(
@@ -138,10 +154,15 @@ class HexAndBinary(MathQuestion):
         )
       ])
     )
-    
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
-  
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+
+  def _get_explanation(self, **kwargs):
     explanation = ContentAST.Section()
     
     paragraph = ContentAST.Paragraph([
@@ -188,10 +209,15 @@ class HexAndBinary(MathQuestion):
           f"Which gives us our binary value of: 0b{binary_str}"
         ])
       )
-      
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
-  
-  
+
+
 @QuestionRegistry.register()
 class AverageMemoryAccessTime(MathQuestion):
   
@@ -228,9 +254,12 @@ class AverageMemoryAccessTime(MathQuestion):
     # At this point, everything in the question should be set.
     pass
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs):
+    """Build question body and collect answers."""
+    answers = [self.answers["amat"]]
+
     body = ContentAST.Section()
-    
+
     # Add in background information
     body.add_element(
       ContentAST.Paragraph([
@@ -245,21 +274,21 @@ class AverageMemoryAccessTime(MathQuestion):
       ["Hit Latency", f"{self.hit_latency} cycles"],
       ["Miss Latency", f"{self.miss_latency} cycles"]
     ]
-    
+
     # Add in either miss rate or hit rate -- we only need one of them
     if self.show_miss_rate:
       table_data.append(["Miss Rate", f"{100 * (1 - self.hit_rate): 0.2f}%"])
     else:
       table_data.append(["Hit Rate", f"{100 * self.hit_rate: 0.2f}%"])
-    
+
     body.add_element(
       ContentAST.Table(
         data=table_data
       )
     )
-    
+
     body.add_element(ContentAST.LineBreak())
-    
+
     body.add_element(
       ContentAST.AnswerBlock([
         ContentAST.Answer(
@@ -269,10 +298,15 @@ class AverageMemoryAccessTime(MathQuestion):
         )
       ])
     )
-    
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
-  
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+
+  def _get_explanation(self, **kwargs):
     explanation = ContentAST.Section()
     
     # Add in General explanation
@@ -294,6 +328,11 @@ class AverageMemoryAccessTime(MathQuestion):
         ]
       )
     )
-    
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
   

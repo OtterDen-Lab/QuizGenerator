@@ -379,7 +379,15 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     # Return whether this workload is interesting
     return self.is_interesting()
   
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def _get_body(self, *args, **kwargs):
+    """
+    Build question body and collect answers.
+    Returns:
+        Tuple of (body_ast, answers_list)
+    """
+    from typing import List
+    answers: List[Answer] = []
+
     # Create table data for scheduling results
     table_rows = []
     for job_id in sorted(self.job_stats.keys()):
@@ -390,6 +398,9 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         "Response Time": f"answer__response_time_job{job_id}",  # Answer key
         "TAT": f"answer__turnaround_time_job{job_id}"  # Answer key
       })
+      # Collect answers for this job
+      answers.append(self.answers[f"answer__response_time_job{job_id}"])
+      answers.append(self.answers[f"answer__turnaround_time_job{job_id}"])
 
     # Create table using mixin
     scheduling_table = self.create_answer_table(
@@ -398,10 +409,16 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       answer_columns=["Response Time", "TAT"]
     )
 
+    # Collect average answers
+    avg_response_answer = self.answers["answer__average_response_time"]
+    avg_tat_answer = self.answers["answer__average_turnaround_time"]
+    answers.append(avg_response_answer)
+    answers.append(avg_tat_answer)
+
     # Create average answer block
     average_block = ContentAST.AnswerBlock([
-      ContentAST.Answer(self.answers["answer__average_response_time"], label="Overall average response time"),
-      ContentAST.Answer(self.answers["answer__average_turnaround_time"], label="Overall average TAT")
+      ContentAST.Answer(avg_response_answer, label="Overall average response time"),
+      ContentAST.Answer(avg_tat_answer, label="Overall average TAT")
     ])
 
     # Use mixin to create complete body
@@ -418,18 +435,28 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     body = self.create_fill_in_table_body(intro_text, instructions, scheduling_table)
     body.add_element(average_block)
+    return body, answers
+
+  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(*args, **kwargs)
     return body
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs):
+    """
+    Build question explanation.
+    Returns:
+        Tuple of (explanation_ast, answers_list)
+    """
     explanation = ContentAST.Section()
-    
+
     explanation.add_element(
       ContentAST.Paragraph([
         f"To calculate the overall Turnaround and Response times using {self.scheduler_algorithm} "
         f"we want to first start by calculating the respective target and response times of all of our individual jobs."
       ])
     )
-    
+
     explanation.add_elements([
       ContentAST.Paragraph([
         "We do this by subtracting arrival time from either the completion time or the start time.  That is:"
@@ -437,13 +464,13 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       ContentAST.Equation("Job_{TAT} = Job_{completion} - Job_{arrival\_time}"),
       ContentAST.Equation("Job_{response} = Job_{start} - Job_{arrival\_time}"),
     ])
-    
+
     explanation.add_element(
       ContentAST.Paragraph([
         f"For each of our {len(self.job_stats.keys())} jobs, we can make these calculations.",
       ])
     )
-    
+
     ## Add in TAT
     explanation.add_element(
       ContentAST.Paragraph([
@@ -456,7 +483,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         for job_id in sorted(self.job_stats.keys())
       ])
     )
-    
+
     summation_line = ' + '.join([
       f"{self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f}" for job_id in sorted(self.job_stats.keys())
     ])
@@ -467,8 +494,8 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         f"= {self.overall_stats['TAT']:0.{self.ROUNDING_DIGITS}f}",
       ])
     )
-    
-    
+
+
     ## Add in Response
     explanation.add_element(
       ContentAST.Paragraph([
@@ -481,7 +508,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       for job_id in sorted(self.job_stats.keys())
     ])
     )
-    
+
     summation_line = ' + '.join([
       f"{self.job_stats[job_id]['Response']:0.{self.ROUNDING_DIGITS}f}" for job_id in sorted(self.job_stats.keys())
     ])
@@ -494,7 +521,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         "\n",
       ])
     )
-    
+
     explanation.add_element(
       ContentAST.Table(
         headers=["Time", "Events"],
@@ -504,14 +531,19 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         ]
       )
     )
-    
+
     explanation.add_element(
       ContentAST.Picture(
         img_data=self.make_image(),
         caption="Process Scheduling Overview"
       )
     )
-    
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
   
   def is_interesting(self) -> bool:
