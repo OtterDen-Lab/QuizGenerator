@@ -368,11 +368,13 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     self.answers.update({
       "answer__average_response_time": Answer.auto_float(
         "answer__average_response_time",
-        sum([job.response_time for job in jobs]) / len(jobs)
+        sum([job.response_time for job in jobs]) / len(jobs),
+        label="Overall average response time"
       ),
       "answer__average_turnaround_time": Answer.auto_float(
         "answer__average_turnaround_time",
-        sum([job.turnaround_time for job in jobs]) / len(jobs)
+        sum([job.turnaround_time for job in jobs]) / len(jobs),
+        label="Overall average TAT"
       )
     })
 
@@ -416,10 +418,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     answers.append(avg_tat_answer)
 
     # Create average answer block
-    average_block = ContentAST.AnswerBlock([
-      ContentAST.Answer(avg_response_answer, label="Overall average response time"),
-      ContentAST.Answer(avg_tat_answer, label="Overall average TAT")
-    ])
+    average_block = ContentAST.AnswerBlock([avg_response_answer, avg_tat_answer])
 
     # Use mixin to create complete body
     intro_text = (

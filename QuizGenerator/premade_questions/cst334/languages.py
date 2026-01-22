@@ -373,7 +373,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     # For Latex-only, ask students to generate some more.
     body.add_element(
       ContentAST.OnlyLatex([
-        ContentAST.AnswerBlock([ContentAST.Answer(Answer.string(f"blank_line_{i}", ""), label="") for i in range(self.num_answer_blanks)])
+        ContentAST.AnswerBlock([Answer.string(f"blank_line_{i}", "", label="") for i in range(self.num_answer_blanks)])
       ])
     )
 

@@ -361,7 +361,8 @@ class VSFS_states(IOQuestion):
       f"{operations[-1]['cmd']}",
       kind=Answer.AnswerKind.MULTIPLE_DROPDOWN,
       correct=True,
-      baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']]))
+      baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']])),
+      label="Command"
     )
   
   def _get_body(self):
@@ -379,14 +380,7 @@ class VSFS_states(IOQuestion):
       )
     )
 
-    body.add_element(
-      ContentAST.AnswerBlock(
-        ContentAST.Answer(
-          self.answers["answer__cmd"],
-          label="Command"
-        )
-      )
-    )
+    body.add_element(ContentAST.AnswerBlock(self.answers["answer__cmd"]))
 
     body.add_element(
       ContentAST.Code(
