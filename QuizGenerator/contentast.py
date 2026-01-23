@@ -921,8 +921,19 @@ class ContentAST:
       # Convert subscripts and superscripts from LaTeX to Typst
       # LaTeX uses braces: b_{out}, x_{10}, x^{2}
       # Typst uses parentheses for multi-char: b_(out), x_(10), x^(2)
-      latex_str = re.sub(r'_{([^}]+)}', r'_("\1")', latex_str)  # _{...} -> _(...)
-      latex_str = re.sub(r'\^{([^}]+)}', r'^("\1")', latex_str)  # ^{...} -> ^(...)
+      # Multi-character text subscripts need quotes: L_{base} -> L_("base")
+      # But numbers don't: x_{10} -> x_(10)
+      def convert_sub_super(match):
+        content = match.group(1)
+        prefix = match.group(0)[0]  # '_' or '^'
+        # If it's purely numeric or a single char, no quotes needed
+        if content.isdigit() or len(content) == 1:
+          return f'{prefix}({content})'
+        # If it's multi-char text, quote it
+        return f'{prefix}("{content}")'
+
+      latex_str = re.sub(r'_{([^}]+)}', convert_sub_super, latex_str)
+      latex_str = re.sub(r'\^{([^}]+)}', convert_sub_super, latex_str)
 
       # Convert LaTeX Greek letters to Typst syntax (remove backslash)
       greek_letters = [
@@ -940,7 +951,23 @@ class ContentAST:
       latex_str = latex_str.replace(r'\nabla', 'nabla')
       latex_str = latex_str.replace(r'\times', 'times')
       latex_str = latex_str.replace(r'\cdot', 'dot')
-      latex_str = latex_str.replace(r'\partial', 'diff')
+      latex_str = latex_str.replace(r'\partial', 'partial')
+      latex_str = latex_str.replace(r'\sum', 'sum')
+      latex_str = latex_str.replace(r'\prod', 'product')
+      latex_str = latex_str.replace(r'\int', 'integral')
+      latex_str = latex_str.replace(r'\ln', 'ln')
+      latex_str = latex_str.replace(r'\log', 'log')
+      latex_str = latex_str.replace(r'\exp', 'exp')
+      latex_str = latex_str.replace(r'\sin', 'sin')
+      latex_str = latex_str.replace(r'\cos', 'cos')
+      latex_str = latex_str.replace(r'\tan', 'tan')
+      latex_str = latex_str.replace(r'\max', 'max')
+      latex_str = latex_str.replace(r'\min', 'min')
+      latex_str = latex_str.replace(r'\sqrt', 'sqrt')
+      # Convert \text{...} to "..." for Typst
+      latex_str = re.sub(r'\\text\{([^}]*)\}', r'"\1"', latex_str)
+      # Convert \frac{a}{b} to frac(a, b) for Typst
+      latex_str = re.sub(r'\\frac\{([^}]*)\}\{([^}]*)\}', r'frac(\1, \2)', latex_str)
 
       # Handle matrix environments (bmatrix, pmatrix, vmatrix, Vmatrix, Bmatrix, matrix)
       # Map bracket types to Typst delimiters

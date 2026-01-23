@@ -3,6 +3,7 @@ import logging
 import math
 import keras
 import numpy as np
+from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry, Answer
 from QuizGenerator.contentast import ContentAST
@@ -86,14 +87,17 @@ class WeightCounting(Question, abc.ABC):
     self.num_parameters = self.model.count_params()
     self.answers["num_parameters"] = Answer.integer(
       "num_parameters",
-      self.num_parameters
+      self.num_parameters,
+      label="Number of Parameters"
     )
     
     return True
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
-    
+    answers = []
+
     body.add_element(
       ContentAST.Paragraph(
         [
@@ -101,7 +105,7 @@ class WeightCounting(Question, abc.ABC):
         ]
       )
     )
-    
+
     body.add_element(
       ContentAST.Code(
         self.model_to_python(
@@ -110,18 +114,23 @@ class WeightCounting(Question, abc.ABC):
         )
       )
     )
-    
+
     body.add_element(ContentAST.LineBreak())
-    
-    body.add_element(
-      ContentAST.Answer(self.answers["num_parameters"], "Number of Parameters")
-    )
-    
+
+    answers.append(self.answers["num_parameters"])
+    body.add_element(self.answers["num_parameters"])
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
-    
+
     def markdown_summary(model) -> ContentAST.Table:
       # Ensure the model is built by running build() or calling it once
       if not model.built:
@@ -129,37 +138,42 @@ class WeightCounting(Question, abc.ABC):
           model.build(model.input_shape)
         except:
           pass  # Some subclassed models need real data to build
-      
+
       data = []
-      
+
       total_params = 0
-      
+
       for layer in model.layers:
         name = layer.name
         ltype = layer.__class__.__name__
-        
+
         # Try to extract output shape
         try:
           outshape = tuple(layer.output.shape)
         except:
           outshape = "?"
-        
+
         params = layer.count_params()
         total_params += params
-        
+
         data.append([name, ltype, outshape, params])
-        
+
       data.append(["**Total**", "", "", f"**{total_params}**"])
       return ContentAST.Table(data=data, headers=["Layer", "Type", "Output Shape", "Params"])
-      
-    
+
+
     summary_lines = []
     self.model.summary(print_fn=lambda x: summary_lines.append(x))
     explanation.add_element(
       # ContentAST.Text('\n'.join(summary_lines))
       markdown_summary(self.model)
     )
-    
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 

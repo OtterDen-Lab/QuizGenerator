@@ -566,13 +566,15 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     # Hidden layer activations
     for i in range(self.num_hidden):
       key = f"h{i+1}"
-      self.answers[key] = Answer.float_value(key, float(self.a1[i]))
+      self.answers[key] = Answer.float_value(key, float(self.a1[i]), label=f"h_{i+1}")
 
     # Output
-    self.answers["y_pred"] = Answer.float_value("y_pred", float(self.a2[0]))
+    self.answers["y_pred"] = Answer.float_value("y_pred", float(self.a2[0]), label="ŷ")
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -597,28 +599,23 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       f"**Hidden layer activation:** {self._get_activation_name()}"
     ]))
 
-    # Create answer block
-    answers = []
+    # Collect answers
     for i in range(self.num_hidden):
-      answers.append(
-        ContentAST.Answer(
-          answer=self.answers[f"h{i+1}"],
-          label=f"h_{i+1}"
-        )
-      )
+      answers.append(self.answers[f"h{i+1}"])
 
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["y_pred"],
-        label="ŷ"
-      )
-    )
+    answers.append(self.answers["y_pred"])
 
     body.add_element(ContentAST.AnswerBlock(answers))
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -695,6 +692,11 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       "so the output is between 0 and 1, representing the probability of class 1)"
     ]))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -741,15 +743,17 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Gradient for W2 (hidden to output)
     for i in range(self.num_hidden):
       key = f"dL_dw2_{i}"
-      self.answers[key] = Answer.auto_float(key, self._compute_gradient_W2(i))
+      self.answers[key] = Answer.auto_float(key, self._compute_gradient_W2(i), label=f"∂L/∂w_{i+3}")
 
     # Gradient for W1 (input to hidden) - pick first hidden neuron
     for j in range(self.num_inputs):
       key = f"dL_dw1_0{j}"
-      self.answers[key] = Answer.auto_float(key, self._compute_gradient_W1(0, j))
+      self.answers[key] = Answer.auto_float(key, self._compute_gradient_W1(0, j), label=f"∂L/∂w_1{j+1}")
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -779,32 +783,25 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       "**Calculate the following gradients:**"
     ]))
 
-    # Create answer block
-    answers = []
-
-    # W2 gradients
+    # Collect W2 gradient answers
     for i in range(self.num_hidden):
-      answers.append(
-        ContentAST.Answer(
-          answer=self.answers[f"dL_dw2_{i}"],
-          label=f"∂L/∂w_{i+3}"
-        )
-      )
+      answers.append(self.answers[f"dL_dw2_{i}"])
 
-    # W1 gradients (first hidden neuron)
+    # Collect W1 gradient answers (first hidden neuron)
     for j in range(self.num_inputs):
-      answers.append(
-        ContentAST.Answer(
-          answer=self.answers[f"dL_dw1_0{j}"],
-          label=f"∂L/∂w_1{j+1}"
-        )
-      )
+      answers.append(self.answers[f"dL_dw1_0{j}"])
 
     body.add_element(ContentAST.AnswerBlock(answers))
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -875,6 +872,11 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
         inline=False
       ))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -918,14 +920,16 @@ class EnsembleAveragingQuestion(Question):
 
     # Mean prediction
     mean_pred = np.mean(self.predictions)
-    self.answers["mean"] = Answer.float_value("mean", float(mean_pred))
+    self.answers["mean"] = Answer.float_value("mean", float(mean_pred), label="Mean (average)")
 
     # Median (optional, but useful)
     median_pred = np.median(self.predictions)
-    self.answers["median"] = Answer.float_value("median", float(median_pred))
+    self.answers["median"] = Answer.float_value("median", float(median_pred), label="Median")
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -944,26 +948,21 @@ class EnsembleAveragingQuestion(Question):
       "To create an ensemble, calculate the combined prediction using the following methods:"
     ]))
 
-    # Create answer block
-    answers = []
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["mean"],
-        label="Mean (average)"
-      )
-    )
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["median"],
-        label="Median"
-      )
-    )
+    # Collect answers
+    answers.append(self.answers["mean"])
+    answers.append(self.answers["median"])
 
     body.add_element(ContentAST.AnswerBlock(answers))
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -1009,6 +1008,11 @@ class EnsembleAveragingQuestion(Question):
         f"({sorted_preds[mid_idx1]:.1f} + {sorted_preds[mid_idx2]:.1f}) / 2 = {median_val:.1f}"
       ]))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -1079,21 +1083,23 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     self.answers = {}
 
     # Forward pass answers
-    self.answers["y_pred"] = Answer.float_value("y_pred", float(self.a2[0]))
+    self.answers["y_pred"] = Answer.float_value("y_pred", float(self.a2[0]), label="1. Forward Pass - Network output ŷ")
 
     # Loss answer
-    self.answers["loss"] = Answer.float_value("loss", float(self.loss))
+    self.answers["loss"] = Answer.float_value("loss", float(self.loss), label="2. Loss")
 
     # Gradient answers (for key weights)
-    self.answers["grad_w3"] = Answer.auto_float("grad_w3", self._compute_gradient_W2(0))
-    self.answers["grad_w11"] = Answer.auto_float("grad_w11", self._compute_gradient_W1(0, 0))
+    self.answers["grad_w3"] = Answer.auto_float("grad_w3", self._compute_gradient_W2(0), label="3. Gradient ∂L/∂w₃")
+    self.answers["grad_w11"] = Answer.auto_float("grad_w11", self._compute_gradient_W1(0, 0), label="4. Gradient ∂L/∂w₁₁")
 
     # Updated weight answers
-    self.answers["new_w3"] = Answer.float_value("new_w3", float(self.new_W2[0, 0]))
-    self.answers["new_w11"] = Answer.float_value("new_w11", float(self.new_W1[0, 0]))
+    self.answers["new_w3"] = Answer.float_value("new_w3", float(self.new_W2[0, 0]), label="5. Updated w₃:")
+    self.answers["new_w11"] = Answer.float_value("new_w11", float(self.new_W1[0, 0]), label="6. Updated w₁₁:")
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -1139,56 +1145,25 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     # Network parameters table
     body.add_element(self._generate_parameter_table(include_activations=False))
 
-    # Create answer block
-    answers = []
-
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["y_pred"],
-        label="1. Forward Pass - Network output ŷ"
-      )
-    )
-
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["loss"],
-        label="2. Loss"
-      )
-    )
-
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["grad_w3"],
-        label="3. Gradient ∂L/∂w₃"
-      )
-    )
-
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["grad_w11"],
-        label="4. Gradient ∂L/∂w₁₁"
-      )
-    )
-
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["new_w3"],
-        label="5. Updated w₃:"
-      )
-    )
-
-    answers.append(
-      ContentAST.Answer(
-        answer=self.answers["new_w11"],
-        label="6. Updated w₁₁:"
-      )
-    )
+    # Collect answers
+    answers.append(self.answers["y_pred"])
+    answers.append(self.answers["loss"])
+    answers.append(self.answers["grad_w3"])
+    answers.append(self.answers["grad_w11"])
+    answers.append(self.answers["new_w3"])
+    answers.append(self.answers["new_w11"])
 
     body.add_element(ContentAST.AnswerBlock(answers))
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -1311,4 +1286,9 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       "These updated weights would be used in the next training iteration."
     ]))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation

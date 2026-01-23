@@ -13,6 +13,9 @@ from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 log = logging.getLogger(__name__)
 
 
+# Note: This file migrates to the _get_body()/_get_explanation() pattern
+
+
 class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
   """Base class for loss function calculation questions."""
 
@@ -70,14 +73,15 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
     # Individual loss answers
     for i in range(self.num_samples):
-      self.answers[f"loss_{i}"] = Answer.float_value(f"loss_{i}", self.individual_losses[i])
+      self.answers[f"loss_{i}"] = Answer.float_value(f"loss_{i}", self.individual_losses[i], label=f"Sample {i+1} loss")
 
     # Overall loss answer
-    self.answers["overall_loss"] = Answer.float_value("overall_loss", self.overall_loss)
+    self.answers["overall_loss"] = Answer.float_value("overall_loss", self.overall_loss, label="Overall loss")
 
-  def get_body(self) -> ContentAST.Element:
-    """Generate the question body with data table."""
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Element, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -85,15 +89,25 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
       f"and the overall {self._get_loss_function_short_name()}."
     ]))
 
-    # Data table
+    # Data table (contains individual loss answers)
     body.add_element(self._create_data_table())
+
+    # Collect individual loss answers
+    for i in range(self.num_samples):
+      answers.append(self.answers[f"loss_{i}"])
 
     # Overall loss question
     body.add_element(ContentAST.Paragraph([
       f"Overall {self._get_loss_function_short_name()}: "
     ]))
-    body.add_element(ContentAST.Answer(self.answers["overall_loss"]))
+    answers.append(self.answers["overall_loss"])
+    body.add_element(self.answers["overall_loss"])
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Element:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
   @abc.abstractmethod
@@ -101,8 +115,8 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     """Create the data table with answer fields."""
     pass
 
-  def get_explanation(self) -> ContentAST.Element:
-    """Generate detailed explanation of the loss calculations."""
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Element, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -121,6 +135,11 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     # Overall loss calculation
     explanation.add_element(self._create_overall_loss_explanation())
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Element:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
   @abc.abstractmethod

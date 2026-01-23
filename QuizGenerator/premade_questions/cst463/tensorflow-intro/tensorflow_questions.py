@@ -85,16 +85,18 @@ class ParameterCountingQuestion(Question):
     """Create answer fields."""
     self.answers = {}
 
-    self.answers["total_weights"] = Answer.integer("total_weights", self.total_weights)
+    self.answers["total_weights"] = Answer.integer("total_weights", self.total_weights, label="Total weights")
 
     if self.include_biases:
-      self.answers["total_biases"] = Answer.integer("total_biases", self.total_biases)
-      self.answers["total_params"] = Answer.integer("total_params", self.total_params)
+      self.answers["total_biases"] = Answer.integer("total_biases", self.total_biases, label="Total biases")
+      self.answers["total_params"] = Answer.integer("total_params", self.total_params, label="Total trainable parameters")
     else:
-      self.answers["total_params"] = Answer.integer("total_params", self.total_params)
+      self.answers["total_params"] = Answer.integer("total_params", self.total_params, label="Total trainable parameters")
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -122,27 +124,36 @@ class ParameterCountingQuestion(Question):
     table_data = []
     table_data.append(["Parameter Type", "Count"])
 
+    answers.append(self.answers["total_weights"])
     table_data.append([
       "Total weights (connections between layers)",
-      ContentAST.Answer(self.answers["total_weights"])
+      self.answers["total_weights"]
     ])
 
     if self.include_biases:
+      answers.append(self.answers["total_biases"])
       table_data.append([
         "Total biases",
-        ContentAST.Answer(self.answers["total_biases"])
+        self.answers["total_biases"]
       ])
 
+    answers.append(self.answers["total_params"])
     table_data.append([
       "Total trainable parameters",
-      ContentAST.Answer(self.answers["total_params"])
+      self.answers["total_params"]
     ])
 
     body.add_element(ContentAST.Table(data=table_data))
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -150,7 +161,7 @@ class ParameterCountingQuestion(Question):
     ]))
 
     explanation.add_element(ContentAST.Paragraph([
-      "**Weights calculation:**"
+      ContentAST.Text("Weights calculation:", emphasis=True)
     ]))
 
     for i in range(len(self.layer_sizes) - 1):
@@ -174,7 +185,7 @@ class ParameterCountingQuestion(Question):
 
     if self.include_biases:
       explanation.add_element(ContentAST.Paragraph([
-        "**Biases calculation:**"
+        ContentAST.Text("Biases calculation:", emphasis=True)
       ]))
 
       for i in range(len(self.layer_sizes) - 1):
@@ -194,7 +205,7 @@ class ParameterCountingQuestion(Question):
       ]))
 
     explanation.add_element(ContentAST.Paragraph([
-      "**Total trainable parameters:**"
+      ContentAST.Text("Total trainable parameters:", emphasis=True)
     ]))
 
     if self.include_biases:
@@ -208,6 +219,11 @@ class ParameterCountingQuestion(Question):
         inline=False
       ))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -315,15 +331,17 @@ class ActivationFunctionComputationQuestion(Question):
 
     if self.activation == self.ACTIVATION_SOFTMAX:
       # Softmax: single vector answer
-      self.answers["output"] = Answer.vector_value("output", self.output_vector)
+      self.answers["output"] = Answer.vector_value("output", self.output_vector, label="Output vector")
     else:
       # Element-wise: individual answers
       for i, output in enumerate(self.output_vector):
         key = f"output_{i}"
-        self.answers[key] = Answer.float_value(key, float(output))
+        self.answers[key] = Answer.float_value(key, float(output), label=f"Output for input {self.input_vector[i]:.1f}")
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -349,9 +367,10 @@ class ActivationFunctionComputationQuestion(Question):
         "Compute the output vector:"
       ]))
 
+      answers.append(self.answers["output"])
       table_data = []
       table_data.append(["Output Vector"])
-      table_data.append([ContentAST.Answer(self.answers["output"])])
+      table_data.append([self.answers["output"]])
 
       body.add_element(ContentAST.Table(data=table_data))
 
@@ -364,16 +383,24 @@ class ActivationFunctionComputationQuestion(Question):
       table_data.append(["Input", "Output"])
 
       for i, x in enumerate(self.input_vector):
+        answer = self.answers[f"output_{i}"]
+        answers.append(answer)
         table_data.append([
           ContentAST.Equation(f"{x:.1f}", inline=True),
-          ContentAST.Answer(self.answers[f"output_{i}"])
+          answer
         ])
 
       body.add_element(ContentAST.Table(data=table_data))
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -382,7 +409,7 @@ class ActivationFunctionComputationQuestion(Question):
 
     if self.activation == self.ACTIVATION_SOFTMAX:
       explanation.add_element(ContentAST.Paragraph([
-        "**Softmax computation:**"
+        ContentAST.Text("Softmax computation:", emphasis=True)
       ]))
 
       # Show exponentials
@@ -419,7 +446,7 @@ class ActivationFunctionComputationQuestion(Question):
 
     else:
       explanation.add_element(ContentAST.Paragraph([
-        "**Element-wise computation:**"
+        ContentAST.Text("Element-wise computation:", emphasis=True)
       ]))
 
       for i, (x, y) in enumerate(zip(self.input_vector, self.output_vector)):
@@ -441,6 +468,11 @@ class ActivationFunctionComputationQuestion(Question):
             inline=False
           ))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -513,14 +545,16 @@ class RegularizationCalculationQuestion(Question):
     """Create answer fields."""
     self.answers = {}
 
-    self.answers["prediction"] = Answer.float_value("prediction", float(self.prediction))
-    self.answers["base_loss"] = Answer.float_value("base_loss", float(self.base_loss))
-    self.answers["l2_penalty"] = Answer.float_value("l2_penalty", float(self.l2_penalty))
-    self.answers["total_loss"] = Answer.float_value("total_loss", float(self.total_loss))
-    self.answers["grad_total_w0"] = Answer.auto_float("grad_total_w0", float(self.grad_total_w0))
+    self.answers["prediction"] = Answer.float_value("prediction", float(self.prediction), label="Prediction ŷ")
+    self.answers["base_loss"] = Answer.float_value("base_loss", float(self.base_loss), label="Base MSE loss")
+    self.answers["l2_penalty"] = Answer.float_value("l2_penalty", float(self.l2_penalty), label="L2 penalty")
+    self.answers["total_loss"] = Answer.float_value("total_loss", float(self.total_loss), label="Total loss")
+    self.answers["grad_total_w0"] = Answer.auto_float("grad_total_w0", float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -570,36 +604,47 @@ class RegularizationCalculationQuestion(Question):
     table_data = []
     table_data.append(["Calculation", "Value"])
 
+    answers.append(self.answers["prediction"])
     table_data.append([
       ContentAST.Paragraph(["Prediction ", ContentAST.Equation(r"\hat{y}", inline=True)]),
-      ContentAST.Answer(self.answers["prediction"])
+      self.answers["prediction"]
     ])
 
+    answers.append(self.answers["base_loss"])
     table_data.append([
       ContentAST.Paragraph(["Base MSE loss: ", ContentAST.Equation(r"L_{base} = (1/2)(y - \hat{y})^2", inline=True)]),
-      ContentAST.Answer(self.answers["base_loss"])
+      self.answers["base_loss"]
     ])
 
+    answers.append(self.answers["l2_penalty"])
     table_data.append([
       ContentAST.Paragraph(["L2 penalty: ", ContentAST.Equation(r"L_{reg} = (\lambda/2)\sum w_i^2", inline=True)]),
-      ContentAST.Answer(self.answers["l2_penalty"])
+      self.answers["l2_penalty"]
     ])
 
+    answers.append(self.answers["total_loss"])
     table_data.append([
       ContentAST.Paragraph(["Total loss: ", ContentAST.Equation(r"L_{total} = L_{base} + L_{reg}", inline=True)]),
-      ContentAST.Answer(self.answers["total_loss"])
+      self.answers["total_loss"]
     ])
 
+    answers.append(self.answers["grad_total_w0"])
     table_data.append([
       ContentAST.Paragraph(["Gradient: ", ContentAST.Equation(r"\frac{\partial L_{total}}{\partial w_0}", inline=True)]),
-      ContentAST.Answer(self.answers["grad_total_w0"])
+      self.answers["grad_total_w0"]
     ])
 
     body.add_element(ContentAST.Table(data=table_data))
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -608,7 +653,7 @@ class RegularizationCalculationQuestion(Question):
 
     # Step 1: Forward pass
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 1: Compute prediction**"
+      ContentAST.Text("Step 1: Compute prediction", emphasis=True)
     ]))
 
     terms = []
@@ -626,7 +671,7 @@ class RegularizationCalculationQuestion(Question):
 
     # Step 2: Base loss
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 2: Compute base MSE loss**"
+      ContentAST.Text("Step 2: Compute base MSE loss", emphasis=True)
     ]))
 
     explanation.add_element(ContentAST.Equation(
@@ -636,7 +681,7 @@ class RegularizationCalculationQuestion(Question):
 
     # Step 3: L2 penalty
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 3: Compute L2 penalty**"
+      ContentAST.Text("Step 3: Compute L2 penalty", emphasis=True)
     ]))
 
     weight_squares = [f"{w:.1f}^2" for w in self.weights]
@@ -649,7 +694,7 @@ class RegularizationCalculationQuestion(Question):
 
     # Step 4: Total loss
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 4: Compute total loss**"
+      ContentAST.Text("Step 4: Compute total loss", emphasis=True)
     ]))
 
     explanation.add_element(ContentAST.Equation(
@@ -659,7 +704,7 @@ class RegularizationCalculationQuestion(Question):
 
     # Step 5: Gradient with regularization
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 5: Compute gradient with regularization**"
+      ContentAST.Text("Step 5: Compute gradient with regularization", emphasis=True)
     ]))
 
     explanation.add_element(ContentAST.Paragraph([
@@ -688,6 +733,11 @@ class RegularizationCalculationQuestion(Question):
       " to the gradient, pushing the weight toward zero."
     ]))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -767,17 +817,19 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     self.answers = {}
 
     # New velocity
-    self.answers["velocity"] = Answer.vector_value("velocity", self.new_velocity)
+    self.answers["velocity"] = Answer.vector_value("velocity", self.new_velocity, label="New velocity")
 
     # New weights with momentum
-    self.answers["weights_momentum"] = Answer.vector_value("weights_momentum", self.new_weights)
+    self.answers["weights_momentum"] = Answer.vector_value("weights_momentum", self.new_weights, label="Weights (momentum)")
 
     # Vanilla SGD weights for comparison
     if self.show_vanilla_sgd:
-      self.answers["weights_sgd"] = Answer.vector_value("weights_sgd", self.sgd_weights)
+      self.answers["weights_sgd"] = Answer.vector_value("weights_sgd", self.sgd_weights, label="Weights (vanilla SGD)")
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Question description
     body.add_element(ContentAST.Paragraph([
@@ -800,14 +852,14 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     # Current state
     body.add_element(ContentAST.Paragraph([
-      "**Current optimization state:**"
+      ContentAST.Text("Current optimization state:", emphasis=True)
     ]))
 
     body.add_element(ContentAST.Paragraph([
       "Current weights: ",
       ContentAST.Equation(f"{format_vector(self.current_weights)}", inline=True)
     ]))
-    
+
     body.add_element(ContentAST.Paragraph([
       "Previous velocity: ",
       ContentAST.Equation(f"{format_vector(self.prev_velocity)}", inline=True)
@@ -815,7 +867,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     # Hyperparameters
     body.add_element(ContentAST.Paragraph([
-      "**Hyperparameters:**"
+      ContentAST.Text("Hyperparameters:", emphasis=True)
     ]))
 
     body.add_element(ContentAST.Paragraph([
@@ -837,30 +889,39 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     table_data = []
     table_data.append(["Update Type", "Formula", "Result"])
 
+    answers.append(self.answers["velocity"])
     table_data.append([
       "New velocity",
       ContentAST.Equation(r"v' = \beta v + (1-\beta)\nabla f", inline=True),
-      ContentAST.Answer(self.answers["velocity"])
+      self.answers["velocity"]
     ])
 
+    answers.append(self.answers["weights_momentum"])
     table_data.append([
       "Weights (momentum)",
       ContentAST.Equation(r"w' = w - \alpha v'", inline=True),
-      ContentAST.Answer(self.answers["weights_momentum"])
+      self.answers["weights_momentum"]
     ])
 
     if self.show_vanilla_sgd:
+      answers.append(self.answers["weights_sgd"])
       table_data.append([
         "Weights (vanilla SGD)",
         ContentAST.Equation(r"w' = w - \alpha \nabla f", inline=True),
-        ContentAST.Answer(self.answers["weights_sgd"])
+        self.answers["weights_sgd"]
       ])
 
     body.add_element(ContentAST.Table(data=table_data))
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph([
@@ -870,7 +931,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     # Step 1: Calculate new velocity
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 1: Update velocity using momentum**"
+      ContentAST.Text("Step 1: Update velocity using momentum", emphasis=True)
     ]))
 
     explanation.add_element(ContentAST.Paragraph([
@@ -900,7 +961,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     # Step 2: Update weights with momentum
     explanation.add_element(ContentAST.Paragraph([
-      "**Step 2: Update weights using new velocity**"
+      ContentAST.Text("Step 2: Update weights using new velocity", emphasis=True)
     ]))
 
     explanation.add_element(ContentAST.Equation(
@@ -917,7 +978,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     # Comparison with vanilla SGD
     if self.show_vanilla_sgd:
       explanation.add_element(ContentAST.Paragraph([
-        "**Comparison with vanilla SGD:**"
+        ContentAST.Text("Comparison with vanilla SGD:", emphasis=True)
       ]))
 
       explanation.add_element(ContentAST.Paragraph([
@@ -940,4 +1001,9 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
         "which can help accelerate learning and smooth out noisy gradients."
       ]))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation

@@ -3,6 +3,7 @@ import logging
 import math
 import keras
 import numpy as np
+from typing import List, Tuple
 
 from QuizGenerator.misc import MatrixAnswer
 from QuizGenerator.question import Question, QuestionRegistry, Answer
@@ -61,14 +62,16 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # Q, K, V, output, weights
 
-    self.answers["weights"] = MatrixAnswer("weights", self.weights)
-    self.answers["output"] = MatrixAnswer("output", self.output)
+    self.answers["weights"] = MatrixAnswer("weights", self.weights, label="Weights")
+    self.answers["output"] = MatrixAnswer("output", self.output, label="Output")
     
     return True
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
-    
+    answers = []
+
     body.add_element(
       ContentAST.Text("Given the below information about a self attention layer, please calculate the output sequence.")
     )
@@ -81,17 +84,25 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
         }
       )
     )
-    
+
+    answers.append(self.answers["weights"])
+    answers.append(self.answers["output"])
     body.add_elements([
       ContentAST.LineBreak(),
-      self.answers["weights"].get_ast_element(label=f"Weights"),
+      self.answers["weights"],
       ContentAST.LineBreak(),
-      self.answers["output"].get_ast_element(label=f"Output"),
+      self.answers["output"],
     ])
-    
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
     digits = Answer.DEFAULT_ROUNDING_DIGITS
 
@@ -188,5 +199,10 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     )
     explanation.add_element(ContentAST.Matrix(np.round(self.output, digits)))
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 

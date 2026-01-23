@@ -3,9 +3,10 @@ import logging
 import math
 import keras
 import numpy as np
+from typing import List, Tuple
 
-from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.misc import Answer, MatrixAnswer
+from QuizGenerator.question import Question, QuestionRegistry, Answer
+from QuizGenerator.misc import MatrixAnswer
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.constants import MathRanges
 from .matrices import MatrixQuestion
@@ -65,22 +66,24 @@ class ConvolutionCalculation(MatrixQuestion):
     self.result = self.conv2d_multi_channel(self.image, self.kernel, stride=self.stride, padding=self.padding)
     
     self.answers = {
-      f"result_{i}" : MatrixAnswer(f"result_{i}", self.result[:,:,i])
+      f"result_{i}" : MatrixAnswer(f"result_{i}", self.result[:,:,i], label=f"Result of filter {i}")
       for i in range(self.result.shape[-1])
     }
     
     return True
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
-    
+    answers = []
+
     body.add_elements(
       [
         ContentAST.Text("Given image represented as matrix: "),
         ContentAST.Matrix(self.image, name="image")
       ]
     )
-    
+
     body.add_elements(
       [
         ContentAST.Text("And convolution filters: "),
@@ -89,7 +92,7 @@ class ConvolutionCalculation(MatrixQuestion):
         for i in range(self.kernel.shape[-1])
       ]
     )
-    
+
     body.add_element(
       ContentAST.Paragraph(
         [
@@ -97,22 +100,27 @@ class ConvolutionCalculation(MatrixQuestion):
         ]
       )
     )
-    
+
     body.add_element(ContentAST.LineBreak())
-    
-    body.add_elements([
-      ContentAST.Container([
-        self.answers[f"result_{i}"].get_ast_element(label=f"Result of filter {i}"),
-        ContentAST.LineBreak()
+
+    for i in range(self.result.shape[-1]):
+      answers.append(self.answers[f"result_{i}"])
+      body.add_elements([
+        ContentAST.Container([
+          self.answers[f"result_{i}"],
+          ContentAST.LineBreak()
+        ])
       ])
-      for i in range(self.result.shape[-1])
-    ])
-    
-    
-    
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
     digits = Answer.DEFAULT_ROUNDING_DIGITS
 
@@ -183,4 +191,9 @@ class ConvolutionCalculation(MatrixQuestion):
         ContentAST.Matrix(np.round(self.result[:, :, f_idx], digits))
       )
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation

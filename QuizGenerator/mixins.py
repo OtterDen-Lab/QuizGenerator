@@ -493,37 +493,52 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
       subparts.append((operand_a_latex, self.get_operator(), operand_b_latex))
     return subparts
   
-  def get_body(self):
+  def _get_body(self):
+    """Build question body and collect answers."""
     body = ContentAST.Section()
-    
+    answers = []
+
     body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
-    
+
     if self.is_multipart():
       # Use multipart formatting with repeated problem parts
       subpart_data = self.generate_subquestion_data()
       repeated_part = self.create_repeated_problem_part(subpart_data)
       body.add_element(repeated_part)
+      # Collect answers from self.answers dict
+      answers = list(self.answers.values())
     else:
       # Single equation display
       equation_latex = self.format_single_equation(self.operand_a, self.operand_b)
       body.add_element(ContentAST.Equation(f"{equation_latex} = ", inline=False))
-      
+
       # Canvas-only answer fields (hidden from PDF)
-      self._add_single_question_answers(body)
-    
+      single_answers = self._add_single_question_answers(body)
+      if single_answers:
+        answers.extend(single_answers)
+
+    return body, answers
+
+  def get_body(self):
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body()
     return body
-  
+
   def _add_single_question_answers(self, body):
-    """Add Canvas-only answer fields for single questions. Subclasses can override."""
+    """Add Canvas-only answer fields for single questions. Subclasses can override.
+
+    Returns:
+        List of Answer objects that were added to the body.
+    """
     # Default implementation - subclasses should override for specific answer formats
-    pass
-  
-  def get_explanation(self):
+    return []
+
+  def _get_explanation(self):
     """Default explanation structure. Subclasses should override for specific explanations."""
     explanation = ContentAST.Section()
-    
+
     explanation.add_element(ContentAST.Paragraph([self.get_explanation_intro()]))
-    
+
     if self.is_multipart():
       # Handle multipart explanations
       for i, data in enumerate(self.subquestion_data):
@@ -532,7 +547,12 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
     else:
       # Single part explanation
       explanation.add_element(self.create_single_explanation())
-    
+
+    return explanation, []
+
+  def get_explanation(self):
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation()
     return explanation
   
   def get_explanation_intro(self):

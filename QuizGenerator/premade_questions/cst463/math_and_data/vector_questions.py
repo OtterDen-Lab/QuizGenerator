@@ -87,23 +87,6 @@ class VectorMathQuestion(MathOperationQuestion, Question):
       subparts.append((vector_a_latex, self.get_operator(), vector_b_latex))
     return subparts
 
-  def _add_single_question_answers(self, body):
-    """Add Canvas-only answer fields for single questions."""
-    # Check if it's a scalar result (like dot product)
-    if hasattr(self, 'answers') and len(self.answers) == 1:
-      # Single scalar answer
-      answer_key = list(self.answers.keys())[0]
-      body.add_element(ContentAST.OnlyHtml([ContentAST.Answer(answer=self.answers[answer_key])]))
-    else:
-      # Vector results (like addition) - show table
-      body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
-      table_data = []
-      for i in range(self.dimension):
-        if f"result_{i}" in self.answers:
-          table_data.append([ContentAST.Answer(answer=self.answers[f"result_{i}"])])
-      if table_data:
-        body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
-
   # Abstract methods that subclasses must still implement
   @abc.abstractmethod
   def get_operator(self):
