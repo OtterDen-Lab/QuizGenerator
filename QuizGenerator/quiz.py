@@ -11,6 +11,7 @@ import subprocess
 import tempfile
 from datetime import datetime
 from typing import List, Dict, Optional
+import re
 
 import yaml
 
@@ -87,6 +88,11 @@ class Quiz:
 
       # Get general quiz information from the dictionary
       name = exam_dict.get("name", f"Unnamed Exam ({datetime.now().strftime('%a %b %d %I:%M %p')})")
+      if isinstance(name, str):
+        def replace_time(match: re.Match) -> str:
+          fmt = match.group(1) or "%b %d %I:%M%p"
+          return datetime.now().strftime(fmt)
+        name = re.sub(r"\$TIME(?:\{([^}]+)\})?", replace_time, name)
       practice = exam_dict.get("practice", False)
       description = exam_dict.get("description", None)
       sort_order = list(map(lambda t: Question.Topic.from_string(t), exam_dict.get("sort order", [])))
