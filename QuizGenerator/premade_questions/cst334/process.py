@@ -726,10 +726,10 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       nonlocal pending
       while pending and pending[0].arrival_time <= up_to_time:
         job = pending.pop(0)
-        job.queue_level = 0
+        job.queue_level = len(queues) - 1
         job.time_in_queue = 0
         job.remaining_quantum = None
-        queues[0].append(job)
+        queues[-1].append(job)
         self.timeline[job.arrival_time].append(
           f"Job{job.job_id} arrived (dur = {job.duration})"
         )
@@ -737,7 +737,10 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     enqueue_arrivals(curr_time)
 
     while len(completed) < len(jobs):
-      q_idx = next((i for i, q in enumerate(queues) if q), None)
+      q_idx = next(
+        (i for i in range(len(queues) - 1, -1, -1) if queues[i]),
+        None
+      )
       if q_idx is None:
         if pending:
           next_time = pending[0].arrival_time
@@ -755,7 +758,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
       slice_duration = min(job.remaining_quantum, job.remaining_time)
       preempted = False
-      if q_idx > 0 and pending:
+      if q_idx < len(queues) - 1 and pending:
         next_arrival = pending[0].arrival_time
         if next_arrival < curr_time + slice_duration:
           slice_duration = next_arrival - curr_time
@@ -789,15 +792,15 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       if (
         allotment is not None
         and job.time_in_queue >= allotment
-        and q_idx < len(queues) - 1
+        and q_idx > 0
       ):
-        job.queue_level = q_idx + 1
+        job.queue_level = q_idx - 1
         job.max_queue_level = max(job.max_queue_level, job.queue_level)
         job.time_in_queue = 0
         job.remaining_quantum = None
-        queues[q_idx + 1].append(job)
+        queues[q_idx - 1].append(job)
         self.timeline[curr_time].append(
-          f"Demoted Job{job.job_id} to Q{q_idx + 1}"
+          f"Demoted Job{job.job_id} to Q{q_idx - 1}"
         )
         continue
 
@@ -819,21 +822,20 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     jobs = self.get_workload(self.num_jobs)
 
     if queue_quantums is None:
-      queue_quantums = [2**i for i in range(self.num_queues)]
+      queue_quantums = [2**(self.num_queues - 1 - i) for i in range(self.num_queues)]
     queue_quantums = self._normalize_queue_params(queue_quantums, self.num_queues)
     queue_quantums = [int(q) for q in queue_quantums]
 
     if queue_allotments is None:
-      total_duration = sum(job.duration for job in jobs)
-      queue_allotments = [
-        queue_quantums[i] * 2 for i in range(self.num_queues - 1)
-      ] + [total_duration]
+      queue_allotments = [None] + [
+        queue_quantums[i] * 2 for i in range(1, self.num_queues)
+      ]
     queue_allotments = self._normalize_queue_params(queue_allotments, self.num_queues)
     queue_allotments = [
       int(allotment) if allotment is not None else None
       for allotment in queue_allotments
     ]
-    queue_allotments[-1] = None
+    queue_allotments[0] = None
 
     self.queue_quantums = queue_quantums
     self.queue_allotments = queue_allotments
@@ -865,7 +867,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     answers: List[Answer] = []
 
     queue_rows = []
-    for i in range(self.num_queues):
+    for i in reversed(range(self.num_queues)):
       allotment = self.queue_allotments[i]
       queue_rows.append([
         f"Q{i}",
@@ -895,8 +897,8 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     intro_text = (
       "Assume an MLFQ scheduler with round-robin inside each queue. "
-      "New jobs enter the highest-priority queue and a job is demoted after "
-      "using its total allotment for that queue. "
+      f"New jobs enter the highest-priority queue (Q{self.num_queues - 1}) "
+      "and a job is demoted after using its total allotment for that queue. "
       "If a higher-priority job arrives, it preempts any lower-priority job."
     )
 
@@ -976,11 +978,17 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       job_id: str(0.15 + 0.7 * (idx / max(1, num_jobs - 1)))
       for idx, job_id in enumerate(sorted(self.job_stats.keys()))
     }
+    job_lane = {
+      job_id: idx
+      for idx, job_id in enumerate(sorted(self.job_stats.keys()))
+    }
+    lanes_per_queue = num_jobs
 
     for job_id in sorted(self.job_stats.keys()):
       for start, stop, queue_level in self.job_stats[job_id]["run_intervals"]:
+        y_loc = queue_level * lanes_per_queue + job_lane[job_id]
         ax.barh(
-          y=[queue_level],
+          y=[y_loc],
           left=[start],
           width=[stop - start],
           edgecolor='black',
@@ -988,9 +996,13 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           color=job_colors[job_id]
         )
 
-    ax.set_yticks([i for i in range(self.num_queues)])
+    tick_positions = [
+      q * lanes_per_queue + (lanes_per_queue - 1) / 2
+      for q in range(self.num_queues)
+    ]
+    ax.set_yticks(tick_positions)
     ax.set_yticklabels([f"Q{i}" for i in range(self.num_queues)])
-    ax.invert_yaxis()
+    ax.set_ylim(-0.5, self.num_queues * lanes_per_queue - 0.5)
     ax.set_xlim(xmin=0)
     ax.set_xlabel("Time")
 
