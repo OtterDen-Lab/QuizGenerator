@@ -664,15 +664,19 @@ class ContentAST:
     - Organizing complex question content
 
     Example:
-        def get_body(self):
+        def _get_body(self):
             body = ContentAST.Section()
+            answers = []
             body.add_element(ContentAST.Paragraph(["Calculate the determinant:"]))
 
             matrix_data = [[1, 2], [3, 4]]
             body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="v"))
 
-            body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
-            return body
+            # Answer extends Leaf - add directly to body
+            ans = ContentAST.Answer.integer("det", self.determinant, label="Determinant")
+            answers.append(ans)
+            body.add_element(ans)
+            return body, answers
     """
     pass
   
@@ -2613,18 +2617,15 @@ class ContentAST:
     - Better visual grouping of related answers
 
     Example:
-        # Multiple related answers
-        answers = [
-            ContentAST.Answer(answer=self.memory_answer, label="Memory used", unit="MB"),
-            ContentAST.Answer(answer=self.time_answer, label="Execution time", unit="ms")
-        ]
-        answer_block = ContentAST.AnswerBlock(answers)
+        # Multiple related answers - Answer extends Leaf, use factory methods
+        memory_ans = ContentAST.Answer.integer("memory", self.memory_value, label="Memory used", unit="MB")
+        time_ans = ContentAST.Answer.auto_float("time", self.time_value, label="Execution time", unit="ms")
+        answer_block = ContentAST.AnswerBlock([memory_ans, time_ans])
         body.add_element(answer_block)
 
         # Single answer with better spacing
-        single_answer = ContentAST.AnswerBlock(
-            ContentAST.Answer(answer=self.result, label="Final result")
-        )
+        result_ans = ContentAST.Answer.integer("result", self.result_value, label="Final result")
+        single_answer = ContentAST.AnswerBlock(result_ans)
     """
     def __init__(self, answers: ContentAST.Answer|List[ContentAST.Answer]):
       if not isinstance(answers, list):

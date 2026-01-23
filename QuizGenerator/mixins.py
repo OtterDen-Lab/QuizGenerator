@@ -68,19 +68,20 @@ class TableQuestionMixin:
     """
     answer_columns = answer_columns or []
     
-    def format_cell(row_data: Dict, column: str) -> Union[str, ContentAST.Answer]:
+    def format_cell(row_data: Dict, column: str) -> Union[str, Answer]:
       """Format a cell based on whether it should be an answer or plain data"""
       value = row_data.get(column, "")
-      
+
       # If this column should contain answers and the value is an Answer object
+      # Answer extends ContentAST.Leaf, so it can be used directly
       if column in answer_columns and isinstance(value, Answer):
-        return ContentAST.Answer(value)
+        return value
       # If this column should contain answers but we have the answer key
       elif column in answer_columns and isinstance(value, str) and hasattr(self, 'answers'):
         answer_obj = self.answers.get(value)
         if answer_obj:
-          return ContentAST.Answer(answer_obj)
-      
+          return answer_obj
+
       # Otherwise return as plain data
       return str(value)
     
@@ -119,9 +120,9 @@ class TableQuestionMixin:
     # Build data with parameters plus answer row
     data = [[key, str(value)] for key, value in parameter_info.items()]
     
-    # Add answer row
+    # Add answer row - Answer extends ContentAST.Leaf so it can be used directly
     if hasattr(self, 'answers') and answer_key in self.answers:
-      data.append([answer_label, ContentAST.Answer(self.answers[answer_key])])
+      data.append([answer_label, self.answers[answer_key]])
     else:
       data.append([answer_label, f"[{answer_key}]"])  # Fallback
     
@@ -149,16 +150,17 @@ class TableQuestionMixin:
         ContentAST.Table with multiple answer blanks
     """
     
-    def process_cell_value(value: Any) -> Union[str, ContentAST.Answer]:
+    def process_cell_value(value: Any) -> Union[str, Answer]:
       """Convert cell values to appropriate display format"""
-      # If it's already an Answer object, wrap it
+      # If it's already an Answer object, use it directly
+      # Answer extends ContentAST.Leaf so it can be used in the AST
       if isinstance(value, Answer):
-        return ContentAST.Answer(value)
+        return value
       # If it's a string that looks like an answer key, try to resolve it
       elif isinstance(value, str) and value.startswith("answer__") and hasattr(self, 'answers'):
         answer_obj = self.answers.get(value)
         if answer_obj:
-          return ContentAST.Answer(answer_obj)
+          return answer_obj
       # Otherwise return as-is
       return str(value)
     

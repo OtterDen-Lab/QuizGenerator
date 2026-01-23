@@ -352,25 +352,31 @@ class Question(abc.ABC):
   ensures consistent rendering across PDF/LaTeX and Canvas/HTML formats.
 
   Required Methods:
-    - get_body(): Return ContentAST.Section with question content
-    - get_explanation(): Return ContentAST.Section with solution steps
+    - _get_body(): Return Tuple[ContentAST.Section, List[Answer]] with body and answers
+    - _get_explanation(): Return Tuple[ContentAST.Section, List[Answer]] with explanation
+
+  Note: get_body() and get_explanation() are provided for backward compatibility
+  and call the _get_* methods, returning just the first element of the tuple.
 
   Required Class Attributes:
     - VERSION (str): Question version number (e.g., "1.0")
       Increment when RNG logic changes to ensure reproducibility
 
   ContentAST Usage Examples:
-    def get_body(self):
+    def _get_body(self):
         body = ContentAST.Section()
+        answers = []
         body.add_element(ContentAST.Paragraph(["Calculate the matrix:"]))
 
         # Use ContentAST.Matrix for math, NOT manual LaTeX
         matrix_data = [[1, 2], [3, 4]]
         body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="b"))
 
-        # Use ContentAST.Answer for input fields
-        body.add_element(ContentAST.Answer(answer=self.answers["result"]))
-        return body
+        # Answer extends ContentAST.Leaf - add directly to body
+        ans = Answer.integer("result", 42, label="Result")
+        answers.append(ans)
+        body.add_element(ans)
+        return body, answers
 
   Common ContentAST Elements:
     - ContentAST.Paragraph: Text blocks
