@@ -7,9 +7,7 @@ import dataclasses
 import enum
 import io
 import logging
-import math
 import os
-import queue
 import uuid
 from typing import List
 
@@ -630,50 +628,374 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     return image_path
     
 
-class MLFQ_Question(ProcessQuestion):
-  
-  MIN_DURATION = 10
-  MAX_DURATION = 100
+@QuestionRegistry.register()
+class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
+  MIN_DURATION = 4
+  MAX_DURATION = 12
   MIN_ARRIVAL = 0
-  MAX_ARRIVAL = 100
-  
+  MAX_ARRIVAL = 10
+  DEFAULT_NUM_JOBS = 3
+  DEFAULT_NUM_QUEUES = 3
+  ROUNDING_DIGITS = 2
+
   @dataclasses.dataclass
-  class Job():
-    arrival_time: float
-    duration: float
-    elapsed_time: float = 0.0
-    response_time: float = None
-    turnaround_time: float = None
-    
-    def run_for_slice(self, slice_duration):
-      self.elapsed_time += slice_duration
-    
-    def is_complete(self):
-      return math.isclose(self.duration, self.elapsed_time)
-  
+  class Job:
+    job_id: int
+    arrival_time: int
+    duration: int
+    remaining_time: int
+    queue_level: int = 0
+    time_in_queue: int = 0
+    response_time: float | None = None
+    turnaround_time: float | None = None
+    remaining_quantum: int | None = None
+    run_intervals: List[tuple] = dataclasses.field(default_factory=list)
+    max_queue_level: int = 0
+
+  def __init__(
+    self,
+    num_jobs: int = DEFAULT_NUM_JOBS,
+    num_queues: int = DEFAULT_NUM_QUEUES,
+    queue_quantums: List[int] | None = None,
+    queue_allotments: List[int] | None = None,
+    *args,
+    **kwargs
+  ):
+    kwargs["num_jobs"] = num_jobs
+    kwargs["num_queues"] = num_queues
+    if queue_quantums is not None:
+      kwargs["queue_quantums"] = queue_quantums
+    if queue_allotments is not None:
+      kwargs["queue_allotments"] = queue_allotments
+    super().__init__(*args, **kwargs)
+    self.num_jobs = num_jobs
+    self.num_queues = num_queues
+    self.queue_quantums = queue_quantums
+    self.queue_allotments = queue_allotments
+
+  def get_workload(self, num_jobs: int) -> List[MLFQQuestion.Job]:
+    arrivals = [0]
+    if num_jobs > 1:
+      arrivals.extend(
+        self.rng.randint(self.MIN_ARRIVAL, self.MAX_ARRIVAL)
+        for _ in range(num_jobs - 1)
+      )
+      if max(arrivals) == 0:
+        arrivals[-1] = self.rng.randint(1, self.MAX_ARRIVAL)
+
+    durations = [
+      self.rng.randint(self.MIN_DURATION, self.MAX_DURATION)
+      for _ in range(num_jobs)
+    ]
+
+    jobs = []
+    for i in range(num_jobs):
+      jobs.append(
+        MLFQQuestion.Job(
+          job_id=i,
+          arrival_time=arrivals[i],
+          duration=durations[i],
+          remaining_time=durations[i],
+        )
+      )
+    return jobs
+
+  def _normalize_queue_params(self, values: List[int] | None, num_queues: int) -> List[int]:
+    if values is None:
+      return []
+    values = list(values)
+    while len(values) < num_queues:
+      values.append(values[-1])
+    return values[:num_queues]
+
+  def run_simulation(
+    self,
+    jobs: List[MLFQQuestion.Job],
+    queue_quantums: List[int],
+    queue_allotments: List[int | None],
+  ) -> None:
+    self.timeline = collections.defaultdict(list)
+    pending = sorted(jobs, key=lambda j: (j.arrival_time, j.job_id))
+    queues = [collections.deque() for _ in range(len(queue_quantums))]
+    completed = set()
+
+    curr_time = pending[0].arrival_time if pending else 0
+    self.timeline[curr_time].append("Simulation Start")
+
+    def enqueue_arrivals(up_to_time: int) -> None:
+      nonlocal pending
+      while pending and pending[0].arrival_time <= up_to_time:
+        job = pending.pop(0)
+        job.queue_level = 0
+        job.time_in_queue = 0
+        job.remaining_quantum = None
+        queues[0].append(job)
+        self.timeline[job.arrival_time].append(
+          f"Job{job.job_id} arrived (dur = {job.duration})"
+        )
+
+    enqueue_arrivals(curr_time)
+
+    while len(completed) < len(jobs):
+      q_idx = next((i for i, q in enumerate(queues) if q), None)
+      if q_idx is None:
+        if pending:
+          next_time = pending[0].arrival_time
+          if next_time > curr_time:
+            self.timeline[curr_time].append("CPU idle")
+          curr_time = next_time
+          enqueue_arrivals(curr_time)
+          continue
+        break
+
+      job = queues[q_idx].popleft()
+      quantum = queue_quantums[q_idx]
+      if job.remaining_quantum is None or job.remaining_quantum <= 0:
+        job.remaining_quantum = quantum
+
+      slice_duration = min(job.remaining_quantum, job.remaining_time)
+      preempted = False
+      if q_idx > 0 and pending:
+        next_arrival = pending[0].arrival_time
+        if next_arrival < curr_time + slice_duration:
+          slice_duration = next_arrival - curr_time
+          preempted = True
+
+      if job.response_time is None:
+        job.response_time = curr_time - job.arrival_time
+
+      if slice_duration > 0:
+        self.timeline[curr_time].append(
+          f"Running Job{job.job_id} in Q{q_idx} for {slice_duration}"
+        )
+        job.run_intervals.append((curr_time, curr_time + slice_duration, q_idx))
+        curr_time += slice_duration
+        job.remaining_time -= slice_duration
+        job.time_in_queue += slice_duration
+        job.remaining_quantum -= slice_duration
+
+      enqueue_arrivals(curr_time)
+
+      if job.remaining_time <= 0:
+        job.turnaround_time = curr_time - job.arrival_time
+        job.remaining_quantum = None
+        completed.add(job.job_id)
+        self.timeline[curr_time].append(
+          f"Completed Job{job.job_id} (TAT = {job.turnaround_time})"
+        )
+        continue
+
+      allotment = queue_allotments[q_idx]
+      if (
+        allotment is not None
+        and job.time_in_queue >= allotment
+        and q_idx < len(queues) - 1
+      ):
+        job.queue_level = q_idx + 1
+        job.max_queue_level = max(job.max_queue_level, job.queue_level)
+        job.time_in_queue = 0
+        job.remaining_quantum = None
+        queues[q_idx + 1].append(job)
+        self.timeline[curr_time].append(
+          f"Demoted Job{job.job_id} to Q{q_idx + 1}"
+        )
+        continue
+
+      if preempted and job.remaining_quantum > 0:
+        queues[q_idx].appendleft(job)
+      else:
+        if job.remaining_quantum <= 0:
+          job.remaining_quantum = None
+        queues[q_idx].append(job)
+
   def refresh(self, *args, **kwargs):
     super().refresh(*args, **kwargs)
-    
-    # Set up defaults
-    # todo: allow for per-queue specification of durations, likely through dicts
-    num_queues = kwargs.get("num_queues", 2)
-    num_jobs = kwargs.get("num_jobs", 2)
-    
-    # Set up queues that we will be using
-    mlfq_queues = {
-      priority : queue.Queue()
-      for priority in range(num_queues)
-    }
-    
-    # Set up jobs that we'll be using
-    jobs = [
-      MLFQ_Question.Job(
-        arrival_time=self.rng.randint(self.MIN_ARRIVAL, self.MAX_ARRIVAL),
-        duration=self.rng.randint(self.MIN_DURATION, self.MAX_DURATION),
-        
-      )
+
+    self.num_jobs = kwargs.get("num_jobs", self.num_jobs)
+    self.num_queues = kwargs.get("num_queues", self.num_queues)
+    queue_quantums = kwargs.get("queue_quantums", self.queue_quantums)
+    queue_allotments = kwargs.get("queue_allotments", self.queue_allotments)
+
+    jobs = self.get_workload(self.num_jobs)
+
+    if queue_quantums is None:
+      queue_quantums = [2**i for i in range(self.num_queues)]
+    queue_quantums = self._normalize_queue_params(queue_quantums, self.num_queues)
+    queue_quantums = [int(q) for q in queue_quantums]
+
+    if queue_allotments is None:
+      total_duration = sum(job.duration for job in jobs)
+      queue_allotments = [
+        queue_quantums[i] * 2 for i in range(self.num_queues - 1)
+      ] + [total_duration]
+    queue_allotments = self._normalize_queue_params(queue_allotments, self.num_queues)
+    queue_allotments = [
+      int(allotment) if allotment is not None else None
+      for allotment in queue_allotments
     ]
-    
-    curr_time = -1.0
-    while True:
-      pass
+    queue_allotments[-1] = None
+
+    self.queue_quantums = queue_quantums
+    self.queue_allotments = queue_allotments
+
+    self.run_simulation(jobs, queue_quantums, queue_allotments)
+
+    self.job_stats = {
+      job.job_id: {
+        "arrival_time": job.arrival_time,
+        "duration": job.duration,
+        "Response": job.response_time,
+        "TAT": job.turnaround_time,
+        "run_intervals": list(job.run_intervals),
+      }
+      for job in jobs
+    }
+
+    for job_id in sorted(self.job_stats.keys()):
+      self.answers.update({
+        f"answer__turnaround_time_job{job_id}": Answer.auto_float(
+          f"answer__turnaround_time_job{job_id}",
+          self.job_stats[job_id]["TAT"]
+        )
+      })
+
+    return self.is_interesting()
+
+  def _get_body(self, *args, **kwargs):
+    answers: List[Answer] = []
+
+    queue_rows = []
+    for i in range(self.num_queues):
+      allotment = self.queue_allotments[i]
+      queue_rows.append([
+        f"Q{i}",
+        self.queue_quantums[i],
+        "infinite" if allotment is None else allotment
+      ])
+    queue_table = ContentAST.Table(
+      headers=["Queue", "Quantum", "Allotment"],
+      data=queue_rows
+    )
+
+    table_rows = []
+    for job_id in sorted(self.job_stats.keys()):
+      table_rows.append({
+        "Job ID": f"Job{job_id}",
+        "Arrival": self.job_stats[job_id]["arrival_time"],
+        "Duration": self.job_stats[job_id]["duration"],
+        "TAT": f"answer__turnaround_time_job{job_id}",
+      })
+      answers.append(self.answers[f"answer__turnaround_time_job{job_id}"])
+
+    scheduling_table = self.create_answer_table(
+      headers=["Job ID", "Arrival", "Duration", "TAT"],
+      data_rows=table_rows,
+      answer_columns=["TAT"]
+    )
+
+    intro_text = (
+      "Assume an MLFQ scheduler with round-robin inside each queue. "
+      "New jobs enter the highest-priority queue and a job is demoted after "
+      "using its total allotment for that queue. "
+      "If a higher-priority job arrives, it preempts any lower-priority job."
+    )
+
+    instructions = (
+      f"Compute the turnaround time (TAT) for each job. "
+      f"Round to at most {Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal."
+    )
+
+    body = ContentAST.Section()
+    body.add_element(ContentAST.Paragraph([intro_text]))
+    body.add_element(queue_table)
+    body.add_element(ContentAST.Paragraph([instructions]))
+    body.add_element(scheduling_table)
+    return body, answers
+
+  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+    body, _ = self._get_body(*args, **kwargs)
+    return body
+
+  def _get_explanation(self, **kwargs):
+    explanation = ContentAST.Section()
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "Turnaround time (TAT) is the completion time minus the arrival time.",
+        "We calculate it for each job after simulating the schedule."
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Paragraph([
+        "For each job:"
+      ] + [
+        f"Job{job_id}_TAT = "
+        f"{self.job_stats[job_id]['arrival_time'] + self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f} "
+        f"- {self.job_stats[job_id]['arrival_time']:0.{self.ROUNDING_DIGITS}f} "
+        f"= {self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f}"
+        for job_id in sorted(self.job_stats.keys())
+      ])
+    )
+
+    explanation.add_element(
+      ContentAST.Table(
+        headers=["Time", "Events"],
+        data=[
+          [f"{t:0.{self.ROUNDING_DIGITS}f}s"] + ['\n'.join(self.timeline[t])]
+          for t in sorted(self.timeline.keys())
+        ]
+      )
+    )
+
+    explanation.add_element(
+      ContentAST.Picture(
+        img_data=self.make_image(),
+        caption="MLFQ Scheduling Overview"
+      )
+    )
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    explanation, _ = self._get_explanation(**kwargs)
+    return explanation
+
+  def make_image(self):
+    fig, ax = plt.subplots(1, 1)
+
+    num_jobs = len(self.job_stats)
+    if num_jobs == 0:
+      buffer = io.BytesIO()
+      plt.savefig(buffer, format='png')
+      plt.close(fig)
+      buffer.seek(0)
+      return buffer
+
+    job_colors = {
+      job_id: str(0.15 + 0.7 * (idx / max(1, num_jobs - 1)))
+      for idx, job_id in enumerate(sorted(self.job_stats.keys()))
+    }
+
+    for job_id in sorted(self.job_stats.keys()):
+      for start, stop, queue_level in self.job_stats[job_id]["run_intervals"]:
+        ax.barh(
+          y=[queue_level],
+          left=[start],
+          width=[stop - start],
+          edgecolor='black',
+          linewidth=1.5,
+          color=job_colors[job_id]
+        )
+
+    ax.set_yticks([i for i in range(self.num_queues)])
+    ax.set_yticklabels([f"Q{i}" for i in range(self.num_queues)])
+    ax.invert_yaxis()
+    ax.set_xlim(xmin=0)
+    ax.set_xlabel("Time")
+
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png')
+    plt.close(fig)
+    buffer.seek(0)
+    return buffer
