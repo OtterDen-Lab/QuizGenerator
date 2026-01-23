@@ -663,6 +663,8 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     num_queues: int = DEFAULT_NUM_QUEUES,
     min_job_length: int = MIN_DURATION,
     max_job_length: int = MAX_DURATION,
+    boost_interval: int | None = None,
+    boost_interval_range: List[int] | None = None,
     *args,
     **kwargs
   ):
@@ -670,11 +672,17 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     kwargs["num_queues"] = num_queues
     kwargs["min_job_length"] = min_job_length
     kwargs["max_job_length"] = max_job_length
+    if boost_interval is not None:
+      kwargs["boost_interval"] = boost_interval
+    if boost_interval_range is not None:
+      kwargs["boost_interval_range"] = boost_interval_range
     super().__init__(*args, **kwargs)
     self.num_jobs = num_jobs
     self.num_queues = num_queues
     self.min_job_length = min_job_length
     self.max_job_length = max_job_length
+    self.boost_interval = boost_interval
+    self.boost_interval_range = boost_interval_range
 
   def get_workload(self, num_jobs: int) -> List[MLFQQuestion.Job]:
     arrivals = [0]
@@ -716,14 +724,19 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     jobs: List[MLFQQuestion.Job],
     queue_quantums: List[int],
     queue_allotments: List[int | None],
+    boost_interval: int | None,
   ) -> None:
     self.timeline = collections.defaultdict(list)
+    self.boost_times = []
     pending = sorted(jobs, key=lambda j: (j.arrival_time, j.job_id))
     queues = [collections.deque() for _ in range(len(queue_quantums))]
     completed = set()
 
     curr_time = pending[0].arrival_time if pending else 0
     self.timeline[curr_time].append("Simulation Start")
+    next_boost_time = None
+    if boost_interval is not None:
+      next_boost_time = boost_interval
 
     def enqueue_arrivals(up_to_time: int) -> None:
       nonlocal pending
@@ -737,6 +750,24 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           f"Job{job.job_id} arrived (dur = {job.duration})"
         )
 
+    def apply_boost(curr_time: int) -> None:
+      jobs_to_boost = []
+      for q in queues:
+        while q:
+          jobs_to_boost.append(q.popleft())
+      if not jobs_to_boost:
+        self.boost_times.append(curr_time)
+        return
+      for job in jobs_to_boost:
+        job.queue_level = len(queues) - 1
+        job.time_in_queue = 0
+        job.remaining_quantum = None
+        queues[-1].append(job)
+      self.timeline[curr_time].append(
+        f"Boosted all jobs to Q{len(queues) - 1}"
+      )
+      self.boost_times.append(curr_time)
+
     enqueue_arrivals(curr_time)
 
     while len(completed) < len(jobs):
@@ -745,12 +776,20 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         None
       )
       if q_idx is None:
+        next_times = []
         if pending:
-          next_time = pending[0].arrival_time
+          next_times.append(pending[0].arrival_time)
+        if next_boost_time is not None:
+          next_times.append(next_boost_time)
+        if next_times:
+          next_time = min(next_times)
           if next_time > curr_time:
             self.timeline[curr_time].append("CPU idle")
           curr_time = next_time
           enqueue_arrivals(curr_time)
+          while next_boost_time is not None and curr_time >= next_boost_time:
+            apply_boost(curr_time)
+            next_boost_time += boost_interval
           continue
         break
 
@@ -766,6 +805,9 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         if next_arrival < curr_time + slice_duration:
           slice_duration = next_arrival - curr_time
           preempted = True
+      if next_boost_time is not None and next_boost_time < curr_time + slice_duration:
+        slice_duration = next_boost_time - curr_time
+        preempted = True
 
       if job.response_time is None:
         job.response_time = curr_time - job.arrival_time
@@ -781,6 +823,9 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         job.remaining_quantum -= slice_duration
 
       enqueue_arrivals(curr_time)
+      while next_boost_time is not None and curr_time >= next_boost_time:
+        apply_boost(curr_time)
+        next_boost_time += boost_interval
 
       if job.remaining_time <= 0:
         job.turnaround_time = curr_time - job.arrival_time
@@ -821,6 +866,14 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.num_queues = kwargs.get("num_queues", self.num_queues)
     self.min_job_length = kwargs.get("min_job_length", self.min_job_length)
     self.max_job_length = kwargs.get("max_job_length", self.max_job_length)
+    self.boost_interval = kwargs.get("boost_interval", self.boost_interval)
+    self.boost_interval_range = kwargs.get(
+      "boost_interval_range",
+      self.boost_interval_range
+    )
+    if self.boost_interval is None and self.boost_interval_range:
+      low, high = self.boost_interval_range
+      self.boost_interval = self.rng.randint(low, high)
 
     jobs = self.get_workload(self.num_jobs)
 
@@ -841,7 +894,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.queue_quantums = queue_quantums
     self.queue_allotments = queue_allotments
 
-    self.run_simulation(jobs, queue_quantums, queue_allotments)
+    self.run_simulation(jobs, queue_quantums, queue_allotments, self.boost_interval)
 
     self.job_stats = {
       job.job_id: {
@@ -911,6 +964,11 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     body = ContentAST.Section()
     body.add_element(ContentAST.Paragraph([intro_text]))
     body.add_element(queue_table)
+    if self.boost_interval is not None:
+      body.add_element(ContentAST.Paragraph([
+        f"Every {self.boost_interval} time units, all jobs are boosted to "
+        f"Q{self.num_queues - 1}."
+      ]))
     body.add_element(ContentAST.Paragraph([instructions]))
     body.add_element(scheduling_table)
     return body, answers
@@ -952,6 +1010,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
             if (
               "arrived" in event
               or "Demoted" in event
+              or "Boosted" in event
               or "Completed" in event
               or "Simulation Start" in event
               or "CPU idle" in event
@@ -1023,6 +1082,9 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         ha='center',
         va='top'
       )
+
+    for boost_time in sorted(set(self.boost_times)):
+      ax.axvline(boost_time, color='tab:blue', linestyle='--', linewidth=1.2, zorder=0)
 
     tick_positions = [
       q * lanes_per_queue + (lanes_per_queue - 1) / 2
