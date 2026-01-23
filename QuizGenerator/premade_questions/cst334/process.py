@@ -611,7 +611,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     # Save to BytesIO object instead of a file
     buffer = io.BytesIO()
     plt.tight_layout()
-    plt.savefig(buffer, format='png', dpi=self.IMAGE_DPI, bbox_inches='tight')
+    plt.savefig(buffer, format='png', dpi=self.IMAGE_DPI, bbox_inches='tight', pad_inches=0.2)
     plt.close(fig)
     
     # Reset buffer position to the beginning
@@ -1066,6 +1066,23 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           linewidth=1.5,
           color=job_colors[job_id]
         )
+
+    arrival_times = sorted({
+      self.job_stats[job_id]["arrival_time"]
+      for job_id in self.job_stats.keys()
+    })
+    bottom_label_y = -0.1
+    for arrival_time in arrival_times:
+      ax.axvline(arrival_time, color='0.2', linestyle=':', linewidth=1.2, zorder=0)
+      ax.text(
+        arrival_time + 0.2,
+        bottom_label_y,
+        f"{arrival_time:0.{self.ROUNDING_DIGITS}f}s",
+        color='0.2',
+        rotation=90,
+        ha='left',
+        va='bottom'
+      )
 
     completion_times = sorted({
       self.job_stats[job_id]["arrival_time"] + self.job_stats[job_id]["TAT"]
