@@ -337,9 +337,12 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       )
   
   
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def _get_body(self, *args, **kwargs):
+    """Build question body and collect answers."""
+    answers = list(self.answers.values())
+
     body = ContentAST.Section()
-    
+
     body.add_element(
       ContentAST.OnlyHtml([
         ContentAST.Paragraph([
@@ -356,27 +359,33 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         ])
       ])
     )
-    
+
     body.add_element(
       ContentAST.Code(self.grammar_good.get_grammar_string())
     )
-    
+
     # Add in some answers as latex-only options to be circled
     latex_list = ContentAST.OnlyLatex([])
     for answer in self.featured_answers:
       latex_list.add_element(ContentAST.Paragraph([f"- `{str(answer)}`"]))
     body.add_element(latex_list)
-    
+
     # For Latex-only, ask students to generate some more.
     body.add_element(
       ContentAST.OnlyLatex([
-        ContentAST.AnswerBlock([ContentAST.Answer(Answer.string(f"blank_line_{i}", ""), label="") for i in range(self.num_answer_blanks)])
+        ContentAST.AnswerBlock([Answer.string(f"blank_line_{i}", "", label="") for i in range(self.num_answer_blanks)])
       ])
     )
-    
+
+    return body, answers
+
+  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(*args, **kwargs)
     return body
   
-  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, *args, **kwargs):
+    """Build question explanation."""
     explanation = ContentAST.Section()
     explanation.add_element(
       ContentAST.Paragraph([
@@ -384,6 +393,11 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         "Unfortunately, there isn't space here to demonstrate the derivation so please work through them on your own!"
       ])
     )
+    return explanation, []
+
+  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation
 
   def get_answers(self, *args, **kwargs) -> Tuple[Answer.AnswerKind, List[Dict[str,Any]]]:

@@ -15,6 +15,11 @@ from .misc import generate_function, format_vector
 log = logging.getLogger(__name__)
 
 
+# Note: This file does not use ContentAST.Answer wrappers - it uses TableQuestionMixin
+# which handles answer display through create_answer_table(). The answers are created
+# with labels embedded at creation time in refresh().
+
+
 class GradientDescentQuestion(Question, abc.ABC):
   def __init__(self, *args, **kwargs):
     kwargs["topic"] = kwargs.get("topic", Question.Topic.ML_OPTIMIZATION)
@@ -86,30 +91,32 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     
     # Set up answers
     self.answers = {}
-    
+
     # Answers for each step
     for i, result in enumerate(self.gradient_descent_results):
       step = result['step']
-      
+
       # Location answer
       location_key = f"answer__location_{step}"
-      self.answers[location_key] = Answer.vector_value(location_key, list(result['location']))
-      
+      self.answers[location_key] = Answer.vector_value(location_key, list(result['location']), label=f"Location at step {step}")
+
       # Gradient answer
       gradient_key = f"answer__gradient_{step}"
-      self.answers[gradient_key] = Answer.vector_value(gradient_key, list(result['gradient']))
-      
+      self.answers[gradient_key] = Answer.vector_value(gradient_key, list(result['gradient']), label=f"Gradient at step {step}")
+
       # Update answer
       update_key = f"answer__update_{step}"
-      self.answers[update_key] = Answer.vector_value(update_key, list(result['update']))
+      self.answers[update_key] = Answer.vector_value(update_key, list(result['update']), label=f"Update at step {step}")
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
-    
+    answers = []
+
     # Introduction
     objective = "minimize" if self.minimize else "maximize"
     sign = "-" if self.minimize else "+"
-    
+
     body.add_element(
       ContentAST.Paragraph(
         [
@@ -122,7 +129,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         ]
       )
     )
-    
+
     # Create table data - use ContentAST.Equation for proper LaTeX rendering in headers
     headers = [
       "n",
@@ -131,36 +138,49 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       ContentAST.Equation("\\alpha \\cdot \\nabla f", inline=True)
     ]
     table_rows = []
-    
+
     for i in range(self.num_steps):
       step = i + 1
       row = {"n": str(step)}
-      
+
       if step == 1:
-        
+
         # Fill in starting location for first row with default formatting
         row["location"] = f"{format_vector(self.starting_point)}"
         row[headers[2]] = f"answer__gradient_{step}"  # gradient column
         row[headers[3]] = f"answer__update_{step}"  # update column
+        # Collect answers for this step (no location answer for step 1)
+        answers.append(self.answers[f"answer__gradient_{step}"])
+        answers.append(self.answers[f"answer__update_{step}"])
       else:
         # Subsequent rows - all answer fields
         row["location"] = f"answer__location_{step}"
         row[headers[2]] = f"answer__gradient_{step}"  # gradient column
         row[headers[3]] = f"answer__update_{step}"  # update column
+        # Collect all answers for this step
+        answers.append(self.answers[f"answer__location_{step}"])
+        answers.append(self.answers[f"answer__gradient_{step}"])
+        answers.append(self.answers[f"answer__update_{step}"])
       table_rows.append(row)
-    
+
     # Create the table using mixin
     gradient_table = self.create_answer_table(
       headers=headers,
       data_rows=table_rows,
       answer_columns=["location", headers[2], headers[3]]  # Use actual header objects
     )
-    
+
     body.add_element(gradient_table)
-    
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(
@@ -201,7 +221,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         ]
       )
     )
-    
+
     # Add completed table showing all solutions
     explanation.add_element(
       ContentAST.Paragraph(
@@ -210,7 +230,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         ]
       )
     )
-    
+
     # Create filled solution table
     solution_headers = [
       "n",
@@ -218,31 +238,31 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       ContentAST.Equation("\\nabla f", inline=True),
       ContentAST.Equation("\\alpha \\cdot \\nabla f", inline=True)
     ]
-    
+
     solution_rows = []
     for i, result in enumerate(self.gradient_descent_results):
       step = result['step']
       row = {"n": str(step)}
-      
+
       row["location"] = f"{format_vector(result['location'])}"
       row[solution_headers[2]] = f"{format_vector(result['gradient'])}"
       row[solution_headers[3]] = f"{format_vector(result['update'])}"
-    
+
       solution_rows.append(row)
-    
+
     # Create solution table (non-answer table, just display)
     solution_table = self.create_answer_table(
       headers=solution_headers,
       data_rows=solution_rows,
       answer_columns=[]  # No answer columns since this is just for display
     )
-    
+
     explanation.add_element(solution_table)
-    
+
     # Step-by-step explanation
     for i, result in enumerate(self.gradient_descent_results):
       step = result['step']
-      
+
       explanation.add_element(
         ContentAST.Paragraph(
           [
@@ -250,7 +270,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           ]
         )
       )
-      
+
       explanation.add_element(
         ContentAST.Paragraph(
           [
@@ -258,7 +278,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           ]
         )
       )
-      
+
       explanation.add_element(
         ContentAST.Paragraph(
           [
@@ -266,7 +286,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           ]
         )
       )
-      
+
       explanation.add_element(
         ContentAST.Paragraph(
           [
@@ -278,13 +298,13 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           ]
         )
       )
-      
+
       if step < len(self.gradient_descent_results):
         # Calculate next location for display
         current_loc = result['location']
         update = result['update']
         next_loc = [current_loc[j] - update[j] for j in range(len(current_loc))]
-        
+
         explanation.add_element(
           ContentAST.Paragraph(
             [
@@ -292,7 +312,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
             ]
           )
         )
-    
+
     function_values = [r['function_value'] for r in self.gradient_descent_results]
     explanation.add_element(
       ContentAST.Paragraph(
@@ -301,5 +321,10 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         ]
       )
     )
-    
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation

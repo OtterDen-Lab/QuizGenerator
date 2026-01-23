@@ -22,10 +22,16 @@ class VectorMathQuestion(MathOperationQuestion, Question):
     return [self.rng.randint(min_val, max_val) for _ in range(dimension)]
 
   def _format_vector(self, vector):
-    """Format vector for display as column vector using ContentAST.Matrix."""
-    # Convert to column matrix format
+    """Return a ContentAST.Matrix element for the vector (format-independent).
+
+    The Matrix element will render appropriately for each output format:
+    - HTML: LaTeX bmatrix (for MathJax)
+    - Typst: mat() with square bracket delimiter
+    - LaTeX: bmatrix environment
+    """
+    # Convert to column matrix format: [[v1], [v2], [v3]]
     matrix_data = [[v] for v in vector]
-    return ContentAST.Matrix.to_latex(matrix_data, "b")
+    return ContentAST.Matrix(data=matrix_data, bracket_type="b")
 
   def _format_vector_inline(self, vector):
     """Format vector for inline display."""
@@ -81,23 +87,6 @@ class VectorMathQuestion(MathOperationQuestion, Question):
       subparts.append((vector_a_latex, self.get_operator(), vector_b_latex))
     return subparts
 
-  def _add_single_question_answers(self, body):
-    """Add Canvas-only answer fields for single questions."""
-    # Check if it's a scalar result (like dot product)
-    if hasattr(self, 'answers') and len(self.answers) == 1:
-      # Single scalar answer
-      answer_key = list(self.answers.keys())[0]
-      body.add_element(ContentAST.OnlyHtml([ContentAST.Answer(answer=self.answers[answer_key])]))
-    else:
-      # Vector results (like addition) - show table
-      body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
-      table_data = []
-      for i in range(self.dimension):
-        if f"result_{i}" in self.answers:
-          table_data.append([ContentAST.Answer(answer=self.answers[f"result_{i}"])])
-      if table_data:
-        body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
-
   # Abstract methods that subclasses must still implement
   @abc.abstractmethod
   def get_operator(self):
@@ -133,10 +122,61 @@ class VectorAddition(VectorMathQuestion):
       self.answers[f"subpart_{letter}_{j}"] = Answer.integer(f"subpart_{letter}_{j}", result[j])
 
   def create_single_answers(self, result):
+    # Backward compatibility - still populate dict for old pattern
     for i in range(len(result)):
       self.answers[f"result_{i}"] = Answer.integer(f"result_{i}", result[i])
 
-  def get_explanation(self):
+  def get_body(self):
+    """Override parent get_body() to use our custom formatting."""
+    body, _ = self._get_body()
+    return body
+
+  def _get_body(self):
+    """Build question body and collect answers (new pattern)."""
+    from typing import Tuple, List
+
+    body = ContentAST.Section()
+    answers = []
+
+    body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
+
+    if self.is_multipart():
+      # Use multipart formatting with repeated problem parts
+      subpart_data = self.generate_subquestion_data()
+      repeated_part = self.create_repeated_problem_part(subpart_data)
+      body.add_element(repeated_part)
+
+      # Collect all subpart answers
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        result = data['result']
+        for j in range(len(result)):
+          ans = Answer.integer(f"subpart_{letter}_{j}", result[j])
+          answers.append(ans)
+    else:
+      # Single equation display using MathExpression for format-independent rendering
+      vector_a_elem = self._format_vector(self.vector_a)
+      vector_b_elem = self._format_vector(self.vector_b)
+      body.add_element(ContentAST.MathExpression([
+          vector_a_elem,
+          " + ",
+          vector_b_elem,
+          " = "
+      ]))
+
+      # Canvas-only answer fields (hidden from PDF)
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
+      table_data = []
+      for i in range(self.dimension):
+        ans = Answer.integer(f"result_{i}", self.result[i])
+        answers.append(ans)
+        table_data.append([ans])
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
+
+    return body, answers
+
+  def _get_explanation(self):
+    """Build question explanation (new pattern)."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["To add vectors, we add corresponding components:"]))
@@ -149,43 +189,49 @@ class VectorAddition(VectorMathQuestion):
         vector_b = data['vector_b']
         result = data['result']
 
-        # Create LaTeX strings for multiline equation
-        vector_a_str = r" \\ ".join([str(v) for v in vector_a])
-        vector_b_str = r" \\ ".join([str(v) for v in vector_b])
-        addition_str = r" \\ ".join([f"{vector_a[j]}+{vector_b[j]}" for j in range(self.dimension)])
-        result_str = r" \\ ".join([str(v) for v in result])
+        # Format vectors using Typst syntax
+        vector_a_str = self._format_vector(vector_a)
+        vector_b_str = self._format_vector(vector_b)
+        result_str = self._format_vector(result)
+
+        # Build addition step-by-step
+        addition_elements = "; ".join([f"{vector_a[j]}+{vector_b[j]}" for j in range(self.dimension)])
+        addition_str = f"mat({addition_elements})"
 
         # Add explanation for this subpart
         explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
         explanation.add_element(
             ContentAST.Equation.make_block_equation__multiline_equals(
-                lhs="\\vec{a} + \\vec{b}",
+                lhs="arrow(a) + arrow(b)",  # Typst uses arrow() for vectors
                 rhs=[
-                    f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
-                    f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
-                    f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                    f"{vector_a_str} + {vector_b_str}",
+                    addition_str,
+                    result_str
                 ]
             )
         )
     else:
-      # Single part explanation (original behavior)
-      vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
-      vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
-      addition_str = r" \\ ".join([f"{self.vector_a[i]}+{self.vector_b[i]}" for i in range(self.dimension)])
-      result_str = r" \\ ".join([str(v) for v in self.result])
+      # Single part explanation - use Typst syntax
+      vector_a_str = self._format_vector(self.vector_a)
+      vector_b_str = self._format_vector(self.vector_b)
+      result_str = self._format_vector(self.result)
+
+      # Build addition step-by-step
+      addition_elements = "; ".join([f"{self.vector_a[i]}+{self.vector_b[i]}" for i in range(self.dimension)])
+      addition_str = f"mat({addition_elements})"
 
       explanation.add_element(
           ContentAST.Equation.make_block_equation__multiline_equals(
-              lhs="\\vec{a} + \\vec{b}",
+              lhs="arrow(a) + arrow(b)",
               rhs=[
-                  f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
-                  f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
-                  f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
+                  f"{vector_a_str} + {vector_b_str}",
+                  addition_str,
+                  result_str
               ]
           )
       )
 
-    return explanation
+    return explanation, []  # Explanations don't have answers
 
 
 @QuestionRegistry.register()
@@ -269,15 +315,24 @@ class VectorScalarMultiplication(VectorMathQuestion):
     """Override to handle scalar multiplication format."""
     subparts = []
     for data in self.subquestion_data:
-      vector_a_latex = self._format_vector(data['vector_a'])
-      # For scalar multiplication, we show scalar * vector as a single string
-      # Use the scalar from this specific subquestion's data
+      vector_elem = self._format_vector(data['vector_a'])
       scalar = data['scalar']
-      subparts.append(f"{scalar} \\cdot {vector_a_latex}")
+      # Return MathExpression for format-independent rendering
+      subparts.append(ContentAST.MathExpression([
+          f"{scalar} \\cdot ",
+          vector_elem
+      ], inline=True))
     return subparts
 
   def get_body(self):
+    """Override parent get_body() to use our custom formatting."""
+    body, _ = self._get_body()
+    return body
+
+  def _get_body(self):
+    """Build question body and collect answers (new pattern)."""
     body = ContentAST.Section()
+    answers = []
 
     body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
 
@@ -286,17 +341,36 @@ class VectorScalarMultiplication(VectorMathQuestion):
       subpart_data = self.generate_subquestion_data()
       repeated_part = self.create_repeated_problem_part(subpart_data)
       body.add_element(repeated_part)
+
+      # Collect all subpart answers
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        result = data['result']
+        for j in range(len(result)):
+          ans = Answer.integer(f"subpart_{letter}_{j}", result[j])
+          answers.append(ans)
     else:
-      # Single equation display
-      vector_a_latex = self._format_vector(self.vector_a)
-      body.add_element(ContentAST.Equation(f"{self.scalar} \\cdot {vector_a_latex} = ", inline=False))
+      # Single equation display using MathExpression
+      vector_elem = self._format_vector(self.vector_a)
+      body.add_element(ContentAST.MathExpression([
+          f"{self.scalar} \\cdot ",
+          vector_elem,
+          " = "
+      ]))
 
       # Canvas-only answer fields (hidden from PDF)
-      self._add_single_question_answers(body)
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
+      table_data = []
+      for i in range(self.dimension):
+        ans = Answer.integer(f"result_{i}", self.result[i])
+        answers.append(ans)
+        table_data.append([ans])
+      body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
 
-    return body
+    return body, answers
 
-  def get_explanation(self):
+  def _get_explanation(self):
+    """Build question explanation (new pattern)."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["To multiply a vector by a scalar, we multiply each component by the scalar:"]))
@@ -307,16 +381,13 @@ class VectorScalarMultiplication(VectorMathQuestion):
         letter = chr(ord('a') + i)
         vector_a = data['vector_a']
         result = data['result']
-
-        # Get the scalar for this specific subpart
         scalar = data['scalar']
 
-        # Create LaTeX strings for multiline equation
+        # Use LaTeX syntax (will be converted by Equation._latex_to_typst for Typst output)
         vector_str = r" \\ ".join([str(v) for v in vector_a])
         multiplication_str = r" \\ ".join([f"{scalar} \\cdot {v}" for v in vector_a])
         result_str = r" \\ ".join([str(v) for v in result])
 
-        # Add explanation for this subpart
         explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
         explanation.add_element(
             ContentAST.Equation.make_block_equation__multiline_equals(
@@ -329,7 +400,6 @@ class VectorScalarMultiplication(VectorMathQuestion):
             )
         )
     else:
-      # Single part explanation - use the correct attributes
       vector_str = r" \\ ".join([str(v) for v in self.vector_a])
       multiplication_str = r" \\ ".join([f"{self.scalar} \\cdot {v}" for v in self.vector_a])
       result_str = r" \\ ".join([str(v) for v in self.result])
@@ -345,7 +415,7 @@ class VectorScalarMultiplication(VectorMathQuestion):
           )
       )
 
-    return explanation
+    return explanation, []  # Explanations don't have answers
 
 
 @QuestionRegistry.register()
@@ -369,26 +439,66 @@ class VectorDotProduct(VectorMathQuestion):
       "dot_product": Answer.integer("dot_product", result)
     }
 
-  def get_explanation(self):
+  def get_body(self):
+    """Override parent get_body() to use our custom formatting."""
+    body, _ = self._get_body()
+    return body
+
+  def _get_body(self):
+    """Build question body and collect answers (new pattern)."""
+    body = ContentAST.Section()
+    answers = []
+
+    body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
+
+    if self.is_multipart():
+      # Use multipart formatting with repeated problem parts
+      subpart_data = self.generate_subquestion_data()
+      repeated_part = self.create_repeated_problem_part(subpart_data)
+      body.add_element(repeated_part)
+
+      # Collect all subpart answers (scalar results)
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        result = data['result']
+        ans = Answer.integer(f"subpart_{letter}", result)
+        answers.append(ans)
+    else:
+      # Single equation display using MathExpression
+      vector_a_elem = self._format_vector(self.vector_a)
+      vector_b_elem = self._format_vector(self.vector_b)
+      body.add_element(ContentAST.MathExpression([
+          vector_a_elem,
+          " \\cdot ",
+          vector_b_elem,
+          " = "
+      ]))
+
+      # Canvas-only answer field (single scalar result)
+      ans = Answer.integer("dot_product", self.result)
+      answers.append(ans)
+      body.add_element(ContentAST.OnlyHtml([ans]))
+
+    return body, answers
+
+  def _get_explanation(self):
+    """Build question explanation (new pattern)."""
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["The dot product is calculated by multiplying corresponding components and summing the results:"]))
 
     if self.is_multipart():
-      # Handle multipart explanations
       for i, data in enumerate(self.subquestion_data):
         letter = chr(ord('a') + i)
         vector_a = data['vector_a']
         vector_b = data['vector_b']
         result = data['result']
 
-        # Create LaTeX strings for multiline equation
         vector_a_str = r" \\ ".join([str(v) for v in vector_a])
         vector_b_str = r" \\ ".join([str(v) for v in vector_b])
         products_str = " + ".join([f"({vector_a[j]} \\cdot {vector_b[j]})" for j in range(self.dimension)])
         calculation_str = " + ".join([str(vector_a[j] * vector_b[j]) for j in range(self.dimension)])
 
-        # Add explanation for this subpart
         explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
         explanation.add_element(
             ContentAST.Equation.make_block_equation__multiline_equals(
@@ -402,7 +512,6 @@ class VectorDotProduct(VectorMathQuestion):
             )
         )
     else:
-      # Single part explanation (original behavior)
       vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
       vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
       products_str = " + ".join([f"({self.vector_a[i]} \\cdot {self.vector_b[i]})" for i in range(self.dimension)])
@@ -420,7 +529,7 @@ class VectorDotProduct(VectorMathQuestion):
           )
       )
 
-    return explanation
+    return explanation, []  # Explanations don't have answers
 
 
 @QuestionRegistry.register()
@@ -439,25 +548,43 @@ class VectorMagnitude(VectorMathQuestion):
     return math.sqrt(magnitude_squared)
 
   def create_subquestion_answers(self, subpart_index, result):
+    # Backward compatibility
     letter = chr(ord('a') + subpart_index)
     self.answers[f"subpart_{letter}"] = Answer.auto_float(f"subpart_{letter}", result)
 
   def create_single_answers(self, result):
+    # Backward compatibility
     self.answers = {
       "magnitude": Answer.auto_float("magnitude", result)
     }
 
   def generate_subquestion_data(self):
-    """Override to handle magnitude format ||vector||."""
+    """Override to handle magnitude format ||vector||.
+
+    Returns MathExpression elements for format-independent rendering.
+    """
     subparts = []
     for data in self.subquestion_data:
-      vector_a_latex = self._format_vector(data['vector_a'])
-      # For magnitude, we show ||vector|| as a single string
-      subparts.append(f"\\left\\|{vector_a_latex}\\right\\|")
+      vector_elem = self._format_vector(data['vector_a'])
+      # Create MathExpression for ||vector||
+      subparts.append(ContentAST.MathExpression([
+          "||",
+          vector_elem,
+          "||"
+      ], inline=True))
     return subparts
 
   def get_body(self):
+    """Override parent get_body() to use our custom formatting."""
+    body, _ = self._get_body()
+    return body
+
+  def _get_body(self):
+    """Build question body and collect answers (new pattern)."""
+    from typing import Tuple, List
+
     body = ContentAST.Section()
+    answers = []
 
     body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
 
@@ -466,21 +593,34 @@ class VectorMagnitude(VectorMathQuestion):
       subpart_data = self.generate_subquestion_data()
       repeated_part = self.create_repeated_problem_part(subpart_data)
       body.add_element(repeated_part)
+
+      # Collect all subpart answers
+      for i, data in enumerate(self.subquestion_data):
+        letter = chr(ord('a') + i)
+        result = data['result']
+        ans = Answer.auto_float(f"subpart_{letter}", result)
+        answers.append(ans)
     else:
-      # Single equation display
-      vector_a_latex = self._format_vector(self.vector_a)
-      body.add_element(ContentAST.Equation(f"\\left\\|{vector_a_latex}\\right\\| = ", inline=False))
+      # Single equation display using MathExpression for format-independent rendering
+      vector_elem = self._format_vector(self.vector_a)
+      body.add_element(ContentAST.MathExpression([
+          "||",
+          vector_elem,
+          "|| = "
+      ]))
 
       # Canvas-only answer field (hidden from PDF)
-      self._add_single_question_answers(body)
+      ans = Answer.auto_float("magnitude", self.result)
+      answers.append(ans)
+      body.add_element(ContentAST.OnlyHtml([ans]))
 
-    return body
+    return body, answers
 
-  def get_explanation(self):
+  def _get_explanation(self):
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["The magnitude of a vector is calculated using the formula:"]))
-    explanation.add_element(ContentAST.Equation("\\left\\|\\vec{v}\\right\\| = \\sqrt{v_1^2 + v_2^2 + \\ldots + v_n^2}", inline=False))
+    explanation.add_element(ContentAST.Equation("||arrow(v)|| = sqrt(v_1^2 + v_2^2 + ... + v_n^2)", inline=False))
 
     if self.is_multipart():
       # Handle multipart explanations
@@ -489,8 +629,8 @@ class VectorMagnitude(VectorMathQuestion):
         vector_a = data['vector_a']
         result = data['result']
 
-        # Create LaTeX strings for multiline equation
-        vector_str = r" \\ ".join([str(v) for v in vector_a])
+        # Format vectors using Typst syntax
+        vector_str = self._format_vector(vector_a)
         squares_str = " + ".join([f"{v}^2" for v in vector_a])
         calculation_str = " + ".join([str(v**2) for v in vector_a])
         sum_of_squares = sum(component ** 2 for component in vector_a)
@@ -500,19 +640,19 @@ class VectorMagnitude(VectorMathQuestion):
         explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
         explanation.add_element(
             ContentAST.Equation.make_block_equation__multiline_equals(
-                lhs="\\left\\|\\vec{v}\\right\\|",
+                lhs="||arrow(v)||",
                 rhs=[
-                    f"\\left\\|\\begin{{bmatrix}} {vector_str} \\end{{bmatrix}}\\right\\|",
-                    f"\\sqrt{{{squares_str}}}",
-                    f"\\sqrt{{{calculation_str}}}",
-                    f"\\sqrt{{{sum_of_squares}}}",
+                    f"||{vector_str}||",
+                    f"sqrt({squares_str})",
+                    f"sqrt({calculation_str})",
+                    f"sqrt({sum_of_squares})",
                     result_formatted
                 ]
             )
         )
     else:
-      # Single part explanation - use the correct attributes
-      vector_str = r" \\ ".join([str(v) for v in self.vector_a])
+      # Single part explanation - use Typst syntax
+      vector_str = self._format_vector(self.vector_a)
       squares_str = " + ".join([f"{v}^2" for v in self.vector_a])
       calculation_str = " + ".join([str(v**2) for v in self.vector_a])
       sum_of_squares = sum(component ** 2 for component in self.vector_a)
@@ -520,15 +660,15 @@ class VectorMagnitude(VectorMathQuestion):
 
       explanation.add_element(
           ContentAST.Equation.make_block_equation__multiline_equals(
-              lhs="\\left\\|\\vec{v}\\right\\|",
+              lhs="||arrow(v)||",
               rhs=[
-                  f"\\left\\|\\begin{{bmatrix}} {vector_str} \\end{{bmatrix}}\\right\\|",
-                  f"\\sqrt{{{squares_str}}}",
-                  f"\\sqrt{{{calculation_str}}}",
-                  f"\\sqrt{{{sum_of_squares}}}",
+                  f"||{vector_str}||",
+                  f"sqrt({squares_str})",
+                  f"sqrt({calculation_str})",
+                  f"sqrt({sum_of_squares})",
                   result_formatted
               ]
           )
       )
 
-    return explanation
+    return explanation, []  # Explanations don't have answers

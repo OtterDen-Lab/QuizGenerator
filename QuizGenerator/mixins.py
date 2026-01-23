@@ -68,19 +68,20 @@ class TableQuestionMixin:
     """
     answer_columns = answer_columns or []
     
-    def format_cell(row_data: Dict, column: str) -> Union[str, ContentAST.Answer]:
+    def format_cell(row_data: Dict, column: str) -> Union[str, Answer]:
       """Format a cell based on whether it should be an answer or plain data"""
       value = row_data.get(column, "")
-      
+
       # If this column should contain answers and the value is an Answer object
+      # Answer extends ContentAST.Leaf, so it can be used directly
       if column in answer_columns and isinstance(value, Answer):
-        return ContentAST.Answer(value)
+        return value
       # If this column should contain answers but we have the answer key
       elif column in answer_columns and isinstance(value, str) and hasattr(self, 'answers'):
         answer_obj = self.answers.get(value)
         if answer_obj:
-          return ContentAST.Answer(answer_obj)
-      
+          return answer_obj
+
       # Otherwise return as plain data
       return str(value)
     
@@ -119,9 +120,9 @@ class TableQuestionMixin:
     # Build data with parameters plus answer row
     data = [[key, str(value)] for key, value in parameter_info.items()]
     
-    # Add answer row
+    # Add answer row - Answer extends ContentAST.Leaf so it can be used directly
     if hasattr(self, 'answers') and answer_key in self.answers:
-      data.append([answer_label, ContentAST.Answer(self.answers[answer_key])])
+      data.append([answer_label, self.answers[answer_key]])
     else:
       data.append([answer_label, f"[{answer_key}]"])  # Fallback
     
@@ -149,16 +150,17 @@ class TableQuestionMixin:
         ContentAST.Table with multiple answer blanks
     """
     
-    def process_cell_value(value: Any) -> Union[str, ContentAST.Answer]:
+    def process_cell_value(value: Any) -> Union[str, Answer]:
       """Convert cell values to appropriate display format"""
-      # If it's already an Answer object, wrap it
+      # If it's already an Answer object, use it directly
+      # Answer extends ContentAST.Leaf so it can be used in the AST
       if isinstance(value, Answer):
-        return ContentAST.Answer(value)
+        return value
       # If it's a string that looks like an answer key, try to resolve it
       elif isinstance(value, str) and value.startswith("answer__") and hasattr(self, 'answers'):
         answer_obj = self.answers.get(value)
         if answer_obj:
-          return ContentAST.Answer(answer_obj)
+          return answer_obj
       # Otherwise return as-is
       return str(value)
     
@@ -493,37 +495,52 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
       subparts.append((operand_a_latex, self.get_operator(), operand_b_latex))
     return subparts
   
-  def get_body(self):
+  def _get_body(self):
+    """Build question body and collect answers."""
     body = ContentAST.Section()
-    
+    answers = []
+
     body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
-    
+
     if self.is_multipart():
       # Use multipart formatting with repeated problem parts
       subpart_data = self.generate_subquestion_data()
       repeated_part = self.create_repeated_problem_part(subpart_data)
       body.add_element(repeated_part)
+      # Collect answers from self.answers dict
+      answers = list(self.answers.values())
     else:
       # Single equation display
       equation_latex = self.format_single_equation(self.operand_a, self.operand_b)
       body.add_element(ContentAST.Equation(f"{equation_latex} = ", inline=False))
-      
+
       # Canvas-only answer fields (hidden from PDF)
-      self._add_single_question_answers(body)
-    
+      single_answers = self._add_single_question_answers(body)
+      if single_answers:
+        answers.extend(single_answers)
+
+    return body, answers
+
+  def get_body(self):
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body()
     return body
-  
+
   def _add_single_question_answers(self, body):
-    """Add Canvas-only answer fields for single questions. Subclasses can override."""
+    """Add Canvas-only answer fields for single questions. Subclasses can override.
+
+    Returns:
+        List of Answer objects that were added to the body.
+    """
     # Default implementation - subclasses should override for specific answer formats
-    pass
-  
-  def get_explanation(self):
+    return []
+
+  def _get_explanation(self):
     """Default explanation structure. Subclasses should override for specific explanations."""
     explanation = ContentAST.Section()
-    
+
     explanation.add_element(ContentAST.Paragraph([self.get_explanation_intro()]))
-    
+
     if self.is_multipart():
       # Handle multipart explanations
       for i, data in enumerate(self.subquestion_data):
@@ -532,7 +549,12 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
     else:
       # Single part explanation
       explanation.add_element(self.create_single_explanation())
-    
+
+    return explanation, []
+
+  def get_explanation(self):
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation()
     return explanation
   
   def get_explanation_intro(self):

@@ -36,15 +36,22 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
         return [[f"{prefix}{matrix[i][j]}" for j in range(len(matrix[0]))] for i in range(len(matrix))]
 
     def _create_answer_table(self, rows, cols, answers_dict, answer_prefix="answer"):
-        """Create a table with answer blanks for matrix results."""
+        """Create a table with answer blanks for matrix results.
+
+        Returns:
+            Tuple of (table, answers_list)
+        """
         table_data = []
+        answers = []
         for i in range(rows):
             row = []
             for j in range(cols):
                 answer_key = f"{answer_prefix}_{i}_{j}"
-                row.append(ContentAST.Answer(answer=answers_dict[answer_key]))
+                ans = answers_dict[answer_key]
+                row.append(ans)
+                answers.append(ans)
             table_data.append(row)
-        return ContentAST.Table(data=table_data, padding=True)
+        return ContentAST.Table(data=table_data, padding=True), answers
 
     # Implement MathOperationQuestion abstract methods
 
@@ -64,23 +71,23 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
         return f"{operand_a_latex} {self.get_operator()} {operand_b_latex}"
 
     def _add_single_question_answers(self, body):
-        """Add Canvas-only answer fields for single questions."""
+        """Add Canvas-only answer fields for single questions.
+
+        Returns:
+            List of Answer objects that were added to the body.
+        """
+        answers = []
+
         # For matrices, we typically show result dimensions and answer table
         if hasattr(self, 'result_rows') and hasattr(self, 'result_cols'):
             # Matrix multiplication case with dimension answers
             if hasattr(self, 'answers') and "result_rows" in self.answers:
+                rows_ans = self.answers["result_rows"]
+                cols_ans = self.answers["result_cols"]
+                answers.extend([rows_ans, cols_ans])
                 body.add_element(
                     ContentAST.OnlyHtml([
-                        ContentAST.AnswerBlock([
-                            ContentAST.Answer(
-                                answer=self.answers["result_rows"],
-                                label="Number of rows in result"
-                            ),
-                            ContentAST.Answer(
-                                answer=self.answers["result_cols"],
-                                label="Number of columns in result"
-                            )
-                        ])
+                        ContentAST.AnswerBlock([rows_ans, cols_ans])
                     ])
                 )
 
@@ -88,20 +95,26 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
         if hasattr(self, 'result') and self.result:
             rows = len(self.result)
             cols = len(self.result[0])
+            table, table_answers = self._create_answer_table(rows, cols, self.answers)
+            answers.extend(table_answers)
             body.add_element(
                 ContentAST.OnlyHtml([
                     ContentAST.Paragraph(["Result matrix:"]),
-                    self._create_answer_table(rows, cols, self.answers)
+                    table
                 ])
             )
         elif hasattr(self, 'max_dim'):
             # Matrix multiplication with max dimensions
+            table, table_answers = self._create_answer_table(self.max_dim, self.max_dim, self.answers)
+            answers.extend(table_answers)
             body.add_element(
                 ContentAST.OnlyHtml([
                     ContentAST.Paragraph(["Result matrix (use '-' if cell doesn't exist):"]),
-                    self._create_answer_table(self.max_dim, self.max_dim, self.answers)
+                    table
                 ])
             )
+
+        return answers
 
     # Abstract methods that subclasses must implement
     @abc.abstractmethod
@@ -488,8 +501,10 @@ class MatrixMultiplication(MatrixMathQuestion):
             # For single questions, use the old answer format
             # Dimension answers
             if result is not None:
-                self.answers["result_rows"] = Answer.integer("result_rows", self.result_rows)
-                self.answers["result_cols"] = Answer.integer("result_cols", self.result_cols)
+                self.answers["result_rows"] = Answer.integer("result_rows", self.result_rows,
+                                                             label="Number of rows in result")
+                self.answers["result_cols"] = Answer.integer("result_cols", self.result_cols,
+                                                             label="Number of columns in result")
 
                 # Matrix element answers
                 for i in range(self.max_dim):
@@ -501,8 +516,10 @@ class MatrixMultiplication(MatrixMathQuestion):
                             self.answers[answer_key] = Answer.string(answer_key, "-")
             else:
                 # Multiplication not possible
-                self.answers["result_rows"] = Answer.string("result_rows", "-")
-                self.answers["result_cols"] = Answer.string("result_cols", "-")
+                self.answers["result_rows"] = Answer.string("result_rows", "-",
+                                                            label="Number of rows in result")
+                self.answers["result_cols"] = Answer.string("result_cols", "-",
+                                                            label="Number of columns in result")
 
                 # All matrix elements are "-"
                 for i in range(self.max_dim):
@@ -523,31 +540,35 @@ class MatrixMultiplication(MatrixMathQuestion):
                         self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
 
     def _add_single_question_answers(self, body):
-        """Add Canvas-only answer fields for MatrixMultiplication with dash instruction."""
+        """Add Canvas-only answer fields for MatrixMultiplication with dash instruction.
+
+        Returns:
+            List of Answer objects that were added to the body.
+        """
+        answers = []
+
         # Dimension answers for matrix multiplication
         if hasattr(self, 'answers') and "result_rows" in self.answers:
+            rows_ans = self.answers["result_rows"]
+            cols_ans = self.answers["result_cols"]
+            answers.extend([rows_ans, cols_ans])
             body.add_element(
                 ContentAST.OnlyHtml([
-                    ContentAST.AnswerBlock([
-                        ContentAST.Answer(
-                            answer=self.answers["result_rows"],
-                            label="Number of rows in result"
-                        ),
-                        ContentAST.Answer(
-                            answer=self.answers["result_cols"],
-                            label="Number of columns in result"
-                        )
-                    ])
+                    ContentAST.AnswerBlock([rows_ans, cols_ans])
                 ])
             )
 
         # Matrix result table with dash instruction
+        table, table_answers = self._create_answer_table(self.max_dim, self.max_dim, self.answers)
+        answers.extend(table_answers)
         body.add_element(
             ContentAST.OnlyHtml([
                 ContentAST.Paragraph(["Result matrix (use '-' if cell doesn't exist):"]),
-                self._create_answer_table(self.max_dim, self.max_dim, self.answers)
+                table
             ])
         )
+
+        return answers
 
     def refresh(self, *args, **kwargs):
         """Override refresh to handle matrix attributes."""

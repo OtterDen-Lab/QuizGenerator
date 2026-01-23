@@ -3,6 +3,7 @@ import logging
 import math
 import keras
 import numpy as np
+from typing import List, Tuple
 
 from QuizGenerator.misc import MatrixAnswer
 from QuizGenerator.premade_questions.cst463.models.matrices import MatrixQuestion
@@ -59,17 +60,19 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
 
     ## Answers:
     # center_word, center_emb, context_words, context_embs, logits, probs
-    self.answers["logits"] = Answer.vector_value(key="logits", value=self.logits)
+    self.answers["logits"] = Answer.vector_value(key="logits", value=self.logits, label="Logits")
     most_likely_idx = np.argmax(self.probs)
     most_likely_word = self.context_words[most_likely_idx]
-    self.answers["center_word"] = Answer.string(key="center_word", value=most_likely_word)
+    self.answers["center_word"] = Answer.string(key="center_word", value=most_likely_word, label="Most likely context word")
     
     
     return True
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
-    
+    answers = []
+
     body.add_element(
       ContentAST.Paragraph([
         f"Given center word: `{self.center_word}` with embedding {self.center_emb}, compute the skip-gram probabilities for each context word and identify the most likely one."
@@ -78,21 +81,28 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     body.add_elements([
       ContentAST.Paragraph([ContentAST.Text(f"`{w}` : "), str(e)]) for w, e in zip(self.context_words, self.context_embs)
     ])
-    
+
+    answers.append(self.answers["logits"])
+    answers.append(self.answers["center_word"])
     body.add_elements([
       ContentAST.LineBreak(),
-      self.answers["logits"].get_ast_element("Logits"),
+      self.answers["logits"],
       ContentAST.LineBreak(),
-      self.answers["center_word"].get_ast_element("Most likely context word")
+      self.answers["center_word"]
     ])
-    
-    
+
     log.debug(f"output: {self.logits}")
     log.debug(f"weights: {self.probs}")
-    
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
     digits = Answer.DEFAULT_ROUNDING_DIGITS
 
@@ -199,5 +209,10 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
       ])
     )
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 

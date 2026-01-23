@@ -40,9 +40,9 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     self.num_bits_vpn = self.num_bits_va - self.num_bits_offset
     
     self.possible_answers = {
-      self.Target.VA_BITS: Answer.integer("answer__num_bits_va", self.num_bits_va),
-      self.Target.OFFSET_BITS: Answer.integer("answer__num_bits_offset", self.num_bits_offset),
-      self.Target.VPN_BITS: Answer.integer("answer__num_bits_vpn", self.num_bits_vpn)
+      self.Target.VA_BITS: Answer.integer("answer__num_bits_va", self.num_bits_va, unit="bits"),
+      self.Target.OFFSET_BITS: Answer.integer("answer__num_bits_offset", self.num_bits_offset, unit="bits"),
+      self.Target.VPN_BITS: Answer.integer("answer__num_bits_vpn", self.num_bits_vpn, unit="bits")
     }
     
     # Select what kind of question we are going to be
@@ -52,22 +52,25 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     
     return
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs):
+    """Build question body and collect answers."""
+    answers = [self.answers['answer']]  # Collect the answer
+
     # Create table data with one blank cell
     table_data = [{}]
     for target in list(self.Target):
       if target == self.blank_kind:
         # This cell should be an answer blank
-        table_data[0][target.value] = ContentAST.Answer(self.possible_answers[target], " bits")
+        table_data[0][target.value] = self.possible_answers[target]
       else:
         # This cell shows the value
         table_data[0][target.value] = f"{self.possible_answers[target].display} bits"
-    
+
     table = self.create_fill_in_table(
       headers=[t.value for t in list(self.Target)],
       template_rows=table_data
     )
-    
+
     body = ContentAST.Section()
     body.add_element(
       ContentAST.Paragraph(
@@ -77,11 +80,17 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
       )
     )
     body.add_element(table)
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
-  
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+
+  def _get_explanation(self, **kwargs):
+    """Build question explanation."""
     explanation = ContentAST.Section()
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -92,7 +101,7 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
         ]
       )
     )
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -104,7 +113,12 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
         ]
       )
     )
-    
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -245,14 +259,21 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     self.hit_rate = 100 * number_of_hits / (self.num_requests)
     self.answers.update(
       {
-        "answer__hit_rate": Answer.auto_float("answer__hit_rate", self.hit_rate)
+        "answer__hit_rate": Answer.auto_float(
+          "answer__hit_rate", self.hit_rate,
+          label=f"Hit rate, excluding non-capacity misses. Round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits if appropriate.",
+          unit="%"
+        )
       }
     )
 
     # Return whether this workload is interesting
     return self.is_interesting()
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs):
+    """Build question body and collect answers."""
+    answers = []
+
     # Create table data for cache simulation
     table_rows = []
     for request_number in sorted(self.request_results.keys()):
@@ -264,23 +285,25 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
           "Cache State": f"answer__cache_state-{request_number}"  # Answer key
         }
       )
-    
+      # Collect answers for this request
+      answers.append(self.answers[f"answer__hit-{request_number}"])
+      answers.append(self.answers[f"answer__evicted-{request_number}"])
+      answers.append(self.answers[f"answer__cache_state-{request_number}"])
+
     # Create table using mixin - automatically handles answer conversion
     cache_table = self.create_answer_table(
       headers=["Page Requested", "Hit/Miss", "Evicted", "Cache State"],
       data_rows=table_rows,
       answer_columns=["Hit/Miss", "Evicted", "Cache State"]
     )
-    
+
+    # Collect hit rate answer
+    hit_rate_answer = self.answers["answer__hit_rate"]
+    answers.append(hit_rate_answer)
+
     # Create hit rate answer block
-    hit_rate_block = ContentAST.AnswerBlock(
-      ContentAST.Answer(
-        answer=self.answers["answer__hit_rate"],
-        label=f"Hit rate, excluding non-capacity misses.  If appropriate, round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits.",
-        unit="%"
-      )
-    )
-    
+    hit_rate_block = ContentAST.AnswerBlock(hit_rate_answer)
+
     # Use mixin to create complete body
     intro_text = (
       f"Assume we are using a **{self.cache_policy}** caching policy and a cache size of **{self.cache_size}**. "
@@ -288,23 +311,29 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       "For the hit/miss column, please write either \"hit\" or \"miss\". "
       "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
     )
-    
+
     instructions = ContentAST.OnlyHtml([
       "For the cache state, please enter the cache contents in the order suggested in class, "
       "which means separated by commas with spaces (e.g. \"1, 2, 3\") "
       "and with the left-most being the next to be evicted. "
       "In the case where there is a tie, order by increasing number."
     ])
-    
+
     body = self.create_fill_in_table_body(intro_text, instructions, cache_table)
     body.add_element(hit_rate_block)
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
-  
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+
+  def _get_explanation(self, **kwargs):
+    """Build question explanation."""
     explanation = ContentAST.Section()
-    
+
     explanation.add_element(ContentAST.Paragraph(["The full caching table can be seen below."]))
-    
+
     explanation.add_element(
       ContentAST.Table(
         headers=["Page", "Hit/Miss", "Evicted", "Cache State"],
@@ -319,7 +348,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         ]
       )
     )
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -330,7 +359,12 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         ]
       )
     )
-    
+
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
   
   def is_interesting(self) -> bool:
@@ -373,22 +407,25 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     else:
       self.answers["answer"] = Answer.string("answer__physical_address", "INVALID")
   
-  def get_body(self) -> ContentAST.Section:
+  def _get_body(self):
+    """Build question body and collect answers."""
+    answers = [self.answers["answer"]]
+
     # Use mixin to create parameter table with answer
     parameter_info = {
       "Base": f"0x{self.base:X}",
       "Bounds": f"0x{self.bounds:X}",
       "Virtual Address": f"0x{self.virtual_address:X}"
     }
-    
+
     table = self.create_parameter_answer_table(
       parameter_info=parameter_info,
       answer_label="Physical Address",
       answer_key="answer",
       transpose=True
     )
-    
-    return self.create_parameter_calculation_body(
+
+    body = self.create_parameter_calculation_body(
       intro_text=(
         "Given the information in the below table, "
         "please calcuate the physical address associated with the given virtual address. "
@@ -396,10 +433,17 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
       ),
       parameter_table=table
     )
-  
-  def get_explanation(self) -> ContentAST.Section:
+    return body, answers
+
+  def get_body(self) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body()
+    return body
+
+  def _get_explanation(self):
+    """Build question explanation."""
     explanation = ContentAST.Section()
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -410,7 +454,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
         ]
       )
     )
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -419,7 +463,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
         ]
       )
     )
-    
+
     if self.virtual_address < self.bounds:
       explanation.add_element(
         ContentAST.Paragraph(
@@ -442,7 +486,12 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
           ]
         )
       )
-    
+
+    return explanation, []
+
+  def get_explanation(self) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation()
     return explanation
 
 
@@ -540,19 +589,28 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
       self.answers["answer__physical_address"] = Answer.binary_hex(
         "answer__physical_address",
         self.physical_address,
-        length=self.physical_bits
+        length=self.physical_bits,
+        label="Physical Address"
       )
     else:
       self.answers["answer__physical_address"] = Answer.string(
         "answer__physical_address",
-        "INVALID"
+        "INVALID",
+        label="Physical Address"
       )
-    
-    self.answers["answer__segment"] = Answer.string("answer__segment", self.segment)
+
+    self.answers["answer__segment"] = Answer.string("answer__segment", self.segment,
+                                                    label="Segment name")
   
-  def get_body(self) -> ContentAST.Section:
+  def _get_body(self):
+    """Build question body and collect answers."""
+    answers = [
+      self.answers["answer__segment"],
+      self.answers["answer__physical_address"]
+    ]
+
     body = ContentAST.Section()
-    
+
     body.add_element(
       ContentAST.Paragraph(
         [
@@ -565,39 +623,36 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
         ]
       )
     )
-    
+
     # Create segment table using mixin
     segment_rows = [
       {"": "code", "base": f"0b{self.base['code']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['code']:0b}"},
       {"": "heap", "base": f"0b{self.base['heap']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['heap']:0b}"},
       {"": "stack", "base": f"0b{self.base['stack']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['stack']:0b}"}
     ]
-    
+
     segment_table = self.create_answer_table(
       headers=["", "base", "bounds"],
       data_rows=segment_rows,
       answer_columns=[]  # No answer columns in this table
     )
-    
+
     body.add_element(segment_table)
-    
+
     body.add_element(
-      ContentAST.AnswerBlock(
-        [
-          ContentAST.Answer(
-            self.answers["answer__segment"],
-            label="Segment name"
-          ),
-          ContentAST.Answer(
-            self.answers["answer__physical_address"],
-            label="Physical Address"
-          )
-        ]
-      )
+      ContentAST.AnswerBlock([
+        self.answers["answer__segment"],
+        self.answers["answer__physical_address"]
+      ])
     )
+    return body, answers
+
+  def get_body(self) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body()
     return body
-  
-  def get_explanation(self) -> ContentAST.Section:
+
+  def _get_explanation(self):
     explanation = ContentAST.Section()
     
     explanation.add_element(
@@ -691,7 +746,12 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
           f"  0b{self.physical_address:0{self.physical_bits}b}\n"
         )
       )
-    
+
+    return explanation, []
+
+  def get_explanation(self) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation()
     return explanation
 
 
@@ -765,34 +825,45 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     self.answers.update(
       {
-        "answer__vpn": Answer.binary_hex("answer__vpn", self.vpn, length=self.num_bits_vpn),
-        "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset),
-        "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1)),
+        "answer__vpn": Answer.binary_hex("answer__vpn", self.vpn, length=self.num_bits_vpn, label="VPN"),
+        "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset, label="Offset"),
+        "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1), label="PTE"),
       }
     )
 
     if self.is_valid:
       self.answers.update(
         {
-          "answer__is_valid": Answer.string("answer__is_valid", "VALID"),
-          "answer__pfn": Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn),
+          "answer__is_valid": Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
+          "answer__pfn": Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn, label="PFN"),
           "answer__physical_address": Answer.binary_hex(
-            "answer__physical_address", self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset)
+            "answer__physical_address", self.physical_address,
+            length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
           ),
         }
       )
     else:
       self.answers.update(
         {
-          "answer__is_valid": Answer.string("answer__is_valid", "INVALID"),
-          "answer__pfn": Answer.string("answer__pfn", "INVALID"),
-          "answer__physical_address": Answer.string("answer__physical_address", "INVALID"),
+          "answer__is_valid": Answer.string("answer__is_valid", "INVALID", label="VALID or INVALID?"),
+          "answer__pfn": Answer.string("answer__pfn", "INVALID", label="PFN"),
+          "answer__physical_address": Answer.string("answer__physical_address", "INVALID", label="Physical Address"),
         }
       )
   
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def _get_body(self, *args, **kwargs):
+    """Build question body and collect answers."""
+    answers = [
+      self.answers["answer__vpn"],
+      self.answers["answer__offset"],
+      self.answers["answer__pte"],
+      self.answers["answer__is_valid"],
+      self.answers["answer__pfn"],
+      self.answers["answer__physical_address"],
+    ]
+
     body = ContentAST.Section()
-    
+
     body.add_element(
       ContentAST.Paragraph(
         [
@@ -801,14 +872,14 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         ]
       )
     )
-    
+
     # Create parameter info table using mixin
     parameter_info = {
       "Virtual Address": f"0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}",
       "# VPN bits": f"{self.num_bits_vpn}",
       "# PFN bits": f"{self.num_bits_pfn}"
     }
-    
+
     body.add_element(self.create_info_table(parameter_info))
 
     # Use the page table generated in refresh() for deterministic output
@@ -827,33 +898,36 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     if (max(self.page_table.keys()) + 1) != 2 ** self.num_bits_vpn:
       value_matrix.append(["...", "..."])
-    
+
     body.add_element(
       ContentAST.Table(
         headers=["VPN", "PTE"],
         data=value_matrix
       )
     )
-    
+
     body.add_element(
-      ContentAST.AnswerBlock(
-        [
-          
-          ContentAST.Answer(self.answers["answer__vpn"], label="VPN"),
-          ContentAST.Answer(self.answers["answer__offset"], label="Offset"),
-          ContentAST.Answer(self.answers["answer__pte"], label="PTE"),
-          ContentAST.Answer(self.answers["answer__is_valid"], label="VALID or INVALID?"),
-          ContentAST.Answer(self.answers["answer__pfn"], label="PFN"),
-          ContentAST.Answer(self.answers["answer__physical_address"], label="Physical Address"),
-        ]
-      )
+      ContentAST.AnswerBlock([
+        self.answers["answer__vpn"],
+        self.answers["answer__offset"],
+        self.answers["answer__pte"],
+        self.answers["answer__is_valid"],
+        self.answers["answer__pfn"],
+        self.answers["answer__physical_address"],
+      ])
     )
-    
+
+    return body, answers
+
+  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(*args, **kwargs)
     return body
   
-  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, *args, **kwargs):
+    """Build question explanation."""
     explanation = ContentAST.Section()
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -863,7 +937,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         ]
       )
     )
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -871,7 +945,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         ]
       )
     )
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -881,7 +955,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         ]
       )
     )
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -892,7 +966,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         ]
       )
     )
-    
+
     if self.is_valid:
       explanation.add_element(
         ContentAST.Paragraph(
@@ -912,7 +986,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           ]
         )
       )
-    
+
     explanation.add_element(
       ContentAST.Paragraph(
         [
@@ -930,7 +1004,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         f"\\& \\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
       )
     )
-    
+
     explanation.add_elements(
       [
         ContentAST.Paragraph(
@@ -944,7 +1018,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         )
       ]
     )
-    
+
     explanation.add_elements(
       [
         ContentAST.Paragraph(["Note: Strictly speaking, this calculation is:", ]),
@@ -955,6 +1029,11 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ]
     )
 
+    return explanation, []
+
+  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation
 
 
@@ -1108,43 +1187,67 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     # Set up answers
     self.answers.update({
-      "answer__pdi": Answer.binary_hex("answer__pdi", self.pdi, length=self.num_bits_pdi),
-      "answer__pti": Answer.binary_hex("answer__pti", self.pti, length=self.num_bits_pti),
-      "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset),
-      "answer__pd_entry": Answer.binary_hex("answer__pd_entry", self.pd_entry, length=(self.num_bits_pfn + 1)),
-      "answer__pt_number": Answer.binary_hex("answer__pt_number", self.page_table_number, length=self.num_bits_pfn) if self.pd_valid else Answer.string("answer__pt_number", "INVALID"),
+      "answer__pdi": Answer.binary_hex("answer__pdi", self.pdi, length=self.num_bits_pdi,
+                                       label="PDI (Page Directory Index)"),
+      "answer__pti": Answer.binary_hex("answer__pti", self.pti, length=self.num_bits_pti,
+                                       label="PTI (Page Table Index)"),
+      "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset,
+                                          label="Offset"),
+      "answer__pd_entry": Answer.binary_hex("answer__pd_entry", self.pd_entry, length=(self.num_bits_pfn + 1),
+                                            label="PD Entry (from Page Directory)"),
+      "answer__pt_number": (
+        Answer.binary_hex("answer__pt_number", self.page_table_number, length=self.num_bits_pfn,
+                          label="Page Table Number")
+        if self.pd_valid
+        else Answer.string("answer__pt_number", "INVALID", label="Page Table Number")
+      ),
     })
 
     # PTE answer: if PD is valid, accept the actual PTE value from the table
     # (regardless of whether that PTE is valid or invalid)
     if self.pd_valid:
       self.answers.update({
-        "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1)),
+        "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1),
+                                         label="PTE (from Page Table)"),
       })
     else:
       # If PD is invalid, student can't look up the page table
       # Accept both "INVALID" (for consistency) and "N/A" (for accuracy)
       self.answers.update({
-        "answer__pte": Answer.string("answer__pte", ["INVALID", "N/A"]),
+        "answer__pte": Answer.string("answer__pte", ["INVALID", "N/A"], label="PTE (from Page Table)"),
       })
 
     # Validity, PFN, and Physical Address depend on BOTH levels being valid
     if self.pd_valid and self.pt_valid:
       self.answers.update({
-        "answer__is_valid": Answer.string("answer__is_valid", "VALID"),
-        "answer__pfn": Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn),
+        "answer__is_valid": Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
+        "answer__pfn": Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn, label="PFN"),
         "answer__physical_address": Answer.binary_hex(
-          "answer__physical_address", self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset)
+          "answer__physical_address", self.physical_address,
+          length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
         ),
       })
     else:
       self.answers.update({
-        "answer__is_valid": Answer.string("answer__is_valid", "INVALID"),
-        "answer__pfn": Answer.string("answer__pfn", "INVALID"),
-        "answer__physical_address": Answer.string("answer__physical_address", "INVALID"),
+        "answer__is_valid": Answer.string("answer__is_valid", "INVALID", label="VALID or INVALID?"),
+        "answer__pfn": Answer.string("answer__pfn", "INVALID", label="PFN"),
+        "answer__physical_address": Answer.string("answer__physical_address", "INVALID", label="Physical Address"),
       })
 
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def _get_body(self, *args, **kwargs):
+    """Build question body and collect answers."""
+    answers = [
+      self.answers["answer__pdi"],
+      self.answers["answer__pti"],
+      self.answers["answer__offset"],
+      self.answers["answer__pd_entry"],
+      self.answers["answer__pt_number"],
+      self.answers["answer__pte"],
+      self.answers["answer__is_valid"],
+      self.answers["answer__pfn"],
+      self.answers["answer__physical_address"],
+    ]
+
     body = ContentAST.Section()
 
     body.add_element(
@@ -1245,21 +1348,27 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Answer block
     body.add_element(
       ContentAST.AnswerBlock([
-        ContentAST.Answer(self.answers["answer__pdi"], label="PDI (Page Directory Index)"),
-        ContentAST.Answer(self.answers["answer__pti"], label="PTI (Page Table Index)"),
-        ContentAST.Answer(self.answers["answer__offset"], label="Offset"),
-        ContentAST.Answer(self.answers["answer__pd_entry"], label="PD Entry (from Page Directory)"),
-        ContentAST.Answer(self.answers["answer__pt_number"], label="Page Table Number"),
-        ContentAST.Answer(self.answers["answer__pte"], label="PTE (from Page Table)"),
-        ContentAST.Answer(self.answers["answer__is_valid"], label="VALID or INVALID?"),
-        ContentAST.Answer(self.answers["answer__pfn"], label="PFN"),
-        ContentAST.Answer(self.answers["answer__physical_address"], label="Physical Address"),
+        self.answers["answer__pdi"],
+        self.answers["answer__pti"],
+        self.answers["answer__offset"],
+        self.answers["answer__pd_entry"],
+        self.answers["answer__pt_number"],
+        self.answers["answer__pte"],
+        self.answers["answer__is_valid"],
+        self.answers["answer__pfn"],
+        self.answers["answer__physical_address"],
       ])
     )
 
+    return body, answers
+
+  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(*args, **kwargs)
     return body
 
-  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, *args, **kwargs):
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     explanation.add_element(
@@ -1397,4 +1506,9 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
         )
       )
 
+    return explanation, []
+
+  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation

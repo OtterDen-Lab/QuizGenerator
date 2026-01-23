@@ -664,15 +664,19 @@ class ContentAST:
     - Organizing complex question content
 
     Example:
-        def get_body(self):
+        def _get_body(self):
             body = ContentAST.Section()
+            answers = []
             body.add_element(ContentAST.Paragraph(["Calculate the determinant:"]))
 
             matrix_data = [[1, 2], [3, 4]]
             body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="v"))
 
-            body.add_element(ContentAST.Answer(answer=self.answer, label="Determinant"))
-            return body
+            # Answer extends Leaf - add directly to body
+            ans = ContentAST.Answer.integer("det", self.determinant, label="Determinant")
+            answers.append(ans)
+            body.add_element(ans)
+            return body, answers
     """
     pass
   
@@ -921,8 +925,19 @@ class ContentAST:
       # Convert subscripts and superscripts from LaTeX to Typst
       # LaTeX uses braces: b_{out}, x_{10}, x^{2}
       # Typst uses parentheses for multi-char: b_(out), x_(10), x^(2)
-      latex_str = re.sub(r'_{([^}]+)}', r'_("\1")', latex_str)  # _{...} -> _(...)
-      latex_str = re.sub(r'\^{([^}]+)}', r'^("\1")', latex_str)  # ^{...} -> ^(...)
+      # Multi-character text subscripts need quotes: L_{base} -> L_("base")
+      # But numbers don't: x_{10} -> x_(10)
+      def convert_sub_super(match):
+        content = match.group(1)
+        prefix = match.group(0)[0]  # '_' or '^'
+        # If it's purely numeric or a single char, no quotes needed
+        if content.isdigit() or len(content) == 1:
+          return f'{prefix}({content})'
+        # If it's multi-char text, quote it
+        return f'{prefix}("{content}")'
+
+      latex_str = re.sub(r'_{([^}]+)}', convert_sub_super, latex_str)
+      latex_str = re.sub(r'\^{([^}]+)}', convert_sub_super, latex_str)
 
       # Convert LaTeX Greek letters to Typst syntax (remove backslash)
       greek_letters = [
@@ -940,19 +955,66 @@ class ContentAST:
       latex_str = latex_str.replace(r'\nabla', 'nabla')
       latex_str = latex_str.replace(r'\times', 'times')
       latex_str = latex_str.replace(r'\cdot', 'dot')
-      latex_str = latex_str.replace(r'\partial', 'diff')
+      latex_str = latex_str.replace(r'\partial', 'partial')
+      latex_str = latex_str.replace(r'\sum', 'sum')
+      latex_str = latex_str.replace(r'\prod', 'product')
+      latex_str = latex_str.replace(r'\int', 'integral')
+      latex_str = latex_str.replace(r'\ln', 'ln')
+      latex_str = latex_str.replace(r'\log', 'log')
+      latex_str = latex_str.replace(r'\exp', 'exp')
+      latex_str = latex_str.replace(r'\sin', 'sin')
+      latex_str = latex_str.replace(r'\cos', 'cos')
+      latex_str = latex_str.replace(r'\tan', 'tan')
+      latex_str = latex_str.replace(r'\max', 'max')
+      latex_str = latex_str.replace(r'\min', 'min')
+      latex_str = latex_str.replace(r'\sqrt', 'sqrt')
+      # Convert \text{...} to "..." for Typst
+      latex_str = re.sub(r'\\text\{([^}]*)\}', r'"\1"', latex_str)
+      # Convert \frac{a}{b} to frac(a, b) for Typst
+      latex_str = re.sub(r'\\frac\{([^}]*)\}\{([^}]*)\}', r'frac(\1, \2)', latex_str)
 
-      # Handle matrix environments
-      if r'\begin{matrix}' in latex_str:
-        matrix_pattern = r'\[\\begin\{matrix\}(.*?)\\end\{matrix\}\]'
+      # Handle matrix environments (bmatrix, pmatrix, vmatrix, Vmatrix, Bmatrix, matrix)
+      # Map bracket types to Typst delimiters
+      bracket_map = {
+        'bmatrix': '\"[\"',   # square brackets
+        'pmatrix': '\"(\"',   # parentheses (default)
+        'vmatrix': '\"|\"',   # single vertical bars (determinant)
+        'Vmatrix': '\"||\"',  # double vertical bars (norm)
+        'Bmatrix': '\"{\"',   # curly braces
+        'matrix': None,       # no brackets
+      }
 
-        def replace_matrix(match):
-          content = match.group(1)
-          elements = content.split(r'\\')
-          elements = [e.strip() for e in elements if e.strip()]
-          return f"vec({', '.join(elements)})"
+      for env_type, delim in bracket_map.items():
+        pattern = rf'\\begin\{{{env_type}\}}(.*?)\\end\{{{env_type}\}}'
 
-        latex_str = re.sub(matrix_pattern, replace_matrix, latex_str)
+        def make_replacer(delimiter):
+          def replace_matrix(match):
+            content = match.group(1)
+            # Split rows by \\ and columns by &
+            rows = content.split(r'\\')
+            rows = [r.strip() for r in rows if r.strip()]
+
+            # Check if it's a vector (single column) or matrix
+            is_vector = all('&' not in row for row in rows)
+
+            if is_vector:
+              # Single column - use semicolons to separate rows in mat()
+              elements = "; ".join(rows)
+            else:
+              # Multiple columns - replace & with , and rows with ;
+              formatted_rows = [row.replace('&', ',').strip() for row in rows]
+              elements = "; ".join(formatted_rows)
+
+            if delimiter:
+              return f"mat(delim: {delimiter}, {elements})"
+            else:
+              return f"mat({elements})"
+          return replace_matrix
+
+        latex_str = re.sub(pattern, make_replacer(delim), latex_str, flags=re.DOTALL)
+
+      # Handle \left\| ... \right\| for norms
+      latex_str = re.sub(r'\\\|', '||', latex_str)
 
       return latex_str
 
@@ -972,6 +1034,125 @@ class ContentAST:
       ])
       
       return cls('\n'.join(equation_lines))
+
+  class MathExpression(Leaf):
+    """
+    Compose multiple math elements into a single format-independent expression.
+
+    This allows mixing ContentAST elements (like Matrix) with math operators
+    and symbols, with each part rendering appropriately for the target format.
+
+    Example:
+        # Vector magnitude: ||v|| =
+        body.add_element(ContentAST.MathExpression([
+            "||",
+            ContentAST.Matrix(data=[[1], [2], [3]], bracket_type="b"),
+            "|| = "
+        ]))
+
+        # Vector addition: a + b =
+        body.add_element(ContentAST.MathExpression([
+            ContentAST.Matrix(data=[[1], [2]], bracket_type="b"),
+            " + ",
+            ContentAST.Matrix(data=[[3], [4]], bracket_type="b"),
+            " = "
+        ]))
+
+    Parts can be:
+        - Strings: rendered as-is (math operators, symbols, etc.)
+        - ContentAST elements: call their render method for the target format
+    """
+    def __init__(self, parts, inline=False):
+      super().__init__("[math_expression]")
+      self.parts = parts  # List of strings and/or ContentAST elements
+      self.inline = inline
+
+    def _render_parts(self, output_format, **kwargs):
+      """Render all parts for the given output format."""
+      rendered = []
+      for part in self.parts:
+        if isinstance(part, str):
+          # Convert LaTeX operators to Typst if needed
+          if output_format == ContentAST.OutputFormat.TYPST:
+            part = part.replace(r'\cdot', ' dot ')
+            part = part.replace(r'\times', ' times ')
+            part = part.replace(r'\div', ' div ')
+          rendered.append(part)
+        elif isinstance(part, ContentAST.Element):
+          # Use dedicated math_content methods if available (cleaner than stripping delimiters)
+          if output_format == ContentAST.OutputFormat.HTML:
+            # For HTML (MathJax), use LaTeX math content
+            if hasattr(part, 'math_content_latex'):
+              rendered.append(part.math_content_latex())
+            else:
+              # Fallback: try to extract from render_html
+              html = part.render_html(**kwargs)
+              html = re.sub(r"<[^>]+>", "", html)
+              html = re.sub(r"^\$\$?\s*\\displaystyle\s*", "", html)
+              html = re.sub(r"^\$\$?\s*", "", html)
+              html = re.sub(r"\s*\$\$?$", "", html)
+              rendered.append(html)
+          elif output_format == ContentAST.OutputFormat.TYPST:
+            if hasattr(part, 'math_content_typst'):
+              rendered.append(part.math_content_typst())
+            else:
+              # Fallback: try to extract from render_typst
+              typst = part.render_typst(**kwargs)
+              typst = re.sub(r"^\s*\$\s*", "", typst)
+              typst = re.sub(r"\s*\$\s*$", "", typst)
+              rendered.append(typst)
+          elif output_format == ContentAST.OutputFormat.LATEX:
+            if hasattr(part, 'math_content_latex'):
+              rendered.append(part.math_content_latex())
+            else:
+              latex = part.render_latex(**kwargs)
+              latex = re.sub(r"^\\begin\{flushleft\}", "", latex)
+              latex = re.sub(r"\\end\{flushleft\}$", "", latex)
+              latex = re.sub(r"^\\\[", "", latex)
+              latex = re.sub(r"\\\]$", "", latex)
+              latex = re.sub(r"^\$", "", latex)
+              latex = re.sub(r"\$~?$", "", latex)
+              rendered.append(latex)
+          elif output_format == ContentAST.OutputFormat.MARKDOWN:
+            if hasattr(part, 'math_content_latex'):
+              rendered.append(part.math_content_latex())
+            else:
+              md = part.render_markdown(**kwargs)
+              md = re.sub(r"^\$", "", md)
+              md = re.sub(r"\$$", "", md)
+              rendered.append(md)
+        else:
+          # Convert to string as fallback
+          rendered.append(str(part))
+      return "".join(rendered)
+
+    def render_markdown(self, **kwargs):
+      content = self._render_parts(ContentAST.OutputFormat.MARKDOWN, **kwargs)
+      if self.inline:
+        return f"${content}$"
+      else:
+        return f"$\\displaystyle {content}$"
+
+    def render_html(self, **kwargs):
+      content = self._render_parts(ContentAST.OutputFormat.HTML, **kwargs)
+      if self.inline:
+        return f"\\({content}\\)"
+      else:
+        return f"<div class='math'>$$ \\displaystyle {content} \\; $$</div>"
+
+    def render_latex(self, **kwargs):
+      content = self._render_parts(ContentAST.OutputFormat.LATEX, **kwargs)
+      if self.inline:
+        return f"${content}$~"
+      else:
+        return f"\\begin{{flushleft}}${content}$\\end{{flushleft}}"
+
+    def render_typst(self, **kwargs):
+      content = self._render_parts(ContentAST.OutputFormat.TYPST, **kwargs)
+      if self.inline:
+        return f"${content}$"
+      else:
+        return f" $ {content} $ "
 
   class Matrix(Leaf):
     """
@@ -1055,6 +1236,42 @@ class ContentAST:
         rows.append(" & ".join(str(cell) for cell in row))
       matrix_content = r" \\ ".join(rows)
       return f"\\begin{{{bracket_type}matrix}} {matrix_content} \\end{{{bracket_type}matrix}}"
+
+    def math_content_latex(self):
+      """Return raw LaTeX math content without delimiters (for use in MathExpression)."""
+      return ContentAST.Matrix.to_latex(self.data, self.bracket_type)
+
+    def math_content_typst(self):
+      """Return raw Typst math content without delimiters (for use in MathExpression)."""
+      # Build matrix content
+      rows = []
+      for row in self.data:
+        rows.append(", ".join(str(cell) for cell in row))
+
+      # Check if it's a vector (single column)
+      is_vector = all(len(row) == 1 for row in self.data)
+
+      if is_vector:
+        # Use vec() for vectors
+        matrix_content = ", ".join(str(row[0]) for row in self.data)
+        result = f"vec({matrix_content})"
+      else:
+        # Use mat() for matrices with semicolons separating rows
+        matrix_content = "; ".join(rows)
+        result = f"mat({matrix_content})"
+
+      # Add bracket delimiters if needed
+      if self.bracket_type == "b":  # square brackets
+        matrix_content_inner = ", ".join(str(row[0]) for row in self.data) if is_vector else "; ".join(rows)
+        result = f"mat(delim: \"[\", {matrix_content_inner})" if not is_vector else f"vec(delim: \"[\", {matrix_content_inner})"
+      elif self.bracket_type == "v":  # vertical bars (determinant)
+        result = f"mat(delim: \"|\", {'; '.join(rows)})"
+      elif self.bracket_type == "V":  # double vertical bars (norm)
+        result = f"mat(delim: \"||\", {'; '.join(rows)})"
+      elif self.bracket_type == "B":  # curly braces
+        result = f"mat(delim: \"{{\", {'; '.join(rows)})"
+
+      return result
 
     def render_markdown(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
@@ -1251,79 +1468,716 @@ class ContentAST:
 
   class Answer(Leaf):
     """
-    Answer input field that renders as blanks in PDF and shows answers in HTML.
+    Unified answer class combining data storage, Canvas export, and rendering.
+
+    Extends ContentAST.Leaf to integrate seamlessly with the ContentAST tree while
+    maintaining all Canvas export functionality.
 
     CRITICAL: Use this for ALL answer inputs in questions.
     Creates appropriate input fields that work across both PDF and Canvas formats.
     In PDF, renders as blank lines for students to fill in.
     In HTML/Canvas, can display the answer for checking.
 
-    When to use:
-    - Any place where students need to input an answer
-    - Numerical answers, short text answers, etc.
-    - Questions requiring fill-in-the-blank responses
-
     Example:
         # Basic answer field
-        body.add_element(ContentAST.Answer(
-            answer=self.answer,
-            label="Result",
-            unit="MB"
-        ))
-
-        # Multiple choice or complex answers
-        body.add_element(ContentAST.Answer(
-            answer=[self.answer_a, self.answer_b],
-            label="Choose the best answer"
-        ))
+        ans = ContentAST.Answer.integer("result", 42, label="Result", unit="MB")
+        body.add_element(ans)
+        answers.append(ans)  # Track for Canvas export
     """
-    
-    def __init__(self, answer, label: str = "", unit: str = "", blank_length=5):
-      super().__init__(label)
-      self.answer = answer
+
+    DEFAULT_ROUNDING_DIGITS = 4
+
+    class AnswerKind(enum.Enum):
+      BLANK = "fill_in_multiple_blanks_question"
+      MULTIPLE_ANSWER = "multiple_answers_question"
+      ESSAY = "essay_question"
+      MULTIPLE_DROPDOWN = "multiple_dropdowns_question"
+      NUMERICAL_QUESTION = "numerical_question"
+
+    class VariableKind(enum.Enum):
+      STR = enum.auto()
+      INT = enum.auto()
+      FLOAT = enum.auto()
+      BINARY = enum.auto()
+      HEX = enum.auto()
+      BINARY_OR_HEX = enum.auto()
+      AUTOFLOAT = enum.auto()
+      LIST = enum.auto()
+      VECTOR = enum.auto()
+      MATRIX = enum.auto()
+
+    def __init__(
+        self,
+        key=None,  # Can be str (new pattern) or Answer object (old wrapper pattern)
+        value=None,
+        kind: 'ContentAST.Answer.AnswerKind' = None,
+        variable_kind: 'ContentAST.Answer.VariableKind' = None,
+        # Data fields (from misc.Answer)
+        display=None,
+        length=None,
+        correct=True,
+        baffles=None,
+        pdf_only=False,
+        # Rendering fields (from ContentAST.Answer)
+        label: str = "",
+        unit: str = "",
+        blank_length=5,
+        # Backward compatibility for old wrapper pattern
+        answer=None  # Old pattern: ContentAST.Answer(answer=misc_answer_obj)
+    ):
+      # BACKWARD COMPATIBILITY: Handle old wrapper pattern
+      # Old: ContentAST.Answer(Answer.string("key", "value"))
+      # Old: ContentAST.Answer(answer=some_answer_obj, label="...")
+      if answer is not None or (key is not None and isinstance(key, ContentAST.Answer)):
+        # Old wrapper pattern detected
+        wrapped_answer = answer if answer is not None else key
+
+        if wrapped_answer is None:
+          raise ValueError("Must provide either 'key' and 'value', or 'answer' parameter")
+
+        # Copy all fields from wrapped answer
+        super().__init__(content=label if label else wrapped_answer.label)
+        self.key = wrapped_answer.key
+        self.value = wrapped_answer.value
+        self.kind = wrapped_answer.kind
+        self.variable_kind = wrapped_answer.variable_kind
+        self.display = wrapped_answer.display
+        self.length = wrapped_answer.length
+        self.correct = wrapped_answer.correct
+        self.baffles = wrapped_answer.baffles
+        self.pdf_only = wrapped_answer.pdf_only
+
+        # Use provided rendering fields or copy from wrapped answer
+        self.label = label if label else wrapped_answer.label
+        self.unit = unit if unit else (wrapped_answer.unit if hasattr(wrapped_answer, 'unit') else "")
+        self.blank_length = blank_length if blank_length != 5 else (wrapped_answer.blank_length if hasattr(wrapped_answer, 'blank_length') else 5)
+        return
+
+      # NEW PATTERN: Normal construction
+      if key is None:
+        raise ValueError("Must provide 'key' parameter for new Answer pattern, or 'answer' parameter for old wrapper pattern")
+
+      # Initialize Leaf with label as content
+      super().__init__(content=label if label else "")
+
+      # Data fields
+      self.key = key
+      self.value = value
+      self.kind = kind if kind is not None else ContentAST.Answer.AnswerKind.BLANK
+      self.variable_kind = variable_kind if variable_kind is not None else ContentAST.Answer.VariableKind.STR
+
+      # For list values in display, show the first option (or join them with /)
+      if display is not None:
+        self.display = display
+      elif isinstance(value, list) and self.variable_kind == ContentAST.Answer.VariableKind.STR:
+        self.display = value[0] if len(value) == 1 else " / ".join(value)
+      else:
+        self.display = value
+
+      self.length = length  # Used for bits and hex to be printed appropriately
+      self.correct = correct
+      self.baffles = baffles
+      self.pdf_only = pdf_only
+
+      # Rendering fields
       self.label = label
       self.unit = unit
-      self.length = blank_length
-    
-    def render_markdown(self, **kwargs):
-      if not isinstance(self.answer, list):
-        key_to_display = self.answer.key
+      self.blank_length = blank_length
+
+    # Canvas export methods (from misc.Answer)
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      """Generate Canvas answer dictionaries based on variable_kind."""
+      import itertools
+      import math
+      import decimal
+      import fractions
+
+      # If this answer is PDF-only, don't send it to Canvas
+      if self.pdf_only:
+        return []
+
+      canvas_answers = []
+
+      if self.variable_kind == ContentAST.Answer.VariableKind.BINARY:
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": f"{self.value:0{self.length if self.length is not None else 0}b}",
+            "answer_weight": 100 if self.correct else 0,
+          },
+          {
+            "blank_id": self.key,
+            "answer_text": f"0b{self.value:0{self.length if self.length is not None else 0}b}",
+            "answer_weight": 100 if self.correct else 0,
+          }
+        ]
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.HEX:
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": f"{self.value:0{(self.length // 8) + 1 if self.length is not None else 0}X}",
+            "answer_weight": 100 if self.correct else 0,
+          },
+          {
+            "blank_id": self.key,
+            "answer_text": f"0x{self.value:0{(self.length // 8) + 1 if self.length is not None else 0}X}",
+            "answer_weight": 100 if self.correct else 0,
+          }
+        ]
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.BINARY_OR_HEX:
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": f"{self.value:0{self.length if self.length is not None else 0}b}",
+            "answer_weight": 100 if self.correct else 0,
+          },
+          {
+            "blank_id": self.key,
+            "answer_text": f"0b{self.value:0{self.length if self.length is not None else 0}b}",
+            "answer_weight": 100 if self.correct else 0,
+          },
+          {
+            "blank_id": self.key,
+            "answer_text": f"{self.value:0{math.ceil(self.length / 8) if self.length is not None else 0}X}",
+            "answer_weight": 100 if self.correct else 0,
+          },
+          {
+            "blank_id": self.key,
+            "answer_text": f"0x{self.value:0{math.ceil(self.length / 8) if self.length is not None else 0}X}",
+            "answer_weight": 100 if self.correct else 0,
+          },
+          {
+            "blank_id": self.key,
+            "answer_text": f"{self.value}",
+            "answer_weight": 100 if self.correct else 0,
+          },
+        ]
+
+      elif self.variable_kind in [
+        ContentAST.Answer.VariableKind.AUTOFLOAT,
+        ContentAST.Answer.VariableKind.FLOAT,
+        ContentAST.Answer.VariableKind.INT
+      ]:
+        if single_answer:
+          canvas_answers = [
+            {
+              "numerical_answer_type": "exact_answer",
+              "answer_text": round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS),
+              "answer_exact": round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS),
+              "answer_error_margin": 0.1,
+              "answer_weight": 100 if self.correct else 0,
+            }
+          ]
+        else:
+          # Use the accepted_strings helper
+          answer_strings = ContentAST.Answer.accepted_strings(
+            self.value,
+            allow_integer=True,
+            allow_simple_fraction=True,
+            max_denominator=60,
+            allow_mixed=True,
+            include_spaces=False,
+            include_fixed_even_if_integer=True
+          )
+
+          canvas_answers = [
+            {
+              "blank_id": self.key,
+              "answer_text": answer_string,
+              "answer_weight": 100 if self.correct else 0,
+            }
+            for answer_string in answer_strings
+          ]
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.VECTOR:
+        # Get all answer variations
+        answer_variations = [
+          ContentAST.Answer.accepted_strings(dimension_value)
+          for dimension_value in self.value
+        ]
+
+        canvas_answers = []
+        for combination in itertools.product(*answer_variations):
+          # Add parentheses format
+          canvas_answers.append({
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"({', '.join(list(combination))})",
+          })
+
+          # Add non-parentheses format for single-element vectors
+          if len(combination) == 1:
+            canvas_answers.append({
+              "blank_id": self.key,
+              "answer_weight": 100 if self.correct else 0,
+              "answer_text": f"{', '.join(combination)}",
+            })
+        return canvas_answers
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.LIST:
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": ', '.join(map(str, possible_state)),
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for possible_state in [self.value]
+        ]
+
       else:
-        key_to_display = self.answer[0].key
-      return f"{self.label + (':' if len(self.label) > 0 else '')} [{key_to_display}] {self.unit}".strip()
-    
+        # For string answers, check if value is a list of acceptable alternatives
+        if isinstance(self.value, list):
+          canvas_answers = [
+            {
+              "blank_id": self.key,
+              "answer_text": str(alt),
+              "answer_weight": 100 if self.correct else 0,
+            }
+            for alt in self.value
+          ]
+        else:
+          canvas_answers = [{
+            "blank_id": self.key,
+            "answer_text": self.value,
+            "answer_weight": 100 if self.correct else 0,
+          }]
+
+      # Add baffles (incorrect answer choices)
+      if self.baffles is not None:
+        for baffle in self.baffles:
+          canvas_answers.append({
+            "blank_id": self.key,
+            "answer_text": baffle,
+            "answer_weight": 0,
+          })
+
+      return canvas_answers
+
+    def get_display_string(self) -> str:
+      """Get the formatted display string for this answer (for grading/answer keys)."""
+      import math
+
+      def fix_negative_zero(x):
+        """Fix -0.0 display issue."""
+        return 0.0 if x == 0 else x
+
+      if self.variable_kind == ContentAST.Answer.VariableKind.BINARY_OR_HEX:
+        hex_digits = math.ceil(self.length / 4) if self.length is not None else 0
+        return f"0x{self.value:0{hex_digits}X}"
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.BINARY:
+        return f"0b{self.value:0{self.length if self.length is not None else 0}b}"
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.HEX:
+        hex_digits = (self.length // 4) + 1 if self.length is not None else 0
+        return f"0x{self.value:0{hex_digits}X}"
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.AUTOFLOAT:
+        rounded = round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+        return f"{fix_negative_zero(rounded)}"
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.FLOAT:
+        if isinstance(self.value, (list, tuple)):
+          rounded = round(self.value[0], ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+          return f"{fix_negative_zero(rounded)}"
+        rounded = round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+        return f"{fix_negative_zero(rounded)}"
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.INT:
+        return str(int(self.value))
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.LIST:
+        return ", ".join(str(v) for v in self.value)
+
+      elif self.variable_kind == ContentAST.Answer.VariableKind.VECTOR:
+        def fix_negative_zero(x):
+          return 0.0 if x == 0 else x
+        return ", ".join(str(fix_negative_zero(round(v, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS))) for v in self.value)
+
+      else:
+        return str(self.display if hasattr(self, 'display') else self.value)
+
+    # Rendering methods (override Leaf's defaults)
+    def render_markdown(self, **kwargs):
+      return f"{self.label + (':' if len(self.label) > 0 else '')} [{self.key}] {self.unit}".strip()
+
     def render_html(self, show_answers=False, can_be_numerical=False, **kwargs):
       if can_be_numerical:
         return f"Calculate {self.label}"
-      if show_answers and self.answer:
-        # Show actual answer value using formatted display string
-        if not isinstance(self.answer, list):
-          answer_display = self.answer.get_display_string()
-        else:
-          answer_display = ", ".join(a.get_display_string() for a in self.answer)
-        
+      if show_answers:
+        answer_display = self.get_display_string()
         label_part = f"{self.label}:" if self.label else ""
         unit_part = f" {self.unit}" if self.unit else ""
         return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
       else:
-        # Default behavior: show [key]
         return self.render_markdown(**kwargs)
-    
+
     def render_latex(self, **kwargs):
-      return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.length}}} {self.unit}".strip()
-    
+      return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.blank_length}}} {self.unit}".strip()
+
     def render_typst(self, **kwargs):
       """Render answer blank as an underlined space in Typst."""
-      # Use the fillline function defined in TYPST_HEADER
-      # Width is based on self.length (in cm)
-      blank_width = self.length * 0.75  # Convert character length to cm
+      blank_width = self.blank_length * 0.75  # Convert character length to cm
       blank = f"#fillline(width: {blank_width}cm)"
-      
+
       label_part = f"{self.label}:" if self.label else ""
       unit_part = f" {self.unit}" if self.unit else ""
-      
+
       return f"{label_part} {blank}{unit_part}".strip()
-  
+
+    # Factory methods for common answer types
+    @classmethod
+    def binary_hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
+      """Create an answer that accepts binary or hex format"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.BINARY_OR_HEX,
+        length=length,
+        **kwargs
+      )
+
+    @classmethod
+    def auto_float(cls, key: str, value: float, **kwargs) -> 'ContentAST.Answer':
+      """Create an answer that accepts multiple float formats (decimal, fraction, mixed)"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.AUTOFLOAT,
+        **kwargs
+      )
+
+    @classmethod
+    def integer(cls, key: str, value: int, **kwargs) -> 'ContentAST.Answer':
+      """Create an integer answer"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.INT,
+        **kwargs
+      )
+
+    @classmethod
+    def string(cls, key: str, value: str, **kwargs) -> 'ContentAST.Answer':
+      """Create a string answer"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.STR,
+        **kwargs
+      )
+
+    @classmethod
+    def binary(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
+      """Create a binary-only answer"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.BINARY,
+        length=length,
+        **kwargs
+      )
+
+    @classmethod
+    def hex_value(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
+      """Create a hex-only answer"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.HEX,
+        length=length,
+        **kwargs
+      )
+
+    @classmethod
+    def float_value(cls, key: str, value, **kwargs) -> 'ContentAST.Answer':
+      """Create a simple float answer (no fraction conversion)"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.FLOAT,
+        **kwargs
+      )
+
+    @classmethod
+    def list_value(cls, key: str, value: list, **kwargs) -> 'ContentAST.Answer':
+      """Create a list answer (comma-separated values)"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.LIST,
+        **kwargs
+      )
+
+    @classmethod
+    def vector_value(cls, key: str, value: List[float], **kwargs) -> 'ContentAST.Answer':
+      """Create a vector answer"""
+      return cls(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.VECTOR,
+        **kwargs
+      )
+
+    @classmethod
+    def dropdown(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
+      """Create a dropdown answer with wrong answer choices (baffles)"""
+      return cls(
+        key=key,
+        value=value,
+        kind=cls.AnswerKind.MULTIPLE_DROPDOWN,
+        baffles=baffles,
+        **kwargs
+      )
+
+    @classmethod
+    def multiple_choice(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
+      """Create a multiple choice answer with wrong answer choices (baffles)"""
+      return cls(
+        key=key,
+        value=value,
+        kind=cls.AnswerKind.MULTIPLE_ANSWER,
+        baffles=baffles,
+        **kwargs
+      )
+
+    @classmethod
+    def essay(cls, key: str, **kwargs) -> 'ContentAST.Answer':
+      """Create an essay question (no specific correct answer)"""
+      return cls(
+        key=key,
+        value="",  # Essays don't have predetermined answers
+        kind=cls.AnswerKind.ESSAY,
+        **kwargs
+      )
+
+    @classmethod
+    def matrix(cls, key: str, value, **kwargs):
+      """Create a matrix answer (returns MatrixAnswer instance)"""
+      return ContentAST.MatrixAnswer(
+        key=key,
+        value=value,
+        variable_kind=cls.VariableKind.MATRIX,
+        **kwargs
+      )
+
+    # Static helper methods
+    @staticmethod
+    def _to_fraction(x):
+      """Convert int/float/decimal.Decimal/fractions.Fraction/str to fractions.Fraction exactly."""
+      import fractions
+      import decimal
+
+      if isinstance(x, fractions.Fraction):
+        return x
+      if isinstance(x, int):
+        return fractions.Fraction(x, 1)
+      if isinstance(x, decimal.Decimal):
+        # exact conversion of decimal.Decimal to fractions.Fraction
+        sign, digits, exp = x.as_tuple()
+        n = 0
+        for d in digits:
+          n = n * 10 + d
+        n = -n if sign else n
+        if exp >= 0:
+          return fractions.Fraction(n * (10 ** exp), 1)
+        else:
+          return fractions.Fraction(n, 10 ** (-exp))
+      if isinstance(x, str):
+        s = x.strip()
+        if '/' in s:
+          a, b = s.split('/', 1)
+          return fractions.Fraction(int(a.strip()), int(b.strip()))
+        return fractions.Fraction(decimal.Decimal(s))
+      # float or other numerics
+      return fractions.Fraction(decimal.Decimal(str(x)))
+
+    @staticmethod
+    def accepted_strings(
+        value,
+        *,
+        allow_integer=True,
+        allow_simple_fraction=True,
+        max_denominator=720,
+        allow_mixed=False,
+        include_spaces=False,
+        include_fixed_even_if_integer=False
+    ):
+      """Return a sorted list of strings you can paste into Canvas as alternate correct answers."""
+      import decimal
+      import fractions
+
+      decimal.getcontext().prec = max(34, (ContentAST.Answer.DEFAULT_ROUNDING_DIGITS or 0) + 10)
+      f = ContentAST.Answer._to_fraction(value)
+      outs = set()
+
+      # Integer form
+      if f.denominator == 1 and allow_integer:
+        outs.add(str(f.numerator))
+        if include_fixed_even_if_integer:
+          q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+          d = decimal.Decimal(f.numerator).quantize(q, rounding=decimal.ROUND_HALF_UP)
+          outs.add(format(d, 'f'))
+
+      # Fixed-decimal form
+      q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+      d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
+      outs.add(format(d, 'f'))
+
+      # Trimmed decimal
+      if ContentAST.Answer.DEFAULT_ROUNDING_DIGITS:
+        q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+        d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
+        s = format(d, 'f').rstrip('0').rstrip('.')
+        if s.startswith('.'):
+          s = '0' + s
+        if s == '-0':
+          s = '0'
+        outs.add(s)
+
+      # Simple fraction
+      if allow_simple_fraction:
+        fr = f.limit_denominator(max_denominator)
+        if fr == f:
+          a, b = fr.numerator, fr.denominator
+          outs.add(f"{a}/{b}")
+          if include_spaces:
+            outs.add(f"{a} / {b}")
+          if allow_mixed and b != 1 and abs(a) > b:
+            sign = '-' if a < 0 else ''
+            A = abs(a)
+            whole, rem = divmod(A, b)
+            outs.add(f"{sign}{whole} {rem}/{b}")
+
+      return sorted(outs, key=lambda s: (len(s), s))
+
+  class MatrixAnswer(Answer):
+    """
+    Matrix answers generate multiple blank_ids (e.g., M_0_0, M_0_1, M_1_0, M_1_1).
+    """
+
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      """Generate Canvas answers for each matrix element."""
+      import numpy as np
+
+      canvas_answers = []
+
+      # Generate a per-index set of answers for each matrix element
+      for i, j in np.ndindex(self.value.shape):
+        entry_strings = ContentAST.Answer.accepted_strings(
+          self.value[i, j],
+          allow_integer=True,
+          allow_simple_fraction=True,
+          max_denominator=60,
+          allow_mixed=True,
+          include_spaces=False,
+          include_fixed_even_if_integer=True
+        )
+        canvas_answers.extend([
+          {
+            "blank_id": f"{self.key}_{i}_{j}",  # Indexed per cell
+            "answer_text": answer_string,
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for answer_string in entry_strings
+        ])
+
+      return canvas_answers
+
+    def render_html(self, **kwargs):
+      """Render as table of answer blanks."""
+      # Create sub-Answer for each cell
+      data = [
+        [
+          ContentAST.Answer.float_value(
+            key=f"{self.key}_{i}_{j}",
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+      table = ContentAST.Table(data)
+
+      if self.label:
+        return ContentAST.Container([
+          ContentAST.Text(f"{self.label} = "),
+          table
+        ]).render_html(**kwargs)
+      return table.render_html(**kwargs)
+
+    def render_latex(self, **kwargs):
+      """Render as LaTeX table of answer blanks."""
+      # Create sub-Answer for each cell
+      data = [
+        [
+          ContentAST.Answer.float_value(
+            key=f"{self.key}_{i}_{j}",
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+      table = ContentAST.Table(data)
+
+      if self.label:
+        return ContentAST.Container([
+          ContentAST.Text(f"{self.label} = "),
+          table
+        ]).render_latex(**kwargs)
+      return table.render_latex(**kwargs)
+
+    def render_markdown(self, **kwargs):
+      """Render as markdown table of answer blanks."""
+      # Create sub-Answer for each cell
+      data = [
+        [
+          ContentAST.Answer.float_value(
+            key=f"{self.key}_{i}_{j}",
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+      table = ContentAST.Table(data)
+
+      if self.label:
+        return ContentAST.Container([
+          ContentAST.Text(f"{self.label} = "),
+          table
+        ]).render_markdown(**kwargs)
+      return table.render_markdown(**kwargs)
+
+    def render_typst(self, **kwargs):
+      """Render as Typst table of answer blanks."""
+      # Create sub-Answer for each cell
+      data = [
+        [
+          ContentAST.Answer.float_value(
+            key=f"{self.key}_{i}_{j}",
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+      table = ContentAST.Table(data)
+
+      if self.label:
+        return ContentAST.Container([
+          ContentAST.Text(f"{self.label} = "),
+          table
+        ]).render_typst(**kwargs)
+      return table.render_typst(**kwargs)
+
   class LineBreak(Text):
     def __init__(self, *args, **kwargs):
       super().__init__("\n\n")
@@ -1763,18 +2617,15 @@ class ContentAST:
     - Better visual grouping of related answers
 
     Example:
-        # Multiple related answers
-        answers = [
-            ContentAST.Answer(answer=self.memory_answer, label="Memory used", unit="MB"),
-            ContentAST.Answer(answer=self.time_answer, label="Execution time", unit="ms")
-        ]
-        answer_block = ContentAST.AnswerBlock(answers)
+        # Multiple related answers - Answer extends Leaf, use factory methods
+        memory_ans = ContentAST.Answer.integer("memory", self.memory_value, label="Memory used", unit="MB")
+        time_ans = ContentAST.Answer.auto_float("time", self.time_value, label="Execution time", unit="ms")
+        answer_block = ContentAST.AnswerBlock([memory_ans, time_ans])
         body.add_element(answer_block)
 
         # Single answer with better spacing
-        single_answer = ContentAST.AnswerBlock(
-            ContentAST.Answer(answer=self.result, label="Final result")
-        )
+        result_ans = ContentAST.Answer.integer("result", self.result_value, label="Final result")
+        single_answer = ContentAST.AnswerBlock(result_ans)
     """
     def __init__(self, answers: ContentAST.Answer|List[ContentAST.Answer]):
       if not isinstance(answers, list):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 import logging
-from typing import List
+from typing import List, Tuple
 import sympy as sp
 
 from QuizGenerator.contentast import ContentAST
@@ -39,6 +39,9 @@ class DerivativeQuestion(Question, abc.ABC):
     # Evaluate gradient at the specified point
     subs_map = dict(zip(self.variables, evaluation_point))
 
+    # Format evaluation point for label
+    eval_point_str = ", ".join([f"x_{i} = {evaluation_point[i]}" for i in range(self.num_variables)])
+
     # Create answer for each partial derivative
     for i in range(self.num_variables):
       answer_key = f"partial_derivative_{i}"
@@ -52,7 +55,9 @@ class DerivativeQuestion(Question, abc.ABC):
         raise ValueError("Complex number encountered - need to regenerate")
 
       # Use auto_float for Canvas compatibility with integers and decimals
-      self.answers[answer_key] = Answer.auto_float(answer_key, gradient_value)
+      # Label includes the partial derivative notation
+      label = f"∂f/∂x_{i} at ({eval_point_str})"
+      self.answers[answer_key] = Answer.auto_float(answer_key, gradient_value, label=label)
 
   def _create_gradient_vector_answer(self) -> None:
     """Create a single gradient vector answer for PDF format."""
@@ -72,8 +77,10 @@ class DerivativeQuestion(Question, abc.ABC):
     vector_str = format_vector(gradient_values)
     self.answers["gradient_vector"] = Answer.string("gradient_vector", vector_str, pdf_only=True)
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
+    answers = []
 
     # Display the function
     body.add_element(
@@ -103,6 +110,8 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # For Canvas: Use OnlyHtml to show individual partial derivatives
     for i in range(self.num_variables):
+      answer = self.answers[f"partial_derivative_{i}"]
+      answers.append(answer)
       body.add_element(
         ContentAST.OnlyHtml([
           ContentAST.Paragraph([
@@ -110,14 +119,20 @@ class DerivativeQuestion(Question, abc.ABC):
               f"\\left. {self._format_partial_derivative(i)} \\right|_{{{eval_point_str}}} = ",
               inline=True
             ),
-            ContentAST.Answer(self.answers[f"partial_derivative_{i}"])
+            answer
           ])
         ])
       )
 
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     # Show the function and its gradient
@@ -165,6 +180,11 @@ class DerivativeQuestion(Question, abc.ABC):
         ])
       )
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
 
@@ -264,7 +284,8 @@ class DerivativeChain(DerivativeQuestion):
     f = sp.Function('f')
     self.equation = sp.Eq(f(*self.variables), self.function)
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
 
     # Show the composed function structure
@@ -366,4 +387,9 @@ class DerivativeChain(DerivativeQuestion):
         ])
       )
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation

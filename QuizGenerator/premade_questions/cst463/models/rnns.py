@@ -3,6 +3,7 @@ import logging
 import math
 import keras
 import numpy as np
+from typing import List, Tuple
 
 from .matrices import MatrixQuestion
 from QuizGenerator.question import Question, QuestionRegistry, Answer
@@ -63,13 +64,15 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # x_seq, W_xh, W_hh, b_h, h_0, h_states
     
-    self.answers["output_sequence"] = Answer.matrix(key="output_sequence", value=self.h_states)
+    self.answers["output_sequence"] = Answer.matrix(key="output_sequence", value=self.h_states, label="Hidden states")
     
     return True
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question body and collect answers."""
     body = ContentAST.Section()
-    
+    answers = []
+
     body.add_element(
       ContentAST.Paragraph([
         ContentAST.Text("Given the below information about an RNN, please calculate the output sequence."),
@@ -87,16 +90,21 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
         }
       )
     )
-    
+
     body.add_element(ContentAST.LineBreak())
-    
-    body.add_element(
-      self.answers["output_sequence"].get_ast_element(label=f"Hidden states")
-    )
-    
+
+    answers.append(self.answers["output_sequence"])
+    body.add_element(self.answers["output_sequence"])
+
+    return body, answers
+
+  def get_body(self, **kwargs) -> ContentAST.Section:
+    """Build question body (backward compatible interface)."""
+    body, _ = self._get_body(**kwargs)
     return body
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+    """Build question explanation."""
     explanation = ContentAST.Section()
     digits = Answer.DEFAULT_ROUNDING_DIGITS
 
@@ -128,7 +136,7 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     # Show detailed examples for first 2 timesteps (or just 1 if seq_len == 1)
     seq_len = len(self.x_seq)
     num_examples = min(2, seq_len)
-    
+
     explanation.add_element(ContentAST.Paragraph([""]))
 
     for t in range(num_examples):
@@ -198,5 +206,10 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
       ContentAST.Matrix(np.round(self.h_states, digits))
     )
 
+    return explanation, []
+
+  def get_explanation(self, **kwargs) -> ContentAST.Section:
+    """Build question explanation (backward compatible interface)."""
+    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
