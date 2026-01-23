@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main    # change if your default branch is different
+  workflow_dispatch:    # allows manual triggering from GitHub Actions UI
 
 jobs:
   release:
