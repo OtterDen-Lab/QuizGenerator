@@ -42,8 +42,7 @@ def parse_args():
   
   # PDF Flags
   parser.add_argument("--num_pdfs", default=0, type=int, help="How many PDF quizzes to create")
-  parser.add_argument("--typst", action="store_true",
-                     help="Use Typst instead of LaTeX for PDF generation")
+  parser.add_argument("--latex", action="store_false", dest="typst", help="Use Typst instead of LaTeX for PDF generation")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
