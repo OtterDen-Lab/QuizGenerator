@@ -63,6 +63,8 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
   TIME_QUANTUM = None
   
   ROUNDING_DIGITS = 2
+  IMAGE_DPI = 140
+  IMAGE_FIGSIZE = (9.5, 5.5)
   
   @dataclasses.dataclass
   class Job:
@@ -550,7 +552,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
   
   def make_image(self):
     
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1, 1, figsize=self.IMAGE_FIGSIZE, dpi=self.IMAGE_DPI)
     
     for x_loc in set([t for job_id in self.job_stats.keys() for t in self.job_stats[job_id]["state_changes"] ]):
       ax.axvline(x_loc, zorder=0)
@@ -608,7 +610,8 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     
     # Save to BytesIO object instead of a file
     buffer = io.BytesIO()
-    plt.savefig(buffer, format='png')
+    plt.tight_layout()
+    plt.savefig(buffer, format='png', dpi=self.IMAGE_DPI, bbox_inches='tight')
     plt.close(fig)
     
     # Reset buffer position to the beginning
@@ -637,6 +640,8 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   DEFAULT_NUM_JOBS = 3
   DEFAULT_NUM_QUEUES = 3
   ROUNDING_DIGITS = 2
+  IMAGE_DPI = 140
+  IMAGE_FIGSIZE = (9.5, 6.5)
 
   @dataclasses.dataclass
   class Job:
@@ -970,12 +975,13 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     return explanation
 
   def make_image(self):
-    fig, ax = plt.subplots(1, 1)
+    fig, ax = plt.subplots(1, 1, figsize=self.IMAGE_FIGSIZE, dpi=self.IMAGE_DPI)
 
     num_jobs = len(self.job_stats)
     if num_jobs == 0:
       buffer = io.BytesIO()
-      plt.savefig(buffer, format='png')
+      plt.tight_layout()
+      plt.savefig(buffer, format='png', dpi=self.IMAGE_DPI, bbox_inches='tight')
       plt.close(fig)
       buffer.seek(0)
       return buffer
@@ -1010,12 +1016,12 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ax.axvline(completion_time, color='red', linewidth=1.5, zorder=0)
       ax.text(
         completion_time - 0.6,
-        -0.6,
+        self.num_queues * lanes_per_queue - 0.5,
         f"{completion_time:0.{self.ROUNDING_DIGITS}f}s",
         color='red',
         rotation=90,
         ha='center',
-        va='bottom'
+        va='top'
       )
 
     tick_positions = [
@@ -1037,7 +1043,8 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ax.set_xlabel("Time")
 
     buffer = io.BytesIO()
-    plt.savefig(buffer, format='png')
+    plt.tight_layout()
+    plt.savefig(buffer, format='png', dpi=self.IMAGE_DPI, bbox_inches='tight')
     plt.close(fig)
     buffer.seek(0)
     return buffer
