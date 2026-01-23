@@ -17,6 +17,9 @@ from QuizGenerator.qrcode_generator import QuestionQRCode
 import re
 
 import logging
+import os
+import uuid
+
 log = logging.getLogger(__name__)
 
 class ContentAST:
@@ -1389,8 +1392,6 @@ class ContentAST:
     def _ensure_image_saved(self):
       """Save image data to file if not already saved."""
       if self.path is None:
-        import os
-        import uuid
 
         # Create imgs directory if it doesn't exist (use absolute path)
         img_dir = os.path.abspath("imgs")
