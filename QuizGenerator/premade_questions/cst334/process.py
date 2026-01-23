@@ -1067,6 +1067,16 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           color=job_colors[job_id]
         )
 
+    for queue_idx in range(self.num_queues):
+      if queue_idx % 2 == 1:
+        ax.axhspan(
+          queue_idx * lanes_per_queue - 0.5,
+          (queue_idx + 1) * lanes_per_queue - 0.5,
+          facecolor='0.97',
+          edgecolor='none',
+          zorder=-1
+        )
+
     arrival_times = sorted({
       self.job_stats[job_id]["arrival_time"]
       for job_id in self.job_stats.keys()
