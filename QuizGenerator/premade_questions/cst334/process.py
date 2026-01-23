@@ -944,8 +944,18 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ContentAST.Table(
         headers=["Time", "Events"],
         data=[
-          [f"{t:0.{self.ROUNDING_DIGITS}f}s"] + ['\n'.join(self.timeline[t])]
+          [f"{t:0.{self.ROUNDING_DIGITS}f}s"] + ['\n'.join(events)]
           for t in sorted(self.timeline.keys())
+          if (events := [
+            event for event in self.timeline[t]
+            if (
+              "arrived" in event
+              or "Demoted" in event
+              or "Completed" in event
+              or "Simulation Start" in event
+              or "CPU idle" in event
+            )
+          ])
         ]
       )
     )
@@ -996,6 +1006,22 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           color=job_colors[job_id]
         )
 
+    completion_times = sorted({
+      self.job_stats[job_id]["arrival_time"] + self.job_stats[job_id]["TAT"]
+      for job_id in self.job_stats.keys()
+    })
+    for completion_time in completion_times:
+      ax.axvline(completion_time, color='red', linewidth=1.5, zorder=0)
+      ax.text(
+        completion_time - 0.6,
+        -0.6,
+        f"{completion_time:0.{self.ROUNDING_DIGITS}f}s",
+        color='red',
+        rotation=90,
+        ha='center',
+        va='bottom'
+      )
+
     tick_positions = [
       q * lanes_per_queue + (lanes_per_queue - 1) / 2
       for q in range(self.num_queues)
@@ -1003,6 +1029,14 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ax.set_yticks(tick_positions)
     ax.set_yticklabels([f"Q{i}" for i in range(self.num_queues)])
     ax.set_ylim(-0.5, self.num_queues * lanes_per_queue - 0.5)
+    for boundary in range(1, self.num_queues):
+      ax.axhline(
+        boundary * lanes_per_queue - 0.5,
+        color='0.7',
+        linestyle=':',
+        linewidth=1,
+        zorder=0
+      )
     ax.set_xlim(xmin=0)
     ax.set_xlabel("Time")
 
