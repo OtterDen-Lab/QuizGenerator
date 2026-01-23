@@ -750,15 +750,17 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           f"Job{job.job_id} arrived (dur = {job.duration})"
         )
 
-    def apply_boost(curr_time: int) -> None:
+    def apply_boost(curr_time: int, running_job: MLFQQuestion.Job | None = None) -> None:
       jobs_to_boost = []
       for q in queues:
         while q:
           jobs_to_boost.append(q.popleft())
+      if running_job is not None and running_job.remaining_time > 0:
+        jobs_to_boost.append(running_job)
       if not jobs_to_boost:
         self.boost_times.append(curr_time)
         return
-      for job in jobs_to_boost:
+      for job in sorted(jobs_to_boost, key=lambda j: j.job_id):
         job.queue_level = len(queues) - 1
         job.time_in_queue = 0
         job.remaining_quantum = None
@@ -823,8 +825,10 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         job.remaining_quantum -= slice_duration
 
       enqueue_arrivals(curr_time)
+      boosted_current_job = False
       while next_boost_time is not None and curr_time >= next_boost_time:
-        apply_boost(curr_time)
+        apply_boost(curr_time, running_job=job if not boosted_current_job else None)
+        boosted_current_job = True
         next_boost_time += boost_interval
 
       if job.remaining_time <= 0:
@@ -834,6 +838,8 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         self.timeline[curr_time].append(
           f"Completed Job{job.job_id} (TAT = {job.turnaround_time})"
         )
+        continue
+      if boosted_current_job:
         continue
 
       allotment = queue_allotments[q_idx]
@@ -967,7 +973,8 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     if self.boost_interval is not None:
       body.add_element(ContentAST.Paragraph([
         f"Every {self.boost_interval} time units, all jobs are boosted to "
-        f"Q{self.num_queues - 1}."
+        f"Q{self.num_queues - 1}. After a boost, scheduling restarts with the "
+        "lowest job number in that queue."
       ]))
     body.add_element(ContentAST.Paragraph([instructions]))
     body.add_element(scheduling_table)
@@ -1051,7 +1058,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     }
     job_lane = {
       job_id: idx
-      for idx, job_id in enumerate(sorted(self.job_stats.keys()))
+      for idx, job_id in enumerate(sorted(self.job_stats.keys(), reverse=True))
     }
     lanes_per_queue = num_jobs
 
@@ -1120,14 +1127,6 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ax.set_yticks(tick_positions)
     ax.set_yticklabels([f"Q{i}" for i in range(self.num_queues)])
     ax.set_ylim(-0.5, self.num_queues * lanes_per_queue - 0.5)
-    for boundary in range(1, self.num_queues):
-      ax.axhline(
-        boundary * lanes_per_queue - 0.5,
-        color='0.7',
-        linestyle=':',
-        linewidth=1,
-        zorder=0
-      )
     ax.set_xlim(xmin=0)
     ax.set_xlabel("Time")
 
