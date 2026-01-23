@@ -656,22 +656,20 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self,
     num_jobs: int = DEFAULT_NUM_JOBS,
     num_queues: int = DEFAULT_NUM_QUEUES,
-    queue_quantums: List[int] | None = None,
-    queue_allotments: List[int] | None = None,
+    min_job_length: int = MIN_DURATION,
+    max_job_length: int = MAX_DURATION,
     *args,
     **kwargs
   ):
     kwargs["num_jobs"] = num_jobs
     kwargs["num_queues"] = num_queues
-    if queue_quantums is not None:
-      kwargs["queue_quantums"] = queue_quantums
-    if queue_allotments is not None:
-      kwargs["queue_allotments"] = queue_allotments
+    kwargs["min_job_length"] = min_job_length
+    kwargs["max_job_length"] = max_job_length
     super().__init__(*args, **kwargs)
     self.num_jobs = num_jobs
     self.num_queues = num_queues
-    self.queue_quantums = queue_quantums
-    self.queue_allotments = queue_allotments
+    self.min_job_length = min_job_length
+    self.max_job_length = max_job_length
 
   def get_workload(self, num_jobs: int) -> List[MLFQQuestion.Job]:
     arrivals = [0]
@@ -684,7 +682,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         arrivals[-1] = self.rng.randint(1, self.MAX_ARRIVAL)
 
     durations = [
-      self.rng.randint(self.MIN_DURATION, self.MAX_DURATION)
+      self.rng.randint(self.min_job_length, self.max_job_length)
       for _ in range(num_jobs)
     ]
 
@@ -816,20 +814,18 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     self.num_jobs = kwargs.get("num_jobs", self.num_jobs)
     self.num_queues = kwargs.get("num_queues", self.num_queues)
-    queue_quantums = kwargs.get("queue_quantums", self.queue_quantums)
-    queue_allotments = kwargs.get("queue_allotments", self.queue_allotments)
+    self.min_job_length = kwargs.get("min_job_length", self.min_job_length)
+    self.max_job_length = kwargs.get("max_job_length", self.max_job_length)
 
     jobs = self.get_workload(self.num_jobs)
 
-    if queue_quantums is None:
-      queue_quantums = [2**(self.num_queues - 1 - i) for i in range(self.num_queues)]
+    queue_quantums = [2**(self.num_queues - 1 - i) for i in range(self.num_queues)]
     queue_quantums = self._normalize_queue_params(queue_quantums, self.num_queues)
     queue_quantums = [int(q) for q in queue_quantums]
 
-    if queue_allotments is None:
-      queue_allotments = [None] + [
-        queue_quantums[i] * 2 for i in range(1, self.num_queues)
-      ]
+    queue_allotments = [None] + [
+      queue_quantums[i] * 2 for i in range(1, self.num_queues)
+    ]
     queue_allotments = self._normalize_queue_params(queue_allotments, self.num_queues)
     queue_allotments = [
       int(allotment) if allotment is not None else None
