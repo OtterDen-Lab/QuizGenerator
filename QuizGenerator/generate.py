@@ -86,6 +86,13 @@ def test_all_questions(num_variations: int):
   registered_questions = QuestionRegistry._registry
   total_questions = len(registered_questions)
 
+  # Test defaults for questions that require external input
+  # These are "template" questions that can't work without content
+  TEST_DEFAULTS = {
+    'fromtext': {'text': 'Test question placeholder text.'},
+    'fromgenerator': {'generator': 'return "Generated test content"'},
+  }
+
   print(f"\nTesting {total_questions} registered question types with {num_variations} variations each...")
   print("=" * 70)
 
@@ -101,10 +108,14 @@ def test_all_questions(num_variations: int):
     for variation in range(num_variations):
       seed = variation * 1000  # Use different seeds for each variation
       try:
+        # Get any test defaults for this question type
+        extra_kwargs = TEST_DEFAULTS.get(question_name, {})
+
         # Create question instance with minimal required params
         question = question_class(
           name=f"test_{question_name}",
-          points_value=1.0
+          points_value=1.0,
+          **extra_kwargs
         )
 
         # Generate the question (this calls refresh and builds the AST)
