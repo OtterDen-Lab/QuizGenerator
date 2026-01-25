@@ -5,8 +5,7 @@ import keras
 import numpy as np
 from typing import List, Tuple
 
-from QuizGenerator.misc import MatrixAnswer
-from QuizGenerator.question import Question, QuestionRegistry, Answer
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
@@ -62,12 +61,12 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # Q, K, V, output, weights
 
-    self.answers["weights"] = MatrixAnswer("weights", self.weights, label="Weights")
-    self.answers["output"] = MatrixAnswer("output", self.output, label="Output")
+    self.answers["weights"] = ContentAST.Answer.MatrixAnswer("weights", self.weights, label="Weights")
+    self.answers["output"] = ContentAST.Answer.MatrixAnswer("output", self.output, label="Output")
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -101,10 +100,10 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
-    digits = Answer.DEFAULT_ROUNDING_DIGITS
+    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
 
     explanation.add_element(
       ContentAST.Paragraph([

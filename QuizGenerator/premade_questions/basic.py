@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Tuple
 import logging
 
 from QuizGenerator.contentast import *
-from QuizGenerator.question import Question, QuestionRegistry, Answer
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin
 
 log = logging.getLogger(__name__)
@@ -25,8 +25,8 @@ class FromText(Question):
     
     return ContentAST.Section([ContentAST.Text(self.text)])
   
-  def get_answers(self, *args, **kwargs) -> Tuple[Answer.AnswerKind, List[Dict[str,Any]]]:
-    return Answer.AnswerKind.ESSAY, []
+  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.AnswerKind, List[Dict[str,Any]]]:
+    return ContentAST.Answer.AnswerKind.ESSAY, []
 
 
 @QuestionRegistry.register()

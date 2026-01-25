@@ -7,7 +7,7 @@ import numpy as np
 from typing import List, Tuple, Dict, Any
 
 from QuizGenerator.contentast import ContentAST
-from QuizGenerator.question import Question, Answer, QuestionRegistry
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
@@ -73,12 +73,12 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
     # Individual loss answers
     for i in range(self.num_samples):
-      self.answers[f"loss_{i}"] = Answer.float_value(f"loss_{i}", self.individual_losses[i], label=f"Sample {i+1} loss")
+      self.answers[f"loss_{i}"] = ContentAST.Answer.float_value(f"loss_{i}", self.individual_losses[i], label=f"Sample {i+1} loss")
 
     # Overall loss answer
-    self.answers["overall_loss"] = Answer.float_value("overall_loss", self.overall_loss, label="Overall loss")
+    self.answers["overall_loss"] = ContentAST.Answer.float_value("overall_loss", self.overall_loss, label="Overall loss")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Element, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Element, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -115,7 +115,7 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     """Create the data table with answer fields."""
     pass
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Element, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Element, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 

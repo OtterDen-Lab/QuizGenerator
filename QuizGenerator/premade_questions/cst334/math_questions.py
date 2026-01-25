@@ -3,7 +3,7 @@ import abc
 import logging
 import math
 
-from QuizGenerator.question import Question, QuestionRegistry, Answer
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.constants import MathRanges
 
@@ -31,10 +31,10 @@ class BitsAndBytes(MathQuestion):
     self.num_bytes = int(math.pow(2, self.num_bits))
     
     if self.from_binary:
-      self.answers = {"answer": Answer.integer("num_bytes", self.num_bytes,
+      self.answers = {"answer": ContentAST.Answer.integer("num_bytes", self.num_bytes,
                                                label="Address space size", unit="Bytes")}
     else:
-      self.answers = {"answer": Answer.integer("num_bits", self.num_bits,
+      self.answers = {"answer": ContentAST.Answer.integer("num_bits", self.num_bits,
                                                label="Number of bits in address", unit="bits")}
   
   def _get_body(self, **kwargs):
@@ -111,10 +111,10 @@ class HexAndBinary(MathQuestion):
     self.binary_val = f"0b{self.value:0{4*self.number_of_hexits}b}"
     
     if self.from_binary:
-      self.answers['answer'] = Answer.string("hex_val", self.hex_val,
+      self.answers['answer'] = ContentAST.Answer.string("hex_val", self.hex_val,
                                              label="Value in hex")
     else:
-      self.answers['answer'] = Answer.string("binary_val", self.binary_val,
+      self.answers['answer'] = ContentAST.Answer.string("binary_val", self.binary_val,
                                              label="Value in binary")
   
   def _get_body(self, **kwargs):
@@ -223,7 +223,7 @@ class AverageMemoryAccessTime(MathQuestion):
     self.amat = self.hit_rate * self.hit_latency + (1 - self.hit_rate) * self.miss_latency
     
     self.answers = {
-      "amat": Answer.float_value("answer__amat", self.amat,
+      "amat": ContentAST.Answer.float_value("answer__amat", self.amat,
                                  label="Average Memory Access Time", unit="cycles")
     }
     
@@ -244,7 +244,7 @@ class AverageMemoryAccessTime(MathQuestion):
       ContentAST.Paragraph([
         ContentAST.Text("Please calculate the Average Memory Access Time given the below information. "),
         ContentAST.Text(
-          f"Please round your answer to {Answer.DEFAULT_ROUNDING_DIGITS} decimal points. ",
+          f"Please round your answer to {ContentAST.Answer.DEFAULT_ROUNDING_DIGITS} decimal points. ",
           hide_from_latex=True
         )
       ])
@@ -295,7 +295,7 @@ class AverageMemoryAccessTime(MathQuestion):
         lhs="AMAT",
         rhs=[
           r"(hit\_rate)*(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
-          f"({self.hit_rate: 0.{Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.{Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.miss_latency}) = {self.amat: 0.{Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
+          f"({self.hit_rate: 0.{ContentAST.Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.{ContentAST.Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.miss_latency}) = {self.amat: 0.{ContentAST.Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
         ]
       )
     )

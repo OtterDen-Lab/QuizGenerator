@@ -6,7 +6,7 @@ import enum
 import itertools
 from typing import List, Dict, Optional, Tuple, Any
 
-from QuizGenerator.question import QuestionRegistry, Question, Answer
+from QuizGenerator.question import QuestionRegistry, Question
 
 from QuizGenerator.contentast import ContentAST
 
@@ -268,10 +268,10 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     
     self.answers.update(
       {
-        "answer_good" : Answer(
+        "answer_good" : ContentAST.Answer(
           f"answer_good",
           self.grammar_good.generate(self.include_spaces),
-          Answer.AnswerKind.MULTIPLE_ANSWER,
+          ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER,
           correct=True
         )
       }
@@ -280,19 +280,19 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     self.answers.update(
       {
         "answer_bad":
-          Answer(
+          ContentAST.Answer(
             f"answer_bad",
             self.grammar_bad.generate(self.include_spaces),
-            Answer.AnswerKind.MULTIPLE_ANSWER,
+            ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER,
             correct=False
           )
       })
     self.answers.update({
       "answer_bad_early":
-        Answer(
+        ContentAST.Answer(
           f"answer_bad_early",
           self.grammar_bad.generate(self.include_spaces, early_exit=True),
-          Answer.AnswerKind.MULTIPLE_ANSWER,
+          ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER,
           correct=False
         )
     })
@@ -306,14 +306,14 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         early_exit = self.rng.choice([True, False])
       else:
         early_exit = False
-      new_answer = Answer(
+      new_answer = ContentAST.Answer(
         f"answer_{num_tries}",
         (
           self.grammar_good
           if correct or early_exit
           else self.grammar_bad
         ).generate(self.include_spaces, early_exit=early_exit),
-        Answer.AnswerKind.MULTIPLE_ANSWER,
+        ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER,
         correct= correct and not early_exit
       )
       if len(new_answer.value) < self.MAX_LENGTH and new_answer.value not in answer_text_set:
@@ -373,7 +373,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     # For Latex-only, ask students to generate some more.
     body.add_element(
       ContentAST.OnlyLatex([
-        ContentAST.AnswerBlock([Answer.string(f"blank_line_{i}", "", label="") for i in range(self.num_answer_blanks)])
+        ContentAST.AnswerBlock([ContentAST.Answer.string(f"blank_line_{i}", "", label="") for i in range(self.num_answer_blanks)])
       ])
     )
 
@@ -400,6 +400,6 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation
 
-  def get_answers(self, *args, **kwargs) -> Tuple[Answer.AnswerKind, List[Dict[str,Any]]]:
+  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.AnswerKind, List[Dict[str,Any]]]:
     
-    return Answer.AnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
+    return ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))

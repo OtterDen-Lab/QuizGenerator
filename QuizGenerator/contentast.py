@@ -2173,7 +2173,7 @@ class ContentAST:
         answer=None  # Old pattern: ContentAST.Answer(answer=misc_answer_obj)
     ):
       # BACKWARD COMPATIBILITY: Handle old wrapper pattern
-      # Old: ContentAST.Answer(Answer.string("key", "value"))
+      # Old: ContentAST.Answer(ContentAST.Answer.string("key", "value"))
       # Old: ContentAST.Answer(answer=some_answer_obj, label="...")
       if answer is not None or (key is not None and isinstance(key, ContentAST.Answer)):
         # Old wrapper pattern detected

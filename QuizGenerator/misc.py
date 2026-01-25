@@ -21,9 +21,3 @@ def fix_negative_zero(value):
   if isinstance(value, (int, float)):
     return 0.0 if value == 0 else value
   return value
-
-
-# Backward compatibility: Answer and MatrixAnswer have moved to ContentAST
-# Re-export them here so existing imports continue to work
-Answer = ContentAST.Answer
-MatrixAnswer = ContentAST.MatrixAnswer

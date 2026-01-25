@@ -10,7 +10,7 @@ import math
 from typing import List, Optional
 
 from QuizGenerator.contentast import ContentAST
-from QuizGenerator.question import Question, Answer, QuestionRegistry, RegenerableChoiceMixin
+from QuizGenerator.question import Question, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
@@ -40,9 +40,9 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     self.num_bits_vpn = self.num_bits_va - self.num_bits_offset
     
     self.possible_answers = {
-      self.Target.VA_BITS: Answer.integer("answer__num_bits_va", self.num_bits_va, unit="bits"),
-      self.Target.OFFSET_BITS: Answer.integer("answer__num_bits_offset", self.num_bits_offset, unit="bits"),
-      self.Target.VPN_BITS: Answer.integer("answer__num_bits_vpn", self.num_bits_vpn, unit="bits")
+      self.Target.VA_BITS: ContentAST.Answer.integer("answer__num_bits_va", self.num_bits_va, unit="bits"),
+      self.Target.OFFSET_BITS: ContentAST.Answer.integer("answer__num_bits_offset", self.num_bits_offset, unit="bits"),
+      self.Target.VPN_BITS: ContentAST.Answer.integer("answer__num_bits_vpn", self.num_bits_vpn, unit="bits")
     }
     
     # Select what kind of question we are going to be
@@ -244,13 +244,13 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       
       self.answers.update(
         {
-          f"answer__hit-{request_number}": Answer.string(
+          f"answer__hit-{request_number}": ContentAST.Answer.string(
             f"answer__hit-{request_number}", ('hit' if was_hit else 'miss')
           ),
-          f"answer__evicted-{request_number}": Answer.string(
+          f"answer__evicted-{request_number}": ContentAST.Answer.string(
             f"answer__evicted-{request_number}", ('-' if evicted is None else f"{evicted}")
           ),
-          f"answer__cache_state-{request_number}": Answer.list_value(
+          f"answer__cache_state-{request_number}": ContentAST.Answer.list_value(
             f"answer__cache_state-{request_number}", copy.copy(cache_state)
           ),
         }
@@ -259,9 +259,9 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     self.hit_rate = 100 * number_of_hits / (self.num_requests)
     self.answers.update(
       {
-        "answer__hit_rate": Answer.auto_float(
+        "answer__hit_rate": ContentAST.Answer.auto_float(
           "answer__hit_rate", self.hit_rate,
-          label=f"Hit rate, excluding non-capacity misses. Round to {Answer.DEFAULT_ROUNDING_DIGITS} decimal digits if appropriate.",
+          label=f"Hit rate, excluding non-capacity misses. Round to {ContentAST.Answer.DEFAULT_ROUNDING_DIGITS} decimal digits if appropriate.",
           unit="%"
         )
       }
@@ -399,13 +399,13 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     self.virtual_address = self.rng.randint(1, int(self.bounds / self.PROBABILITY_OF_VALID))
     
     if self.virtual_address < self.bounds:
-      self.answers["answer"] = Answer.binary_hex(
+      self.answers["answer"] = ContentAST.Answer.binary_hex(
         "answer__physical_address",
         self.base + self.virtual_address,
         length=math.ceil(math.log2(self.base + self.virtual_address))
       )
     else:
-      self.answers["answer"] = Answer.string("answer__physical_address", "INVALID")
+      self.answers["answer"] = ContentAST.Answer.string("answer__physical_address", "INVALID")
   
   def _get_body(self):
     """Build question body and collect answers."""
@@ -586,20 +586,20 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     
     # Set answers based on whether it's in bounds or not
     if self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
-      self.answers["answer__physical_address"] = Answer.binary_hex(
+      self.answers["answer__physical_address"] = ContentAST.Answer.binary_hex(
         "answer__physical_address",
         self.physical_address,
         length=self.physical_bits,
         label="Physical Address"
       )
     else:
-      self.answers["answer__physical_address"] = Answer.string(
+      self.answers["answer__physical_address"] = ContentAST.Answer.string(
         "answer__physical_address",
         "INVALID",
         label="Physical Address"
       )
 
-    self.answers["answer__segment"] = Answer.string("answer__segment", self.segment,
+    self.answers["answer__segment"] = ContentAST.Answer.string("answer__segment", self.segment,
                                                     label="Segment name")
   
   def _get_body(self):
@@ -825,18 +825,18 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     self.answers.update(
       {
-        "answer__vpn": Answer.binary_hex("answer__vpn", self.vpn, length=self.num_bits_vpn, label="VPN"),
-        "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset, label="Offset"),
-        "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1), label="PTE"),
+        "answer__vpn": ContentAST.Answer.binary_hex("answer__vpn", self.vpn, length=self.num_bits_vpn, label="VPN"),
+        "answer__offset": ContentAST.Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset, label="Offset"),
+        "answer__pte": ContentAST.Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1), label="PTE"),
       }
     )
 
     if self.is_valid:
       self.answers.update(
         {
-          "answer__is_valid": Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
-          "answer__pfn": Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn, label="PFN"),
-          "answer__physical_address": Answer.binary_hex(
+          "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
+          "answer__pfn": ContentAST.Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn, label="PFN"),
+          "answer__physical_address": ContentAST.Answer.binary_hex(
             "answer__physical_address", self.physical_address,
             length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
           ),
@@ -845,9 +845,9 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     else:
       self.answers.update(
         {
-          "answer__is_valid": Answer.string("answer__is_valid", "INVALID", label="VALID or INVALID?"),
-          "answer__pfn": Answer.string("answer__pfn", "INVALID", label="PFN"),
-          "answer__physical_address": Answer.string("answer__physical_address", "INVALID", label="Physical Address"),
+          "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "INVALID", label="VALID or INVALID?"),
+          "answer__pfn": ContentAST.Answer.string("answer__pfn", "INVALID", label="PFN"),
+          "answer__physical_address": ContentAST.Answer.string("answer__physical_address", "INVALID", label="Physical Address"),
         }
       )
   
@@ -1187,19 +1187,19 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     # Set up answers
     self.answers.update({
-      "answer__pdi": Answer.binary_hex("answer__pdi", self.pdi, length=self.num_bits_pdi,
+      "answer__pdi": ContentAST.Answer.binary_hex("answer__pdi", self.pdi, length=self.num_bits_pdi,
                                        label="PDI (Page Directory Index)"),
-      "answer__pti": Answer.binary_hex("answer__pti", self.pti, length=self.num_bits_pti,
+      "answer__pti": ContentAST.Answer.binary_hex("answer__pti", self.pti, length=self.num_bits_pti,
                                        label="PTI (Page Table Index)"),
-      "answer__offset": Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset,
+      "answer__offset": ContentAST.Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset,
                                           label="Offset"),
-      "answer__pd_entry": Answer.binary_hex("answer__pd_entry", self.pd_entry, length=(self.num_bits_pfn + 1),
+      "answer__pd_entry": ContentAST.Answer.binary_hex("answer__pd_entry", self.pd_entry, length=(self.num_bits_pfn + 1),
                                             label="PD Entry (from Page Directory)"),
       "answer__pt_number": (
-        Answer.binary_hex("answer__pt_number", self.page_table_number, length=self.num_bits_pfn,
+        ContentAST.Answer.binary_hex("answer__pt_number", self.page_table_number, length=self.num_bits_pfn,
                           label="Page Table Number")
         if self.pd_valid
-        else Answer.string("answer__pt_number", "INVALID", label="Page Table Number")
+        else ContentAST.Answer.string("answer__pt_number", "INVALID", label="Page Table Number")
       ),
     })
 
@@ -1207,31 +1207,31 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # (regardless of whether that PTE is valid or invalid)
     if self.pd_valid:
       self.answers.update({
-        "answer__pte": Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1),
+        "answer__pte": ContentAST.Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1),
                                          label="PTE (from Page Table)"),
       })
     else:
       # If PD is invalid, student can't look up the page table
       # Accept both "INVALID" (for consistency) and "N/A" (for accuracy)
       self.answers.update({
-        "answer__pte": Answer.string("answer__pte", ["INVALID", "N/A"], label="PTE (from Page Table)"),
+        "answer__pte": ContentAST.Answer.string("answer__pte", ["INVALID", "N/A"], label="PTE (from Page Table)"),
       })
 
     # Validity, PFN, and Physical Address depend on BOTH levels being valid
     if self.pd_valid and self.pt_valid:
       self.answers.update({
-        "answer__is_valid": Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
-        "answer__pfn": Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn, label="PFN"),
-        "answer__physical_address": Answer.binary_hex(
+        "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
+        "answer__pfn": ContentAST.Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn, label="PFN"),
+        "answer__physical_address": ContentAST.Answer.binary_hex(
           "answer__physical_address", self.physical_address,
           length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
         ),
       })
     else:
       self.answers.update({
-        "answer__is_valid": Answer.string("answer__is_valid", "INVALID", label="VALID or INVALID?"),
-        "answer__pfn": Answer.string("answer__pfn", "INVALID", label="PFN"),
-        "answer__physical_address": Answer.string("answer__physical_address", "INVALID", label="Physical Address"),
+        "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "INVALID", label="VALID or INVALID?"),
+        "answer__pfn": ContentAST.Answer.string("answer__pfn", "INVALID", label="PFN"),
+        "answer__physical_address": ContentAST.Answer.string("answer__physical_address", "INVALID", label="Physical Address"),
       })
 
   def _get_body(self, *args, **kwargs):

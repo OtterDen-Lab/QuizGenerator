@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
 from QuizGenerator.contentast import ContentAST
-from QuizGenerator.question import Question, Answer, QuestionRegistry
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 from ..models.matrices import MatrixQuestion
 
@@ -566,12 +566,12 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     # Hidden layer activations
     for i in range(self.num_hidden):
       key = f"h{i+1}"
-      self.answers[key] = Answer.float_value(key, float(self.a1[i]), label=f"h_{i+1}")
+      self.answers[key] = ContentAST.Answer.float_value(key, float(self.a1[i]), label=f"h_{i+1}")
 
     # Output
-    self.answers["y_pred"] = Answer.float_value("y_pred", float(self.a2[0]), label="ŷ")
+    self.answers["y_pred"] = ContentAST.Answer.float_value("y_pred", float(self.a2[0]), label="ŷ")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -614,7 +614,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 
@@ -743,14 +743,14 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Gradient for W2 (hidden to output)
     for i in range(self.num_hidden):
       key = f"dL_dw2_{i}"
-      self.answers[key] = Answer.auto_float(key, self._compute_gradient_W2(i), label=f"∂L/∂w_{i+3}")
+      self.answers[key] = ContentAST.Answer.auto_float(key, self._compute_gradient_W2(i), label=f"∂L/∂w_{i+3}")
 
     # Gradient for W1 (input to hidden) - pick first hidden neuron
     for j in range(self.num_inputs):
       key = f"dL_dw1_0{j}"
-      self.answers[key] = Answer.auto_float(key, self._compute_gradient_W1(0, j), label=f"∂L/∂w_1{j+1}")
+      self.answers[key] = ContentAST.Answer.auto_float(key, self._compute_gradient_W1(0, j), label=f"∂L/∂w_1{j+1}")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -800,7 +800,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 
@@ -920,13 +920,13 @@ class EnsembleAveragingQuestion(Question):
 
     # Mean prediction
     mean_pred = np.mean(self.predictions)
-    self.answers["mean"] = Answer.float_value("mean", float(mean_pred), label="Mean (average)")
+    self.answers["mean"] = ContentAST.Answer.float_value("mean", float(mean_pred), label="Mean (average)")
 
     # Median (optional, but useful)
     median_pred = np.median(self.predictions)
-    self.answers["median"] = Answer.float_value("median", float(median_pred), label="Median")
+    self.answers["median"] = ContentAST.Answer.float_value("median", float(median_pred), label="Median")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -961,7 +961,7 @@ class EnsembleAveragingQuestion(Question):
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 
@@ -1083,20 +1083,20 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     self.answers = {}
 
     # Forward pass answers
-    self.answers["y_pred"] = Answer.float_value("y_pred", float(self.a2[0]), label="1. Forward Pass - Network output ŷ")
+    self.answers["y_pred"] = ContentAST.Answer.float_value("y_pred", float(self.a2[0]), label="1. Forward Pass - Network output ŷ")
 
     # Loss answer
-    self.answers["loss"] = Answer.float_value("loss", float(self.loss), label="2. Loss")
+    self.answers["loss"] = ContentAST.Answer.float_value("loss", float(self.loss), label="2. Loss")
 
     # Gradient answers (for key weights)
-    self.answers["grad_w3"] = Answer.auto_float("grad_w3", self._compute_gradient_W2(0), label="3. Gradient ∂L/∂w₃")
-    self.answers["grad_w11"] = Answer.auto_float("grad_w11", self._compute_gradient_W1(0, 0), label="4. Gradient ∂L/∂w₁₁")
+    self.answers["grad_w3"] = ContentAST.Answer.auto_float("grad_w3", self._compute_gradient_W2(0), label="3. Gradient ∂L/∂w₃")
+    self.answers["grad_w11"] = ContentAST.Answer.auto_float("grad_w11", self._compute_gradient_W1(0, 0), label="4. Gradient ∂L/∂w₁₁")
 
     # Updated weight answers
-    self.answers["new_w3"] = Answer.float_value("new_w3", float(self.new_W2[0, 0]), label="5. Updated w₃:")
-    self.answers["new_w11"] = Answer.float_value("new_w11", float(self.new_W1[0, 0]), label="6. Updated w₁₁:")
+    self.answers["new_w3"] = ContentAST.Answer.float_value("new_w3", float(self.new_W2[0, 0]), label="5. Updated w₃:")
+    self.answers["new_w11"] = ContentAST.Answer.float_value("new_w11", float(self.new_W1[0, 0]), label="6. Updated w₁₁:")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -1162,7 +1162,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 

@@ -5,9 +5,8 @@ import keras
 import numpy as np
 from typing import List, Tuple
 
-from QuizGenerator.misc import MatrixAnswer
 from QuizGenerator.premade_questions.cst463.models.matrices import MatrixQuestion
-from QuizGenerator.question import Question, QuestionRegistry, Answer
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
@@ -60,15 +59,15 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
 
     ## Answers:
     # center_word, center_emb, context_words, context_embs, logits, probs
-    self.answers["logits"] = Answer.vector_value(key="logits", value=self.logits, label="Logits")
+    self.answers["logits"] = ContentAST.Answer.vector_value(key="logits", value=self.logits, label="Logits")
     most_likely_idx = np.argmax(self.probs)
     most_likely_word = self.context_words[most_likely_idx]
-    self.answers["center_word"] = Answer.string(key="center_word", value=most_likely_word, label="Most likely context word")
+    self.answers["center_word"] = ContentAST.Answer.string(key="center_word", value=most_likely_word, label="Most likely context word")
     
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -101,10 +100,10 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
-    digits = Answer.DEFAULT_ROUNDING_DIGITS
+    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
 
     explanation.add_element(
       ContentAST.Paragraph([

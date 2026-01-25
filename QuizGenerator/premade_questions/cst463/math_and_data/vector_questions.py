@@ -4,7 +4,7 @@ import logging
 import math
 from typing import List
 
-from QuizGenerator.question import Question, QuestionRegistry, Answer
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.contentast import ContentAST
 from QuizGenerator.mixins import MathOperationQuestion
 
@@ -119,12 +119,12 @@ class VectorAddition(VectorMathQuestion):
   def create_subquestion_answers(self, subpart_index, result):
     letter = chr(ord('a') + subpart_index)
     for j in range(len(result)):
-      self.answers[f"subpart_{letter}_{j}"] = Answer.integer(f"subpart_{letter}_{j}", result[j])
+      self.answers[f"subpart_{letter}_{j}"] = ContentAST.Answer.integer(f"subpart_{letter}_{j}", result[j])
 
   def create_single_answers(self, result):
     # Backward compatibility - still populate dict for old pattern
     for i in range(len(result)):
-      self.answers[f"result_{i}"] = Answer.integer(f"result_{i}", result[i])
+      self.answers[f"result_{i}"] = ContentAST.Answer.integer(f"result_{i}", result[i])
 
   def get_body(self):
     """Override parent get_body() to use our custom formatting."""
@@ -151,7 +151,7 @@ class VectorAddition(VectorMathQuestion):
         letter = chr(ord('a') + i)
         result = data['result']
         for j in range(len(result)):
-          ans = Answer.integer(f"subpart_{letter}_{j}", result[j])
+          ans = ContentAST.Answer.integer(f"subpart_{letter}_{j}", result[j])
           answers.append(ans)
     else:
       # Single equation display using MathExpression for format-independent rendering
@@ -168,7 +168,7 @@ class VectorAddition(VectorMathQuestion):
       body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
       table_data = []
       for i in range(self.dimension):
-        ans = Answer.integer(f"result_{i}", self.result[i])
+        ans = ContentAST.Answer.integer(f"result_{i}", self.result[i])
         answers.append(ans)
         table_data.append([ans])
       body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
@@ -305,11 +305,11 @@ class VectorScalarMultiplication(VectorMathQuestion):
   def create_subquestion_answers(self, subpart_index, result):
     letter = chr(ord('a') + subpart_index)
     for j in range(len(result)):
-      self.answers[f"subpart_{letter}_{j}"] = Answer.integer(f"subpart_{letter}_{j}", result[j])
+      self.answers[f"subpart_{letter}_{j}"] = ContentAST.Answer.integer(f"subpart_{letter}_{j}", result[j])
 
   def create_single_answers(self, result):
     for i in range(len(result)):
-      self.answers[f"result_{i}"] = Answer.integer(f"result_{i}", result[i])
+      self.answers[f"result_{i}"] = ContentAST.Answer.integer(f"result_{i}", result[i])
 
   def generate_subquestion_data(self):
     """Override to handle scalar multiplication format."""
@@ -347,7 +347,7 @@ class VectorScalarMultiplication(VectorMathQuestion):
         letter = chr(ord('a') + i)
         result = data['result']
         for j in range(len(result)):
-          ans = Answer.integer(f"subpart_{letter}_{j}", result[j])
+          ans = ContentAST.Answer.integer(f"subpart_{letter}_{j}", result[j])
           answers.append(ans)
     else:
       # Single equation display using MathExpression
@@ -362,7 +362,7 @@ class VectorScalarMultiplication(VectorMathQuestion):
       body.add_element(ContentAST.OnlyHtml([ContentAST.Paragraph(["Enter your answer as a column vector:"])]))
       table_data = []
       for i in range(self.dimension):
-        ans = Answer.integer(f"result_{i}", self.result[i])
+        ans = ContentAST.Answer.integer(f"result_{i}", self.result[i])
         answers.append(ans)
         table_data.append([ans])
       body.add_element(ContentAST.OnlyHtml([ContentAST.Table(data=table_data, padding=True)]))
@@ -432,11 +432,11 @@ class VectorDotProduct(VectorMathQuestion):
 
   def create_subquestion_answers(self, subpart_index, result):
     letter = chr(ord('a') + subpart_index)
-    self.answers[f"subpart_{letter}"] = Answer.integer(f"subpart_{letter}", result)
+    self.answers[f"subpart_{letter}"] = ContentAST.Answer.integer(f"subpart_{letter}", result)
 
   def create_single_answers(self, result):
     self.answers = {
-      "dot_product": Answer.integer("dot_product", result)
+      "dot_product": ContentAST.Answer.integer("dot_product", result)
     }
 
   def get_body(self):
@@ -461,7 +461,7 @@ class VectorDotProduct(VectorMathQuestion):
       for i, data in enumerate(self.subquestion_data):
         letter = chr(ord('a') + i)
         result = data['result']
-        ans = Answer.integer(f"subpart_{letter}", result)
+        ans = ContentAST.Answer.integer(f"subpart_{letter}", result)
         answers.append(ans)
     else:
       # Single equation display using MathExpression
@@ -475,7 +475,7 @@ class VectorDotProduct(VectorMathQuestion):
       ]))
 
       # Canvas-only answer field (single scalar result)
-      ans = Answer.integer("dot_product", self.result)
+      ans = ContentAST.Answer.integer("dot_product", self.result)
       answers.append(ans)
       body.add_element(ContentAST.OnlyHtml([ans]))
 
@@ -550,12 +550,12 @@ class VectorMagnitude(VectorMathQuestion):
   def create_subquestion_answers(self, subpart_index, result):
     # Backward compatibility
     letter = chr(ord('a') + subpart_index)
-    self.answers[f"subpart_{letter}"] = Answer.auto_float(f"subpart_{letter}", result)
+    self.answers[f"subpart_{letter}"] = ContentAST.Answer.auto_float(f"subpart_{letter}", result)
 
   def create_single_answers(self, result):
     # Backward compatibility
     self.answers = {
-      "magnitude": Answer.auto_float("magnitude", result)
+      "magnitude": ContentAST.Answer.auto_float("magnitude", result)
     }
 
   def generate_subquestion_data(self):
@@ -598,7 +598,7 @@ class VectorMagnitude(VectorMathQuestion):
       for i, data in enumerate(self.subquestion_data):
         letter = chr(ord('a') + i)
         result = data['result']
-        ans = Answer.auto_float(f"subpart_{letter}", result)
+        ans = ContentAST.Answer.auto_float(f"subpart_{letter}", result)
         answers.append(ans)
     else:
       # Single equation display using MathExpression for format-independent rendering
@@ -610,7 +610,7 @@ class VectorMagnitude(VectorMathQuestion):
       ]))
 
       # Canvas-only answer field (hidden from PDF)
-      ans = Answer.auto_float("magnitude", self.result)
+      ans = ContentAST.Answer.auto_float("magnitude", self.result)
       answers.append(ans)
       body.add_element(ContentAST.OnlyHtml([ans]))
 
@@ -634,7 +634,7 @@ class VectorMagnitude(VectorMathQuestion):
         squares_str = " + ".join([f"{v}^2" for v in vector_a])
         calculation_str = " + ".join([str(v**2) for v in vector_a])
         sum_of_squares = sum(component ** 2 for component in vector_a)
-        result_formatted = sorted(Answer.accepted_strings(result), key=lambda s: len(s))[0]
+        result_formatted = sorted(ContentAST.Answer.accepted_strings(result), key=lambda s: len(s))[0]
 
         # Add explanation for this subpart
         explanation.add_element(ContentAST.Paragraph([f"Part ({letter}):"]))
@@ -656,7 +656,7 @@ class VectorMagnitude(VectorMathQuestion):
       squares_str = " + ".join([f"{v}^2" for v in self.vector_a])
       calculation_str = " + ".join([str(v**2) for v in self.vector_a])
       sum_of_squares = sum(component ** 2 for component in self.vector_a)
-      result_formatted = sorted(Answer.accepted_strings(self.result), key=lambda s: len(s))[0]
+      result_formatted = sorted(ContentAST.Answer.accepted_strings(self.result), key=lambda s: len(s))[0]
 
       explanation.add_element(
           ContentAST.Equation.make_block_equation__multiline_equals(
