@@ -111,10 +111,10 @@ class HexAndBinary(MathQuestion):
     self.binary_val = f"0b{self.value:0{4*self.number_of_hexits}b}"
     
     if self.from_binary:
-      self.answers['answer'] = ContentAST.Answer.string("hex_val", self.hex_val,
+      self.answers['answer'] = AnswerTypes.String(self.hex_val,
                                              label="Value in hex")
     else:
-      self.answers['answer'] = ContentAST.Answer.string("binary_val", self.binary_val,
+      self.answers['answer'] = AnswerTypes.String(self.binary_val,
                                              label="Value in binary")
   
   def _get_body(self, **kwargs):

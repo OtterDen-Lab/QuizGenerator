@@ -244,15 +244,9 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       
       self.answers.update(
         {
-          f"answer__hit-{request_number}": ContentAST.Answer.string(
-            f"answer__hit-{request_number}", ('hit' if was_hit else 'miss')
-          ),
-          f"answer__evicted-{request_number}": ContentAST.Answer.string(
-            f"answer__evicted-{request_number}", ('-' if evicted is None else f"{evicted}")
-          ),
-          f"answer__cache_state-{request_number}": ContentAST.Answer.list(
-            f"answer__cache_state-{request_number}", copy.copy(cache_state)
-          ),
+          f"answer__hit-{request_number}": AnswerTypes.String(('hit' if was_hit else 'miss')),
+          f"answer__evicted-{request_number}": AnswerTypes.String(('-' if evicted is None else f"{evicted}")),
+          f"answer__cache_state-{request_number}": ContentAST.Answer.list(key="blah", value=copy.copy(cache_state)),
         }
       )
     
@@ -403,7 +397,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
         length=math.ceil(math.log2(self.base + self.virtual_address))
       )
     else:
-      self.answers["answer"] = ContentAST.Answer.string("answer__physical_address", "INVALID")
+      self.answers["answer"] = AnswerTypes.String("INVALID")
   
   def _get_body(self):
     """Build question body and collect answers."""
@@ -590,14 +584,9 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
         label="Physical Address"
       )
     else:
-      self.answers["answer__physical_address"] = ContentAST.Answer.string(
-        "answer__physical_address",
-        "INVALID",
-        label="Physical Address"
-      )
+      self.answers["answer__physical_address"] = AnswerTypes.String("INVALID", label="Physical Address")
 
-    self.answers["answer__segment"] = ContentAST.Answer.string("answer__segment", self.segment,
-                                                    label="Segment name")
+    self.answers["answer__segment"] = AnswerTypes.String(self.segment, label="Segment name")
   
   def _get_body(self):
     """Build question body and collect answers."""
@@ -831,7 +820,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     if self.is_valid:
       self.answers.update(
         {
-          "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
+          "answer__is_valid": AnswerTypes.String("VALID", label="VALID or INVALID?"),
           "answer__pfn": AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
           "answer__physical_address": AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
           ),
@@ -840,9 +829,9 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     else:
       self.answers.update(
         {
-          "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "INVALID", label="VALID or INVALID?"),
-          "answer__pfn": ContentAST.Answer.string("answer__pfn", "INVALID", label="PFN"),
-          "answer__physical_address": ContentAST.Answer.string("answer__physical_address", "INVALID", label="Physical Address"),
+          "answer__is_valid": AnswerTypes.String("INVALID", label="VALID or INVALID?"),
+          "answer__pfn": AnswerTypes.String("INVALID", label="PFN"),
+          "answer__physical_address": AnswerTypes.String("INVALID", label="Physical Address"),
         }
       )
   
@@ -1194,7 +1183,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
         AnswerTypes.Binary(self.page_table_number, length=self.num_bits_pfn,
                           label="Page Table Number")
         if self.pd_valid
-        else ContentAST.Answer.string("answer__pt_number", "INVALID", label="Page Table Number")
+        else AnswerTypes.String("INVALID", label="Page Table Number")
       ),
     })
 
@@ -1209,22 +1198,22 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       # If PD is invalid, student can't look up the page table
       # Accept both "INVALID" (for consistency) and "N/A" (for accuracy)
       self.answers.update({
-        "answer__pte": ContentAST.Answer.string("answer__pte", ["INVALID", "N/A"], label="PTE (from Page Table)"),
+        "answer__pte": AnswerTypes.String(["INVALID", "N/A"], label="PTE (from Page Table)"),
       })
 
     # Validity, PFN, and Physical Address depend on BOTH levels being valid
     if self.pd_valid and self.pt_valid:
       self.answers.update({
-        "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
+        "answer__is_valid": AnswerTypes.String("VALID", label="VALID or INVALID?"),
         "answer__pfn": AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
         "answer__physical_address": AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
         ),
       })
     else:
       self.answers.update({
-        "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "INVALID", label="VALID or INVALID?"),
-        "answer__pfn": ContentAST.Answer.string("answer__pfn", "INVALID", label="PFN"),
-        "answer__physical_address": ContentAST.Answer.string("answer__physical_address", "INVALID", label="Physical Address"),
+        "answer__is_valid": AnswerTypes.String("INVALID", label="VALID or INVALID?"),
+        "answer__pfn": AnswerTypes.String("INVALID", label="PFN"),
+        "answer__physical_address": AnswerTypes.String("INVALID", label="Physical Address"),
       })
 
   def _get_body(self, *args, **kwargs):

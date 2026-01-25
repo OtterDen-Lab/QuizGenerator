@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 from QuizGenerator.premade_questions.cst463.models.matrices import MatrixQuestion
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
@@ -62,7 +62,7 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     self.answers["logits"] = ContentAST.Answer.vector(key="logits", value=self.logits, label="Logits")
     most_likely_idx = np.argmax(self.probs)
     most_likely_word = self.context_words[most_likely_idx]
-    self.answers["center_word"] = ContentAST.Answer.string(key="center_word", value=most_likely_word, label="Most likely context word")
+    self.answers["center_word"] = AnswerTypes.String(most_likely_word, label="Most likely context word")
     
     
     return True

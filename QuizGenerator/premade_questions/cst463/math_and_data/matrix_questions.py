@@ -501,10 +501,8 @@ class MatrixMultiplication(MatrixMathQuestion):
             # For single questions, use the old answer format
             # Dimension answers
             if result is not None:
-                self.answers["result_rows"] = AnswerTypes.Int(self.result_rows,
-                                                             label="Number of rows in result")
-                self.answers["result_cols"] = AnswerTypes.Int(self.result_cols,
-                                                             label="Number of columns in result")
+                self.answers["result_rows"] = AnswerTypes.Int(self.result_rows, label="Number of rows in result")
+                self.answers["result_cols"] = AnswerTypes.Int(self.result_cols, label="Number of columns in result")
 
                 # Matrix element answers
                 for i in range(self.max_dim):
@@ -513,19 +511,17 @@ class MatrixMultiplication(MatrixMathQuestion):
                         if i < self.result_rows and j < self.result_cols:
                             self.answers[answer_key] = AnswerTypes.Int(result[i][j])
                         else:
-                            self.answers[answer_key] = ContentAST.Answer.string(answer_key, "-")
+                            self.answers[answer_key] = AnswerTypes.String("-")
             else:
                 # Multiplication not possible
-                self.answers["result_rows"] = ContentAST.Answer.string("result_rows", "-",
-                                                            label="Number of rows in result")
-                self.answers["result_cols"] = ContentAST.Answer.string("result_cols", "-",
-                                                            label="Number of columns in result")
+                self.answers["result_rows"] = AnswerTypes.String("-", label="Number of rows in result")
+                self.answers["result_cols"] = AnswerTypes.String("-", label="Number of columns in result")
 
                 # All matrix elements are "-"
                 for i in range(self.max_dim):
                     for j in range(self.max_dim):
                         answer_key = f"answer_{i}_{j}"
-                        self.answers[answer_key] = ContentAST.Answer.string(answer_key, "-")
+                        self.answers[answer_key] = AnswerTypes.String("-")
         else:
             # For multipart questions, use subpart letter format
             letter = chr(ord('a') + subpart_index)

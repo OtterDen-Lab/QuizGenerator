@@ -75,7 +75,7 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # Format as vector for display using consistent formatting
     vector_str = format_vector(gradient_values)
-    self.answers["gradient_vector"] = ContentAST.Answer.string("gradient_vector", vector_str, pdf_only=True)
+    self.answers["gradient_vector"] = AnswerTypes.String(vector_str, pdf_only=True)
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""

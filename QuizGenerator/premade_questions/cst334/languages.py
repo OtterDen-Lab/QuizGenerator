@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Tuple, Any
 
 from QuizGenerator.question import QuestionRegistry, Question
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 
 import logging
 log = logging.getLogger(__name__)
@@ -373,7 +373,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     # For Latex-only, ask students to generate some more.
     body.add_element(
       ContentAST.OnlyLatex([
-        ContentAST.AnswerBlock([ContentAST.Answer.string(f"blank_line_{i}", "", label="") for i in range(self.num_answer_blanks)])
+        ContentAST.AnswerBlock([AnswerTypes.String("", label="") for i in range(self.num_answer_blanks)])
       ])
     )
 

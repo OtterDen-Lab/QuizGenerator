@@ -2313,15 +2313,6 @@ class ContentAST:
     
     # Factory methods for common answer types
     @classmethod
-    def string(cls, key: str, value: str, **kwargs) -> 'ContentAST.Answer':
-      """Create a string answer"""
-      return cls(
-        value=value,
-        variable_kind=cls.VariableKind.STR,
-        **kwargs
-      )
-
-    @classmethod
     def list(cls, key: str, value: list, **kwargs) -> 'ContentAST.Answer':
       """Create a list answer (comma-separated values)"""
       return cls(
@@ -2356,15 +2347,6 @@ class ContentAST:
         value=value,
         kind=cls.CanvasAnswerKind.MULTIPLE_ANSWER,
         baffles=baffles,
-        **kwargs
-      )
-
-    @classmethod
-    def essay(cls, key: str, **kwargs) -> 'ContentAST.Answer':
-      """Create an essay question (no specific correct answer)"""
-      return cls(
-        value="",  # Essays don't have predetermined answers
-        kind=cls.CanvasAnswerKind.ESSAY,
         **kwargs
       )
 
@@ -2703,3 +2685,12 @@ class AnswerTypes:
         }
       ]
       return canvas_answers
+
+  # Open Ended
+  class OpenEnded(ContentAST.Answer):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.kind=ContentAST.Answer.CanvasAnswerKind.ESSAY
+  
+  class String(ContentAST.Answer):
+    pass
