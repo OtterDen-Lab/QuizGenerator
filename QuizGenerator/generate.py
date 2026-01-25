@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from QuizGenerator.canvas.canvas_interface import CanvasInterface
 
 from QuizGenerator.quiz import Quiz
+from QuizGenerator.question import QuestionRegistry
 
 import logging
 log = logging.getLogger(__name__)
@@ -44,6 +45,10 @@ def parse_args():
   parser.add_argument("--num_pdfs", default=0, type=int, help="How many PDF quizzes to create")
   parser.add_argument("--latex", action="store_false", dest="typst", help="Use Typst instead of LaTeX for PDF generation")
 
+  # Testing flags
+  parser.add_argument("--test_all", type=int, default=0, metavar="N",
+                     help="Generate N variations of ALL registered questions to test they work correctly")
+
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
 
@@ -63,8 +68,91 @@ def test():
   print("\n" + "="*60)
   print("TEST COMPLETE")
   print("="*60)
-  
-  
+
+
+def test_all_questions(num_variations: int):
+  """
+  Test all registered questions by generating N variations of each.
+
+  This helps verify that all question types work correctly and can generate
+  valid output without errors.
+
+  Args:
+    num_variations: Number of variations to generate for each question type
+  """
+  # Ensure all premade questions are loaded
+  QuestionRegistry.load_premade_questions()
+
+  registered_questions = QuestionRegistry._registry
+  total_questions = len(registered_questions)
+
+  print(f"\nTesting {total_questions} registered question types with {num_variations} variations each...")
+  print("=" * 70)
+
+  failed_questions = []
+  successful_questions = []
+
+  for i, (question_name, question_class) in enumerate(sorted(registered_questions.items()), 1):
+    print(f"\n[{i}/{total_questions}] Testing: {question_name}")
+    print(f"  Class: {question_class.__name__}")
+
+    question_failures = []
+
+    for variation in range(num_variations):
+      seed = variation * 1000  # Use different seeds for each variation
+      try:
+        # Create question instance with minimal required params
+        question = question_class(
+          name=f"test_{question_name}",
+          points_value=1.0
+        )
+
+        # Generate the question (this calls refresh and builds the AST)
+        question_ast = question.get_question(rng_seed=seed)
+
+        # Try rendering to both formats to catch format-specific issues
+        try:
+          question_ast.render("html")
+        except Exception as e:
+          question_failures.append(f"  Variation {variation+1}: HTML render failed - {e}")
+          continue
+
+        try:
+          question_ast.render("typst")
+        except Exception as e:
+          question_failures.append(f"  Variation {variation+1}: Typst render failed - {e}")
+          continue
+
+      except Exception as e:
+        question_failures.append(f"  Variation {variation+1}: Generation failed - {e}")
+
+    if question_failures:
+      print(f"  FAILED ({len(question_failures)}/{num_variations} variations)")
+      for failure in question_failures:
+        print(failure)
+      failed_questions.append((question_name, question_failures))
+    else:
+      print(f"  OK ({num_variations}/{num_variations} variations)")
+      successful_questions.append(question_name)
+
+  # Summary
+  print("\n" + "=" * 70)
+  print("TEST SUMMARY")
+  print("=" * 70)
+  print(f"Total question types: {total_questions}")
+  print(f"Successful: {len(successful_questions)}")
+  print(f"Failed: {len(failed_questions)}")
+
+  if failed_questions:
+    print("\nFailed questions:")
+    for name, failures in failed_questions:
+      print(f"  - {name}: {len(failures)} failures")
+
+  print("=" * 70)
+
+  return len(failed_questions) == 0
+
+
 def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   """
   Generate PDF from LaTeX source code.
@@ -268,6 +356,10 @@ def main():
   if args.command == "TEST":
     test()
     return
+
+  if args.test_all > 0:
+    success = test_all_questions(args.test_all)
+    exit(0 if success else 1)
 
   # Clear any previous metrics
   PerformanceTracker.clear_metrics()
