@@ -61,8 +61,8 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # Q, K, V, output, weights
 
-    self.answers["weights"] = ContentAST.Answer.MatrixAnswer("weights", self.weights, label="Weights")
-    self.answers["output"] = ContentAST.Answer.MatrixAnswer("output", self.output, label="Output")
+    self.answers["weights"] = ContentAST.Answer.matrix("weights", self.weights, label="Weights")
+    self.answers["output"] = ContentAST.Answer.matrix("output", self.output, label="Output")
     
     return True
   
