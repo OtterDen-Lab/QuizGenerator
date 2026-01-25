@@ -334,7 +334,7 @@ class VSFS_states(IOQuestion):
   
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self.answer_kind = ContentAST.Answer.AnswerKind.MULTIPLE_DROPDOWN
+    self.answer_kind = ContentAST.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN
     
     self.num_steps = kwargs.get("num_steps", 10)
   
@@ -357,9 +357,8 @@ class VSFS_states(IOQuestion):
     self.rng.shuffle(wrong_answers)
     
     self.answers["answer__cmd"] = ContentAST.Answer(
-      "answer__cmd",
       f"{operations[-1]['cmd']}",
-      kind=ContentAST.Answer.AnswerKind.MULTIPLE_DROPDOWN,
+      kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN,
       correct=True,
       baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']])),
       label="Command"

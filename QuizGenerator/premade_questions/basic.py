@@ -25,8 +25,8 @@ class FromText(Question):
     
     return ContentAST.Section([ContentAST.Text(self.text)])
   
-  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.AnswerKind, List[Dict[str,Any]]]:
-    return ContentAST.Answer.AnswerKind.ESSAY, []
+  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
+    return ContentAST.Answer.CanvasAnswerKind.ESSAY, []
 
 
 @QuestionRegistry.register()

@@ -2133,7 +2133,7 @@ class ContentAST:
 
     DEFAULT_ROUNDING_DIGITS = 4
 
-    class AnswerKind(enum.Enum):
+    class CanvasAnswerKind(enum.Enum):
       BLANK = "fill_in_multiple_blanks_question"
       MULTIPLE_ANSWER = "multiple_answers_question"
       ESSAY = "essay_question"
@@ -2154,10 +2154,10 @@ class ContentAST:
 
     def __init__(
         self,
-        key=None,  # Can be str (new pattern) or Answer object (old wrapper pattern)
         value=None,
-        kind: 'ContentAST.Answer.AnswerKind' = None,
+        kind: 'ContentAST.Answer.CanvasAnswerKind' = None,
         variable_kind: 'ContentAST.Answer.VariableKind' = None,
+        *,
         # Data fields (from misc.Answer)
         display=None,
         length=None,
@@ -2168,48 +2168,15 @@ class ContentAST:
         label: str = "",
         unit: str = "",
         blank_length=5,
-        # Backward compatibility for old wrapper pattern
-        answer=None  # Old pattern: ContentAST.Answer(answer=misc_answer_obj)
     ):
-      # BACKWARD COMPATIBILITY: Handle old wrapper pattern
-      # Old: ContentAST.Answer(ContentAST.Answer.string("key", "value"))
-      # Old: ContentAST.Answer(answer=some_answer_obj, label="...")
-      if answer is not None or (key is not None and isinstance(key, ContentAST.Answer)):
-        # Old wrapper pattern detected
-        wrapped_answer = answer if answer is not None else key
-
-        if wrapped_answer is None:
-          raise ValueError("Must provide either 'key' and 'value', or 'answer' parameter")
-
-        # Copy all fields from wrapped answer
-        super().__init__(content=label if label else wrapped_answer.label)
-        self.key = wrapped_answer.key
-        self.value = wrapped_answer.value
-        self.kind = wrapped_answer.kind
-        self.variable_kind = wrapped_answer.variable_kind
-        self.display = wrapped_answer.display
-        self.length = wrapped_answer.length
-        self.correct = wrapped_answer.correct
-        self.baffles = wrapped_answer.baffles
-        self.pdf_only = wrapped_answer.pdf_only
-
-        # Use provided rendering fields or copy from wrapped answer
-        self.label = label if label else wrapped_answer.label
-        self.unit = unit if unit else (wrapped_answer.unit if hasattr(wrapped_answer, 'unit') else "")
-        self.blank_length = blank_length if blank_length != 5 else (wrapped_answer.blank_length if hasattr(wrapped_answer, 'blank_length') else 5)
-        return
-
-      # NEW PATTERN: Normal construction
-      if key is None:
-        raise ValueError("Must provide 'key' parameter for new Answer pattern, or 'answer' parameter for old wrapper pattern")
-
+      
       # Initialize Leaf with label as content
       super().__init__(content=label if label else "")
 
       # Data fields
-      self.key = key
+      self.key = str(uuid.uuid4())
       self.value = value
-      self.kind = kind if kind is not None else ContentAST.Answer.AnswerKind.BLANK
+      self.kind = kind if kind is not None else ContentAST.Answer.CanvasAnswerKind.BLANK
       self.variable_kind = variable_kind if variable_kind is not None else ContentAST.Answer.VariableKind.STR
 
       # For list values in display, show the first option (or join them with /)
@@ -2349,7 +2316,6 @@ class ContentAST:
     def binary_hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
       """Create an answer that accepts binary or hex format"""
       return AnswerTypes.MultiBaseAnswer(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.BINARY_OR_HEX,
         length=length,
@@ -2360,7 +2326,6 @@ class ContentAST:
     def binary(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
       """Create a binary-only answer"""
       return AnswerTypes.BinaryAnswer(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.BINARY,
         length=length,
@@ -2371,7 +2336,6 @@ class ContentAST:
     def hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
       """Create a hex-only answer"""
       return AnswerTypes.HexAnswer(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.HEX,
         length=length,
@@ -2382,7 +2346,6 @@ class ContentAST:
     def float(cls, key: str, value, **kwargs) -> 'ContentAST.Answer':
       """Create a simple float answer (no fraction conversion)"""
       return AnswerTypes.FloatAnswer(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.FLOAT,
         **kwargs
@@ -2401,7 +2364,6 @@ class ContentAST:
     def integer(cls, key: str, value: int, **kwargs) -> 'ContentAST.Answer':
       """Create an integer answer"""
       return AnswerTypes.IntAnswer(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.INT,
         **kwargs
@@ -2411,7 +2373,6 @@ class ContentAST:
     def string(cls, key: str, value: str, **kwargs) -> 'ContentAST.Answer':
       """Create a string answer"""
       return cls(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.STR,
         **kwargs
@@ -2421,7 +2382,6 @@ class ContentAST:
     def list(cls, key: str, value: list, **kwargs) -> 'ContentAST.Answer':
       """Create a list answer (comma-separated values)"""
       return cls(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.LIST,
         **kwargs
@@ -2431,7 +2391,6 @@ class ContentAST:
     def vector(cls, key: str, value: List[float], **kwargs) -> 'ContentAST.Answer':
       """Create a vector answer"""
       return cls(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.VECTOR,
         **kwargs
@@ -2441,9 +2400,8 @@ class ContentAST:
     def dropdown(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
       """Create a dropdown answer with wrong answer choices (baffles)"""
       return cls(
-        key=key,
         value=value,
-        kind=cls.AnswerKind.MULTIPLE_DROPDOWN,
+        kind=cls.CanvasAnswerKind.MULTIPLE_DROPDOWN,
         baffles=baffles,
         **kwargs
       )
@@ -2452,9 +2410,8 @@ class ContentAST:
     def multiple_choice(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
       """Create a multiple choice answer with wrong answer choices (baffles)"""
       return cls(
-        key=key,
         value=value,
-        kind=cls.AnswerKind.MULTIPLE_ANSWER,
+        kind=cls.CanvasAnswerKind.MULTIPLE_ANSWER,
         baffles=baffles,
         **kwargs
       )
@@ -2463,9 +2420,8 @@ class ContentAST:
     def essay(cls, key: str, **kwargs) -> 'ContentAST.Answer':
       """Create an essay question (no specific correct answer)"""
       return cls(
-        key=key,
         value="",  # Essays don't have predetermined answers
-        kind=cls.AnswerKind.ESSAY,
+        kind=cls.CanvasAnswerKind.ESSAY,
         **kwargs
       )
 
@@ -2473,7 +2429,6 @@ class ContentAST:
     def matrix(cls, key: str, value, **kwargs):
       """Create a matrix answer (returns MatrixAnswer instance)"""
       return AnswerTypes.MatrixAnswer(
-        key=key,
         value=value,
         variable_kind=cls.VariableKind.MATRIX,
         **kwargs

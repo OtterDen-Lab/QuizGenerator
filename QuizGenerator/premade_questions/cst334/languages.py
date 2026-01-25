@@ -271,7 +271,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         "answer_good" : ContentAST.Answer(
           f"answer_good",
           self.grammar_good.generate(self.include_spaces),
-          ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER,
+          ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
           correct=True
         )
       }
@@ -283,7 +283,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
           ContentAST.Answer(
             f"answer_bad",
             self.grammar_bad.generate(self.include_spaces),
-            ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER,
+            ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
             correct=False
           )
       })
@@ -292,7 +292,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         ContentAST.Answer(
           f"answer_bad_early",
           self.grammar_bad.generate(self.include_spaces, early_exit=True),
-          ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER,
+          ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
           correct=False
         )
     })
@@ -313,7 +313,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
           if correct or early_exit
           else self.grammar_bad
         ).generate(self.include_spaces, early_exit=early_exit),
-        ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER,
+        ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
         correct= correct and not early_exit
       )
       if len(new_answer.value) < self.MAX_LENGTH and new_answer.value not in answer_text_set:
@@ -400,6 +400,6 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation
 
-  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.AnswerKind, List[Dict[str,Any]]]:
+  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
     
-    return ContentAST.Answer.AnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
+    return ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))

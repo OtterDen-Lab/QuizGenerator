@@ -473,7 +473,7 @@ class Question(abc.ABC):
     self.points_value = points_value
     self.topic = topic
     self.spacing = parse_spacing(kwargs.get("spacing", 0))
-    self.answer_kind = ContentAST.Answer.AnswerKind.BLANK
+    self.answer_kind = ContentAST.Answer.CanvasAnswerKind.BLANK
 
     # Support for multi-part questions (defaults to 1 for normal questions)
     self.num_subquestions = kwargs.get("num_subquestions", 1)
@@ -645,7 +645,7 @@ class Question(abc.ABC):
       explanation=explanation
     )
 
-  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.AnswerKind, List[Dict[str,Any]]]:
+  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
     """
     Return answers from cached components (new pattern) or self.answers dict (old pattern).
     """
@@ -663,7 +663,7 @@ class Question(abc.ABC):
       answers = self._components.answers
       if self.can_be_numerical():
         return (
-          ContentAST.Answer.AnswerKind.NUMERICAL_QUESTION,
+          ContentAST.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
           list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in answers]))
         )
       return (
@@ -675,7 +675,7 @@ class Question(abc.ABC):
     if len(self.answers.values()) > 0:
       if self.can_be_numerical():
         return (
-          ContentAST.Answer.AnswerKind.NUMERICAL_QUESTION,
+          ContentAST.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
           list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in self.answers.values()]))
         )
       return (
@@ -683,7 +683,7 @@ class Question(abc.ABC):
         list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
       )
 
-    return (ContentAST.Answer.AnswerKind.ESSAY, [])
+    return (ContentAST.Answer.CanvasAnswerKind.ESSAY, [])
     
   def refresh(self, rng_seed=None, *args, **kwargs):
     """If it is necessary to regenerate aspects between usages, this is the time to do it.

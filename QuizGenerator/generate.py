@@ -1,5 +1,6 @@
 #!env python
 import argparse
+from datetime import datetime
 import os
 import random
 import shutil
@@ -198,13 +199,14 @@ def test_all_questions(
 
     if canvas_course:
       print("Pushing to Canvas...")
+      quiz_title = f"Test All Questions ({datetime.now().strftime('%b %d %I:%M%p')})"
       canvas_course.push_quiz_to_canvas(
         test_quiz,
         num_variations=1,
-        title="Test All Questions",
+        title=quiz_title,
         is_practice=True
       )
-      print("Quiz pushed to Canvas")
+      print(f"Quiz '{quiz_title}' pushed to Canvas")
 
   return len(failed_questions) == 0
 
