@@ -70,7 +70,12 @@ def test():
   print("="*60)
 
 
-def test_all_questions(num_variations: int):
+def test_all_questions(
+    num_variations: int,
+    generate_pdf: bool = False,
+    use_typst: bool = True,
+    canvas_course=None
+):
   """
   Test all registered questions by generating N variations of each.
 
@@ -79,6 +84,9 @@ def test_all_questions(num_variations: int):
 
   Args:
     num_variations: Number of variations to generate for each question type
+    generate_pdf: If True, generate a PDF with all successful questions
+    use_typst: If True, use Typst for PDF generation; otherwise use LaTeX
+    canvas_course: If provided, push a test quiz to this Canvas course
   """
   # Ensure all premade questions are loaded
   QuestionRegistry.load_premade_questions()
@@ -98,6 +106,8 @@ def test_all_questions(num_variations: int):
 
   failed_questions = []
   successful_questions = []
+  # Collect question instances for PDF/Canvas generation
+  test_question_instances = []
 
   for i, (question_name, question_class) in enumerate(sorted(registered_questions.items()), 1):
     print(f"\n[{i}/{total_questions}] Testing: {question_name}")
@@ -113,7 +123,7 @@ def test_all_questions(num_variations: int):
 
         # Create question instance with minimal required params
         question = question_class(
-          name=f"test_{question_name}",
+          name=f"{question_name} (v{variation+1})",
           points_value=1.0,
           **extra_kwargs
         )
@@ -133,6 +143,9 @@ def test_all_questions(num_variations: int):
         except Exception as e:
           question_failures.append(f"  Variation {variation+1}: Typst render failed - {e}")
           continue
+
+        # If we got here, the question works - save the instance
+        test_question_instances.append(question)
 
       except Exception as e:
         question_failures.append(f"  Variation {variation+1}: Generation failed - {e}")
@@ -160,6 +173,38 @@ def test_all_questions(num_variations: int):
       print(f"  - {name}: {len(failures)} failures")
 
   print("=" * 70)
+
+  # Generate PDF and/or push to Canvas if requested
+  if (generate_pdf or canvas_course) and test_question_instances:
+    print(f"\nCreating test quiz with {len(test_question_instances)} questions...")
+
+    # Create a Quiz object with all successful questions
+    test_quiz = Quiz(
+      name="Test All Questions",
+      questions=test_question_instances,
+      practice=True
+    )
+
+    if generate_pdf:
+      print("Generating PDF...")
+      pdf_seed = 12345  # Fixed seed for reproducibility
+      if use_typst:
+        typst_text = test_quiz.get_quiz(rng_seed=pdf_seed).render("typst")
+        generate_typst(typst_text, remove_previous=True, name_prefix="test_all_questions")
+      else:
+        latex_text = test_quiz.get_quiz(rng_seed=pdf_seed).render_latex()
+        generate_latex(latex_text, remove_previous=True, name_prefix="test_all_questions")
+      print("PDF generated in out/ directory")
+
+    if canvas_course:
+      print("Pushing to Canvas...")
+      canvas_course.push_quiz_to_canvas(
+        test_quiz,
+        num_variations=1,
+        title="Test All Questions",
+        is_practice=True
+      )
+      print("Quiz pushed to Canvas")
 
   return len(failed_questions) == 0
 
@@ -369,7 +414,18 @@ def main():
     return
 
   if args.test_all > 0:
-    success = test_all_questions(args.test_all)
+    # Set up Canvas course if course_id provided
+    canvas_course = None
+    if args.course_id:
+      canvas_interface = CanvasInterface(prod=args.prod)
+      canvas_course = canvas_interface.get_course(course_id=args.course_id)
+
+    success = test_all_questions(
+      args.test_all,
+      generate_pdf=True,
+      use_typst=getattr(args, 'typst', True),
+      canvas_course=canvas_course
+    )
     exit(0 if success else 1)
 
   # Clear any previous metrics
