@@ -250,7 +250,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
           f"answer__evicted-{request_number}": ContentAST.Answer.string(
             f"answer__evicted-{request_number}", ('-' if evicted is None else f"{evicted}")
           ),
-          f"answer__cache_state-{request_number}": ContentAST.Answer.list_value(
+          f"answer__cache_state-{request_number}": ContentAST.Answer.list(
             f"answer__cache_state-{request_number}", copy.copy(cache_state)
           ),
         }

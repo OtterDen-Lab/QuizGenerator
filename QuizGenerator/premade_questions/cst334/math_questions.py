@@ -223,7 +223,7 @@ class AverageMemoryAccessTime(MathQuestion):
     self.amat = self.hit_rate * self.hit_latency + (1 - self.hit_rate) * self.miss_latency
     
     self.answers = {
-      "amat": ContentAST.Answer.float_value("answer__amat", self.amat,
+      "amat": ContentAST.Answer.float("answer__amat", self.amat,
                                  label="Average Memory Access Time", unit="cycles")
     }
     

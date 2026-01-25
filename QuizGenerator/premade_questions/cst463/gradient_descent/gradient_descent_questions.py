@@ -98,15 +98,15 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
       # Location answer
       location_key = f"answer__location_{step}"
-      self.answers[location_key] = ContentAST.Answer.vector_value(location_key, list(result['location']), label=f"Location at step {step}")
+      self.answers[location_key] = ContentAST.Answer.vector(location_key, list(result['location']), label=f"Location at step {step}")
 
       # Gradient answer
       gradient_key = f"answer__gradient_{step}"
-      self.answers[gradient_key] = ContentAST.Answer.vector_value(gradient_key, list(result['gradient']), label=f"Gradient at step {step}")
+      self.answers[gradient_key] = ContentAST.Answer.vector(gradient_key, list(result['gradient']), label=f"Gradient at step {step}")
 
       # Update answer
       update_key = f"answer__update_{step}"
-      self.answers[update_key] = ContentAST.Answer.vector_value(update_key, list(result['update']), label=f"Update at step {step}")
+      self.answers[update_key] = ContentAST.Answer.vector(update_key, list(result['update']), label=f"Update at step {step}")
   
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""

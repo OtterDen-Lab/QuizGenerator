@@ -36,19 +36,19 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.disk_access_delay = self.access_delay * self.number_of_reads + self.transfer_delay
     
     self.answers.update({
-      "answer__rotational_delay": ContentAST.Answer.float_value(
+      "answer__rotational_delay": ContentAST.Answer.float(
         "answer__rotational_delay",
         self.rotational_delay
       ),
-      "answer__access_delay": ContentAST.Answer.float_value(
+      "answer__access_delay": ContentAST.Answer.float(
         "answer__access_delay",
         self.access_delay
       ),
-      "answer__transfer_delay": ContentAST.Answer.float_value(
+      "answer__transfer_delay": ContentAST.Answer.float(
         "answer__transfer_delay",
         self.transfer_delay
       ),
-      "answer__disk_access_delay": ContentAST.Answer.float_value(
+      "answer__disk_access_delay": ContentAST.Answer.float(
         "answer__disk_access_delay",
         self.disk_access_delay
       ),

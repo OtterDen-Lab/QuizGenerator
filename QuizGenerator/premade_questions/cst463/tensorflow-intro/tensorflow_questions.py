@@ -331,12 +331,12 @@ class ActivationFunctionComputationQuestion(Question):
 
     if self.activation == self.ACTIVATION_SOFTMAX:
       # Softmax: single vector answer
-      self.answers["output"] = ContentAST.Answer.vector_value("output", self.output_vector, label="Output vector")
+      self.answers["output"] = ContentAST.Answer.vector("output", self.output_vector, label="Output vector")
     else:
       # Element-wise: individual answers
       for i, output in enumerate(self.output_vector):
         key = f"output_{i}"
-        self.answers[key] = ContentAST.Answer.float_value(key, float(output), label=f"Output for input {self.input_vector[i]:.1f}")
+        self.answers[key] = ContentAST.Answer.float(key, float(output), label=f"Output for input {self.input_vector[i]:.1f}")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
@@ -545,10 +545,10 @@ class RegularizationCalculationQuestion(Question):
     """Create answer fields."""
     self.answers = {}
 
-    self.answers["prediction"] = ContentAST.Answer.float_value("prediction", float(self.prediction), label="Prediction ŷ")
-    self.answers["base_loss"] = ContentAST.Answer.float_value("base_loss", float(self.base_loss), label="Base MSE loss")
-    self.answers["l2_penalty"] = ContentAST.Answer.float_value("l2_penalty", float(self.l2_penalty), label="L2 penalty")
-    self.answers["total_loss"] = ContentAST.Answer.float_value("total_loss", float(self.total_loss), label="Total loss")
+    self.answers["prediction"] = ContentAST.Answer.float("prediction", float(self.prediction), label="Prediction ŷ")
+    self.answers["base_loss"] = ContentAST.Answer.float("base_loss", float(self.base_loss), label="Base MSE loss")
+    self.answers["l2_penalty"] = ContentAST.Answer.float("l2_penalty", float(self.l2_penalty), label="L2 penalty")
+    self.answers["total_loss"] = ContentAST.Answer.float("total_loss", float(self.total_loss), label="Total loss")
     self.answers["grad_total_w0"] = ContentAST.Answer.auto_float("grad_total_w0", float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
@@ -817,14 +817,14 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     self.answers = {}
 
     # New velocity
-    self.answers["velocity"] = ContentAST.Answer.vector_value("velocity", self.new_velocity, label="New velocity")
+    self.answers["velocity"] = ContentAST.Answer.vector("velocity", self.new_velocity, label="New velocity")
 
     # New weights with momentum
-    self.answers["weights_momentum"] = ContentAST.Answer.vector_value("weights_momentum", self.new_weights, label="Weights (momentum)")
+    self.answers["weights_momentum"] = ContentAST.Answer.vector("weights_momentum", self.new_weights, label="Weights (momentum)")
 
     # Vanilla SGD weights for comparison
     if self.show_vanilla_sgd:
-      self.answers["weights_sgd"] = ContentAST.Answer.vector_value("weights_sgd", self.sgd_weights, label="Weights (vanilla SGD)")
+      self.answers["weights_sgd"] = ContentAST.Answer.vector("weights_sgd", self.sgd_weights, label="Weights (vanilla SGD)")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""

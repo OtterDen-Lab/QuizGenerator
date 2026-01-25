@@ -566,10 +566,10 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     # Hidden layer activations
     for i in range(self.num_hidden):
       key = f"h{i+1}"
-      self.answers[key] = ContentAST.Answer.float_value(key, float(self.a1[i]), label=f"h_{i+1}")
+      self.answers[key] = ContentAST.Answer.float(key, float(self.a1[i]), label=f"h_{i + 1}")
 
     # Output
-    self.answers["y_pred"] = ContentAST.Answer.float_value("y_pred", float(self.a2[0]), label="ŷ")
+    self.answers["y_pred"] = ContentAST.Answer.float("y_pred", float(self.a2[0]), label="ŷ")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
@@ -920,11 +920,11 @@ class EnsembleAveragingQuestion(Question):
 
     # Mean prediction
     mean_pred = np.mean(self.predictions)
-    self.answers["mean"] = ContentAST.Answer.float_value("mean", float(mean_pred), label="Mean (average)")
+    self.answers["mean"] = ContentAST.Answer.float("mean", float(mean_pred), label="Mean (average)")
 
     # Median (optional, but useful)
     median_pred = np.median(self.predictions)
-    self.answers["median"] = ContentAST.Answer.float_value("median", float(median_pred), label="Median")
+    self.answers["median"] = ContentAST.Answer.float("median", float(median_pred), label="Median")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
@@ -1083,18 +1083,18 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     self.answers = {}
 
     # Forward pass answers
-    self.answers["y_pred"] = ContentAST.Answer.float_value("y_pred", float(self.a2[0]), label="1. Forward Pass - Network output ŷ")
+    self.answers["y_pred"] = ContentAST.Answer.float("y_pred", float(self.a2[0]), label="1. Forward Pass - Network output ŷ")
 
     # Loss answer
-    self.answers["loss"] = ContentAST.Answer.float_value("loss", float(self.loss), label="2. Loss")
+    self.answers["loss"] = ContentAST.Answer.float("loss", float(self.loss), label="2. Loss")
 
     # Gradient answers (for key weights)
     self.answers["grad_w3"] = ContentAST.Answer.auto_float("grad_w3", self._compute_gradient_W2(0), label="3. Gradient ∂L/∂w₃")
     self.answers["grad_w11"] = ContentAST.Answer.auto_float("grad_w11", self._compute_gradient_W1(0, 0), label="4. Gradient ∂L/∂w₁₁")
 
     # Updated weight answers
-    self.answers["new_w3"] = ContentAST.Answer.float_value("new_w3", float(self.new_W2[0, 0]), label="5. Updated w₃:")
-    self.answers["new_w11"] = ContentAST.Answer.float_value("new_w11", float(self.new_W1[0, 0]), label="6. Updated w₁₁:")
+    self.answers["new_w3"] = ContentAST.Answer.float("new_w3", float(self.new_W2[0, 0]), label="5. Updated w₃:")
+    self.answers["new_w11"] = ContentAST.Answer.float("new_w11", float(self.new_W1[0, 0]), label="6. Updated w₁₁:")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""

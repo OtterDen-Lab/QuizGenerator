@@ -2112,7 +2112,6 @@ class ContentAST:
         return ""
       return super().render(output_format, **kwargs)
   
-
   class Answer(Leaf):
     """
     Unified answer class combining data storage, Canvas export, and rendering.
@@ -2369,7 +2368,7 @@ class ContentAST:
       )
 
     @classmethod
-    def hex_value(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
+    def hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
       """Create a hex-only answer"""
       return AnswerTypes.HexAnswer(
         key=key,
@@ -2380,7 +2379,7 @@ class ContentAST:
       )
 
     @classmethod
-    def float_value(cls, key: str, value, **kwargs) -> 'ContentAST.Answer':
+    def float(cls, key: str, value, **kwargs) -> 'ContentAST.Answer':
       """Create a simple float answer (no fraction conversion)"""
       return AnswerTypes.FloatAnswer(
         key=key,
@@ -2392,7 +2391,7 @@ class ContentAST:
     @classmethod
     def auto_float(cls, key: str, value: float, **kwargs) -> 'ContentAST.Answer':
       """Create an answer that accepts multiple float formats (decimal, fraction, mixed)"""
-      return cls.float_value(
+      return cls.float(
         key=key,
         value=value,
         **kwargs
@@ -2419,7 +2418,7 @@ class ContentAST:
       )
 
     @classmethod
-    def list_value(cls, key: str, value: list, **kwargs) -> 'ContentAST.Answer':
+    def list(cls, key: str, value: list, **kwargs) -> 'ContentAST.Answer':
       """Create a list answer (comma-separated values)"""
       return cls(
         key=key,
@@ -2429,7 +2428,7 @@ class ContentAST:
       )
 
     @classmethod
-    def vector_value(cls, key: str, value: List[float], **kwargs) -> 'ContentAST.Answer':
+    def vector(cls, key: str, value: List[float], **kwargs) -> 'ContentAST.Answer':
       """Create a vector answer"""
       return cls(
         key=key,
@@ -2610,7 +2609,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          ContentAST.Answer.float_value(
+          ContentAST.Answer.float(
             key=f"{self.key}_{i}_{j}",
             value=self.value[i, j],
             blank_length=5
@@ -2635,7 +2634,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          ContentAST.Answer.float_value(
+          ContentAST.Answer.float(
             key=f"{self.key}_{i}_{j}",
             value=self.value[i, j],
             blank_length=5
@@ -2660,7 +2659,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          ContentAST.Answer.float_value(
+          ContentAST.Answer.float(
             key=f"{self.key}_{i}_{j}",
             value=self.value[i, j],
             blank_length=5
@@ -2685,7 +2684,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          ContentAST.Answer.float_value(
+          ContentAST.Answer.float(
             key=f"{self.key}_{i}_{j}",
             value=self.value[i, j],
             blank_length=5
