@@ -398,8 +398,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     self.virtual_address = self.rng.randint(1, int(self.bounds / self.PROBABILITY_OF_VALID))
     
     if self.virtual_address < self.bounds:
-      self.answers["answer"] = ContentAST.Answer.binary_hex(
-        "answer__physical_address",
+      self.answers["answer"] = AnswerTypes.Hex(
         self.base + self.virtual_address,
         length=math.ceil(math.log2(self.base + self.virtual_address))
       )
@@ -585,8 +584,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     
     # Set answers based on whether it's in bounds or not
     if self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
-      self.answers["answer__physical_address"] = ContentAST.Answer.binary_hex(
-        "answer__physical_address",
+      self.answers["answer__physical_address"] = AnswerTypes.Binary(
         self.physical_address,
         length=self.physical_bits,
         label="Physical Address"
@@ -824,9 +822,9 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     self.answers.update(
       {
-        "answer__vpn": ContentAST.Answer.binary_hex("answer__vpn", self.vpn, length=self.num_bits_vpn, label="VPN"),
-        "answer__offset": ContentAST.Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset, label="Offset"),
-        "answer__pte": ContentAST.Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1), label="PTE"),
+        "answer__vpn": AnswerTypes.Binary(self.vpn, length=self.num_bits_vpn, label="VPN"),
+        "answer__offset": AnswerTypes.Binary(self.offset, length=self.num_bits_offset, label="Offset"),
+        "answer__pte": AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1), label="PTE"),
       }
     )
 
@@ -834,10 +832,8 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       self.answers.update(
         {
           "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
-          "answer__pfn": ContentAST.Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn, label="PFN"),
-          "answer__physical_address": ContentAST.Answer.binary_hex(
-            "answer__physical_address", self.physical_address,
-            length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
+          "answer__pfn": AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
+          "answer__physical_address": AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
           ),
         }
       )
@@ -1186,16 +1182,16 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     # Set up answers
     self.answers.update({
-      "answer__pdi": ContentAST.Answer.binary_hex("answer__pdi", self.pdi, length=self.num_bits_pdi,
+      "answer__pdi": AnswerTypes.Binary(self.pdi, length=self.num_bits_pdi,
                                        label="PDI (Page Directory Index)"),
-      "answer__pti": ContentAST.Answer.binary_hex("answer__pti", self.pti, length=self.num_bits_pti,
+      "answer__pti": AnswerTypes.Binary(self.pti, length=self.num_bits_pti,
                                        label="PTI (Page Table Index)"),
-      "answer__offset": ContentAST.Answer.binary_hex("answer__offset", self.offset, length=self.num_bits_offset,
+      "answer__offset": AnswerTypes.Binary(self.offset, length=self.num_bits_offset,
                                           label="Offset"),
-      "answer__pd_entry": ContentAST.Answer.binary_hex("answer__pd_entry", self.pd_entry, length=(self.num_bits_pfn + 1),
+      "answer__pd_entry": AnswerTypes.Binary(self.pd_entry, length=(self.num_bits_pfn + 1),
                                             label="PD Entry (from Page Directory)"),
       "answer__pt_number": (
-        ContentAST.Answer.binary_hex("answer__pt_number", self.page_table_number, length=self.num_bits_pfn,
+        AnswerTypes.Binary(self.page_table_number, length=self.num_bits_pfn,
                           label="Page Table Number")
         if self.pd_valid
         else ContentAST.Answer.string("answer__pt_number", "INVALID", label="Page Table Number")
@@ -1206,7 +1202,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # (regardless of whether that PTE is valid or invalid)
     if self.pd_valid:
       self.answers.update({
-        "answer__pte": ContentAST.Answer.binary_hex("answer__pte", self.pte, length=(self.num_bits_pfn + 1),
+        "answer__pte": AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1),
                                          label="PTE (from Page Table)"),
       })
     else:
@@ -1220,10 +1216,8 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     if self.pd_valid and self.pt_valid:
       self.answers.update({
         "answer__is_valid": ContentAST.Answer.string("answer__is_valid", "VALID", label="VALID or INVALID?"),
-        "answer__pfn": ContentAST.Answer.binary_hex("answer__pfn", self.pfn, length=self.num_bits_pfn, label="PFN"),
-        "answer__physical_address": ContentAST.Answer.binary_hex(
-          "answer__physical_address", self.physical_address,
-          length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
+        "answer__pfn": AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
+        "answer__physical_address": AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
         ),
       })
     else:

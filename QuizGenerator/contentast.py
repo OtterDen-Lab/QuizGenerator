@@ -2313,16 +2313,6 @@ class ContentAST:
     
     # Factory methods for common answer types
     @classmethod
-    def binary_hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
-      """Create an answer that accepts binary or hex format"""
-      return AnswerTypes.MultiBase(
-        value=value,
-        variable_kind=cls.VariableKind.BINARY_OR_HEX,
-        length=length,
-        **kwargs
-      )
-
-    @classmethod
     def string(cls, key: str, value: str, **kwargs) -> 'ContentAST.Answer':
       """Create a string answer"""
       return cls(
