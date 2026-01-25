@@ -6,7 +6,7 @@ import math
 import numpy as np
 from typing import List, Tuple, Dict, Any
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -73,10 +73,10 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
     # Individual loss answers
     for i in range(self.num_samples):
-      self.answers[f"loss_{i}"] = ContentAST.Answer.float(f"loss_{i}", self.individual_losses[i], label=f"Sample {i + 1} loss")
+      self.answers[f"loss_{i}"] = AnswerTypes.FloatAnswer(self.individual_losses[i], label=f"Sample {i + 1} loss")
 
     # Overall loss answer
-    self.answers["overall_loss"] = ContentAST.Answer.float("overall_loss", self.overall_loss, label="Overall loss")
+    self.answers["overall_loss"] = AnswerTypes.FloatAnswer(self.overall_loss, label="Overall loss")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Element, List[ContentAST.Answer]]:
     """Build question body and collect answers."""

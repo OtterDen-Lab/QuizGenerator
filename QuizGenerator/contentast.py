@@ -2155,8 +2155,8 @@ class ContentAST:
     def __init__(
         self,
         value=None,
-        kind: 'ContentAST.Answer.CanvasAnswerKind' = None,
-        variable_kind: 'ContentAST.Answer.VariableKind' = None,
+        kind: ContentAST.Answer.CanvasAnswerKind = None,
+        variable_kind: ContentAST.Answer.VariableKind = None,
         *,
         # Data fields (from misc.Answer)
         display=None,
@@ -2319,53 +2319,6 @@ class ContentAST:
         value=value,
         variable_kind=cls.VariableKind.BINARY_OR_HEX,
         length=length,
-        **kwargs
-      )
-
-    @classmethod
-    def binary(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
-      """Create a binary-only answer"""
-      return AnswerTypes.BinaryAnswer(
-        value=value,
-        variable_kind=cls.VariableKind.BINARY,
-        length=length,
-        **kwargs
-      )
-
-    @classmethod
-    def hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
-      """Create a hex-only answer"""
-      return AnswerTypes.HexAnswer(
-        value=value,
-        variable_kind=cls.VariableKind.HEX,
-        length=length,
-        **kwargs
-      )
-
-    @classmethod
-    def float(cls, key: str, value, **kwargs) -> 'ContentAST.Answer':
-      """Create a simple float answer (no fraction conversion)"""
-      return AnswerTypes.FloatAnswer(
-        value=value,
-        variable_kind=cls.VariableKind.FLOAT,
-        **kwargs
-      )
-
-    @classmethod
-    def auto_float(cls, key: str, value: float, **kwargs) -> 'ContentAST.Answer':
-      """Create an answer that accepts multiple float formats (decimal, fraction, mixed)"""
-      return cls.float(
-        key=key,
-        value=value,
-        **kwargs
-      )
-
-    @classmethod
-    def integer(cls, key: str, value: int, **kwargs) -> 'ContentAST.Answer':
-      """Create an integer answer"""
-      return AnswerTypes.IntAnswer(
-        value=value,
-        variable_kind=cls.VariableKind.INT,
         **kwargs
       )
 
@@ -2564,8 +2517,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          ContentAST.Answer.float(
-            key=f"{self.key}_{i}_{j}",
+          AnswerTypes.FloatAnswer(
             value=self.value[i, j],
             blank_length=5
           )
@@ -2589,8 +2541,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          ContentAST.Answer.float(
-            key=f"{self.key}_{i}_{j}",
+          AnswerTypes.FloatAnswer(
             value=self.value[i, j],
             blank_length=5
           )
@@ -2614,8 +2565,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          ContentAST.Answer.float(
-            key=f"{self.key}_{i}_{j}",
+          AnswerTypes.FloatAnswer(
             value=self.value[i, j],
             blank_length=5
           )
@@ -2639,8 +2589,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          ContentAST.Answer.float(
-            key=f"{self.key}_{i}_{j}",
+          AnswerTypes.FloatAnswer(
             value=self.value[i, j],
             blank_length=5
           )

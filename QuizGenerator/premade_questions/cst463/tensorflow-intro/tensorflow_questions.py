@@ -8,7 +8,7 @@ import numpy as np
 import sympy as sp
 from typing import List, Tuple, Dict, Any
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -85,13 +85,13 @@ class ParameterCountingQuestion(Question):
     """Create answer fields."""
     self.answers = {}
 
-    self.answers["total_weights"] = ContentAST.Answer.integer("total_weights", self.total_weights, label="Total weights")
+    self.answers["total_weights"] = AnswerTypes.IntAnswer(self.total_weights, label="Total weights")
 
     if self.include_biases:
-      self.answers["total_biases"] = ContentAST.Answer.integer("total_biases", self.total_biases, label="Total biases")
-      self.answers["total_params"] = ContentAST.Answer.integer("total_params", self.total_params, label="Total trainable parameters")
+      self.answers["total_biases"] = AnswerTypes.IntAnswer(self.total_biases, label="Total biases")
+      self.answers["total_params"] = AnswerTypes.IntAnswer(self.total_params, label="Total trainable parameters")
     else:
-      self.answers["total_params"] = ContentAST.Answer.integer("total_params", self.total_params, label="Total trainable parameters")
+      self.answers["total_params"] = AnswerTypes.IntAnswer(self.total_params, label="Total trainable parameters")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
@@ -336,7 +336,7 @@ class ActivationFunctionComputationQuestion(Question):
       # Element-wise: individual answers
       for i, output in enumerate(self.output_vector):
         key = f"output_{i}"
-        self.answers[key] = ContentAST.Answer.float(key, float(output), label=f"Output for input {self.input_vector[i]:.1f}")
+        self.answers[key] = AnswerTypes.FloatAnswer(float(output), label=f"Output for input {self.input_vector[i]:.1f}")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
@@ -545,11 +545,11 @@ class RegularizationCalculationQuestion(Question):
     """Create answer fields."""
     self.answers = {}
 
-    self.answers["prediction"] = ContentAST.Answer.float("prediction", float(self.prediction), label="Prediction ŷ")
-    self.answers["base_loss"] = ContentAST.Answer.float("base_loss", float(self.base_loss), label="Base MSE loss")
-    self.answers["l2_penalty"] = ContentAST.Answer.float("l2_penalty", float(self.l2_penalty), label="L2 penalty")
-    self.answers["total_loss"] = ContentAST.Answer.float("total_loss", float(self.total_loss), label="Total loss")
-    self.answers["grad_total_w0"] = ContentAST.Answer.auto_float("grad_total_w0", float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
+    self.answers["prediction"] = AnswerTypes.FloatAnswer(float(self.prediction), label="Prediction ŷ")
+    self.answers["base_loss"] = AnswerTypes.FloatAnswer(float(self.base_loss), label="Base MSE loss")
+    self.answers["l2_penalty"] = AnswerTypes.FloatAnswer(float(self.l2_penalty), label="L2 penalty")
+    self.answers["total_loss"] = AnswerTypes.FloatAnswer(float(self.total_loss), label="Total loss")
+    self.answers["grad_total_w0"] = AnswerTypes.FloatAnswer(float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""

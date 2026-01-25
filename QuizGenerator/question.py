@@ -21,7 +21,7 @@ import yaml
 from typing import List, Dict, Any, Tuple, Optional
 import canvasapi.course, canvasapi.quiz
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.performance import timer, PerformanceTracker
 
 import logging
@@ -750,7 +750,7 @@ class Question(abc.ABC):
   
   def can_be_numerical(self):
     if (len(self.answers.values()) == 1
-          and list(self.answers.values())[0].variable_kind in [ContentAST.Answer.VariableKind.FLOAT, ContentAST.Answer.VariableKind.AUTOFLOAT]
+          and isinstance(list(self.answers.values())[0], AnswerTypes.FloatAnswer)
     ):
       return True
     return False

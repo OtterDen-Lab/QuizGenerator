@@ -6,7 +6,7 @@ import difflib
 import logging
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
@@ -36,22 +36,10 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.disk_access_delay = self.access_delay * self.number_of_reads + self.transfer_delay
     
     self.answers.update({
-      "answer__rotational_delay": ContentAST.Answer.float(
-        "answer__rotational_delay",
-        self.rotational_delay
-      ),
-      "answer__access_delay": ContentAST.Answer.float(
-        "answer__access_delay",
-        self.access_delay
-      ),
-      "answer__transfer_delay": ContentAST.Answer.float(
-        "answer__transfer_delay",
-        self.transfer_delay
-      ),
-      "answer__disk_access_delay": ContentAST.Answer.float(
-        "answer__disk_access_delay",
-        self.disk_access_delay
-      ),
+      "answer__rotational_delay"  : AnswerTypes.FloatAnswer(self.rotational_delay),
+      "answer__access_delay"      : AnswerTypes.FloatAnswer(self.access_delay),
+      "answer__transfer_delay"    : AnswerTypes.FloatAnswer(self.transfer_delay),
+      "answer__disk_access_delay" : AnswerTypes.FloatAnswer(self.disk_access_delay),
     })
   
   def _get_body(self, *args, **kwargs):
@@ -190,10 +178,10 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.inode_index_in_block = int(self.inode_address_in_block / self.inode_size)
     
     self.answers.update({
-      "answer__inode_address": ContentAST.Answer.integer("answer__inode_address", self.inode_address),
-      "answer__inode_block": ContentAST.Answer.integer("answer__inode_block", self.inode_block),
-      "answer__inode_address_in_block": ContentAST.Answer.integer("answer__inode_address_in_block", self.inode_address_in_block),
-      "answer__inode_index_in_block": ContentAST.Answer.integer("answer__inode_index_in_block", self.inode_index_in_block),
+      "answer__inode_address": AnswerTypes.IntAnswer(self.inode_address),
+      "answer__inode_block": AnswerTypes.IntAnswer(self.inode_block),
+      "answer__inode_address_in_block": AnswerTypes.IntAnswer(self.inode_address_in_block),
+      "answer__inode_index_in_block": AnswerTypes.IntAnswer(self.inode_index_in_block),
     })
   
   def _get_body(self):

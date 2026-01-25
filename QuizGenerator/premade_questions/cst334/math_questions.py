@@ -4,7 +4,7 @@ import logging
 import math
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)
@@ -31,10 +31,10 @@ class BitsAndBytes(MathQuestion):
     self.num_bytes = int(math.pow(2, self.num_bits))
     
     if self.from_binary:
-      self.answers = {"answer": ContentAST.Answer.integer("num_bytes", self.num_bytes,
+      self.answers = {"answer": AnswerTypes.IntAnswer(self.num_bytes,
                                                label="Address space size", unit="Bytes")}
     else:
-      self.answers = {"answer": ContentAST.Answer.integer("num_bits", self.num_bits,
+      self.answers = {"answer": AnswerTypes.IntAnswer(self.num_bits,
                                                label="Number of bits in address", unit="bits")}
   
   def _get_body(self, **kwargs):
@@ -223,8 +223,7 @@ class AverageMemoryAccessTime(MathQuestion):
     self.amat = self.hit_rate * self.hit_latency + (1 - self.hit_rate) * self.miss_latency
     
     self.answers = {
-      "amat": ContentAST.Answer.float("answer__amat", self.amat,
-                                 label="Average Memory Access Time", unit="cycles")
+      "amat": AnswerTypes.FloatAnswer(self.amat, label="Average Memory Access Time", unit="cycles")
     }
     
     # Finally, do the self.rngizing of the question, to avoid these being non-deterministic

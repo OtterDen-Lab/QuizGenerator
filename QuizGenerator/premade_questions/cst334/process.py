@@ -13,7 +13,7 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.question import Question, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -356,23 +356,15 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     
     for job_id in sorted(self.job_stats.keys()):
       self.answers.update({
-        f"answer__response_time_job{job_id}": ContentAST.Answer.auto_float(
-          f"answer__response_time_job{job_id}",
-          self.job_stats[job_id]["Response"]
-        ),
-        f"answer__turnaround_time_job{job_id}": ContentAST.Answer.auto_float(
-          f"answer__turnaround_time_job{job_id}",
-          self.job_stats[job_id]["TAT"]
-        ),
+        f"answer__response_time_job{job_id}": AnswerTypes.FloatAnswer(self.job_stats[job_id]["Response"]),
+        f"answer__turnaround_time_job{job_id}": AnswerTypes.FloatAnswer(self.job_stats[job_id]["TAT"]),
       })
     self.answers.update({
-      "answer__average_response_time": ContentAST.Answer.auto_float(
-        "answer__average_response_time",
+      "answer__average_response_time": AnswerTypes.FloatAnswer(
         sum([job.response_time for job in jobs]) / len(jobs),
         label="Overall average response time"
       ),
-      "answer__average_turnaround_time": ContentAST.Answer.auto_float(
-        "answer__average_turnaround_time",
+      "answer__average_turnaround_time": AnswerTypes.FloatAnswer(
         sum([job.turnaround_time for job in jobs]) / len(jobs),
         label="Overall average TAT"
       )
@@ -915,10 +907,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     for job_id in sorted(self.job_stats.keys()):
       self.answers.update({
-        f"answer__turnaround_time_job{job_id}": ContentAST.Answer.auto_float(
-          f"answer__turnaround_time_job{job_id}",
-          self.job_stats[job_id]["TAT"]
-        )
+        f"answer__turnaround_time_job{job_id}": AnswerTypes.FloatAnswer(self.job_stats[job_id]["TAT"])
       })
 
     return self.is_interesting()

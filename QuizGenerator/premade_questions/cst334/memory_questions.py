@@ -9,7 +9,7 @@ import logging
 import math
 from typing import List, Optional
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.question import Question, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -40,9 +40,9 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     self.num_bits_vpn = self.num_bits_va - self.num_bits_offset
     
     self.possible_answers = {
-      self.Target.VA_BITS: ContentAST.Answer.integer("answer__num_bits_va", self.num_bits_va, unit="bits"),
-      self.Target.OFFSET_BITS: ContentAST.Answer.integer("answer__num_bits_offset", self.num_bits_offset, unit="bits"),
-      self.Target.VPN_BITS: ContentAST.Answer.integer("answer__num_bits_vpn", self.num_bits_vpn, unit="bits")
+      self.Target.VA_BITS: AnswerTypes.IntAnswer(self.num_bits_va, unit="bits"),
+      self.Target.OFFSET_BITS: AnswerTypes.IntAnswer(self.num_bits_offset, unit="bits"),
+      self.Target.VPN_BITS: AnswerTypes.IntAnswer(self.num_bits_vpn, unit="bits")
     }
     
     # Select what kind of question we are going to be
@@ -259,9 +259,8 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     self.hit_rate = 100 * number_of_hits / (self.num_requests)
     self.answers.update(
       {
-        "answer__hit_rate": ContentAST.Answer.auto_float(
-          "answer__hit_rate", self.hit_rate,
-          label=f"Hit rate, excluding non-capacity misses. Round to {ContentAST.Answer.DEFAULT_ROUNDING_DIGITS} decimal digits if appropriate.",
+        "answer__hit_rate": AnswerTypes.FloatAnswer(self.hit_rate,
+          label=f"Hit rate, excluding non-capacity misses.",
           unit="%"
         )
       }

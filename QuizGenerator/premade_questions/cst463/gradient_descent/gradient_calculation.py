@@ -5,7 +5,7 @@ import logging
 from typing import List, Tuple
 import sympy as sp
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.question import Question, QuestionRegistry
 from .misc import generate_function, format_vector
 
@@ -57,7 +57,7 @@ class DerivativeQuestion(Question, abc.ABC):
       # Use auto_float for Canvas compatibility with integers and decimals
       # Label includes the partial derivative notation
       label = f"∂f/∂x_{i} at ({eval_point_str})"
-      self.answers[answer_key] = ContentAST.Answer.float(answer_key, gradient_value, label=label)
+      self.answers[answer_key] = AnswerTypes.FloatAnswer(gradient_value, label=label)
 
   def _create_gradient_vector_answer(self) -> None:
     """Create a single gradient vector answer for PDF format."""

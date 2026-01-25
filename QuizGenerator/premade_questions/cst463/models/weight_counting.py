@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)
@@ -85,11 +85,7 @@ class WeightCounting(Question, abc.ABC):
         continue
     
     self.num_parameters = self.model.count_params()
-    self.answers["num_parameters"] = ContentAST.Answer.integer(
-      "num_parameters",
-      self.num_parameters,
-      label="Number of Parameters"
-    )
+    self.answers["num_parameters"] = AnswerTypes.IntAnswer(self.num_parameters, label="Number of Parameters")
     
     return True
   
