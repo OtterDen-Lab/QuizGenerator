@@ -750,7 +750,7 @@ class Question(abc.ABC):
   
   def can_be_numerical(self):
     if (len(self.answers.values()) == 1
-          and isinstance(list(self.answers.values())[0], AnswerTypes.FloatAnswer)
+          and isinstance(list(self.answers.values())[0], AnswerTypes.Float)
     ):
       return True
     return False

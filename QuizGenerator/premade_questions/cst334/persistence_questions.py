@@ -36,10 +36,10 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.disk_access_delay = self.access_delay * self.number_of_reads + self.transfer_delay
     
     self.answers.update({
-      "answer__rotational_delay"  : AnswerTypes.FloatAnswer(self.rotational_delay),
-      "answer__access_delay"      : AnswerTypes.FloatAnswer(self.access_delay),
-      "answer__transfer_delay"    : AnswerTypes.FloatAnswer(self.transfer_delay),
-      "answer__disk_access_delay" : AnswerTypes.FloatAnswer(self.disk_access_delay),
+      "answer__rotational_delay"  : AnswerTypes.Float(self.rotational_delay),
+      "answer__access_delay"      : AnswerTypes.Float(self.access_delay),
+      "answer__transfer_delay"    : AnswerTypes.Float(self.transfer_delay),
+      "answer__disk_access_delay" : AnswerTypes.Float(self.disk_access_delay),
     })
   
   def _get_body(self, *args, **kwargs):
@@ -178,10 +178,10 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.inode_index_in_block = int(self.inode_address_in_block / self.inode_size)
     
     self.answers.update({
-      "answer__inode_address": AnswerTypes.IntAnswer(self.inode_address),
-      "answer__inode_block": AnswerTypes.IntAnswer(self.inode_block),
-      "answer__inode_address_in_block": AnswerTypes.IntAnswer(self.inode_address_in_block),
-      "answer__inode_index_in_block": AnswerTypes.IntAnswer(self.inode_index_in_block),
+      "answer__inode_address": AnswerTypes.Int(self.inode_address),
+      "answer__inode_block": AnswerTypes.Int(self.inode_block),
+      "answer__inode_address_in_block": AnswerTypes.Int(self.inode_address_in_block),
+      "answer__inode_index_in_block": AnswerTypes.Int(self.inode_index_in_block),
     })
   
   def _get_body(self):

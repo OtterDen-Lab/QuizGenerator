@@ -2315,7 +2315,7 @@ class ContentAST:
     @classmethod
     def binary_hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
       """Create an answer that accepts binary or hex format"""
-      return AnswerTypes.MultiBaseAnswer(
+      return AnswerTypes.MultiBase(
         value=value,
         variable_kind=cls.VariableKind.BINARY_OR_HEX,
         length=length,
@@ -2381,7 +2381,7 @@ class ContentAST:
     @classmethod
     def matrix(cls, key: str, value, **kwargs):
       """Create a matrix answer (returns MatrixAnswer instance)"""
-      return AnswerTypes.MatrixAnswer(
+      return AnswerTypes.Matrix(
         value=value,
         variable_kind=cls.VariableKind.MATRIX,
         **kwargs
@@ -2479,7 +2479,7 @@ class ContentAST:
 
 class AnswerTypes:
   
-  class MatrixAnswer(ContentAST.Answer):
+  class Matrix(ContentAST.Answer):
     """
     Matrix answers generate multiple blank_ids (e.g., M_0_0, M_0_1, M_1_0, M_1_1).
     """
@@ -2517,7 +2517,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          AnswerTypes.FloatAnswer(
+          AnswerTypes.Float(
             value=self.value[i, j],
             blank_length=5
           )
@@ -2541,7 +2541,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          AnswerTypes.FloatAnswer(
+          AnswerTypes.Float(
             value=self.value[i, j],
             blank_length=5
           )
@@ -2565,7 +2565,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          AnswerTypes.FloatAnswer(
+          AnswerTypes.Float(
             value=self.value[i, j],
             blank_length=5
           )
@@ -2589,7 +2589,7 @@ class AnswerTypes:
       # Create sub-Answer for each cell
       data = [
         [
-          AnswerTypes.FloatAnswer(
+          AnswerTypes.Float(
             value=self.value[i, j],
             blank_length=5
           )
@@ -2609,7 +2609,7 @@ class AnswerTypes:
       return table.render_typst(**kwargs)
 
   # Multibase answers that can accept either hex, binary or decimal
-  class MultiBaseAnswer(ContentAST.Answer):
+  class MultiBase(ContentAST.Answer):
     """
     These are answers that can accept answers in any sort of format, and default to displaying in hex when written out.
     This will be the parent class for Binary, Hex, and Integer answers most likely.
@@ -2651,19 +2651,19 @@ class AnswerTypes:
       hex_digits = (self.length // 4) + 1 if self.length is not None else 0
       return f"0x{self.value:0{hex_digits}X}"
   
-  class HexAnswer(MultiBaseAnswer):
+  class Hex(MultiBase):
     pass
   
-  class BinaryAnswer(MultiBaseAnswer):
+  class Binary(MultiBase):
     def get_display_string(self) -> str:
       return f"0b{self.value:0{self.length if self.length is not None else 0}b}"
   
-  class DecimalAnswer(MultiBaseAnswer):
+  class Decimal(MultiBase):
     def get_display_string(self) -> str:
       return f"{self.value:0{self.length if self.length is not None else 0}}"
 
   # Concrete type answers
-  class FloatAnswer(ContentAST.Answer):
+  class Float(ContentAST.Answer):
     def get_for_canvas(self, single_answer=False) -> List[dict]:
       if single_answer:
         canvas_answers = [
@@ -2701,7 +2701,7 @@ class AnswerTypes:
       rounded = round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
       return f"{self.fix_negative_zero(rounded)}"
   
-  class IntAnswer(ContentAST.Answer):
+  class Int(ContentAST.Answer):
 
     # Canvas export methods (from misc.Answer)
     def get_for_canvas(self, single_answer=False) -> List[dict]:

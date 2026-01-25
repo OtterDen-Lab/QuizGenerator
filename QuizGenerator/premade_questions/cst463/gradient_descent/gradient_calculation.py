@@ -57,7 +57,7 @@ class DerivativeQuestion(Question, abc.ABC):
       # Use auto_float for Canvas compatibility with integers and decimals
       # Label includes the partial derivative notation
       label = f"∂f/∂x_{i} at ({eval_point_str})"
-      self.answers[answer_key] = AnswerTypes.FloatAnswer(gradient_value, label=label)
+      self.answers[answer_key] = AnswerTypes.Float(gradient_value, label=label)
 
   def _create_gradient_vector_answer(self) -> None:
     """Create a single gradient vector answer for PDF format."""

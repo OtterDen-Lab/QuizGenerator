@@ -73,10 +73,10 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
     # Individual loss answers
     for i in range(self.num_samples):
-      self.answers[f"loss_{i}"] = AnswerTypes.FloatAnswer(self.individual_losses[i], label=f"Sample {i + 1} loss")
+      self.answers[f"loss_{i}"] = AnswerTypes.Float(self.individual_losses[i], label=f"Sample {i + 1} loss")
 
     # Overall loss answer
-    self.answers["overall_loss"] = AnswerTypes.FloatAnswer(self.overall_loss, label="Overall loss")
+    self.answers["overall_loss"] = AnswerTypes.Float(self.overall_loss, label="Overall loss")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Element, List[ContentAST.Answer]]:
     """Build question body and collect answers."""

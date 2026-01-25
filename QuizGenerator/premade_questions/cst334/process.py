@@ -356,15 +356,15 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     
     for job_id in sorted(self.job_stats.keys()):
       self.answers.update({
-        f"answer__response_time_job{job_id}": AnswerTypes.FloatAnswer(self.job_stats[job_id]["Response"]),
-        f"answer__turnaround_time_job{job_id}": AnswerTypes.FloatAnswer(self.job_stats[job_id]["TAT"]),
+        f"answer__response_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["Response"]),
+        f"answer__turnaround_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["TAT"]),
       })
     self.answers.update({
-      "answer__average_response_time": AnswerTypes.FloatAnswer(
+      "answer__average_response_time": AnswerTypes.Float(
         sum([job.response_time for job in jobs]) / len(jobs),
         label="Overall average response time"
       ),
-      "answer__average_turnaround_time": AnswerTypes.FloatAnswer(
+      "answer__average_turnaround_time": AnswerTypes.Float(
         sum([job.turnaround_time for job in jobs]) / len(jobs),
         label="Overall average TAT"
       )
@@ -907,7 +907,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     for job_id in sorted(self.job_stats.keys()):
       self.answers.update({
-        f"answer__turnaround_time_job{job_id}": AnswerTypes.FloatAnswer(self.job_stats[job_id]["TAT"])
+        f"answer__turnaround_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["TAT"])
       })
 
     return self.is_interesting()

@@ -85,7 +85,7 @@ class WeightCounting(Question, abc.ABC):
         continue
     
     self.num_parameters = self.model.count_params()
-    self.answers["num_parameters"] = AnswerTypes.IntAnswer(self.num_parameters, label="Number of Parameters")
+    self.answers["num_parameters"] = AnswerTypes.Int(self.num_parameters, label="Number of Parameters")
     
     return True
   
