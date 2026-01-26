@@ -255,7 +255,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     self.answers.update(
       {
         "answer__hit_rate": AnswerTypes.Float(self.hit_rate,
-          label=f"Hit rate, excluding non-capacity misses.",
+          label=f"Hit rate, excluding non-capacity misses",
           unit="%"
         )
       }
