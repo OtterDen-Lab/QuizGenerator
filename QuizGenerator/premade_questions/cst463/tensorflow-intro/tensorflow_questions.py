@@ -331,7 +331,7 @@ class ActivationFunctionComputationQuestion(Question):
 
     if self.activation == self.ACTIVATION_SOFTMAX:
       # Softmax: single vector answer
-      self.answers["output"] = ContentAST.Answer.vector("output", self.output_vector, label="Output vector")
+      self.answers["output"] = AnswerTypes.Vector(self.output_vector, label="Output vector")
     else:
       # Element-wise: individual answers
       for i, output in enumerate(self.output_vector):
@@ -817,14 +817,14 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     self.answers = {}
 
     # New velocity
-    self.answers["velocity"] = ContentAST.Answer.vector("velocity", self.new_velocity, label="New velocity")
+    self.answers["velocity"] = AnswerTypes.Vector(self.new_velocity, label="New velocity")
 
     # New weights with momentum
-    self.answers["weights_momentum"] = ContentAST.Answer.vector("weights_momentum", self.new_weights, label="Weights (momentum)")
+    self.answers["weights_momentum"] = AnswerTypes.Vector(self.new_weights, label="Weights (momentum)")
 
     # Vanilla SGD weights for comparison
     if self.show_vanilla_sgd:
-      self.answers["weights_sgd"] = ContentAST.Answer.vector("weights_sgd", self.sgd_weights, label="Weights (vanilla SGD)")
+      self.answers["weights_sgd"] = AnswerTypes.Vector(self.sgd_weights, label="Weights (vanilla SGD)")
 
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""

@@ -2312,16 +2312,6 @@ class ContentAST:
       return f"{label_part} {blank}{unit_part}".strip()
     
     # Factory methods for common answer types
-
-    @classmethod
-    def vector(cls, key: str, value: List[float], **kwargs) -> 'ContentAST.Answer':
-      """Create a vector answer"""
-      return cls(
-        value=value,
-        variable_kind=cls.VariableKind.VECTOR,
-        **kwargs
-      )
-
     @classmethod
     def dropdown(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
       """Create a dropdown answer with wrong answer choices (baffles)"""
@@ -2693,17 +2683,102 @@ class AnswerTypes:
       self.order_matters = order_matters
     
     def get_for_canvas(self, single_answer=False):
-      canvas_answers = [
-        {
-          "blank_id": self.key,
-          "answer_text": ', '.join(map(str, possible_state)),
-          "answer_weight": 100 if self.correct else 0,
-        }
-        for possible_state in itertools.permutations(self.value)
-      ]
+      if self.order_matters:
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": ', '.join(map(str, self.value)),
+            "answer_weight": 100 if self.correct else 0,
+          },
+          {
+            "blank_id": self.key,
+            "answer_text": ','.join(map(str, self.value)),
+            "answer_weight": 100 if self.correct else 0,
+          }
+        ]
+      else:
+        canvas_answers = []
+        
+        # With spaces
+        canvas_answers.extend([
+          {
+            "blank_id": self.key,
+            "answer_text": ', '.join(map(str, possible_state)),
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for possible_state in itertools.permutations(self.value)
+        ])
+        
+        # Without spaces
+        canvas_answers.extend([
+          {
+            "blank_id": self.key,
+            "answer_text": ','.join(map(str, possible_state)),
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for possible_state in itertools.permutations(self.value)
+        ])
       return canvas_answers
 
     def get_display_string(self) -> str:
       """Get the formatted display string for this answer (for grading/answer keys)."""
       return ", ".join(str(v) for v in self.value)
 
+
+  # Math types
+  class Vector(ContentAST.Answer):
+    """
+    These are self-contained vectors that will go in a single answer block
+    """
+    
+    # Canvas export methods (from misc.Answer)
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      # Get all answer variations
+      answer_variations = [
+        ContentAST.Answer.accepted_strings(dimension_value)
+        for dimension_value in self.value
+      ]
+      
+      canvas_answers = []
+      for combination in itertools.product(*answer_variations):
+        # Add without anything surrounding
+        canvas_answers.extend([
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"{', '.join(combination)}",
+          },
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"{','.join(combination)}",
+          },
+          # Add parentheses format
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"({', '.join(list(combination))})",
+          },
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"({','.join(list(combination))})",
+          },
+          # Add square brackets
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"[{', '.join(list(combination))}]",
+          },
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"[{','.join(list(combination))}]",
+          }
+        ])
+      return canvas_answers
+      
+    def get_display_string(self) -> str:
+      return ", ".join(
+        str(self.fix_negative_zero(round(v, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS))).rstrip('0').rstrip('.') for v in self.value
+      )

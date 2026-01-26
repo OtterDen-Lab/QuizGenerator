@@ -6,7 +6,7 @@ import math
 from typing import List, Tuple, Callable, Union, Any
 import sympy as sp
 
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -98,15 +98,15 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
       # Location answer
       location_key = f"answer__location_{step}"
-      self.answers[location_key] = ContentAST.Answer.vector(location_key, list(result['location']), label=f"Location at step {step}")
+      self.answers[location_key] = AnswerTypes.Vector(list(result['location']), label=f"Location at step {step}")
 
       # Gradient answer
       gradient_key = f"answer__gradient_{step}"
-      self.answers[gradient_key] = ContentAST.Answer.vector(gradient_key, list(result['gradient']), label=f"Gradient at step {step}")
+      self.answers[gradient_key] = AnswerTypes.Vector(list(result['gradient']), label=f"Gradient at step {step}")
 
       # Update answer
       update_key = f"answer__update_{step}"
-      self.answers[update_key] = ContentAST.Answer.vector(update_key, list(result['update']), label=f"Update at step {step}")
+      self.answers[update_key] = AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
   
   def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
