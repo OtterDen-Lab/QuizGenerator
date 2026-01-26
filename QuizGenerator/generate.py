@@ -50,6 +50,8 @@ def parse_args():
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",
                      help="Generate N variations of ALL registered questions to test they work correctly")
+  parser.add_argument("--strict", action="store_true",
+                     help="With --test_all, skip PDF/Canvas generation if any questions fail")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
@@ -76,7 +78,8 @@ def test_all_questions(
     num_variations: int,
     generate_pdf: bool = False,
     use_typst: bool = True,
-    canvas_course=None
+    canvas_course=None,
+    strict: bool = False
 ):
   """
   Test all registered questions by generating N variations of each.
@@ -89,6 +92,7 @@ def test_all_questions(
     generate_pdf: If True, generate a PDF with all successful questions
     use_typst: If True, use Typst for PDF generation; otherwise use LaTeX
     canvas_course: If provided, push a test quiz to this Canvas course
+    strict: If True, skip PDF/Canvas generation if any questions fail
   """
   # Ensure all premade questions are loaded
   QuestionRegistry.load_premade_questions()
@@ -180,7 +184,9 @@ def test_all_questions(
   print("=" * 70)
 
   # Generate PDF and/or push to Canvas if requested
-  if (generate_pdf or canvas_course) and test_question_instances:
+  if strict and failed_questions:
+    print("\n[STRICT MODE] Skipping PDF/Canvas generation due to failures")
+  elif (generate_pdf or canvas_course) and test_question_instances:
     print(f"\nCreating test quiz with {len(test_question_instances)} questions...")
 
     # Create a Quiz object with all successful questions
@@ -430,7 +436,8 @@ def main():
       args.test_all,
       generate_pdf=True,
       use_typst=getattr(args, 'typst', True),
-      canvas_course=canvas_course
+      canvas_course=canvas_course,
+      strict=args.strict
     )
     exit(0 if success else 1)
 
