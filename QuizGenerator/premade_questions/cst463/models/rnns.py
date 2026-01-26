@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 from .matrices import MatrixQuestion
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
@@ -64,7 +64,7 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # x_seq, W_xh, W_hh, b_h, h_0, h_states
     
-    self.answers["output_sequence"] = ContentAST.Answer.matrix(key="output_sequence", value=self.h_states, label="Hidden states")
+    self.answers["output_sequence"] = AnswerTypes.Matrix(value=self.h_states, label="Hidden states")
     
     return True
   

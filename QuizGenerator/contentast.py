@@ -2206,58 +2206,21 @@ class ContentAST:
         return []
 
       canvas_answers = []
-      if self.variable_kind == ContentAST.Answer.VariableKind.VECTOR:
-        # Get all answer variations
-        answer_variations = [
-          ContentAST.Answer.accepted_strings(dimension_value)
-          for dimension_value in self.value
-        ]
-
-        canvas_answers = []
-        for combination in itertools.product(*answer_variations):
-          # Add parentheses format
-          canvas_answers.append({
-            "blank_id": self.key,
-            "answer_weight": 100 if self.correct else 0,
-            "answer_text": f"({', '.join(list(combination))})",
-          })
-
-          # Add non-parentheses format for single-element vectors
-          if len(combination) == 1:
-            canvas_answers.append({
-              "blank_id": self.key,
-              "answer_weight": 100 if self.correct else 0,
-              "answer_text": f"{', '.join(combination)}",
-            })
-        return canvas_answers
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.LIST:
+      if isinstance(self.value, list):
         canvas_answers = [
           {
             "blank_id": self.key,
-            "answer_text": ', '.join(map(str, possible_state)),
+            "answer_text": str(alt),
             "answer_weight": 100 if self.correct else 0,
           }
-          for possible_state in [self.value]
+          for alt in self.value
         ]
-
       else:
-        # For string answers, check if value is a list of acceptable alternatives
-        if isinstance(self.value, list):
-          canvas_answers = [
-            {
-              "blank_id": self.key,
-              "answer_text": str(alt),
-              "answer_weight": 100 if self.correct else 0,
-            }
-            for alt in self.value
-          ]
-        else:
-          canvas_answers = [{
-            "blank_id": self.key,
-            "answer_text": self.value,
-            "answer_weight": 100 if self.correct else 0,
-          }]
+        canvas_answers = [{
+          "blank_id": self.key,
+          "answer_text": self.value,
+          "answer_weight": 100 if self.correct else 0,
+        }]
 
       # Add baffles (incorrect answer choices)
       if self.baffles is not None:
@@ -2272,16 +2235,7 @@ class ContentAST:
 
     def get_display_string(self) -> str:
       """Get the formatted display string for this answer (for grading/answer keys)."""
-      if self.variable_kind == ContentAST.Answer.VariableKind.LIST:
-        return ", ".join(str(v) for v in self.value)
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.VECTOR:
-        def fix_negative_zero(x):
-          return 0.0 if x == 0 else x
-        return ", ".join(str(fix_negative_zero(round(v, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS))) for v in self.value)
-
-      else:
-        return str(self.display if hasattr(self, 'display') else self.value)
+      return str(self.display if hasattr(self, 'display') else self.value)
 
     # Rendering methods (override Leaf's defaults)
     def render_markdown(self, **kwargs):
@@ -2329,15 +2283,6 @@ class ContentAST:
         value=value,
         kind=cls.CanvasAnswerKind.MULTIPLE_ANSWER,
         baffles=baffles,
-        **kwargs
-      )
-
-    @classmethod
-    def matrix(cls, key: str, value, **kwargs):
-      """Create a matrix answer (returns MatrixAnswer instance)"""
-      return AnswerTypes.Matrix(
-        value=value,
-        variable_kind=cls.VariableKind.MATRIX,
         **kwargs
       )
 
@@ -2432,136 +2377,6 @@ class ContentAST:
 
 
 class AnswerTypes:
-  
-  class Matrix(ContentAST.Answer):
-    """
-    Matrix answers generate multiple blank_ids (e.g., M_0_0, M_0_1, M_1_0, M_1_1).
-    """
-    
-    def get_for_canvas(self, single_answer=False) -> List[dict]:
-      """Generate Canvas answers for each matrix element."""
-      canvas_answers = []
-      
-      # Generate a per-index set of answers for each matrix element
-      for i, j in np.ndindex(self.value.shape):
-        entry_strings = ContentAST.Answer.accepted_strings(
-          self.value[i, j],
-          allow_integer=True,
-          allow_simple_fraction=True,
-          max_denominator=60,
-          allow_mixed=True,
-          include_spaces=False,
-          include_fixed_even_if_integer=True
-        )
-        canvas_answers.extend(
-          [
-            {
-              "blank_id": f"{self.key}_{i}_{j}",  # Indexed per cell
-              "answer_text": answer_string,
-              "answer_weight": 100 if self.correct else 0,
-            }
-            for answer_string in entry_strings
-          ]
-        )
-      
-      return canvas_answers
-    
-    def render_html(self, **kwargs):
-      """Render as table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          AnswerTypes.Float(
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-      
-      if self.label:
-        return ContentAST.Container(
-          [
-            ContentAST.Text(f"{self.label} = "),
-            table
-          ]
-        ).render_html(**kwargs)
-      return table.render_html(**kwargs)
-    
-    def render_latex(self, **kwargs):
-      """Render as LaTeX table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          AnswerTypes.Float(
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-      
-      if self.label:
-        return ContentAST.Container(
-          [
-            ContentAST.Text(f"{self.label} = "),
-            table
-          ]
-        ).render_latex(**kwargs)
-      return table.render_latex(**kwargs)
-    
-    def render_markdown(self, **kwargs):
-      """Render as markdown table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          AnswerTypes.Float(
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-      
-      if self.label:
-        return ContentAST.Container(
-          [
-            ContentAST.Text(f"{self.label} = "),
-            table
-          ]
-        ).render_markdown(**kwargs)
-      return table.render_markdown(**kwargs)
-    
-    def render_typst(self, **kwargs):
-      """Render as Typst table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          AnswerTypes.Float(
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-      
-      if self.label:
-        return ContentAST.Container(
-          [
-            ContentAST.Text(f"{self.label} = "),
-            table
-          ]
-        ).render_typst(**kwargs)
-      return table.render_typst(**kwargs)
-
   # Multibase answers that can accept either hex, binary or decimal
   class MultiBase(ContentAST.Answer):
     """
@@ -2724,7 +2539,6 @@ class AnswerTypes:
       """Get the formatted display string for this answer (for grading/answer keys)."""
       return ", ".join(str(v) for v in self.value)
 
-
   # Math types
   class Vector(ContentAST.Answer):
     """
@@ -2782,3 +2596,142 @@ class AnswerTypes:
       return ", ".join(
         str(self.fix_negative_zero(round(v, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS))).rstrip('0').rstrip('.') for v in self.value
       )
+      
+  class CompoundAnswers(ContentAST.Answer):
+    pass
+    """
+    Going forward, this might make a lot of sense to have a SubAnswer class that we can iterate over.
+    We would convert into this shared format and just iterate over it whenever we need to.
+    """
+  
+  class Matrix(CompoundAnswers):
+    """
+    Matrix answers generate multiple blank_ids (e.g., M_0_0, M_0_1, M_1_0, M_1_1).
+    """
+    
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      """Generate Canvas answers for each matrix element."""
+      canvas_answers = []
+      
+      # Generate a per-index set of answers for each matrix element
+      for i, j in np.ndindex(self.value.shape):
+        entry_strings = ContentAST.Answer.accepted_strings(
+          self.value[i, j],
+          allow_integer=True,
+          allow_simple_fraction=True,
+          max_denominator=60,
+          allow_mixed=True,
+          include_spaces=False,
+          include_fixed_even_if_integer=True
+        )
+        canvas_answers.extend(
+          [
+            {
+              "blank_id": f"{self.key}_{i}_{j}",  # Indexed per cell
+              "answer_text": answer_string,
+              "answer_weight": 100 if self.correct else 0,
+            }
+            for answer_string in entry_strings
+          ]
+        )
+      
+      return canvas_answers
+    
+    def render_html(self, **kwargs):
+      """Render as table of answer blanks."""
+      # Create sub-Answer for each cell
+      data = [
+        [
+          AnswerTypes.Float(
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+      table = ContentAST.Table(data)
+
+      if self.label:
+        return ContentAST.Container(
+          [
+            ContentAST.Text(f"{self.label} = "),
+            table
+          ]
+        ).render_html(**kwargs)
+      return table.render_html(**kwargs)
+
+    def render_latex(self, **kwargs):
+      """Render as LaTeX table of answer blanks."""
+      # Create sub-Answer for each cell
+      data = [
+        [
+          AnswerTypes.Float(
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+      table = ContentAST.Table(data)
+
+      if self.label:
+        return ContentAST.Container(
+          [
+            ContentAST.Text(f"{self.label} = "),
+            table
+          ]
+        ).render_latex(**kwargs)
+      return table.render_latex(**kwargs)
+
+    def render_markdown(self, **kwargs):
+      """Render as markdown table of answer blanks."""
+      # Create sub-Answer for each cell
+      data = [
+        [
+          AnswerTypes.Float(
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+      table = ContentAST.Table(data)
+
+      if self.label:
+        return ContentAST.Container(
+          [
+            ContentAST.Text(f"{self.label} = "),
+            table
+          ]
+        ).render_markdown(**kwargs)
+      return table.render_markdown(**kwargs)
+
+    def render_typst(self, **kwargs):
+      """Render as Typst table of answer blanks."""
+      # Create sub-Answer for each cell
+      data = [
+        [
+          AnswerTypes.Float(
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+      table = ContentAST.Table(data)
+
+      if self.label:
+        return ContentAST.Container(
+          [
+            ContentAST.Text(f"{self.label} = "),
+            table
+          ]
+        ).render_typst(**kwargs)
+      return table.render_typst(**kwargs)
+
+
+  

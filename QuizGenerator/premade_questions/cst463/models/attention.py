@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
@@ -61,8 +61,8 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # Q, K, V, output, weights
 
-    self.answers["weights"] = ContentAST.Answer.matrix("weights", self.weights, label="Weights")
-    self.answers["output"] = ContentAST.Answer.matrix("output", self.output, label="Output")
+    self.answers["weights"] = AnswerTypes.Matrix(self.weights, label="Weights")
+    self.answers["output"] = AnswerTypes.Matrix(self.output, label="Output")
     
     return True
   

@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 from .matrices import MatrixQuestion
 
@@ -65,7 +65,7 @@ class ConvolutionCalculation(MatrixQuestion):
     self.result = self.conv2d_multi_channel(self.image, self.kernel, stride=self.stride, padding=self.padding)
     
     self.answers = {
-      f"result_{i}" : ContentAST.Answer.matrix(   f"result_{i}", self.result[:,:,i], label=f"Result of filter {i}")
+      f"result_{i}" : AnswerTypes.Matrix(self.result[:,:,i], label=f"Result of filter {i}")
       for i in range(self.result.shape[-1])
     }
     
