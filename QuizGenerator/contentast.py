@@ -2609,129 +2609,39 @@ class AnswerTypes:
     Matrix answers generate multiple blank_ids (e.g., M_0_0, M_0_1, M_1_0, M_1_1).
     """
     
+    def __init__(self, value, *args, **kwargs):
+      super().__init__(value=value, *args, **kwargs)
+      
+      self.data = [
+        [
+          AnswerTypes.Float(
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+    
     def get_for_canvas(self, single_answer=False) -> List[dict]:
       """Generate Canvas answers for each matrix element."""
       canvas_answers = []
       
-      # Generate a per-index set of answers for each matrix element
-      for i, j in np.ndindex(self.value.shape):
-        entry_strings = ContentAST.Answer.accepted_strings(
-          self.value[i, j],
-          allow_integer=True,
-          allow_simple_fraction=True,
-          max_denominator=60,
-          allow_mixed=True,
-          include_spaces=False,
-          include_fixed_even_if_integer=True
-        )
-        canvas_answers.extend(
-          [
-            {
-              "blank_id": f"{self.key}_{i}_{j}",  # Indexed per cell
-              "answer_text": answer_string,
-              "answer_weight": 100 if self.correct else 0,
-            }
-            for answer_string in entry_strings
-          ]
-        )
+      for sub_answer in itertools.chain.from_iterable(self.data):
+        canvas_answers.extend(sub_answer.get_for_canvas())
       
       return canvas_answers
     
-    def render_html(self, **kwargs):
-      """Render as table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          AnswerTypes.Float(
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-
+    def render(self, *args, **kwargs) -> str:
+      table = ContentAST.Table(self.data)
+    
       if self.label:
         return ContentAST.Container(
           [
             ContentAST.Text(f"{self.label} = "),
             table
           ]
-        ).render_html(**kwargs)
-      return table.render_html(**kwargs)
-
-    def render_latex(self, **kwargs):
-      """Render as LaTeX table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          AnswerTypes.Float(
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-
-      if self.label:
-        return ContentAST.Container(
-          [
-            ContentAST.Text(f"{self.label} = "),
-            table
-          ]
-        ).render_latex(**kwargs)
-      return table.render_latex(**kwargs)
-
-    def render_markdown(self, **kwargs):
-      """Render as markdown table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          AnswerTypes.Float(
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-
-      if self.label:
-        return ContentAST.Container(
-          [
-            ContentAST.Text(f"{self.label} = "),
-            table
-          ]
-        ).render_markdown(**kwargs)
-      return table.render_markdown(**kwargs)
-
-    def render_typst(self, **kwargs):
-      """Render as Typst table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          AnswerTypes.Float(
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-
-      if self.label:
-        return ContentAST.Container(
-          [
-            ContentAST.Text(f"{self.label} = "),
-            table
-          ]
-        ).render_typst(**kwargs)
-      return table.render_typst(**kwargs)
-
-
+        ).render(*args, **kwargs)
+      return table.render(*args, **kwargs)
+    
   
