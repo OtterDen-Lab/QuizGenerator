@@ -2182,7 +2182,7 @@ class ContentAST:
       # For list values in display, show the first option (or join them with /)
       if display is not None:
         self.display = display
-      elif isinstance(value, list) and self.variable_kind == ContentAST.Answer.VariableKind.STR:
+      elif isinstance(value, list) and isinstance(self.variable_kind, AnswerTypes.String):
         self.display = value[0] if len(value) == 1 else " / ".join(value)
       else:
         self.display = value
@@ -2312,14 +2312,6 @@ class ContentAST:
       return f"{label_part} {blank}{unit_part}".strip()
     
     # Factory methods for common answer types
-    @classmethod
-    def list(cls, key: str, value: list, **kwargs) -> 'ContentAST.Answer':
-      """Create a list answer (comma-separated values)"""
-      return cls(
-        value=value,
-        variable_kind=cls.VariableKind.LIST,
-        **kwargs
-      )
 
     @classmethod
     def vector(cls, key: str, value: List[float], **kwargs) -> 'ContentAST.Answer':
@@ -2694,3 +2686,24 @@ class AnswerTypes:
   
   class String(ContentAST.Answer):
     pass
+  
+  class List(ContentAST.Answer):
+    def __init__(self, order_matters=True, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.order_matters = order_matters
+    
+    def get_for_canvas(self, single_answer=False):
+      canvas_answers = [
+        {
+          "blank_id": self.key,
+          "answer_text": ', '.join(map(str, possible_state)),
+          "answer_weight": 100 if self.correct else 0,
+        }
+        for possible_state in itertools.permutations(self.value)
+      ]
+      return canvas_answers
+
+    def get_display_string(self) -> str:
+      """Get the formatted display string for this answer (for grading/answer keys)."""
+      return ", ".join(str(v) for v in self.value)
+

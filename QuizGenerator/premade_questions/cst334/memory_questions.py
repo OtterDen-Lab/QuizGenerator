@@ -233,6 +233,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     number_of_hits = 0
     for (request_number, request) in enumerate(self.requests):
       was_hit, evicted, cache_state = self.cache.query_cache(request, request_number)
+      log.debug(f"cache_state: \"{cache_state}\"")
       if was_hit:
         number_of_hits += 1
       self.request_results[request_number] = {
@@ -246,7 +247,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         {
           f"answer__hit-{request_number}": AnswerTypes.String(('hit' if was_hit else 'miss')),
           f"answer__evicted-{request_number}": AnswerTypes.String(('-' if evicted is None else f"{evicted}")),
-          f"answer__cache_state-{request_number}": ContentAST.Answer.list(key="blah", value=copy.copy(cache_state)),
+          f"answer__cache_state-{request_number}": AnswerTypes.List(value=copy.copy(cache_state), order_matters=True),
         }
       )
     

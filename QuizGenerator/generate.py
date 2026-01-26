@@ -6,6 +6,7 @@ import random
 import shutil
 import subprocess
 import tempfile
+import traceback
 import re
 from pathlib import Path
 from dotenv import load_dotenv
@@ -136,20 +137,23 @@ def test_all_questions(
         try:
           question_ast.render("html")
         except Exception as e:
-          question_failures.append(f"  Variation {variation+1}: HTML render failed - {e}")
+          tb = traceback.format_exc()
+          question_failures.append(f"  Variation {variation+1}: HTML render failed - {e}\n{tb}")
           continue
 
         try:
           question_ast.render("typst")
         except Exception as e:
-          question_failures.append(f"  Variation {variation+1}: Typst render failed - {e}")
+          tb = traceback.format_exc()
+          question_failures.append(f"  Variation {variation+1}: Typst render failed - {e}\n{tb}")
           continue
 
         # If we got here, the question works - save the instance
         test_question_instances.append(question)
 
       except Exception as e:
-        question_failures.append(f"  Variation {variation+1}: Generation failed - {e}")
+        tb = traceback.format_exc()
+        question_failures.append(f"  Variation {variation+1}: Generation failed - {e}\n{tb}")
 
     if question_failures:
       print(f"  FAILED ({len(question_failures)}/{num_variations} variations)")
