@@ -2267,7 +2267,7 @@ class ContentAST:
     
     # Factory methods for common answer types
     @classmethod
-    def dropdown(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
+    def dropdown(cls, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
       """Create a dropdown answer with wrong answer choices (baffles)"""
       return cls(
         value=value,

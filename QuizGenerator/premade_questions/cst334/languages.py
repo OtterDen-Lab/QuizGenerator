@@ -265,60 +265,55 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       self._select_random_grammar()
 
     self.answers = {}
-    
-    self.answers.update(
-      {
-        "answer_good" : ContentAST.Answer(
-          f"answer_good",
-          self.grammar_good.generate(self.include_spaces),
-          ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
-          correct=True
-        )
-      }
+
+    # Create answers with proper ContentAST.Answer signature
+    # value is the generated string, correct indicates if it's a valid answer
+    good_string = self.grammar_good.generate(self.include_spaces)
+    self.answers["answer_good"] = ContentAST.Answer(
+      value=good_string,
+      kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+      correct=True
     )
-    
-    self.answers.update(
-      {
-        "answer_bad":
-          ContentAST.Answer(
-            f"answer_bad",
-            self.grammar_bad.generate(self.include_spaces),
-            ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
-            correct=False
-          )
-      })
-    self.answers.update({
-      "answer_bad_early":
-        ContentAST.Answer(
-          f"answer_bad_early",
-          self.grammar_bad.generate(self.include_spaces, early_exit=True),
-          ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
-          correct=False
-        )
-    })
-    
+
+    bad_string = self.grammar_bad.generate(self.include_spaces)
+    self.answers["answer_bad"] = ContentAST.Answer(
+      value=bad_string,
+      kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+      correct=False
+    )
+
+    bad_early_string = self.grammar_bad.generate(self.include_spaces, early_exit=True)
+    self.answers["answer_bad_early"] = ContentAST.Answer(
+      value=bad_early_string,
+      kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+      correct=False
+    )
+
     answer_text_set = {a.value for a in self.answers.values()}
     num_tries = 0
     while len(self.answers) < 10 and num_tries < self.MAX_TRIES:
-      
+
       correct = self.rng.choice([True, False])
       if not correct:
         early_exit = self.rng.choice([True, False])
       else:
         early_exit = False
-      new_answer = ContentAST.Answer(
-        f"answer_{num_tries}",
-        (
-          self.grammar_good
-          if correct or early_exit
-          else self.grammar_bad
-        ).generate(self.include_spaces, early_exit=early_exit),
-        ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
-        correct= correct and not early_exit
-      )
-      if len(new_answer.value) < self.MAX_LENGTH and new_answer.value not in answer_text_set:
-        self.answers.update({new_answer.key : new_answer})
-        answer_text_set.add(new_answer.value)
+
+      generated_string = (
+        self.grammar_good
+        if correct or early_exit
+        else self.grammar_bad
+      ).generate(self.include_spaces, early_exit=early_exit)
+
+      is_correct = correct and not early_exit
+
+      if len(generated_string) < self.MAX_LENGTH and generated_string not in answer_text_set:
+        self.answers[f"answer_{num_tries}"] = ContentAST.Answer(
+          value=generated_string,
+          kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+          correct=is_correct
+        )
+        answer_text_set.add(generated_string)
       num_tries += 1
     
     # Generate answers that will be used only for the latex version.
@@ -335,7 +330,6 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
           lambda: self.grammar_good.generate(early_exit=True),
         ])()
       )
-  
   
   def _get_body(self, *args, **kwargs):
     """Build question body and collect answers."""

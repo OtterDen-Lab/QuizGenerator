@@ -344,10 +344,8 @@ class VSFS_states(IOQuestion):
     ))
     self.rng.shuffle(wrong_answers)
     
-    self.answers["answer__cmd"] = ContentAST.Answer(
+    self.answers["answer__cmd"] = ContentAST.Answer.dropdown(
       f"{operations[-1]['cmd']}",
-      kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN,
-      correct=True,
       baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']])),
       label="Command"
     )
