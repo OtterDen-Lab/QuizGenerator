@@ -2315,61 +2315,53 @@ class ContentAST:
       return fractions.Fraction(decimal.Decimal(str(x)))
 
     @staticmethod
-    def accepted_strings(
-        value,
-        *,
-        allow_integer=True,
-        allow_simple_fraction=True,
-        max_denominator=720,
-        allow_mixed=False,
-        include_spaces=False,
-        include_fixed_even_if_integer=False
-    ):
-      """Return a sorted list of strings you can paste into Canvas as alternate correct answers."""
-      decimal.getcontext().prec = max(34, (ContentAST.Answer.DEFAULT_ROUNDING_DIGITS or 0) + 10)
-      f = ContentAST.Answer._to_fraction(value)
+    def accepted_strings(value, max_denominator=720):
+      """
+      Return a sorted list of acceptable answer strings for Canvas.
+
+      Generates:
+      - Integer form (if value is a whole number)
+      - Fixed decimal with DEFAULT_ROUNDING_DIGITS (e.g., "1.0000")
+      - Trimmed decimal without trailing zeros (e.g., "1.25")
+      - Simple fraction if exactly representable (e.g., "5/4")
+
+      Examples:
+        1 → ["1", "1.0000"]
+        1.25 → ["1.25", "1.2500", "5/4"]
+        0.123444... → ["0.1234"]
+      """
+      rounding_digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
+      decimal.getcontext().prec = max(34, rounding_digits + 10)
+
       outs = set()
 
-      # Integer form
-      if f.denominator == 1 and allow_integer:
-        outs.add(str(f.numerator))
-        if include_fixed_even_if_integer:
-          q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-          d = decimal.Decimal(f.numerator).quantize(q, rounding=decimal.ROUND_HALF_UP)
-          outs.add(format(d, 'f'))
+      # Round to our standard precision first
+      q = decimal.Decimal(1).scaleb(-rounding_digits)
+      rounded_decimal = decimal.Decimal(str(value)).quantize(q, rounding=decimal.ROUND_HALF_UP)
 
-      # Simple fraction
-      if allow_simple_fraction:
-        fr = f.limit_denominator(max_denominator)
-        if fr == f:
-          a, b = fr.numerator, fr.denominator
-          if fr.denominator > 1:
-            outs.add(f"{a}/{b}")
-            if include_spaces:
-              outs.add(f"{a} / {b}")
-            if allow_mixed and b != 1 and abs(a) > b:
-              sign = '-' if a < 0 else ''
-              A = abs(a)
-              whole, rem = divmod(A, b)
-              outs.add(f"{sign}{whole} {rem}/{b}")
-          else:
-            return sorted(outs, key=lambda s: (len(s), s))
+      # Normalize negative zero to positive zero
+      if rounded_decimal == 0:
+        rounded_decimal = abs(rounded_decimal)
 
-      # Fixed-decimal form
-      q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-      d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
-      outs.add(format(d, 'f'))
+      # Fixed decimal form (e.g., "1.2500")
+      fixed_str = format(rounded_decimal, 'f')
+      outs.add(fixed_str)
 
-      # Trimmed decimal
-      if ContentAST.Answer.DEFAULT_ROUNDING_DIGITS:
-        q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-        d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
-        s = format(d, 'f').rstrip('0').rstrip('.')
-        if s.startswith('.'):
-          s = '0' + s
-        if s == '-0':
-          s = '0'
-        outs.add(s)
+      # Trimmed decimal form (e.g., "1.25")
+      trimmed_str = fixed_str.rstrip('0').rstrip('.')
+      if trimmed_str.startswith('.'):
+        trimmed_str = '0' + trimmed_str
+      outs.add(trimmed_str)
+
+      # Integer form (if it's a whole number after rounding)
+      if rounded_decimal == rounded_decimal.to_integral_value():
+        outs.add(str(int(rounded_decimal)))
+
+      # Fraction form (only if exactly representable with reasonable denominator)
+      f = ContentAST.Answer._to_fraction(rounded_decimal)
+      fr = f.limit_denominator(max_denominator)
+      if fr == f and fr.denominator > 1:
+        outs.add(f"{fr.numerator}/{fr.denominator}")
 
       return sorted(outs, key=lambda s: (len(s), s))
     
@@ -2455,12 +2447,7 @@ class AnswerTypes:
         # Use the accepted_strings helper
         answer_strings = ContentAST.Answer.accepted_strings(
           self.value,
-          allow_integer=True,
-          allow_simple_fraction=True,
-          max_denominator=60,
-          allow_mixed=True,
-          include_spaces=False,
-          include_fixed_even_if_integer=True
+          max_denominator=60
         )
         
         canvas_answers = [
