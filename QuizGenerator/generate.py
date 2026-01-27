@@ -50,6 +50,8 @@ def parse_args():
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",
                      help="Generate N variations of ALL registered questions to test they work correctly")
+  parser.add_argument("--test_questions", nargs='+', metavar="NAME",
+                     help="Only test specific question types by name (use with --test_all)")
   parser.add_argument("--strict", action="store_true",
                      help="With --test_all, skip PDF/Canvas generation if any questions fail")
 
@@ -79,7 +81,8 @@ def test_all_questions(
     generate_pdf: bool = False,
     use_typst: bool = True,
     canvas_course=None,
-    strict: bool = False
+    strict: bool = False,
+    question_filter: list = None
 ):
   """
   Test all registered questions by generating N variations of each.
@@ -93,11 +96,26 @@ def test_all_questions(
     use_typst: If True, use Typst for PDF generation; otherwise use LaTeX
     canvas_course: If provided, push a test quiz to this Canvas course
     strict: If True, skip PDF/Canvas generation if any questions fail
+    question_filter: If provided, only test questions whose names contain one of these strings (case-insensitive)
   """
   # Ensure all premade questions are loaded
   QuestionRegistry.load_premade_questions()
 
   registered_questions = QuestionRegistry._registry
+
+  # Filter questions if a filter list is provided
+  if question_filter:
+    filter_lower = [f.lower() for f in question_filter]
+    registered_questions = {
+      name: cls for name, cls in registered_questions.items()
+      if any(f in name.lower() for f in filter_lower)
+    }
+    if not registered_questions:
+      print(f"No questions matched filter: {question_filter}")
+      print(f"Available questions: {sorted(QuestionRegistry._registry.keys())}")
+      return False
+    print(f"Filtered to {len(registered_questions)} questions matching: {question_filter}")
+
   total_questions = len(registered_questions)
 
   # Test defaults for questions that require external input
@@ -437,7 +455,8 @@ def main():
       generate_pdf=True,
       use_typst=getattr(args, 'typst', True),
       canvas_course=canvas_course,
-      strict=args.strict
+      strict=args.strict,
+      question_filter=args.test_questions
     )
     exit(0 if success else 1)
 
