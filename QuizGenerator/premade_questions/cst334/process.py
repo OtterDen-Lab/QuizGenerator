@@ -324,7 +324,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
           jobs_to_run=jobs,
           selector=(lambda j, curr_time: (j.last_run, j.job_id)),
           preemptable=True,
-          time_quantum=1e-04
+          time_quantum=1e-05
         )
       case _:
         self.run_simulation(
