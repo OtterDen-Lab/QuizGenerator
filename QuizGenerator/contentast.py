@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 """
 Content Abstract Syntax Tree - The core content system for quiz generation.
 
-IMPORTANT: ALWAYS use ContentAST elements for ALL content generation.
+IMPORTANT: ALWAYS use content AST elements for ALL content generation.
 Never create custom LaTeX, HTML, or Markdown strings manually.
 
 This system provides cross-format compatibility between:
@@ -45,7 +45,7 @@ Key Components:
 - OnlyHtml/OnlyLatex: Platform-specific content
 
 Examples:
-  # Good - uses ContentAST
+  # Good - uses content AST
   body = Section()
   body.add_element(Paragraph(["Calculate the matrix:"]))
   matrix_data = [[1, 2], [3, 4]]
@@ -63,9 +63,9 @@ class OutputFormat(enum.StrEnum):
   
 class Element(abc.ABC):
   """
-  Base class for all ContentAST elements providing cross-format rendering.
+  Base class for all content AST elements providing cross-format rendering.
 
-  This is the foundation class that all ContentAST elements inherit from.
+  This is the foundation class that all content AST elements inherit from.
   It provides the core rendering infrastructure that enables consistent
   output across LaTeX/PDF, HTML/Canvas, and Markdown formats.
 
@@ -180,7 +180,7 @@ class Container(Element):
     """
     Default Typst rendering using markdown → typst conversion via pandoc.
 
-    This provides instant Typst support for all ContentAST elements without
+    This provides instant Typst support for all content AST elements without
     needing explicit implementations. Override this method in subclasses
     when pandoc conversion quality is insufficient or Typst-specific
     features are needed.
@@ -653,7 +653,7 @@ class Section(Container):
   """
   Primary container for question content - USE THIS for get_body() and get_explanation().
 
-  This is the most important ContentAST class for question developers.
+  This is the most important content AST class for question developers.
   It serves as the main container for organizing question content
   and should be the return type for your get_body() and get_explanation() methods.
 
@@ -1043,7 +1043,7 @@ class MathExpression(Leaf):
   """
   Compose multiple math elements into a single format-independent expression.
 
-  This allows mixing ContentAST elements (like Matrix) with math operators
+  This allows mixing content AST elements (like Matrix) with math operators
   and symbols, with each part rendering appropriately for the target format.
 
   Example:
@@ -1064,11 +1064,11 @@ class MathExpression(Leaf):
 
   Parts can be:
       - Strings: rendered as-is (math operators, symbols, etc.)
-      - ContentAST elements: call their render method for the target format
+      - content AST elements: call their render method for the target format
   """
   def __init__(self, parts, inline=False):
     super().__init__("[math_expression]")
-    self.parts = parts  # List of strings and/or ContentAST elements
+    self.parts = parts  # List of strings and/or content AST elements
     self.inline = inline
 
   def _render_parts(self, output_format, **kwargs):
@@ -1533,7 +1533,7 @@ class Table(Container):
 
   Creates properly formatted tables that work in PDF, Canvas, and Markdown.
   Automatically handles headers, alignment, and responsive formatting.
-  All data is converted to ContentAST elements for consistent rendering.
+  All data is converted to content AST elements for consistent rendering.
 
   When to use:
   - Structured data presentation (comparison tables, data sets)
@@ -1569,7 +1569,7 @@ class Table(Container):
     # todo: implement transpose
     super().__init__()
     
-    # Normalize data to ContentAST elements
+    # Normalize data to content AST elements
     self.data = []
     for row in data:
       normalized_row = []
@@ -1580,7 +1580,7 @@ class Table(Container):
           normalized_row.append(Text(str(cell)))
       self.data.append(normalized_row)
     
-    # Normalize headers to ContentAST elements
+    # Normalize headers to content AST elements
     if headers:
       self.headers = []
       for header in headers:
@@ -1670,13 +1670,13 @@ class Table(Container):
     if not self.hide_rules: result.append("\\toprule")
     
     if self.headers:
-      # Now all headers are ContentAST elements, so render them consistently
+      # Now all headers are content AST elements, so render them consistently
       rendered_headers = [header.render(output_format="latex", **kwargs) for header in self.headers]
       result.append(" & ".join(rendered_headers) + " \\\\")
       if not self.hide_rules: result.append("\\midrule")
     
     for row in self.data:
-      # All data cells are now ContentAST elements, so render them consistently
+      # All data cells are now content AST elements, so render them consistently
       rendered_row = [cell.render(output_format="latex", **kwargs) for cell in row]
       result.append(" & ".join(rendered_row) + " \\\\")
     
@@ -2047,7 +2047,7 @@ class RepeatedProblemPart(Container):
         content_str = " ".join(rendered_items)
         result.append(f"({letter})\\;& {content_str} &=&\\; {spacing}")
       else:
-        # Single element (ContentAST element or string)
+        # Single element (content AST element or string)
         if hasattr(content, 'render'):
           content_str = content.render('latex', **kwargs)
         else:
@@ -2115,7 +2115,7 @@ class Answer(Leaf):
   """
   Unified answer class combining data storage, Canvas export, and rendering.
 
-  Extends Leaf to integrate seamlessly with the ContentAST tree while
+  Extends Leaf to integrate seamlessly with the content AST tree while
   maintaining all Canvas export functionality.
 
   CRITICAL: Use this for ALL answer inputs in questions.
@@ -2601,4 +2601,3 @@ class AnswerTypes:
         ).render(*args, **kwargs)
       return table.render(*args, **kwargs)
   
-

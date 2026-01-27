@@ -13,7 +13,7 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
     """
     Base class for matrix mathematics questions with multipart support.
 
-    NOTE: This class demonstrates proper ContentAST usage patterns.
+    NOTE: This class demonstrates proper content AST usage patterns.
     When implementing similar question types (vectors, equations, etc.),
     follow these patterns for consistent formatting across output formats.
 
@@ -32,7 +32,7 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
         return [[self.rng.randint(min_val, max_val) for _ in range(cols)] for _ in range(rows)]
 
     def _matrix_to_table(self, matrix, prefix=""):
-        """Convert a matrix to ContentAST table format."""
+        """Convert a matrix to content AST table format."""
         return [[f"{prefix}{matrix[i][j]}" for j in range(len(matrix[0]))] for i in range(len(matrix))]
 
     def _create_answer_table(self, rows, cols, answers_dict, answer_prefix="answer"):

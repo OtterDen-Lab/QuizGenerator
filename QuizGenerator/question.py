@@ -344,10 +344,10 @@ class Question(abc.ABC):
   """
   Base class for all quiz questions with cross-format rendering support.
 
-  CRITICAL: When implementing Question subclasses, ALWAYS use ContentAST elements
+  CRITICAL: When implementing Question subclasses, ALWAYS use content AST elements
   for all content in get_body() and get_explanation() methods.
 
-  NEVER create manual LaTeX, HTML, or Markdown strings. The ContentAST system
+  NEVER create manual LaTeX, HTML, or Markdown strings. The content AST system
   ensures consistent rendering across PDF/LaTeX and Canvas/HTML formats.
 
   Required Methods:
@@ -361,7 +361,7 @@ class Question(abc.ABC):
     - VERSION (str): Question version number (e.g., "1.0")
       Increment when RNG logic changes to ensure reproducibility
 
-  ContentAST Usage Examples:
+  Content AST Usage Examples:
     def _get_body(self):
         body = ca.Section()
         answers = []
@@ -377,7 +377,7 @@ class Question(abc.ABC):
         body.add_element(ans)
         return body, answers
 
-  Common ContentAST Elements:
+  Common Content AST Elements:
     - ca.Paragraph: Text blocks
     - ca.Equation: Mathematical expressions
     - ca.Matrix: Matrices and vectors (use instead of manual LaTeX!)

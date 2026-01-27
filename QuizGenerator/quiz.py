@@ -34,10 +34,10 @@ class Quiz:
     self.questions = questions
     self.instructions = kwargs.get("instructions", "")
 
-    # Parse description with ContentAST if provided
+    # Parse description with content AST if provided
     raw_description = kwargs.get("description", None)
     if raw_description:
-      # Create a ContentAST document from the description text
+      # Create a content AST document from the description text
       desc_doc = ca.Document()
       desc_doc.add_element(ca.Paragraph([raw_description]))
       self.description = desc_doc.render("html")

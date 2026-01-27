@@ -31,10 +31,10 @@ class TableQuestionMixin:
     Returns:
         ca.Table with the information formatted
     """
-    # Don't convert ContentAST elements to strings - let them render properly
+    # Don't convert content AST elements to strings - let them render properly
     table_data = []
     for key, value in info_dict.items():
-      # Keep ContentAST elements as-is, convert others to strings
+      # Keep content AST elements as-is, convert others to strings
       if isinstance(value, ca.Element):
         table_data.append([key, value])
       else:
