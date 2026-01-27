@@ -2378,6 +2378,10 @@ class ContentAST:
       """Fix -0.0 display issue."""
       return 0.0 if x == 0 else x
 
+    @staticmethod
+    def get_spacing_variations_of_list(l, remove_space=False):
+      return [', '.join(l)] + ([', '.join(l)] if remove_space else [])
+    
 
 class AnswerTypes:
   # Multibase answers that can accept either hex, binary or decimal
@@ -2505,37 +2509,23 @@ class AnswerTypes:
         canvas_answers = [
           {
             "blank_id": self.key,
-            "answer_text": ', '.join(map(str, self.value)),
-            "answer_weight": 100 if self.correct else 0,
-          },
-          {
-            "blank_id": self.key,
-            "answer_text": ','.join(map(str, self.value)),
+            "answer_text": spacing_variation,
             "answer_weight": 100 if self.correct else 0,
           }
+          for spacing_variation in self.get_spacing_variations_of_list(map(str, self.value))
         ]
       else:
         canvas_answers = []
-        
-        # With spaces
-        canvas_answers.extend([
+        canvas_answers = [
           {
             "blank_id": self.key,
-            "answer_text": ', '.join(map(str, possible_state)),
+            "answer_text": spacing_variation,
             "answer_weight": 100 if self.correct else 0,
           }
           for possible_state in itertools.permutations(self.value)
-        ])
+          for spacing_variation in self.get_spacing_variations_of_list(possible_state)
+        ]
         
-        # Without spaces
-        canvas_answers.extend([
-          {
-            "blank_id": self.key,
-            "answer_text": ','.join(map(str, possible_state)),
-            "answer_weight": 100 if self.correct else 0,
-          }
-          for possible_state in itertools.permutations(self.value)
-        ])
       return canvas_answers
 
     def get_display_string(self) -> str:
@@ -2558,41 +2548,19 @@ class AnswerTypes:
       
       canvas_answers = []
       for combination in itertools.product(*answer_variations):
-        # Add without anything surrounding
-        canvas_answers.extend([
-          {
-            "blank_id": self.key,
-            "answer_weight": 100 if self.correct else 0,
-            "answer_text": f"{', '.join(combination)}",
-          },
-          {
-            "blank_id": self.key,
-            "answer_weight": 100 if self.correct else 0,
-            "answer_text": f"{','.join(combination)}",
-          },
-          # Add parentheses format
-          {
-            "blank_id": self.key,
-            "answer_weight": 100 if self.correct else 0,
-            "answer_text": f"({', '.join(list(combination))})",
-          },
-          {
-            "blank_id": self.key,
-            "answer_weight": 100 if self.correct else 0,
-            "answer_text": f"({','.join(list(combination))})",
-          },
-          # Add square brackets
-          {
-            "blank_id": self.key,
-            "answer_weight": 100 if self.correct else 0,
-            "answer_text": f"[{', '.join(list(combination))}]",
-          },
-          {
-            "blank_id": self.key,
-            "answer_weight": 100 if self.correct else 0,
-            "answer_text": f"[{','.join(list(combination))}]",
-          }
-        ])
+        for spacing_variation in self.get_spacing_variations_of_list(list(combination)):
+          canvas_answers.extend([
+            {
+              "blank_id": self.key,
+              "answer_weight": 100 if self.correct else 0,
+              "answer_text": f"{spacing_variation}",
+            }, # without parenthesis
+            {
+              "blank_id": self.key,
+              "answer_weight": 100 if self.correct else 0,
+              "answer_text": f"({spacing_variation})",
+            } # with parenthesis
+          ])
       return canvas_answers
       
     def get_display_string(self) -> str:
