@@ -149,20 +149,19 @@ class VectorAddition(VectorMathQuestion):
 
     explanation.add_element(ContentAST.Paragraph(["To add vectors, we add corresponding components:"]))
 
-    vector_a_str = self._format_vector(self.vector_a)
-    vector_b_str = self._format_vector(self.vector_b)
-    result_str = self._format_vector(self.result)
-
-    addition_elements = "; ".join([f"{self.vector_a[i]}+{self.vector_b[i]}" for i in range(self.dimension)])
-    addition_str = f"mat({addition_elements})"
+    # Use LaTeX syntax for make_block_equation__multiline_equals
+    vector_a_str = r" \\ ".join([str(v) for v in self.vector_a])
+    vector_b_str = r" \\ ".join([str(v) for v in self.vector_b])
+    result_str = r" \\ ".join([str(v) for v in self.result])
+    addition_str = r" \\ ".join([f"{self.vector_a[i]}+{self.vector_b[i]}" for i in range(self.dimension)])
 
     explanation.add_element(
         ContentAST.Equation.make_block_equation__multiline_equals(
-            lhs="arrow(a) + arrow(b)",
+            lhs=r"\vec{a} + \vec{b}",
             rhs=[
-                f"{vector_a_str} + {vector_b_str}",
-                addition_str,
-                result_str
+                f"\\begin{{bmatrix}} {vector_a_str} \\end{{bmatrix}} + \\begin{{bmatrix}} {vector_b_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {addition_str} \\end{{bmatrix}}",
+                f"\\begin{{bmatrix}} {result_str} \\end{{bmatrix}}"
             ]
         )
     )
@@ -355,9 +354,12 @@ class VectorMagnitude(VectorMathQuestion):
     explanation = ContentAST.Section()
 
     explanation.add_element(ContentAST.Paragraph(["The magnitude of a vector is calculated using the formula:"]))
-    explanation.add_element(ContentAST.Equation("||arrow(v)|| = sqrt(v_1^2 + v_2^2 + ... + v_n^2)", inline=False))
+    explanation.add_element(ContentAST.Equation(
+        r"||\vec{v}|| = \sqrt{v_1^2 + v_2^2 + \cdots + v_n^2}", inline=False
+    ))
 
-    vector_str = self._format_vector(self.vector_a)
+    # Use LaTeX syntax for make_block_equation__multiline_equals
+    vector_str = r" \\ ".join([str(v) for v in self.vector_a])
     squares_str = " + ".join([f"{v}^2" for v in self.vector_a])
     calculation_str = " + ".join([str(v**2) for v in self.vector_a])
     sum_of_squares = sum(component ** 2 for component in self.vector_a)
@@ -365,12 +367,12 @@ class VectorMagnitude(VectorMathQuestion):
 
     explanation.add_element(
         ContentAST.Equation.make_block_equation__multiline_equals(
-            lhs="||arrow(v)||",
+            lhs=r"||\vec{v}||",
             rhs=[
-                f"||{vector_str}||",
-                f"sqrt({squares_str})",
-                f"sqrt({calculation_str})",
-                f"sqrt({sum_of_squares})",
+                f"\\left|\\left| \\begin{{bmatrix}} {vector_str} \\end{{bmatrix}} \\right|\\right|",
+                f"\\sqrt{{{squares_str}}}",
+                f"\\sqrt{{{calculation_str}}}",
+                f"\\sqrt{{{sum_of_squares}}}",
                 result_formatted
             ]
         )
