@@ -209,7 +209,7 @@ def test_all_questions(
 
     if canvas_course:
       print("Pushing to Canvas...")
-      quiz_title = f"Test All Questions ({datetime.now().strftime('%b %d %I:%M%p')})"
+      quiz_title = f"Test All Questions ({int(datetime.now().timestamp())} : {datetime.now().strftime('%b %d %I:%M%p')})"
       canvas_course.push_quiz_to_canvas(
         test_quiz,
         num_variations=1,
