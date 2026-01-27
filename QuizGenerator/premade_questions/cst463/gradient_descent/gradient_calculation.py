@@ -5,7 +5,7 @@ import logging
 from typing import List, Tuple
 import sympy as sp
 
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
 from .misc import generate_function, format_vector
 
@@ -57,7 +57,7 @@ class DerivativeQuestion(Question, abc.ABC):
       # Use auto_float for Canvas compatibility with integers and decimals
       # Label includes the partial derivative notation
       label = f"∂f/∂x_{i} at ({eval_point_str})"
-      self.answers[answer_key] = AnswerTypes.Float(gradient_value, label=label)
+      self.answers[answer_key] = ca.AnswerTypes.Float(gradient_value, label=label)
 
   def _create_gradient_vector_answer(self) -> None:
     """Create a single gradient vector answer for PDF format."""
@@ -75,20 +75,20 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # Format as vector for display using consistent formatting
     vector_str = format_vector(gradient_values)
-    self.answers["gradient_vector"] = AnswerTypes.String(vector_str, pdf_only=True)
+    self.answers["gradient_vector"] = ca.AnswerTypes.String(vector_str, pdf_only=True)
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Display the function
     body.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Given the function ",
-        ContentAST.Equation(sp.latex(self.equation), inline=True),
+        ca.Equation(sp.latex(self.equation), inline=True),
         ", calculate the gradient at the point ",
-        ContentAST.Equation(format_vector(self.evaluation_point), inline=True),
+        ca.Equation(format_vector(self.evaluation_point), inline=True),
         "."
       ])
     )
@@ -98,9 +98,9 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # For PDF: Use OnlyLatex to show gradient vector format (no answer blank)
     body.add_element(
-      ContentAST.OnlyLatex([
-        ContentAST.Paragraph([
-          ContentAST.Equation(
+      ca.OnlyLatex([
+        ca.Paragraph([
+          ca.Equation(
             f"\\left. \\nabla f \\right|_{{{eval_point_str}}} = ",
             inline=True
           )
@@ -113,9 +113,9 @@ class DerivativeQuestion(Question, abc.ABC):
       answer = self.answers[f"partial_derivative_{i}"]
       answers.append(answer)
       body.add_element(
-        ContentAST.OnlyHtml([
-          ContentAST.Paragraph([
-            ContentAST.Equation(
+        ca.OnlyHtml([
+          ca.Paragraph([
+            ca.Equation(
               f"\\left. {self._format_partial_derivative(i)} \\right|_{{{eval_point_str}}} = ",
               inline=True
             ),
@@ -126,32 +126,32 @@ class DerivativeQuestion(Question, abc.ABC):
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
     # Show the function and its gradient
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "To find the gradient, we calculate the partial derivatives of ",
-        ContentAST.Equation(sp.latex(self.equation), inline=True),
+        ca.Equation(sp.latex(self.equation), inline=True),
         ":"
       ])
     )
 
     # Show analytical gradient
     explanation.add_element(
-      ContentAST.Equation(f"\\nabla f = {sp.latex(self.gradient_function)}", inline=False)
+      ca.Equation(f"\\nabla f = {sp.latex(self.gradient_function)}", inline=False)
     )
 
     # Show evaluation at the specific point
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Evaluating at the point {format_vector(self.evaluation_point)}:"
       ])
     )
@@ -162,18 +162,18 @@ class DerivativeQuestion(Question, abc.ABC):
       partial_expr = self.gradient_function[i]
       partial_value = partial_expr.subs(subs_map)
 
-      # Use ContentAST.Answer.accepted_strings for clean numerical formatting
+      # Use ca.Answer.accepted_strings for clean numerical formatting
       try:
         numerical_value = float(partial_value)
       except (TypeError, ValueError):
         numerical_value = float(partial_value.evalf())
 
       # Get clean string representation
-      clean_value = sorted(ContentAST.Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
+      clean_value = sorted(ca.Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
 
       explanation.add_element(
-        ContentAST.Paragraph([
-          ContentAST.Equation(
+        ca.Paragraph([
+          ca.Equation(
             f"{self._format_partial_derivative(i)} = {sp.latex(partial_expr)} = {clean_value}",
             inline=False
           )
@@ -182,7 +182,7 @@ class DerivativeQuestion(Question, abc.ABC):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -284,26 +284,26 @@ class DerivativeChain(DerivativeQuestion):
     f = sp.Function('f')
     self.equation = sp.Eq(f(*self.variables), self.function)
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
     # Show the composed function structure
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "This is a composition of functions requiring the chain rule. The function ",
-        ContentAST.Equation(sp.latex(self.equation), inline=True),
+        ca.Equation(sp.latex(self.equation), inline=True),
         " can be written as ",
-        ContentAST.Equation(f"f(g(x)) \\text{{ where }} g(x) = {sp.latex(self.inner_function)}", inline=True),
+        ca.Equation(f"f(g(x)) \\text{{ where }} g(x) = {sp.latex(self.inner_function)}", inline=True),
         "."
       ])
     )
 
     # Explain chain rule with Leibniz notation
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "The chain rule states that for a composite function ",
-        ContentAST.Equation("f(g(x))", inline=True),
+        ca.Equation("f(g(x))", inline=True),
         ", the derivative with respect to each variable is found by multiplying the derivative of the outer function with respect to the inner function by the derivative of the inner function with respect to the variable:"
       ])
     )
@@ -312,14 +312,14 @@ class DerivativeChain(DerivativeQuestion):
     for i in range(self.num_variables):
       var_name = f"x_{i}"
       explanation.add_element(
-        ContentAST.Equation(
+        ca.Equation(
           f"\\frac{{\\partial f}}{{\\partial {var_name}}} = \\frac{{\\partial f}}{{\\partial g}} \\cdot \\frac{{\\partial g}}{{\\partial {var_name}}}",
           inline=False
         )
       )
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Applying this to our specific function:"
       ])
     )
@@ -333,13 +333,13 @@ class DerivativeChain(DerivativeQuestion):
       inner_deriv = self.inner_function.diff(self.variables[i])
 
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"For {var_name}:"
         ])
       )
 
       explanation.add_element(
-        ContentAST.Equation(
+        ca.Equation(
           f"\\frac{{\\partial f}}{{\\partial {var_name}}} = \\left({sp.latex(outer_deriv)}\\right) \\cdot \\left({sp.latex(inner_deriv)}\\right)",
           inline=False
         )
@@ -347,18 +347,18 @@ class DerivativeChain(DerivativeQuestion):
 
     # Show analytical gradient
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "This gives us the complete gradient:"
       ])
     )
 
     explanation.add_element(
-      ContentAST.Equation(f"\\nabla f = {sp.latex(self.gradient_function)}", inline=False)
+      ca.Equation(f"\\nabla f = {sp.latex(self.gradient_function)}", inline=False)
     )
 
     # Show evaluation at the specific point
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Evaluating at the point {format_vector(self.evaluation_point)}:"
       ])
     )
@@ -369,18 +369,18 @@ class DerivativeChain(DerivativeQuestion):
       partial_expr = self.gradient_function[i]
       partial_value = partial_expr.subs(subs_map)
 
-      # Use ContentAST.Answer.accepted_strings for clean numerical formatting
+      # Use ca.Answer.accepted_strings for clean numerical formatting
       try:
         numerical_value = float(partial_value)
       except (TypeError, ValueError):
         numerical_value = float(partial_value.evalf())
 
       # Get clean string representation
-      clean_value = sorted(ContentAST.Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
+      clean_value = sorted(ca.Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
 
       explanation.add_element(
-        ContentAST.Paragraph([
-          ContentAST.Equation(
+        ca.Paragraph([
+          ca.Equation(
             f"{self._format_partial_derivative(i)} = {sp.latex(partial_expr)} = {clean_value}",
             inline=False
           )
@@ -389,7 +389,7 @@ class DerivativeChain(DerivativeQuestion):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

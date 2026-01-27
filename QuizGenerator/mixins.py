@@ -6,7 +6,7 @@ These mixins provide reusable patterns for common question structures.
 
 import abc
 from typing import Dict, List, Any, Union
-from QuizGenerator.contentast import ContentAST
+import QuizGenerator.contentast as ca
 
 
 class TableQuestionMixin:
@@ -14,10 +14,10 @@ class TableQuestionMixin:
   Mixin providing common table generation patterns for questions.
 
   This mixin identifies and abstracts the most common table patterns used
-  across question types, reducing repetitive ContentAST.Table creation code.
+  across question types, reducing repetitive ca.Table creation code.
   """
   
-  def create_info_table(self, info_dict: Dict[str, Any], transpose: bool = False) -> ContentAST.Table:
+  def create_info_table(self, info_dict: Dict[str, Any], transpose: bool = False) -> ca.Table:
     """
     Creates a vertical info table (key-value pairs).
 
@@ -29,18 +29,18 @@ class TableQuestionMixin:
         transpose: Whether to transpose the table (default: False)
 
     Returns:
-        ContentAST.Table with the information formatted
+        ca.Table with the information formatted
     """
     # Don't convert ContentAST elements to strings - let them render properly
     table_data = []
     for key, value in info_dict.items():
       # Keep ContentAST elements as-is, convert others to strings
-      if isinstance(value, ContentAST.Element):
+      if isinstance(value, ca.Element):
         table_data.append([key, value])
       else:
         table_data.append([key, str(value)])
 
-    return ContentAST.Table(
+    return ca.Table(
       data=table_data,
       transpose=transpose
     )
@@ -50,7 +50,7 @@ class TableQuestionMixin:
       headers: List[str],
       data_rows: List[Dict[str, Any]],
       answer_columns: List[str] = None
-  ) -> ContentAST.Table:
+  ) -> ca.Table:
     """
     Creates a table where some cells are answer blanks.
 
@@ -63,17 +63,17 @@ class TableQuestionMixin:
         answer_columns: List of column names that should be treated as answers
 
     Returns:
-        ContentAST.Table with answers embedded in appropriate cells
+        ca.Table with answers embedded in appropriate cells
     """
     answer_columns = answer_columns or []
     
-    def format_cell(row_data: Dict, column: str) -> Union[str, ContentAST.Answer]:
+    def format_cell(row_data: Dict, column: str) -> Union[str, ca.Answer]:
       """Format a cell based on whether it should be an answer or plain data"""
       value = row_data.get(column, "")
 
       # If this column should contain answers and the value is an Answer object
-      # Answer extends ContentAST.Leaf, so it can be used directly
-      if column in answer_columns and isinstance(value, ContentAST.Answer):
+      # Answer extends ca.Leaf, so it can be used directly
+      if column in answer_columns and isinstance(value, ca.Answer):
         return value
       # If this column should contain answers but we have the answer key
       elif column in answer_columns and isinstance(value, str) and hasattr(self, 'answers'):
@@ -89,7 +89,7 @@ class TableQuestionMixin:
       for row in data_rows
     ]
     
-    return ContentAST.Table(
+    return ca.Table(
       headers=headers,
       data=table_data
     )
@@ -100,7 +100,7 @@ class TableQuestionMixin:
       answer_label: str,
       answer_key: str,
       transpose: bool = True
-  ) -> ContentAST.Table:
+  ) -> ca.Table:
     """
     Creates a table combining parameters with a single answer.
 
@@ -114,18 +114,18 @@ class TableQuestionMixin:
         transpose: Whether to show as vertical table (default: True)
 
     Returns:
-        ContentAST.Table with parameters and answer
+        ca.Table with parameters and answer
     """
     # Build data with parameters plus answer row
     data = [[key, str(value)] for key, value in parameter_info.items()]
     
-    # Add answer row - Answer extends ContentAST.Leaf so it can be used directly
+    # Add answer row - Answer extends ca.Leaf so it can be used directly
     if hasattr(self, 'answers') and answer_key in self.answers:
       data.append([answer_label, self.answers[answer_key]])
     else:
       data.append([answer_label, f"[{answer_key}]"])  # Fallback
     
-    return ContentAST.Table(
+    return ca.Table(
       data=data,
       transpose=transpose
     )
@@ -134,7 +134,7 @@ class TableQuestionMixin:
       self,
       headers: List[str],
       template_rows: List[Dict[str, Any]]
-  ) -> ContentAST.Table:
+  ) -> ca.Table:
     """
     Creates a table where multiple cells are answer blanks to fill in.
 
@@ -146,14 +146,14 @@ class TableQuestionMixin:
         template_rows: Rows where values can be data or answer keys
 
     Returns:
-        ContentAST.Table with multiple answer blanks
+        ca.Table with multiple answer blanks
     """
     
-    def process_cell_value(value: Any) -> Union[str, ContentAST.Answer]:
+    def process_cell_value(value: Any) -> Union[str, ca.Answer]:
       """Convert cell values to appropriate display format"""
       # If it's already an Answer object, use it directly
-      # Answer extends ContentAST.Leaf so it can be used in the AST
-      if isinstance(value, ContentAST.Answer):
+      # Answer extends ca.Leaf so it can be used in the AST
+      if isinstance(value, ca.Answer):
         return value
       # If it's a string that looks like an answer key, try to resolve it
       elif isinstance(value, str) and value.startswith("answer__") and hasattr(self, 'answers'):
@@ -168,7 +168,7 @@ class TableQuestionMixin:
       for row in template_rows
     ]
     
-    return ContentAST.Table(
+    return ca.Table(
       headers=headers,
       data=table_data
     )
@@ -178,23 +178,23 @@ class BodyTemplatesMixin:
   """
   Mixin providing common body structure patterns.
 
-  These methods create complete ContentAST.Section objects following
+  These methods create complete ca.Section objects following
   common question layout patterns.
   """
   
   def create_calculation_with_info_body(
       self,
       intro_text: str,
-      info_table: ContentAST.Table,
-      answer_block: ContentAST.AnswerBlock
-  ) -> ContentAST.Section:
+      info_table: ca.Table,
+      answer_block: ca.AnswerBlock
+  ) -> ca.Section:
     """
     Standard pattern: intro text + info table + answer block.
 
     Used by: HardDriveAccessTime, AverageMemoryAccessTime, etc.
     """
-    body = ContentAST.Section()
-    body.add_element(ContentAST.Paragraph([intro_text]))
+    body = ca.Section()
+    body.add_element(ca.Paragraph([intro_text]))
     body.add_element(info_table)
     body.add_element(answer_block)
     return body
@@ -203,39 +203,39 @@ class BodyTemplatesMixin:
       self,
       intro_text: str,
       instructions: str,
-      table: ContentAST.Table
-  ) -> ContentAST.Section:
+      table: ca.Table
+  ) -> ca.Section:
     """
     Standard pattern: intro + instructions + table with blanks.
 
     Used by: VirtualAddressParts, CachingQuestion, etc.
     """
-    body = ContentAST.Section()
+    body = ca.Section()
     if intro_text:
-      body.add_element(ContentAST.Paragraph([intro_text]))
+      body.add_element(ca.Paragraph([intro_text]))
     if instructions:
-      body.add_element(ContentAST.Paragraph([instructions]))
+      body.add_element(ca.Paragraph([instructions]))
     body.add_element(table)
     return body
   
   def create_parameter_calculation_body(
       self,
       intro_text: str,
-      parameter_table: ContentAST.Table,
-      answer_table: ContentAST.Table = None,
+      parameter_table: ca.Table,
+      answer_table: ca.Table = None,
       additional_instructions: str = None
-  ) -> ContentAST.Section:
+  ) -> ca.Section:
     """
     Standard pattern: intro + parameter table + optional answer table.
 
     Used by: BaseAndBounds, Paging, etc.
     """
-    body = ContentAST.Section()
-    body.add_element(ContentAST.Paragraph([intro_text]))
+    body = ca.Section()
+    body.add_element(ca.Paragraph([intro_text]))
     body.add_element(parameter_table)
     
     if additional_instructions:
-      body.add_element(ContentAST.Paragraph([additional_instructions]))
+      body.add_element(ca.Paragraph([additional_instructions]))
     
     if answer_table:
       body.add_element(answer_table)
@@ -261,7 +261,7 @@ class MultiPartQuestionMixin:
 
   Methods provided:
       - is_multipart(): Check if this question should generate multiple subparts
-      - create_repeated_problem_part(): Create the ContentAST.RepeatedProblemPart element
+      - create_repeated_problem_part(): Create the ca.RepeatedProblemPart element
       - generate_subquestion_data(): Abstract method for subclasses to implement
   """
   
@@ -276,16 +276,16 @@ class MultiPartQuestionMixin:
   
   def create_repeated_problem_part(self, subpart_data_list):
     """
-    Create a ContentAST.RepeatedProblemPart element from subpart data.
+    Create a ca.RepeatedProblemPart element from subpart data.
 
     Args:
         subpart_data_list: List of data for each subpart. Each item can be:
             - A string (LaTeX equation content)
-            - A ContentAST.Element
+            - A ca.Element
             - A tuple/list of elements to be joined
 
     Returns:
-        ContentAST.RepeatedProblemPart: The formatted multi-part element
+        ca.RepeatedProblemPart: The formatted multi-part element
 
     Example:
         # For vector dot products
@@ -295,8 +295,8 @@ class MultiPartQuestionMixin:
         ]
         return self.create_repeated_problem_part(subparts)
     """
-    from QuizGenerator.contentast import ContentAST
-    return ContentAST.RepeatedProblemPart(subpart_data_list)
+    import QuizGenerator.contentast as ca
+    return ca.RepeatedProblemPart(subpart_data_list)
   
   def generate_subquestion_data(self):
     """
@@ -308,7 +308,7 @@ class MultiPartQuestionMixin:
     Returns:
         list: List of data for each subpart. The format depends on the
               specific question type but should be compatible with
-              ContentAST.RepeatedProblemPart.
+              ca.RepeatedProblemPart.
 
     Example implementation:
         def generate_subquestion_data(self):
@@ -316,10 +316,10 @@ class MultiPartQuestionMixin:
             for i in range(self.num_subquestions):
                 vector_a = self._generate_vector(self.dimension)
                 vector_b = self._generate_vector(self.dimension)
-                matrix_a = ContentAST.Matrix.to_latex(
+                matrix_a = ca.Matrix.to_latex(
                     [[v] for v in vector_a], "b"
                 )
-                matrix_b = ContentAST.Matrix.to_latex(
+                matrix_b = ca.Matrix.to_latex(
                     [[v] for v in vector_b], "b"
                 )
                 subparts.append((matrix_a, "\\cdot", matrix_b))
@@ -337,7 +337,7 @@ class MultiPartQuestionMixin:
         intro_text: Introduction text for the question
 
     Returns:
-        ContentAST.Section: Complete question body with intro and subparts
+        ca.Section: Complete question body with intro and subparts
 
     Example:
         def get_body(self):
@@ -346,9 +346,9 @@ class MultiPartQuestionMixin:
             else:
                 return self.create_single_part_body()
     """
-    from QuizGenerator.contentast import ContentAST
-    body = ContentAST.Section()
-    body.add_element(ContentAST.Paragraph([intro_text]))
+    import QuizGenerator.contentast as ca
+    body = ca.Section()
+    body.add_element(ca.Paragraph([intro_text]))
     
     # Generate subpart data and create the repeated problem part
     subpart_data = self.generate_subquestion_data()
@@ -368,9 +368,9 @@ class MultiPartQuestionMixin:
     Example:
         # For a 3-part question
         {
-            'a': ContentAST.Answer.integer('a', 5),
-            'b': ContentAST.Answer.integer('b', 12),
-            'c': ContentAST.Answer.integer('c', -3)
+            'a': ca.Answer.integer('a', 5),
+            'b': ca.Answer.integer('b', 12),
+            'c': ca.Answer.integer('c', -3)
         }
     """
     if not self.is_multipart():
@@ -496,10 +496,10 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
   
   def _get_body(self):
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
-    body.add_element(ContentAST.Paragraph([self.get_intro_text()]))
+    body.add_element(ca.Paragraph([self.get_intro_text()]))
 
     if self.is_multipart():
       # Use multipart formatting with repeated problem parts
@@ -511,7 +511,7 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
     else:
       # Single equation display
       equation_latex = self.format_single_equation(self.operand_a, self.operand_b)
-      body.add_element(ContentAST.Equation(f"{equation_latex} = ", inline=False))
+      body.add_element(ca.Equation(f"{equation_latex} = ", inline=False))
 
       # Canvas-only answer fields (hidden from PDF)
       single_answers = self._add_single_question_answers(body)
@@ -536,9 +536,9 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
 
   def _get_explanation(self):
     """Default explanation structure. Subclasses should override for specific explanations."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([self.get_explanation_intro()]))
+    explanation.add_element(ca.Paragraph([self.get_explanation_intro()]))
 
     if self.is_multipart():
       # Handle multipart explanations
@@ -562,8 +562,8 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
   
   def create_explanation_for_subpart(self, subpart_data, letter):
     """Create explanation for a single subpart. Subclasses should override."""
-    return ContentAST.Paragraph([f"Part ({letter}): Calculation details would go here."])
+    return ca.Paragraph([f"Part ({letter}): Calculation details would go here."])
   
   def create_single_explanation(self):
     """Create explanation for single questions. Subclasses should override."""
-    return ContentAST.Paragraph(["Single question explanation would go here."])
+    return ca.Paragraph(["Single question explanation would go here."])

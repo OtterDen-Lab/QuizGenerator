@@ -9,7 +9,7 @@ import logging
 import math
 from typing import List, Optional
 
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -40,9 +40,9 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     self.num_bits_vpn = self.num_bits_va - self.num_bits_offset
     
     self.possible_answers = {
-      self.Target.VA_BITS: AnswerTypes.Int(self.num_bits_va, unit="bits"),
-      self.Target.OFFSET_BITS: AnswerTypes.Int(self.num_bits_offset, unit="bits"),
-      self.Target.VPN_BITS: AnswerTypes.Int(self.num_bits_vpn, unit="bits")
+      self.Target.VA_BITS: ca.AnswerTypes.Int(self.num_bits_va, unit="bits"),
+      self.Target.OFFSET_BITS: ca.AnswerTypes.Int(self.num_bits_offset, unit="bits"),
+      self.Target.VPN_BITS: ca.AnswerTypes.Int(self.num_bits_vpn, unit="bits")
     }
     
     # Select what kind of question we are going to be
@@ -71,9 +71,9 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
       template_rows=table_data
     )
 
-    body = ContentAST.Section()
+    body = ca.Section()
     body.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "Given the information in the below table, please complete the table as appropriate."
         ]
@@ -82,17 +82,17 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     body.add_element(table)
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
   def _get_explanation(self, **kwargs):
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "Remember, when we are calculating the size of virtual address spaces, "
           "the number of bits in the overall address space is equal to the number of bits in the VPN "
@@ -103,20 +103,20 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     )
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
-          ContentAST.Text(f"{self.num_bits_va}", emphasis=(self.blank_kind == self.Target.VA_BITS)),
-          ContentAST.Text(" = "),
-          ContentAST.Text(f"{self.num_bits_vpn}", emphasis=(self.blank_kind == self.Target.VPN_BITS)),
-          ContentAST.Text(" + "),
-          ContentAST.Text(f"{self.num_bits_offset}", emphasis=(self.blank_kind == self.Target.OFFSET_BITS))
+          ca.Text(f"{self.num_bits_va}", emphasis=(self.blank_kind == self.Target.VA_BITS)),
+          ca.Text(" = "),
+          ca.Text(f"{self.num_bits_vpn}", emphasis=(self.blank_kind == self.Target.VPN_BITS)),
+          ca.Text(" + "),
+          ca.Text(f"{self.num_bits_offset}", emphasis=(self.blank_kind == self.Target.OFFSET_BITS))
         ]
       )
     )
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -245,16 +245,16 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       
       self.answers.update(
         {
-          f"answer__hit-{request_number}": AnswerTypes.String(('hit' if was_hit else 'miss')),
-          f"answer__evicted-{request_number}": AnswerTypes.String(('-' if evicted is None else f"{evicted}")),
-          f"answer__cache_state-{request_number}": AnswerTypes.List(value=copy.copy(cache_state), order_matters=True),
+          f"answer__hit-{request_number}": ca.AnswerTypes.String(('hit' if was_hit else 'miss')),
+          f"answer__evicted-{request_number}": ca.AnswerTypes.String(('-' if evicted is None else f"{evicted}")),
+          f"answer__cache_state-{request_number}": ca.AnswerTypes.List(value=copy.copy(cache_state), order_matters=True),
         }
       )
     
     self.hit_rate = 100 * number_of_hits / (self.num_requests)
     self.answers.update(
       {
-        "answer__hit_rate": AnswerTypes.Float(self.hit_rate,
+        "answer__hit_rate": ca.AnswerTypes.Float(self.hit_rate,
           label=f"Hit rate, excluding non-capacity misses",
           unit="%"
         )
@@ -296,7 +296,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     answers.append(hit_rate_answer)
 
     # Create hit rate answer block
-    hit_rate_block = ContentAST.AnswerBlock(hit_rate_answer)
+    hit_rate_block = ca.AnswerBlock(hit_rate_answer)
 
     # Use mixin to create complete body
     intro_text = (
@@ -306,7 +306,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
     )
 
-    instructions = ContentAST.OnlyHtml([
+    instructions = ca.OnlyHtml([
       "For the cache state, please enter the cache contents in the order suggested in class, "
       "which means separated by commas with spaces (e.g. \"1, 2, 3\") "
       "and with the left-most being the next to be evicted. "
@@ -317,19 +317,19 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     body.add_element(hit_rate_block)
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
   def _get_explanation(self, **kwargs):
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph(["The full caching table can be seen below."]))
+    explanation.add_element(ca.Paragraph(["The full caching table can be seen below."]))
 
     explanation.add_element(
-      ContentAST.Table(
+      ca.Table(
         headers=["Page", "Hit/Miss", "Evicted", "Cache State"],
         data=[
           [
@@ -344,7 +344,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     )
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "To calculate the hit rate we calculate the percentage of requests "
           "that were cache hits out of the total number of requests. "
@@ -356,7 +356,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -393,12 +393,12 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     self.virtual_address = self.rng.randint(1, int(self.bounds / self.PROBABILITY_OF_VALID))
     
     if self.virtual_address < self.bounds:
-      self.answers["answer"] = AnswerTypes.Hex(
+      self.answers["answer"] = ca.AnswerTypes.Hex(
         self.base + self.virtual_address,
         length=math.ceil(math.log2(self.base + self.virtual_address))
       )
     else:
-      self.answers["answer"] = AnswerTypes.String("INVALID")
+      self.answers["answer"] = ca.AnswerTypes.String("INVALID")
   
   def _get_body(self):
     """Build question body and collect answers."""
@@ -428,17 +428,17 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     )
     return body, answers
 
-  def get_body(self) -> ContentAST.Section:
+  def get_body(self) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body()
     return body
 
   def _get_explanation(self):
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "There's two steps to figuring out base and bounds.",
           "1. Are we within the bounds?\n",
@@ -449,7 +449,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     )
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           f"Step 1: 0x{self.virtual_address:X} < 0x{self.bounds:X} "
           f"--> {'***VALID***' if (self.virtual_address < self.bounds) else 'INVALID'}"
@@ -459,7 +459,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
 
     if self.virtual_address < self.bounds:
       explanation.add_element(
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             f"Step 2: Since the previous check passed, we calculate "
             f"0x{self.base:X} + 0x{self.virtual_address:X} "
@@ -470,7 +470,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
       )
     else:
       explanation.add_element(
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             f"Step 2: Since the previous check failed, we simply write ***INVALID***.",
             "***If*** it had been valid, we would have calculated "
@@ -482,7 +482,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
 
     return explanation, []
 
-  def get_explanation(self) -> ContentAST.Section:
+  def get_explanation(self) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation()
     return explanation
@@ -579,15 +579,15 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     
     # Set answers based on whether it's in bounds or not
     if self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
-      self.answers["answer__physical_address"] = AnswerTypes.Binary(
+      self.answers["answer__physical_address"] = ca.AnswerTypes.Binary(
         self.physical_address,
         length=self.physical_bits,
         label="Physical Address"
       )
     else:
-      self.answers["answer__physical_address"] = AnswerTypes.String("INVALID", label="Physical Address")
+      self.answers["answer__physical_address"] = ca.AnswerTypes.String("INVALID", label="Physical Address")
 
-    self.answers["answer__segment"] = AnswerTypes.String(self.segment, label="Segment name")
+    self.answers["answer__segment"] = ca.AnswerTypes.String(self.segment, label="Segment name")
   
   def _get_body(self):
     """Build question body and collect answers."""
@@ -596,10 +596,10 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
       self.answers["answer__physical_address"]
     ]
 
-    body = ContentAST.Section()
+    body = ca.Section()
 
     body.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           f"Given a virtual address space of {self.virtual_bits}bits, "
           f"and a physical address space of {self.physical_bits}bits, "
@@ -627,23 +627,23 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     body.add_element(segment_table)
 
     body.add_element(
-      ContentAST.AnswerBlock([
+      ca.AnswerBlock([
         self.answers["answer__segment"],
         self.answers["answer__physical_address"]
       ])
     )
     return body, answers
 
-  def get_body(self) -> ContentAST.Section:
+  def get_body(self) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body()
     return body
 
   def _get_explanation(self):
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
     
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "The core idea to keep in mind with segmentation is that you should always check ",
           "the first two bits of the virtual address to see what segment it is in and then go from there."
@@ -654,7 +654,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     )
     
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           f"In this problem our virtual address, "
           f"converted to binary and including padding, is 0b{self.virtual_address:0{self.virtual_bits}b}.",
@@ -667,7 +667,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     
     if self.segment == "unallocated":
       explanation.add_element(
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             "Since this is the unallocated segment there are no possible valid translations, so we enter ***INVALID***."
           ]
@@ -675,7 +675,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
       )
     else:
       explanation.add_element(
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             f"Since we are in the {self.segment} segment, "
             f"we see from our table that our bounds are {self.bounds[self.segment]}. "
@@ -690,7 +690,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
       if not self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
         # then we are outside of bounds
         explanation.add_element(
-          ContentAST.Paragraph(
+          ca.Paragraph(
             [
               "We can therefore see that we are outside of bounds so we should put ***INVALID***.",
               "If we <i>were</i> requesting a valid memory location we could use the below steps to do so."
@@ -700,7 +700,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
         )
       else:
         explanation.add_element(
-          ContentAST.Paragraph(
+          ca.Paragraph(
             [
               "We are therefore in bounds so we can calculate our physical address, as we do below."
             ]
@@ -708,7 +708,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
         )
       
       explanation.add_element(
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             "To find the physical address we use the formula:",
             "<code>physical_address = base(segment) + offset</code>",
@@ -720,14 +720,14 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
       )
       
       explanation.add_element(
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             "Lining this up for ease we can do this calculation as:"
           ]
         )
       )
       explanation.add_element(
-        ContentAST.Code(
+        ca.Code(
           f"  0b{self.base[self.segment]:0{self.physical_bits}b}\n"
           f"<u>+ 0b{self.offset:0{self.physical_bits}b}</u>\n"
           f"  0b{self.physical_address:0{self.physical_bits}b}\n"
@@ -736,7 +736,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
 
     return explanation, []
 
-  def get_explanation(self) -> ContentAST.Section:
+  def get_explanation(self) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation()
     return explanation
@@ -812,27 +812,27 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     self.answers.update(
       {
-        "answer__vpn": AnswerTypes.Binary(self.vpn, length=self.num_bits_vpn, label="VPN"),
-        "answer__offset": AnswerTypes.Binary(self.offset, length=self.num_bits_offset, label="Offset"),
-        "answer__pte": AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1), label="PTE"),
+        "answer__vpn": ca.AnswerTypes.Binary(self.vpn, length=self.num_bits_vpn, label="VPN"),
+        "answer__offset": ca.AnswerTypes.Binary(self.offset, length=self.num_bits_offset, label="Offset"),
+        "answer__pte": ca.AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1), label="PTE"),
       }
     )
 
     if self.is_valid:
       self.answers.update(
         {
-          "answer__is_valid": AnswerTypes.String("VALID", label="VALID or INVALID?"),
-          "answer__pfn": AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
-          "answer__physical_address": AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
+          "answer__is_valid": ca.AnswerTypes.String("VALID", label="VALID or INVALID?"),
+          "answer__pfn": ca.AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
+          "answer__physical_address": ca.AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
           ),
         }
       )
     else:
       self.answers.update(
         {
-          "answer__is_valid": AnswerTypes.String("INVALID", label="VALID or INVALID?"),
-          "answer__pfn": AnswerTypes.String("INVALID", label="PFN"),
-          "answer__physical_address": AnswerTypes.String("INVALID", label="Physical Address"),
+          "answer__is_valid": ca.AnswerTypes.String("INVALID", label="VALID or INVALID?"),
+          "answer__pfn": ca.AnswerTypes.String("INVALID", label="PFN"),
+          "answer__physical_address": ca.AnswerTypes.String("INVALID", label="Physical Address"),
         }
       )
   
@@ -847,10 +847,10 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       self.answers["answer__physical_address"],
     ]
 
-    body = ContentAST.Section()
+    body = ca.Section()
 
     body.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.",
           "Remember, we typically have the MSB representing valid or invalid."
@@ -885,14 +885,14 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       value_matrix.append(["...", "..."])
 
     body.add_element(
-      ContentAST.Table(
+      ca.Table(
         headers=["VPN", "PTE"],
         data=value_matrix
       )
     )
 
     body.add_element(
-      ContentAST.AnswerBlock([
+      ca.AnswerBlock([
         self.answers["answer__vpn"],
         self.answers["answer__offset"],
         self.answers["answer__pte"],
@@ -904,17 +904,17 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     return body, answers
 
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def get_body(self, *args, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(*args, **kwargs)
     return body
   
   def _get_explanation(self, *args, **kwargs):
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "The core idea of Paging is we want to break the virtual address into the VPN and the offset.  "
           "From here, we get the Page Table Entry corresponding to the VPN, and check the validity of the entry.  "
@@ -924,7 +924,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "Don't forget to pad with the appropriate number of 0s (the appropriate number is the number of bits)!",
         ]
@@ -932,7 +932,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           f"Virtual Address = VPN | offset",
           f"<tt>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</tt> "
@@ -942,7 +942,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "We next use our VPN to index into our page table and find the corresponding entry."
           f"Our Page Table Entry is ",
@@ -954,7 +954,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     if self.is_valid:
       explanation.add_element(
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             f"In our PTE we see that the first bit is **{self.pte // (2 ** self.num_bits_pfn)}** meaning that the translation is **VALID**"
           ]
@@ -962,7 +962,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       )
     else:
       explanation.add_element(
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             f"In our PTE we see that the first bit is **{self.pte // (2 ** self.num_bits_pfn)}** meaning that the translation is **INVALID**.",
             "Therefore, we just write \"INVALID\" as our answer.",
@@ -973,7 +973,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       )
 
     explanation.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           "Next, we convert our PTE to our PFN by removing our metadata.  "
           "In this case we're just removing the leading bit.  We can do this by applying a binary mask.",
@@ -983,7 +983,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       )
     )
     explanation.add_element(
-      ContentAST.Equation(
+      ca.Equation(
         f"\\texttt{{{self.pfn:0{self.num_bits_pfn}b}}} "
         f"= \\texttt{{0b{self.pte:0{self.num_bits_pfn + 1}b}}} "
         f"\\& \\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
@@ -992,13 +992,13 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     explanation.add_elements(
       [
-        ContentAST.Paragraph(
+        ca.Paragraph(
           [
             "We then add combine our PFN and offset, "
             "Physical Address = PFN | offset",
           ]
         ),
-        ContentAST.Equation(
+        ca.Equation(
           fr"{r'\mathbf{' if self.is_valid else ''}\mathtt{{0b{self.physical_address:0{self.num_bits_pfn + self.num_bits_offset}b}}}{r'}' if self.is_valid else ''} = \mathtt{{0b{self.pfn:0{self.num_bits_pfn}b}}} \mid \mathtt{{0b{self.offset:0{self.num_bits_offset}b}}}"
         )
       ]
@@ -1006,17 +1006,17 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     explanation.add_elements(
       [
-        ContentAST.Paragraph(["Note: Strictly speaking, this calculation is:", ]),
-        ContentAST.Equation(
+        ca.Paragraph(["Note: Strictly speaking, this calculation is:", ]),
+        ca.Equation(
           fr"{r'\mathbf{' if self.is_valid else ''}\mathtt{{0b{self.physical_address:0{self.num_bits_pfn + self.num_bits_offset}b}}}{r'}' if self.is_valid else ''} = \mathtt{{0b{self.pfn:0{self.num_bits_pfn}b}{0:0{self.num_bits_offset}}}} + \mathtt{{0b{self.offset:0{self.num_bits_offset}b}}}"
         ),
-        ContentAST.Paragraph(["But that's a lot of extra 0s, so I'm splitting them up for succinctness"])
+        ca.Paragraph(["But that's a lot of extra 0s, so I'm splitting them up for succinctness"])
       ]
     )
 
     return explanation, []
 
-  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, *args, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation
@@ -1172,19 +1172,19 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     # Set up answers
     self.answers.update({
-      "answer__pdi": AnswerTypes.Binary(self.pdi, length=self.num_bits_pdi,
+      "answer__pdi": ca.AnswerTypes.Binary(self.pdi, length=self.num_bits_pdi,
                                        label="PDI (Page Directory Index)"),
-      "answer__pti": AnswerTypes.Binary(self.pti, length=self.num_bits_pti,
+      "answer__pti": ca.AnswerTypes.Binary(self.pti, length=self.num_bits_pti,
                                        label="PTI (Page Table Index)"),
-      "answer__offset": AnswerTypes.Binary(self.offset, length=self.num_bits_offset,
+      "answer__offset": ca.AnswerTypes.Binary(self.offset, length=self.num_bits_offset,
                                           label="Offset"),
-      "answer__pd_entry": AnswerTypes.Binary(self.pd_entry, length=(self.num_bits_pfn + 1),
+      "answer__pd_entry": ca.AnswerTypes.Binary(self.pd_entry, length=(self.num_bits_pfn + 1),
                                             label="PD Entry (from Page Directory)"),
       "answer__pt_number": (
-        AnswerTypes.Binary(self.page_table_number, length=self.num_bits_pfn,
+        ca.AnswerTypes.Binary(self.page_table_number, length=self.num_bits_pfn,
                           label="Page Table Number")
         if self.pd_valid
-        else AnswerTypes.String("INVALID", label="Page Table Number")
+        else ca.AnswerTypes.String("INVALID", label="Page Table Number")
       ),
     })
 
@@ -1192,29 +1192,29 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # (regardless of whether that PTE is valid or invalid)
     if self.pd_valid:
       self.answers.update({
-        "answer__pte": AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1),
+        "answer__pte": ca.AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1),
                                          label="PTE (from Page Table)"),
       })
     else:
       # If PD is invalid, student can't look up the page table
       # Accept both "INVALID" (for consistency) and "N/A" (for accuracy)
       self.answers.update({
-        "answer__pte": AnswerTypes.String(["INVALID", "N/A"], label="PTE (from Page Table)"),
+        "answer__pte": ca.AnswerTypes.String(["INVALID", "N/A"], label="PTE (from Page Table)"),
       })
 
     # Validity, PFN, and Physical Address depend on BOTH levels being valid
     if self.pd_valid and self.pt_valid:
       self.answers.update({
-        "answer__is_valid": AnswerTypes.String("VALID", label="VALID or INVALID?"),
-        "answer__pfn": AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
-        "answer__physical_address": AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
+        "answer__is_valid": ca.AnswerTypes.String("VALID", label="VALID or INVALID?"),
+        "answer__pfn": ca.AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
+        "answer__physical_address": ca.AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
         ),
       })
     else:
       self.answers.update({
-        "answer__is_valid": AnswerTypes.String("INVALID", label="VALID or INVALID?"),
-        "answer__pfn": AnswerTypes.String("INVALID", label="PFN"),
-        "answer__physical_address": AnswerTypes.String("INVALID", label="Physical Address"),
+        "answer__is_valid": ca.AnswerTypes.String("INVALID", label="VALID or INVALID?"),
+        "answer__pfn": ca.AnswerTypes.String("INVALID", label="PFN"),
+        "answer__physical_address": ca.AnswerTypes.String("INVALID", label="Physical Address"),
       })
 
   def _get_body(self, *args, **kwargs):
@@ -1231,10 +1231,10 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       self.answers["answer__physical_address"],
     ]
 
-    body = ContentAST.Section()
+    body = ca.Section()
 
     body.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.",
         "This problem uses **two-level (hierarchical) paging**.",
         "Remember, we typically have the MSB representing valid or invalid."
@@ -1267,19 +1267,19 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     # Use a simple text paragraph - the bold will come from markdown conversion
     body.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "**Page Directory:**"
       ])
     )
     body.add_element(
-      ContentAST.Table(
+      ca.Table(
         headers=["PDI", "PD Entry"],
         data=pd_matrix
       )
     )
 
     # Page Tables - use TableGroup for side-by-side display
-    table_group = ContentAST.TableGroup()
+    table_group = ca.TableGroup()
 
     for pt_num in sorted(self.page_tables.keys()):
       pt_matrix = []
@@ -1323,14 +1323,14 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
       table_group.add_table(
         label=f"PTC 0b{pt_num:0{self.num_bits_pfn}b}:",
-        table=ContentAST.Table(headers=["PTI", "PTE"], data=pt_matrix)
+        table=ca.Table(headers=["PTI", "PTE"], data=pt_matrix)
       )
 
     body.add_element(table_group)
 
     # Answer block
     body.add_element(
-      ContentAST.AnswerBlock([
+      ca.AnswerBlock([
         self.answers["answer__pdi"],
         self.answers["answer__pti"],
         self.answers["answer__offset"],
@@ -1345,31 +1345,31 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     return body, answers
 
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def get_body(self, *args, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(*args, **kwargs)
     return body
 
   def _get_explanation(self, *args, **kwargs):
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Two-level paging requires two lookups: first in the Page Directory, then in a Page Table.",
         "The virtual address is split into three parts: PDI | PTI | Offset."
       ])
     )
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Don't forget to pad with the appropriate number of 0s!"
       ])
     )
 
     # Step 1: Extract PDI, PTI, Offset
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"**Step 1: Extract components from Virtual Address**",
         f"Virtual Address = PDI | PTI | Offset",
         f"<tt>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</tt> = "
@@ -1381,7 +1381,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     # Step 2: Look up PD Entry
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"**Step 2: Look up Page Directory Entry**",
         f"Using PDI = <tt>0b{self.pdi:0{self.num_bits_pdi}b}</tt>, we find PD Entry = <tt>0b{self.pd_entry:0{self.num_bits_pfn + 1}b}</tt>"
       ])
@@ -1390,7 +1390,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Step 3: Check PD validity
     pd_valid_bit = self.pd_entry // (2 ** self.num_bits_pfn)
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"**Step 3: Check Page Directory Entry validity**",
         f"The MSB (valid bit) is **{pd_valid_bit}**, so this PD Entry is **{'VALID' if self.pd_valid else 'INVALID'}**."
       ])
@@ -1398,7 +1398,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     if not self.pd_valid:
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           "Since the Page Directory Entry is invalid, the translation fails here.",
           "We write **INVALID** for all remaining fields.",
           "If it were valid, we would continue with the steps below.",
@@ -1408,14 +1408,14 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     # Step 4: Extract PT number (if PD valid)
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"**Step 4: Extract Page Table Number**",
         "We remove the valid bit from the PD Entry to get the Page Table Number:"
       ])
     )
 
     explanation.add_element(
-      ContentAST.Equation(
+      ca.Equation(
         f"\\texttt{{{self.page_table_number:0{self.num_bits_pfn}b}}} = "
         f"\\texttt{{0b{self.pd_entry:0{self.num_bits_pfn + 1}b}}} \\& "
         f"\\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
@@ -1424,14 +1424,14 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     if self.pd_valid:
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"This tells us to use **Page Table #{self.page_table_number}**."
         ])
       )
 
       # Step 5: Look up PTE
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"**Step 5: Look up Page Table Entry**",
           f"Using PTI = <tt>0b{self.pti:0{self.num_bits_pti}b}</tt> in Page Table #{self.page_table_number}, "
           f"we find PTE = <tt>0b{self.pte:0{self.num_bits_pfn + 1}b}</tt>"
@@ -1441,7 +1441,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       # Step 6: Check PT validity
       pt_valid_bit = self.pte // (2 ** self.num_bits_pfn)
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"**Step 6: Check Page Table Entry validity**",
           f"The MSB (valid bit) is **{pt_valid_bit}**, so this PTE is **{'VALID' if self.pt_valid else 'INVALID'}**."
         ])
@@ -1449,7 +1449,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
       if not self.pt_valid:
         explanation.add_element(
-          ContentAST.Paragraph([
+          ca.Paragraph([
             "Since the Page Table Entry is invalid, the translation fails.",
             "We write **INVALID** for PFN and Physical Address.",
             "If it were valid, we would continue with the steps below.",
@@ -1459,14 +1459,14 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
       # Step 7: Extract PFN
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"**Step 7: Extract PFN**",
           "We remove the valid bit from the PTE to get the PFN:"
         ])
       )
 
       explanation.add_element(
-        ContentAST.Equation(
+        ca.Equation(
           f"\\texttt{{{self.pfn:0{self.num_bits_pfn}b}}} = "
           f"\\texttt{{0b{self.pte:0{self.num_bits_pfn + 1}b}}} \\& "
           f"\\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
@@ -1475,14 +1475,14 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
       # Step 8: Construct physical address
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"**Step 8: Construct Physical Address**",
           "Physical Address = PFN | Offset"
         ])
       )
 
       explanation.add_element(
-        ContentAST.Equation(
+        ca.Equation(
           fr"{r'\mathbf{' if self.is_valid else ''}\mathtt{{0b{self.physical_address:0{self.num_bits_pfn + self.num_bits_offset}b}}}{r'}' if self.is_valid else ''} = "
           f"\\mathtt{{0b{self.pfn:0{self.num_bits_pfn}b}}} \\mid "
           f"\\mathtt{{0b{self.offset:0{self.num_bits_offset}b}}}"
@@ -1491,7 +1491,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     return explanation, []
 
-  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, *args, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation

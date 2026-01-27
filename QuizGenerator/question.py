@@ -21,7 +21,7 @@ import yaml
 from typing import List, Dict, Any, Tuple, Optional
 import canvasapi.course, canvasapi.quiz
 
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.performance import timer, PerformanceTracker
 
 import logging
@@ -31,9 +31,9 @@ log = logging.getLogger(__name__)
 @dataclasses.dataclass
 class QuestionComponents:
     """Bundle of question parts generated during construction."""
-    body: ContentAST.Element
-    answers: List[ContentAST.Answer]
-    explanation: ContentAST.Element
+    body: ca.Element
+    answers: List[ca.Answer]
+    explanation: ca.Element
 
 
 # Spacing presets for questions
@@ -351,8 +351,8 @@ class Question(abc.ABC):
   ensures consistent rendering across PDF/LaTeX and Canvas/HTML formats.
 
   Required Methods:
-    - _get_body(): Return Tuple[ContentAST.Section, List[ContentAST.Answer]] with body and answers
-    - _get_explanation(): Return Tuple[ContentAST.Section, List[ContentAST.Answer]] with explanation
+    - _get_body(): Return Tuple[ca.Section, List[ca.Answer]] with body and answers
+    - _get_explanation(): Return Tuple[ca.Section, List[ca.Answer]] with explanation
 
   Note: get_body() and get_explanation() are provided for backward compatibility
   and call the _get_* methods, returning just the first element of the tuple.
@@ -363,26 +363,26 @@ class Question(abc.ABC):
 
   ContentAST Usage Examples:
     def _get_body(self):
-        body = ContentAST.Section()
+        body = ca.Section()
         answers = []
-        body.add_element(ContentAST.Paragraph(["Calculate the matrix:"]))
+        body.add_element(ca.Paragraph(["Calculate the matrix:"]))
 
-        # Use ContentAST.Matrix for math, NOT manual LaTeX
+        # Use ca.Matrix for math, NOT manual LaTeX
         matrix_data = [[1, 2], [3, 4]]
-        body.add_element(ContentAST.Matrix(data=matrix_data, bracket_type="b"))
+        body.add_element(ca.Matrix(data=matrix_data, bracket_type="b"))
 
-        # Answer extends ContentAST.Leaf - add directly to body
-        ans = ContentAST.Answer.integer("result", 42, label="Result")
+        # Answer extends ca.Leaf - add directly to body
+        ans = ca.Answer.integer("result", 42, label="Result")
         answers.append(ans)
         body.add_element(ans)
         return body, answers
 
   Common ContentAST Elements:
-    - ContentAST.Paragraph: Text blocks
-    - ContentAST.Equation: Mathematical expressions
-    - ContentAST.Matrix: Matrices and vectors (use instead of manual LaTeX!)
-    - ContentAST.Table: Data tables
-    - ContentAST.OnlyHtml/OnlyLatex: Platform-specific content
+    - ca.Paragraph: Text blocks
+    - ca.Equation: Mathematical expressions
+    - ca.Matrix: Matrices and vectors (use instead of manual LaTeX!)
+    - ca.Table: Data tables
+    - ca.OnlyHtml/OnlyLatex: Platform-specific content
 
   Versioning Guidelines:
     - Increment VERSION when changing:
@@ -473,7 +473,7 @@ class Question(abc.ABC):
     self.points_value = points_value
     self.topic = topic
     self.spacing = parse_spacing(kwargs.get("spacing", 0))
-    self.answer_kind = ContentAST.Answer.CanvasAnswerKind.BLANK
+    self.answer_kind = ca.Answer.CanvasAnswerKind.BLANK
 
     # Support for multi-part questions (defaults to 1 for normal questions)
     self.num_subquestions = kwargs.get("num_subquestions", 1)
@@ -504,11 +504,11 @@ class Question(abc.ABC):
     with open(path_to_yaml) as fid:
       question_dicts = yaml.safe_load_all(fid)
   
-  def get_question(self, **kwargs) -> ContentAST.Question:
+  def get_question(self, **kwargs) -> ca.Question:
     """
     Gets the question in AST format
     :param kwargs:
-    :return: (ContentAST.Question) Containing question.
+    :return: (ca.Question) Containing question.
     """
     # Generate the question, retrying with incremented seeds until we get an interesting one
     with timer("question_refresh", question_name=self.name, question_type=self.__class__.__name__):
@@ -553,7 +553,7 @@ class Question(abc.ABC):
 
     # Store the actual seed used and question metadata for QR code generation
     actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
-    question_ast = ContentAST.Question(
+    question_ast = ca.Question(
       body=body,
       explanation=explanation,
       value=self.points_value,
@@ -575,31 +575,31 @@ class Question(abc.ABC):
     return question_ast
    
   @abc.abstractmethod
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """
     Gets the body of the question during generation
     :param kwargs:
-    :return: (ContentAST.Section) Containing question body
+    :return: (ca.Section) Containing question body
     """
     pass
   
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """
     Gets the body of the question during generation (backward compatible wrapper).
     Calls _get_explanation() and returns just the explanation.
     :param kwargs:
-    :return: (ContentAST.Section) Containing question explanation or None
+    :return: (ca.Section) Containing question explanation or None
     """
     # Try new pattern first
     if hasattr(self, '_get_explanation') and callable(getattr(self, '_get_explanation')):
       explanation, _ = self._get_explanation()
       return explanation
     # Fallback: default explanation
-    return ContentAST.Section(
-      [ContentAST.Text("[Please reach out to your professor for clarification]")]
+    return ca.Section(
+      [ca.Text("[Please reach out to your professor for clarification]")]
     )
 
-  def _get_body(self) -> Tuple[ContentAST.Element, List[ContentAST.Answer]]:
+  def _get_body(self) -> Tuple[ca.Element, List[ca.Answer]]:
     """
     Build question body and collect answers (new pattern).
     Questions should override this to return (body, answers) tuple.
@@ -611,7 +611,7 @@ class Question(abc.ABC):
     body = self.get_body()
     return body, []
 
-  def _get_explanation(self) -> Tuple[ContentAST.Element, List[ContentAST.Answer]]:
+  def _get_explanation(self) -> Tuple[ca.Element, List[ca.Answer]]:
     """
     Build question explanation and collect answers (new pattern).
     Questions can override this to include answers in explanations.
@@ -619,8 +619,8 @@ class Question(abc.ABC):
     Returns:
         Tuple of (explanation_ast, answers_list)
     """
-    return ContentAST.Section(
-      [ContentAST.Text("[Please reach out to your professor for clarification]")]
+    return ca.Section(
+      [ca.Text("[Please reach out to your professor for clarification]")]
     ), []
 
   def build_question_components(self, **kwargs) -> QuestionComponents:
@@ -645,7 +645,7 @@ class Question(abc.ABC):
       explanation=explanation
     )
 
-  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
+  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
     """
     Return answers from cached components (new pattern) or self.answers dict (old pattern).
     """
@@ -663,7 +663,7 @@ class Question(abc.ABC):
       answers = self._components.answers
       if self.can_be_numerical():
         return (
-          ContentAST.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
+          ca.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
           list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in answers]))
         )
       return (
@@ -675,7 +675,7 @@ class Question(abc.ABC):
     if len(self.answers.values()) > 0:
       if self.can_be_numerical():
         return (
-          ContentAST.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
+          ca.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
           list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in self.answers.values()]))
         )
       return (
@@ -683,7 +683,7 @@ class Question(abc.ABC):
         list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
       )
 
-    return (ContentAST.Answer.CanvasAnswerKind.ESSAY, [])
+    return (ca.Answer.CanvasAnswerKind.ESSAY, [])
     
   def refresh(self, rng_seed=None, *args, **kwargs):
     """If it is necessary to regenerate aspects between usages, this is the time to do it.
@@ -750,7 +750,7 @@ class Question(abc.ABC):
   
   def can_be_numerical(self):
     if (len(self.answers.values()) == 1
-          and isinstance(list(self.answers.values())[0], AnswerTypes.Float)
+          and isinstance(list(self.answers.values())[0], ca.AnswerTypes.Float)
     ):
       return True
     return False

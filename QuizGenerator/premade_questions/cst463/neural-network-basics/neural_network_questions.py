@@ -12,7 +12,7 @@ from typing import List, Tuple, Dict, Any
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 from ..models.matrices import MatrixQuestion
@@ -252,7 +252,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
       include_training_context: If True, include target, loss, etc. (for backprop questions)
 
     Returns:
-      ContentAST.TableGroup with network parameters in two side-by-side tables
+      ca.TableGroup with network parameters in two side-by-side tables
     """
     # Left table: Inputs & Weights
     left_data = []
@@ -261,7 +261,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     # Input values
     for i in range(self.num_inputs):
       left_data.append([
-        ContentAST.Equation(f"x_{i+1}", inline=True),
+        ca.Equation(f"x_{i+1}", inline=True),
         f"{self.X[i]:.1f}"  # Inputs are always integers or 1 decimal
       ])
 
@@ -269,14 +269,14 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     for j in range(self.num_hidden):
       for i in range(self.num_inputs):
         left_data.append([
-          ContentAST.Equation(f"w_{{{j+1}{i+1}}}", inline=True),
+          ca.Equation(f"w_{{{j+1}{i+1}}}", inline=True),
           f"{self.W1[j, i]:.{self.param_digits}f}"
         ])
 
     # Weights from hidden to output
     for i in range(self.num_hidden):
       left_data.append([
-        ContentAST.Equation(f"w_{i+3}", inline=True),
+        ca.Equation(f"w_{i+3}", inline=True),
         f"{self.W2[0, i]:.{self.param_digits}f}"
       ])
 
@@ -288,14 +288,14 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     if self.use_bias:
       for j in range(self.num_hidden):
         right_data.append([
-          ContentAST.Equation(f"b_{j+1}", inline=True),
+          ca.Equation(f"b_{j+1}", inline=True),
           f"{self.b1[j]:.{self.param_digits}f}"
         ])
 
     # Output bias
     if self.use_bias:
       right_data.append([
-        ContentAST.Equation(r"b_{out}", inline=True),
+        ca.Equation(r"b_{out}", inline=True),
         f"{self.b2[0]:.{self.param_digits}f}"
       ])
 
@@ -303,14 +303,14 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     if include_activations and self.a1 is not None:
       for i in range(self.num_hidden):
         right_data.append([
-          ContentAST.Equation(f"h_{i+1}", inline=True),
+          ca.Equation(f"h_{i+1}", inline=True),
           f"{self.a1[i]:.4f}"
         ])
 
     # Output activation (if computed and requested)
     if include_activations and self.a2 is not None:
       right_data.append([
-        ContentAST.Equation(r"\hat{y}", inline=True),
+        ca.Equation(r"\hat{y}", inline=True),
         f"{self.a2[0]:.4f}"
       ])
 
@@ -318,20 +318,20 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     if include_training_context:
       if self.y_target is not None:
         right_data.append([
-          ContentAST.Equation("y", inline=True),
+          ca.Equation("y", inline=True),
           f"{int(self.y_target)}"  # Binary target (0 or 1)
         ])
 
       if self.loss is not None:
         right_data.append([
-          ContentAST.Equation("L", inline=True),
+          ca.Equation("L", inline=True),
           f"{self.loss:.4f}"
         ])
 
     # Create table group
-    table_group = ContentAST.TableGroup()
-    table_group.add_table(ContentAST.Table(data=left_data))
-    table_group.add_table(ContentAST.Table(data=right_data))
+    table_group = ca.TableGroup()
+    table_group.add_table(ca.Table(data=left_data))
+    table_group.add_table(ca.Table(data=right_data))
 
     return table_group
 
@@ -566,18 +566,18 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     # Hidden layer activations
     for i in range(self.num_hidden):
       key = f"h{i+1}"
-      self.answers[key] = AnswerTypes.Float(float(self.a1[i]), label=f"h_{i + 1}")
+      self.answers[key] = ca.AnswerTypes.Float(float(self.a1[i]), label=f"h_{i + 1}")
 
     # Output
-    self.answers["y_pred"] = AnswerTypes.Float(float(self.a2[0]), label="ŷ")
+    self.answers["y_pred"] = ca.AnswerTypes.Float(float(self.a2[0]), label="ŷ")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"Given the neural network below with {self._get_activation_name()} activation "
       f"in the hidden layer and sigmoid activation in the output layer (for binary classification), "
       f"calculate the forward pass for the given input values."
@@ -585,7 +585,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     # Network diagram
     body.add_element(
-      ContentAST.Picture(
+      ca.Picture(
         img_data=self._generate_network_diagram(show_weights=True, show_activations=False),
         caption=f"Neural network architecture"
       )
@@ -595,7 +595,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     body.add_element(self._generate_parameter_table(include_activations=False))
 
     # Activation function
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"**Hidden layer activation:** {self._get_activation_name()}"
     ]))
 
@@ -605,25 +605,25 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     answers.append(self.answers["y_pred"])
 
-    body.add_element(ContentAST.AnswerBlock(answers))
+    body.add_element(ca.AnswerBlock(answers))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "To solve this problem, we need to compute the forward pass through the network."
     ]))
 
     # Hidden layer calculations
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 1: Calculate hidden layer pre-activations**"
     ]))
 
@@ -637,35 +637,35 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       if self.use_bias:
         z_calc += f" + {self.b1[i]:.{self.param_digits}f}"
 
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"z_{i+1} = {z_calc} = {self.z1[i]:.4f}",
         inline=False
       ))
 
     # Hidden layer activations
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       f"**Step 2: Apply {self._get_activation_name()} activation**"
     ]))
 
     for i in range(self.num_hidden):
       if self.activation_function == self.ACTIVATION_SIGMOID:
-        explanation.add_element(ContentAST.Equation(
+        explanation.add_element(ca.Equation(
           f"h_{i+1} = \\sigma(z_{i+1}) = \\frac{{1}}{{1 + e^{{-{self.z1[i]:.4f}}}}} = {self.a1[i]:.4f}",
           inline=False
         ))
       elif self.activation_function == self.ACTIVATION_RELU:
-        explanation.add_element(ContentAST.Equation(
+        explanation.add_element(ca.Equation(
           f"h_{i+1} = \\text{{ReLU}}(z_{i+1}) = \\max(0, {self.z1[i]:.4f}) = {self.a1[i]:.4f}",
           inline=False
         ))
       else:
-        explanation.add_element(ContentAST.Equation(
+        explanation.add_element(ca.Equation(
           f"h_{i+1} = z_{i+1} = {self.a1[i]:.4f}",
           inline=False
         ))
 
     # Output layer
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 3: Calculate output (with sigmoid activation)**"
     ]))
 
@@ -677,24 +677,24 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     if self.use_bias:
       z_out_calc += f" + {self.b2[0]:.{self.param_digits}f}"
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"z_{{out}} = {z_out_calc} = {self.z2[0]:.4f}",
       inline=False
     ))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\hat{{y}} = \\sigma(z_{{out}}) = \\frac{{1}}{{1 + e^{{-{self.z2[0]:.4f}}}}} = {self.a2[0]:.4f}",
       inline=False
     ))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "(Note: The output layer uses sigmoid activation for binary classification, "
       "so the output is between 0 and 1, representing the probability of class 1)"
     ]))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -743,20 +743,20 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Gradient for W2 (hidden to output)
     for i in range(self.num_hidden):
       key = f"dL_dw2_{i}"
-      self.answers[key] = AnswerTypes.Float(self._compute_gradient_W2(i), label=f"∂L/∂w_{i + 3}")
+      self.answers[key] = ca.AnswerTypes.Float(self._compute_gradient_W2(i), label=f"∂L/∂w_{i + 3}")
 
     # Gradient for W1 (input to hidden) - pick first hidden neuron
     for j in range(self.num_inputs):
       key = f"dL_dw1_0{j}"
-      self.answers[key] = AnswerTypes.Float(self._compute_gradient_W1(0, j), label=f"∂L/∂w_1{j + 1}")
+      self.answers[key] = ca.AnswerTypes.Float(self._compute_gradient_W1(0, j), label=f"∂L/∂w_1{j + 1}")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"Given the neural network below with {self._get_activation_name()} activation "
       f"in the hidden layer and sigmoid activation in the output layer (for binary classification), "
       f"a forward pass has been completed with the values shown. "
@@ -765,7 +765,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
 
     # Network diagram
     body.add_element(
-      ContentAST.Picture(
+      ca.Picture(
         img_data=self._generate_network_diagram(show_weights=True, show_activations=False),
         caption=f"Neural network architecture"
       )
@@ -775,11 +775,11 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     body.add_element(self._generate_parameter_table(include_activations=True, include_training_context=True))
 
     # Activation function
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"**Hidden layer activation:** {self._get_activation_name()}"
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "**Calculate the following gradients:**"
     ]))
 
@@ -791,64 +791,64 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     for j in range(self.num_inputs):
       answers.append(self.answers[f"dL_dw1_0{j}"])
 
-    body.add_element(ContentAST.AnswerBlock(answers))
+    body.add_element(ca.AnswerBlock(answers))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "To solve this problem, we use the chain rule to compute gradients via backpropagation."
     ]))
 
     # Output layer gradient
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 1: Compute output layer gradient**"
     ]))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "For binary cross-entropy loss with sigmoid output activation, "
       "the gradient with respect to the pre-activation simplifies beautifully:"
     ]))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\frac{{\\partial L}}{{\\partial z_{{out}}}} = \\hat{{y}} - y = {self.a2[0]:.4f} - {int(self.y_target)} = {self.dL_dz2:.4f}",
       inline=False
     ))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "(This elegant result comes from combining the BCE loss derivative and sigmoid activation derivative)"
     ]))
 
     # W2 gradients
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 2: Gradients for hidden-to-output weights**"
     ]))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "Using the chain rule:"
     ]))
 
     for i in range(self.num_hidden):
       grad = self._compute_gradient_W2(i)
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"\\frac{{\\partial L}}{{\\partial w_{i+3}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot \\frac{{\\partial z_{{out}}}}{{\\partial w_{i+3}}} = {self.dL_dz2:.4f} \\cdot {self.a1[i]:.4f} = {grad:.4f}",
         inline=False
       ))
 
     # W1 gradients
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 3: Gradients for input-to-hidden weights**"
     ]))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "First, compute the gradient flowing back to hidden layer:"
     ]))
 
@@ -867,14 +867,14 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       else:
         act_deriv_str = f"1"
 
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"\\frac{{\\partial L}}{{\\partial w_{{1{j+1}}}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot w_{3} \\cdot {act_deriv_str} \\cdot x_{j+1} = {self.dL_dz2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[j]:.1f} = {grad:.4f}",
         inline=False
       ))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -920,31 +920,31 @@ class EnsembleAveragingQuestion(Question):
 
     # Mean prediction
     mean_pred = np.mean(self.predictions)
-    self.answers["mean"] = AnswerTypes.Float(float(mean_pred), label="Mean (average)")
+    self.answers["mean"] = ca.AnswerTypes.Float(float(mean_pred), label="Mean (average)")
 
     # Median (optional, but useful)
     median_pred = np.median(self.predictions)
-    self.answers["median"] = AnswerTypes.Float(float(median_pred), label="Median")
+    self.answers["median"] = ca.AnswerTypes.Float(float(median_pred), label="Median")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"You have trained {self.num_models} different regression models on the same dataset. "
       f"For a particular test input, each model produces the following predictions:"
     ]))
 
     # Show predictions
     pred_list = ", ".join([f"{p:.1f}" for p in self.predictions])
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"Model predictions: {pred_list}"
     ]))
 
     # Question
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "To create an ensemble, calculate the combined prediction using the following methods:"
     ]))
 
@@ -952,38 +952,38 @@ class EnsembleAveragingQuestion(Question):
     answers.append(self.answers["mean"])
     answers.append(self.answers["median"])
 
-    body.add_element(ContentAST.AnswerBlock(answers))
+    body.add_element(ca.AnswerBlock(answers))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "Ensemble methods combine predictions from multiple models to create a more robust prediction."
     ]))
 
     # Mean calculation
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Mean (Bagging approach):**"
     ]))
 
     pred_sum = " + ".join([f"{p:.1f}" for p in self.predictions])
     mean_val = np.mean(self.predictions)
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\text{{mean}} = \\frac{{{pred_sum}}}{{{self.num_models}}} = \\frac{{{sum(self.predictions):.1f}}}{{{self.num_models}}} = {mean_val:.4f}",
       inline=False
     ))
 
     # Median calculation
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Median:**"
     ]))
 
@@ -991,26 +991,26 @@ class EnsembleAveragingQuestion(Question):
     sorted_str = ", ".join([f"{p:.1f}" for p in sorted_preds])
     median_val = np.median(self.predictions)
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       f"Sorted predictions: {sorted_str}"
     ]))
 
     if self.num_models % 2 == 1:
       mid_idx = self.num_models // 2
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         f"Middle value (position {mid_idx + 1}): {median_val:.1f}"
       ]))
     else:
       mid_idx1 = self.num_models // 2 - 1
       mid_idx2 = self.num_models // 2
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         f"Average of middle two values (positions {mid_idx1 + 1} and {mid_idx2 + 1}): "
         f"({sorted_preds[mid_idx1]:.1f} + {sorted_preds[mid_idx2]:.1f}) / 2 = {median_val:.1f}"
       ]))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -1083,26 +1083,26 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     self.answers = {}
 
     # Forward pass answers
-    self.answers["y_pred"] = AnswerTypes.Float(float(self.a2[0]), label="1. Forward Pass - Network output ŷ")
+    self.answers["y_pred"] = ca.AnswerTypes.Float(float(self.a2[0]), label="1. Forward Pass - Network output ŷ")
 
     # Loss answer
-    self.answers["loss"] = AnswerTypes.Float(float(self.loss), label="2. Loss")
+    self.answers["loss"] = ca.AnswerTypes.Float(float(self.loss), label="2. Loss")
 
     # Gradient answers (for key weights)
-    self.answers["grad_w3"] = AnswerTypes.Float(self._compute_gradient_W2(0), label="3. Gradient ∂L/∂w₃")
-    self.answers["grad_w11"] = AnswerTypes.Float(self._compute_gradient_W1(0, 0), label="4. Gradient ∂L/∂w₁₁")
+    self.answers["grad_w3"] = ca.AnswerTypes.Float(self._compute_gradient_W2(0), label="3. Gradient ∂L/∂w₃")
+    self.answers["grad_w11"] = ca.AnswerTypes.Float(self._compute_gradient_W1(0, 0), label="4. Gradient ∂L/∂w₁₁")
 
     # Updated weight answers
-    self.answers["new_w3"] = AnswerTypes.Float(float(self.new_W2[0, 0]), label="5. Updated w₃:")
-    self.answers["new_w11"] = AnswerTypes.Float(float(self.new_W1[0, 0]), label="6. Updated w₁₁:")
+    self.answers["new_w3"] = ca.AnswerTypes.Float(float(self.new_W2[0, 0]), label="5. Updated w₃:")
+    self.answers["new_w11"] = ca.AnswerTypes.Float(float(self.new_W1[0, 0]), label="6. Updated w₁₁:")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"Given the neural network below with {self._get_activation_name()} activation "
       f"in the hidden layer and sigmoid activation in the output layer (for binary classification), "
       f"perform one complete training step (forward pass, loss calculation, "
@@ -1111,34 +1111,34 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     # Network diagram
     body.add_element(
-      ContentAST.Picture(
+      ca.Picture(
         img_data=self._generate_network_diagram(show_weights=True, show_activations=False)
       )
     )
 
     # Training parameters
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "**Training parameters:**"
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Input: ",
-      ContentAST.Equation(f"x_1 = {self.X[0]:.1f}", inline=True),
+      ca.Equation(f"x_1 = {self.X[0]:.1f}", inline=True),
       ", ",
-      ContentAST.Equation(f"x_2 = {self.X[1]:.1f}", inline=True)
+      ca.Equation(f"x_2 = {self.X[1]:.1f}", inline=True)
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Target: ",
-      ContentAST.Equation(f"y = {int(self.y_target)}", inline=True)
+      ca.Equation(f"y = {int(self.y_target)}", inline=True)
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Learning rate: ",
-      ContentAST.Equation(f"\\alpha = {self.learning_rate}", inline=True)
+      ca.Equation(f"\\alpha = {self.learning_rate}", inline=True)
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"**Hidden layer activation:** {self._get_activation_name()}"
     ]))
 
@@ -1153,98 +1153,98 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     answers.append(self.answers["new_w3"])
     answers.append(self.answers["new_w11"])
 
-    body.add_element(ContentAST.AnswerBlock(answers))
+    body.add_element(ca.AnswerBlock(answers))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "This problem requires performing one complete training iteration. Let's go through each step."
     ]))
 
     # Step 1: Forward pass
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 1: Forward Pass**"
     ]))
 
     # Hidden layer
     z1_0 = self.W1[0, 0] * self.X[0] + self.W1[0, 1] * self.X[1] + self.b1[0]
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"z_1 = w_{{11}} x_1 + w_{{12}} x_2 + b_1 = {self.W1[0,0]:.{self.param_digits}f} \\cdot {self.X[0]:.1f} + {self.W1[0,1]:.{self.param_digits}f} \\cdot {self.X[1]:.1f} + {self.b1[0]:.{self.param_digits}f} = {self.z1[0]:.4f}",
       inline=False
     ))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"h_1 = {self._get_activation_name()}(z_1) = {self.a1[0]:.4f}",
       inline=False
     ))
 
     # Similarly for h2 (abbreviated)
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"h_2 = {self.a1[1]:.4f} \\text{{ (calculated similarly)}}",
       inline=False
     ))
 
     # Output (pre-activation)
     z2 = self.W2[0, 0] * self.a1[0] + self.W2[0, 1] * self.a1[1] + self.b2[0]
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"z_{{out}} = w_3 h_1 + w_4 h_2 + b_2 = {self.W2[0,0]:.{self.param_digits}f} \\cdot {self.a1[0]:.4f} + {self.W2[0,1]:.{self.param_digits}f} \\cdot {self.a1[1]:.4f} + {self.b2[0]:.{self.param_digits}f} = {self.z2[0]:.4f}",
       inline=False
     ))
 
     # Output (sigmoid activation)
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\hat{{y}} = \\sigma(z_{{out}}) = \\frac{{1}}{{1 + e^{{-{self.z2[0]:.4f}}}}} = {self.a2[0]:.4f}",
       inline=False
     ))
 
     # Step 2: Loss
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 2: Calculate Loss (Binary Cross-Entropy)**"
     ]))
 
     # Show the full BCE formula first
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"L = -[y \\log(\\hat{{y}}) + (1-y) \\log(1-\\hat{{y}})]",
       inline=False
     ))
 
     # Then evaluate it
     if self.y_target == 1:
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"L = -[1 \\cdot \\log({self.a2[0]:.4f}) + 0 \\cdot \\log(1-{self.a2[0]:.4f})] = -\\log({self.a2[0]:.4f}) = {self.loss:.4f}",
         inline=False
       ))
     else:
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"L = -[0 \\cdot \\log({self.a2[0]:.4f}) + 1 \\cdot \\log(1-{self.a2[0]:.4f})] = -\\log({1-self.a2[0]:.4f}) = {self.loss:.4f}",
         inline=False
       ))
 
     # Step 3: Gradients
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 3: Compute Gradients**"
     ]))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "For BCE with sigmoid, the output layer gradient simplifies to:"
     ]))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\frac{{\\partial L}}{{\\partial z_{{out}}}} = \\hat{{y}} - y = {self.a2[0]:.4f} - {int(self.y_target)} = {self.dL_dz2:.4f}",
       inline=False
     ))
 
     grad_w3 = self._compute_gradient_W2(0)
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\frac{{\\partial L}}{{\\partial w_3}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot h_1 = {self.dL_dz2:.4f} \\cdot {self.a1[0]:.4f} = {grad_w3:.4f}",
       inline=False
     ))
@@ -1260,35 +1260,35 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     else:
       act_deriv_str = f"1"
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\frac{{\\partial L}}{{\\partial w_{{11}}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot w_3 \\cdot {act_deriv_str} \\cdot x_1 = {self.dL_dz2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[0]:.1f} = {grad_w11:.4f}",
       inline=False
     ))
 
     # Step 4: Weight updates
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "**Step 4: Update Weights**"
     ]))
 
     new_w3 = self.new_W2[0, 0]
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"w_3^{{new}} = w_3 - \\alpha \\frac{{\\partial L}}{{\\partial w_3}} = {self.W2[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w3:.4f} = {new_w3:.4f}",
       inline=False
     ))
 
     new_w11 = self.new_W1[0, 0]
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"w_{{11}}^{{new}} = w_{{11}} - \\alpha \\frac{{\\partial L}}{{\\partial w_{{11}}}} = {self.W1[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w11:.4f} = {new_w11:.4f}",
       inline=False
     ))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "These updated weights would be used in the next training iteration."
     ]))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

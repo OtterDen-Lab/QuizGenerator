@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
@@ -61,25 +61,25 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # Q, K, V, output, weights
 
-    self.answers["weights"] = AnswerTypes.Matrix(self.weights, label="Weights")
-    self.answers["output"] = AnswerTypes.Matrix(self.output, label="Output")
+    self.answers["weights"] = ca.AnswerTypes.Matrix(self.weights, label="Weights")
+    self.answers["output"] = ca.AnswerTypes.Matrix(self.output, label="Output")
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     body.add_element(
-      ContentAST.Text("Given the below information about a self attention layer, please calculate the output sequence.")
+      ca.Text("Given the below information about a self attention layer, please calculate the output sequence.")
     )
     body.add_element(
       self.create_info_table(
         {
-          "Q": ContentAST.Matrix(self.Q),
-          "K": ContentAST.Matrix(self.K),
-          "V": ContentAST.Matrix(self.V),
+          "Q": ca.Matrix(self.Q),
+          "K": ca.Matrix(self.K),
+          "V": ca.Matrix(self.V),
         }
       )
     )
@@ -87,67 +87,67 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     answers.append(self.answers["weights"])
     answers.append(self.answers["output"])
     body.add_elements([
-      ContentAST.LineBreak(),
+      ca.LineBreak(),
       self.answers["weights"],
-      ContentAST.LineBreak(),
+      ca.LineBreak(),
       self.answers["output"],
     ])
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
-    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
+    explanation = ca.Section()
+    digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Self-attention uses scaled dot-product attention to compute a weighted combination of values based on query-key similarity."
       ])
     )
 
     # Step 1: Compute attention scores
     explanation.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Step 1: Compute attention scores", emphasis=True)
+      ca.Paragraph([
+        ca.Text("Step 1: Compute attention scores", emphasis=True)
       ])
     )
 
     d_k = self.Q.shape[1]
     explanation.add_element(
-      ContentAST.Equation(f"\\text{{scores}} = \\frac{{Q K^T}}{{\\sqrt{{d_k}}}} = \\frac{{Q K^T}}{{\\sqrt{{{d_k}}}}}")
+      ca.Equation(f"\\text{{scores}} = \\frac{{Q K^T}}{{\\sqrt{{d_k}}}} = \\frac{{Q K^T}}{{\\sqrt{{{d_k}}}}}")
     )
 
     scores = self.Q @ self.K.T / np.sqrt(d_k)
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Raw scores (scaling by ",
-        ContentAST.Equation(f'\\sqrt{{{d_k}}}', inline=True),
+        ca.Equation(f'\\sqrt{{{d_k}}}', inline=True),
         " prevents extremely large values):"
       ])
     )
-    explanation.add_element(ContentAST.Matrix(np.round(scores, digits)))
+    explanation.add_element(ca.Matrix(np.round(scores, digits)))
 
     # Step 2: Apply softmax
     explanation.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Step 2: Apply softmax to get attention weights", emphasis=True)
+      ca.Paragraph([
+        ca.Text("Step 2: Apply softmax to get attention weights", emphasis=True)
       ])
     )
 
     explanation.add_element(
-      ContentAST.Equation(r"\alpha_{ij} = \frac{\exp(\text{score}_{ij})}{\sum_k \exp(\text{score}_{ik})}")
+      ca.Equation(r"\alpha_{ij} = \frac{\exp(\text{score}_{ij})}{\sum_k \exp(\text{score}_{ik})}")
     )
 
     # Show ONE example row
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Example: Row 0 softmax computation"
       ])
     )
@@ -160,7 +160,7 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     exp_terms = " + ".join([f"e^{{{s:.{digits}f}}}" for s in row_scores])
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Denominator = {exp_terms} = {sum_exp:.{digits}f}"
       ])
     )
@@ -168,39 +168,39 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     # Format array with proper rounding
     weights_str = "[" + ", ".join([f"{w:.{digits}f}" for w in weights_row]) + "]"
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Resulting weights: {weights_str}"
       ])
     )
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Complete attention weight matrix:"
       ])
     )
-    explanation.add_element(ContentAST.Matrix(np.round(self.weights, digits)))
+    explanation.add_element(ca.Matrix(np.round(self.weights, digits)))
 
     # Step 3: Weighted sum of values
     explanation.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Step 3: Compute weighted sum of values", emphasis=True)
+      ca.Paragraph([
+        ca.Text("Step 3: Compute weighted sum of values", emphasis=True)
       ])
     )
 
     explanation.add_element(
-      ContentAST.Equation(r"\text{output} = \text{weights} \times V")
+      ca.Equation(r"\text{output} = \text{weights} \times V")
     )
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Final output:"
       ])
     )
-    explanation.add_element(ContentAST.Matrix(np.round(self.output, digits)))
+    explanation.add_element(ca.Matrix(np.round(self.output, digits)))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

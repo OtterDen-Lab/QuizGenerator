@@ -8,7 +8,7 @@ import numpy as np
 import sympy as sp
 from typing import List, Tuple, Dict, Any
 
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -85,21 +85,21 @@ class ParameterCountingQuestion(Question):
     """Create answer fields."""
     self.answers = {}
 
-    self.answers["total_weights"] = AnswerTypes.Int(self.total_weights, label="Total weights")
+    self.answers["total_weights"] = ca.AnswerTypes.Int(self.total_weights, label="Total weights")
 
     if self.include_biases:
-      self.answers["total_biases"] = AnswerTypes.Int(self.total_biases, label="Total biases")
-      self.answers["total_params"] = AnswerTypes.Int(self.total_params, label="Total trainable parameters")
+      self.answers["total_biases"] = ca.AnswerTypes.Int(self.total_biases, label="Total biases")
+      self.answers["total_params"] = ca.AnswerTypes.Int(self.total_params, label="Total trainable parameters")
     else:
-      self.answers["total_params"] = AnswerTypes.Int(self.total_params, label="Total trainable parameters")
+      self.answers["total_params"] = ca.AnswerTypes.Int(self.total_params, label="Total trainable parameters")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Consider a fully-connected (dense) neural network with the following architecture:"
     ]))
 
@@ -110,12 +110,12 @@ class ParameterCountingQuestion(Question):
         arch_parts.append(" → ")
       arch_parts.append(str(size))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Architecture: " + "".join(arch_parts)
     ]))
 
     if self.include_biases:
-      body.add_element(ContentAST.Paragraph([
+      body.add_element(ca.Paragraph([
         "Each layer includes bias terms."
       ]))
 
@@ -143,25 +143,25 @@ class ParameterCountingQuestion(Question):
       self.answers["total_params"]
     ])
 
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ca.Table(data=table_data))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "To count parameters in a dense neural network, we calculate weights and biases for each layer."
     ]))
 
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Weights calculation:", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Weights calculation:", emphasis=True)
     ]))
 
     for i in range(len(self.layer_sizes) - 1):
@@ -169,59 +169,59 @@ class ParameterCountingQuestion(Question):
       output_size = self.layer_sizes[i+1]
       weights = self.weights_per_layer[i]
 
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         f"Layer {i+1} → {i+2}: ",
-        ContentAST.Equation(f"{input_size} \\times {output_size} = {weights:,}", inline=True),
+        ca.Equation(f"{input_size} \\times {output_size} = {weights:,}", inline=True),
         " weights"
       ]))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "Total weights: ",
-      ContentAST.Equation(
+      ca.Equation(
         f"{' + '.join([f'{w:,}' for w in self.weights_per_layer])} = {self.total_weights:,}",
         inline=True
       )
     ]))
 
     if self.include_biases:
-      explanation.add_element(ContentAST.Paragraph([
-        ContentAST.Text("Biases calculation:", emphasis=True)
+      explanation.add_element(ca.Paragraph([
+        ca.Text("Biases calculation:", emphasis=True)
       ]))
 
       for i in range(len(self.layer_sizes) - 1):
         output_size = self.layer_sizes[i+1]
         biases = self.biases_per_layer[i]
 
-        explanation.add_element(ContentAST.Paragraph([
+        explanation.add_element(ca.Paragraph([
           f"Layer {i+2}: {biases:,} biases (one per neuron)"
         ]))
 
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         "Total biases: ",
-        ContentAST.Equation(
+        ca.Equation(
           f"{' + '.join([f'{b:,}' for b in self.biases_per_layer])} = {self.total_biases:,}",
           inline=True
         )
       ]))
 
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Total trainable parameters:", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Total trainable parameters:", emphasis=True)
     ]))
 
     if self.include_biases:
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"\\text{{Total}} = {self.total_weights:,} + {self.total_biases:,} = {self.total_params:,}",
         inline=False
       ))
     else:
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"\\text{{Total}} = {self.total_weights:,}",
         inline=False
       ))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -331,39 +331,39 @@ class ActivationFunctionComputationQuestion(Question):
 
     if self.activation == self.ACTIVATION_SOFTMAX:
       # Softmax: single vector answer
-      self.answers["output"] = AnswerTypes.Vector(self.output_vector, label="Output vector")
+      self.answers["output"] = ca.AnswerTypes.Vector(self.output_vector, label="Output vector")
     else:
       # Element-wise: individual answers
       for i, output in enumerate(self.output_vector):
         key = f"output_{i}"
-        self.answers[key] = AnswerTypes.Float(float(output), label=f"Output for input {self.input_vector[i]:.1f}")
+        self.answers[key] = ca.AnswerTypes.Float(float(output), label=f"Output for input {self.input_vector[i]:.1f}")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"Given the input vector below, compute the output after applying the {self._get_activation_name()} activation function."
     ]))
 
     # Display formula
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Activation function: ",
-      ContentAST.Equation(self._get_activation_formula(), inline=True)
+      ca.Equation(self._get_activation_formula(), inline=True)
     ]))
 
     # Input vector
     input_str = ", ".join([f"{x:.1f}" for x in self.input_vector])
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Input: ",
-      ContentAST.Equation(f"[{input_str}]", inline=True)
+      ca.Equation(f"[{input_str}]", inline=True)
     ]))
 
     # Answer table
     if self.activation == self.ACTIVATION_SOFTMAX:
-      body.add_element(ContentAST.Paragraph([
+      body.add_element(ca.Paragraph([
         "Compute the output vector:"
       ]))
 
@@ -372,10 +372,10 @@ class ActivationFunctionComputationQuestion(Question):
       table_data.append(["Output Vector"])
       table_data.append([self.answers["output"]])
 
-      body.add_element(ContentAST.Table(data=table_data))
+      body.add_element(ca.Table(data=table_data))
 
     else:
-      body.add_element(ContentAST.Paragraph([
+      body.add_element(ca.Paragraph([
         "Compute the output for each element:"
       ]))
 
@@ -386,91 +386,91 @@ class ActivationFunctionComputationQuestion(Question):
         answer = self.answers[f"output_{i}"]
         answers.append(answer)
         table_data.append([
-          ContentAST.Equation(f"{x:.1f}", inline=True),
+          ca.Equation(f"{x:.1f}", inline=True),
           answer
         ])
 
-      body.add_element(ContentAST.Table(data=table_data))
+      body.add_element(ca.Table(data=table_data))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       f"To compute the {self._get_activation_name()} activation, we apply the formula to each input."
     ]))
 
     if self.activation == self.ACTIVATION_SOFTMAX:
-      explanation.add_element(ContentAST.Paragraph([
-        ContentAST.Text("Softmax computation:", emphasis=True)
+      explanation.add_element(ca.Paragraph([
+        ca.Text("Softmax computation:", emphasis=True)
       ]))
 
       # Show exponentials
       exp_strs = [f"e^{{{x:.1f}}}" for x in self.input_vector]
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         "First, compute exponentials: ",
-        ContentAST.Equation(", ".join(exp_strs), inline=True)
+        ca.Equation(", ".join(exp_strs), inline=True)
       ]))
 
       # Numerical values
       exp_vals = [np.exp(x) for x in self.input_vector]
       exp_vals_str = ", ".join([f"{e:.4f}" for e in exp_vals])
-      explanation.add_element(ContentAST.Paragraph([
-        ContentAST.Equation(f"\\approx [{exp_vals_str}]", inline=True)
+      explanation.add_element(ca.Paragraph([
+        ca.Equation(f"\\approx [{exp_vals_str}]", inline=True)
       ]))
 
       # Sum
       sum_exp = sum(exp_vals)
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         "Sum: ",
-        ContentAST.Equation(f"{sum_exp:.4f}", inline=True)
+        ca.Equation(f"{sum_exp:.4f}", inline=True)
       ]))
 
       # Final outputs
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         "Divide each by the sum:"
       ]))
 
       for i, (exp_val, output) in enumerate(zip(exp_vals, self.output_vector)):
-        explanation.add_element(ContentAST.Equation(
+        explanation.add_element(ca.Equation(
           f"\\text{{softmax}}({self.input_vector[i]:.1f}) = \\frac{{{exp_val:.4f}}}{{{sum_exp:.4f}}} = {output:.4f}",
           inline=False
         ))
 
     else:
-      explanation.add_element(ContentAST.Paragraph([
-        ContentAST.Text("Element-wise computation:", emphasis=True)
+      explanation.add_element(ca.Paragraph([
+        ca.Text("Element-wise computation:", emphasis=True)
       ]))
 
       for i, (x, y) in enumerate(zip(self.input_vector, self.output_vector)):
         if self.activation == self.ACTIVATION_RELU:
-          explanation.add_element(ContentAST.Equation(
+          explanation.add_element(ca.Equation(
             f"\\text{{ReLU}}({x:.1f}) = \\max(0, {x:.1f}) = {y:.4f}",
             inline=False
           ))
 
         elif self.activation == self.ACTIVATION_SIGMOID:
-          explanation.add_element(ContentAST.Equation(
+          explanation.add_element(ca.Equation(
             f"\\sigma({x:.1f}) = \\frac{{1}}{{1 + e^{{-{x:.1f}}}}} = {y:.4f}",
             inline=False
           ))
 
         elif self.activation == self.ACTIVATION_TANH:
-          explanation.add_element(ContentAST.Equation(
+          explanation.add_element(ca.Equation(
             f"\\tanh({x:.1f}) = {y:.4f}",
             inline=False
           ))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -545,27 +545,27 @@ class RegularizationCalculationQuestion(Question):
     """Create answer fields."""
     self.answers = {}
 
-    self.answers["prediction"] = AnswerTypes.Float(float(self.prediction), label="Prediction ŷ")
-    self.answers["base_loss"] = AnswerTypes.Float(float(self.base_loss), label="Base MSE loss")
-    self.answers["l2_penalty"] = AnswerTypes.Float(float(self.l2_penalty), label="L2 penalty")
-    self.answers["total_loss"] = AnswerTypes.Float(float(self.total_loss), label="Total loss")
-    self.answers["grad_total_w0"] = AnswerTypes.Float(float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
+    self.answers["prediction"] = ca.AnswerTypes.Float(float(self.prediction), label="Prediction ŷ")
+    self.answers["base_loss"] = ca.AnswerTypes.Float(float(self.base_loss), label="Base MSE loss")
+    self.answers["l2_penalty"] = ca.AnswerTypes.Float(float(self.l2_penalty), label="L2 penalty")
+    self.answers["total_loss"] = ca.AnswerTypes.Float(float(self.total_loss), label="Total loss")
+    self.answers["grad_total_w0"] = ca.AnswerTypes.Float(float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Consider a simple model with the following parameters:"
     ]))
 
     # Display weights
     weight_strs = [f"w_{i} = {w:.1f}" for i, w in enumerate(self.weights)]
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Weights: ",
-      ContentAST.Equation(", ".join(weight_strs), inline=True)
+      ca.Equation(", ".join(weight_strs), inline=True)
     ]))
 
     # Model equation
@@ -579,24 +579,24 @@ class RegularizationCalculationQuestion(Question):
         terms.append(f"w_{i} x^{i}")
 
     model_eq = " + ".join(terms)
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Model: ",
-      ContentAST.Equation(f"\\hat{{y}} = {model_eq}", inline=True)
+      ca.Equation(f"\\hat{{y}} = {model_eq}", inline=True)
     ]))
 
     # Data point
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Data point: ",
-      ContentAST.Equation(f"x = {self.input_val:.1f}, y = {self.target:.1f}", inline=True)
+      ca.Equation(f"x = {self.input_val:.1f}, y = {self.target:.1f}", inline=True)
     ]))
 
     # Regularization
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "L2 regularization coefficient: ",
-      ContentAST.Equation(f"\\lambda = {self.lambda_reg}", inline=True)
+      ca.Equation(f"\\lambda = {self.lambda_reg}", inline=True)
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Calculate the following:"
     ]))
 
@@ -606,54 +606,54 @@ class RegularizationCalculationQuestion(Question):
 
     answers.append(self.answers["prediction"])
     table_data.append([
-      ContentAST.Paragraph(["Prediction ", ContentAST.Equation(r"\hat{y}", inline=True)]),
+      ca.Paragraph(["Prediction ", ca.Equation(r"\hat{y}", inline=True)]),
       self.answers["prediction"]
     ])
 
     answers.append(self.answers["base_loss"])
     table_data.append([
-      ContentAST.Paragraph(["Base MSE loss: ", ContentAST.Equation(r"L_{base} = (1/2)(y - \hat{y})^2", inline=True)]),
+      ca.Paragraph(["Base MSE loss: ", ca.Equation(r"L_{base} = (1/2)(y - \hat{y})^2", inline=True)]),
       self.answers["base_loss"]
     ])
 
     answers.append(self.answers["l2_penalty"])
     table_data.append([
-      ContentAST.Paragraph(["L2 penalty: ", ContentAST.Equation(r"L_{reg} = (\lambda/2)\sum w_i^2", inline=True)]),
+      ca.Paragraph(["L2 penalty: ", ca.Equation(r"L_{reg} = (\lambda/2)\sum w_i^2", inline=True)]),
       self.answers["l2_penalty"]
     ])
 
     answers.append(self.answers["total_loss"])
     table_data.append([
-      ContentAST.Paragraph(["Total loss: ", ContentAST.Equation(r"L_{total} = L_{base} + L_{reg}", inline=True)]),
+      ca.Paragraph(["Total loss: ", ca.Equation(r"L_{total} = L_{base} + L_{reg}", inline=True)]),
       self.answers["total_loss"]
     ])
 
     answers.append(self.answers["grad_total_w0"])
     table_data.append([
-      ContentAST.Paragraph(["Gradient: ", ContentAST.Equation(r"\frac{\partial L_{total}}{\partial w_0}", inline=True)]),
+      ca.Paragraph(["Gradient: ", ca.Equation(r"\frac{\partial L_{total}}{\partial w_0}", inline=True)]),
       self.answers["grad_total_w0"]
     ])
 
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ca.Table(data=table_data))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "L2 regularization adds a penalty term to the loss function to prevent overfitting by keeping weights small."
     ]))
 
     # Step 1: Forward pass
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Step 1: Compute prediction", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Step 1: Compute prediction", emphasis=True)
     ]))
 
     terms = []
@@ -664,78 +664,78 @@ class RegularizationCalculationQuestion(Question):
         x_term = f"{self.input_val:.1f}^{i}" if i > 1 else f"{self.input_val:.1f}"
         terms.append(f"{w:.1f} \\times {x_term}")
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\hat{{y}} = {' + '.join(terms)} = {self.prediction:.4f}",
       inline=False
     ))
 
     # Step 2: Base loss
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Step 2: Compute base MSE loss", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Step 2: Compute base MSE loss", emphasis=True)
     ]))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"L_{{base}} = \\frac{{1}}{{2}}(y - \\hat{{y}})^2 = \\frac{{1}}{{2}}({self.target:.1f} - {self.prediction:.4f})^2 = {self.base_loss:.4f}",
       inline=False
     ))
 
     # Step 3: L2 penalty
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Step 3: Compute L2 penalty", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Step 3: Compute L2 penalty", emphasis=True)
     ]))
 
     weight_squares = [f"{w:.1f}^2" for w in self.weights]
     sum_squares = sum(w**2 for w in self.weights)
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"L_{{reg}} = \\frac{{\\lambda}}{{2}} \\sum w_i^2 = \\frac{{{self.lambda_reg}}}{{2}}({' + '.join(weight_squares)}) = \\frac{{{self.lambda_reg}}}{{2}} \\times {sum_squares:.4f} = {self.l2_penalty:.4f}",
       inline=False
     ))
 
     # Step 4: Total loss
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Step 4: Compute total loss", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Step 4: Compute total loss", emphasis=True)
     ]))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"L_{{total}} = L_{{base}} + L_{{reg}} = {self.base_loss:.4f} + {self.l2_penalty:.4f} = {self.total_loss:.4f}",
       inline=False
     ))
 
     # Step 5: Gradient with regularization
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Step 5: Compute gradient with regularization", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Step 5: Compute gradient with regularization", emphasis=True)
     ]))
 
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Equation(r"w_0", inline=True),
+    explanation.add_element(ca.Paragraph([
+      ca.Equation(r"w_0", inline=True),
       " (the bias term):"
     ]))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\frac{{\\partial L_{{base}}}}{{\\partial w_0}} = -(y - \\hat{{y}}) \\times 1 = -({self.target:.1f} - {self.prediction:.4f}) = {self.grad_base_w0:.4f}",
       inline=False
     ))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\frac{{\\partial L_{{reg}}}}{{\\partial w_0}} = \\lambda w_0 = {self.lambda_reg} \\times {self.weights[0]:.1f} = {self.grad_reg_w0:.4f}",
       inline=False
     ))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"\\frac{{\\partial L_{{total}}}}{{\\partial w_0}} = {self.grad_base_w0:.4f} + {self.grad_reg_w0:.4f} = {self.grad_total_w0:.4f}",
       inline=False
     ))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "The regularization term adds ",
-      ContentAST.Equation(f"\\lambda w_0 = {self.grad_reg_w0:.4f}", inline=True),
+      ca.Equation(f"\\lambda w_0 = {self.grad_reg_w0:.4f}", inline=True),
       " to the gradient, pushing the weight toward zero."
     ]))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -817,71 +817,71 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     self.answers = {}
 
     # New velocity
-    self.answers["velocity"] = AnswerTypes.Vector(self.new_velocity, label="New velocity")
+    self.answers["velocity"] = ca.AnswerTypes.Vector(self.new_velocity, label="New velocity")
 
     # New weights with momentum
-    self.answers["weights_momentum"] = AnswerTypes.Vector(self.new_weights, label="Weights (momentum)")
+    self.answers["weights_momentum"] = ca.AnswerTypes.Vector(self.new_weights, label="Weights (momentum)")
 
     # Vanilla SGD weights for comparison
     if self.show_vanilla_sgd:
-      self.answers["weights_sgd"] = AnswerTypes.Vector(self.sgd_weights, label="Weights (vanilla SGD)")
+      self.answers["weights_sgd"] = ca.AnswerTypes.Vector(self.sgd_weights, label="Weights (vanilla SGD)")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Consider the optimization problem of minimizing the function:"
     ]))
 
-    body.add_element(ContentAST.Equation(
+    body.add_element(ca.Equation(
       sp.latex(self.function),
       inline=False
     ))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "The gradient is:"
     ]))
 
-    body.add_element(ContentAST.Equation(
+    body.add_element(ca.Equation(
       f"\\nabla f = {sp.latex(self.gradient_function)}",
       inline=False
     ))
 
     # Current state
-    body.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Current optimization state:", emphasis=True)
+    body.add_element(ca.Paragraph([
+      ca.Text("Current optimization state:", emphasis=True)
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Current weights: ",
-      ContentAST.Equation(f"{format_vector(self.current_weights)}", inline=True)
+      ca.Equation(f"{format_vector(self.current_weights)}", inline=True)
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Previous velocity: ",
-      ContentAST.Equation(f"{format_vector(self.prev_velocity)}", inline=True)
+      ca.Equation(f"{format_vector(self.prev_velocity)}", inline=True)
     ]))
 
     # Hyperparameters
-    body.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Hyperparameters:", emphasis=True)
+    body.add_element(ca.Paragraph([
+      ca.Text("Hyperparameters:", emphasis=True)
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Learning rate: ",
-      ContentAST.Equation(f"\\alpha = {self.learning_rate}", inline=True)
+      ca.Equation(f"\\alpha = {self.learning_rate}", inline=True)
     ]))
 
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Momentum coefficient: ",
-      ContentAST.Equation(f"\\beta = {self.momentum_beta}", inline=True)
+      ca.Equation(f"\\beta = {self.momentum_beta}", inline=True)
     ]))
 
     # Questions
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       "Calculate the following updates:"
     ]))
 
@@ -892,14 +892,14 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     answers.append(self.answers["velocity"])
     table_data.append([
       "New velocity",
-      ContentAST.Equation(r"v' = \beta v + (1-\beta)\nabla f", inline=True),
+      ca.Equation(r"v' = \beta v + (1-\beta)\nabla f", inline=True),
       self.answers["velocity"]
     ])
 
     answers.append(self.answers["weights_momentum"])
     table_data.append([
       "Weights (momentum)",
-      ContentAST.Equation(r"w' = w - \alpha v'", inline=True),
+      ca.Equation(r"w' = w - \alpha v'", inline=True),
       self.answers["weights_momentum"]
     ])
 
@@ -907,44 +907,44 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       answers.append(self.answers["weights_sgd"])
       table_data.append([
         "Weights (vanilla SGD)",
-        ContentAST.Equation(r"w' = w - \alpha \nabla f", inline=True),
+        ca.Equation(r"w' = w - \alpha \nabla f", inline=True),
         self.answers["weights_sgd"]
       ])
 
-    body.add_element(ContentAST.Table(data=table_data))
+    body.add_element(ca.Table(data=table_data))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "Momentum helps gradient descent by accumulating a velocity vector in directions of "
       "consistent gradient, allowing faster convergence and reduced oscillation."
     ]))
 
     # Step 1: Calculate new velocity
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Step 1: Update velocity using momentum", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Step 1: Update velocity using momentum", emphasis=True)
     ]))
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "The momentum update formula is:"
     ]))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"v' = \\beta v + (1 - \\beta) \\nabla f",
       inline=False
     ))
 
     # Show calculation for each component
-    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
+    digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
     for i in range(self.num_variables):
       var_name = f"x_{i}"
       # Round all intermediate values to avoid floating point precision issues
@@ -952,7 +952,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       one_minus_beta = round(1 - self.momentum_beta, digits)
       one_minus_beta_times_grad = round((1 - self.momentum_beta) * self.gradients[i], digits)
 
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"v'[{i}] = {self.momentum_beta} \\times {self.prev_velocity[i]:.{digits}f} + "
         f"{one_minus_beta:.{digits}f} \\times {self.gradients[i]:.{digits}f} = "
         f"{beta_times_v:.{digits}f} + {one_minus_beta_times_grad:.{digits}f} = {self.new_velocity[i]:.{digits}f}",
@@ -960,50 +960,50 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       ))
 
     # Step 2: Update weights with momentum
-    explanation.add_element(ContentAST.Paragraph([
-      ContentAST.Text("Step 2: Update weights using new velocity", emphasis=True)
+    explanation.add_element(ca.Paragraph([
+      ca.Text("Step 2: Update weights using new velocity", emphasis=True)
     ]))
 
-    explanation.add_element(ContentAST.Equation(
+    explanation.add_element(ca.Equation(
       f"w' = w - \\alpha v'",
       inline=False
     ))
 
     for i in range(self.num_variables):
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"w[{i}] = {self.current_weights[i]} - {self.learning_rate} \\times {self.new_velocity[i]:.4f} = {self.new_weights[i]:.4f}",
         inline=False
       ))
 
     # Comparison with vanilla SGD
     if self.show_vanilla_sgd:
-      explanation.add_element(ContentAST.Paragraph([
-        ContentAST.Text("Comparison with vanilla SGD:", emphasis=True)
+      explanation.add_element(ca.Paragraph([
+        ca.Text("Comparison with vanilla SGD:", emphasis=True)
       ]))
 
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         "Vanilla SGD (no momentum) would update directly using the gradient:"
       ]))
 
-      explanation.add_element(ContentAST.Equation(
+      explanation.add_element(ca.Equation(
         f"w' = w - \\alpha \\nabla f",
         inline=False
       ))
 
       for i in range(self.num_variables):
-        explanation.add_element(ContentAST.Equation(
+        explanation.add_element(ca.Equation(
           f"w[{i}] = {self.current_weights[i]} - {self.learning_rate} \\times {self.gradients[i]:.4f} = {self.sgd_weights[i]:.4f}",
           inline=False
         ))
 
-      explanation.add_element(ContentAST.Paragraph([
+      explanation.add_element(ca.Paragraph([
         "The momentum update differs because it incorporates the previous velocity, "
         "which can help accelerate learning and smooth out noisy gradients."
       ]))
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

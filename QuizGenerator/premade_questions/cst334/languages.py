@@ -8,7 +8,7 @@ from typing import List, Dict, Optional, Tuple, Any
 
 from QuizGenerator.question import QuestionRegistry, Question
 
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 
 import logging
 log = logging.getLogger(__name__)
@@ -266,26 +266,26 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
 
     self.answers = {}
 
-    # Create answers with proper ContentAST.Answer signature
+    # Create answers with proper ca.Answer signature
     # value is the generated string, correct indicates if it's a valid answer
     good_string = self.grammar_good.generate(self.include_spaces)
-    self.answers["answer_good"] = ContentAST.Answer(
+    self.answers["answer_good"] = ca.Answer(
       value=good_string,
-      kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+      kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=True
     )
 
     bad_string = self.grammar_bad.generate(self.include_spaces)
-    self.answers["answer_bad"] = ContentAST.Answer(
+    self.answers["answer_bad"] = ca.Answer(
       value=bad_string,
-      kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+      kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=False
     )
 
     bad_early_string = self.grammar_bad.generate(self.include_spaces, early_exit=True)
-    self.answers["answer_bad_early"] = ContentAST.Answer(
+    self.answers["answer_bad_early"] = ca.Answer(
       value=bad_early_string,
-      kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+      kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=False
     )
 
@@ -308,9 +308,9 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       is_correct = correct and not early_exit
 
       if len(generated_string) < self.MAX_LENGTH and generated_string not in answer_text_set:
-        self.answers[f"answer_{num_tries}"] = ContentAST.Answer(
+        self.answers[f"answer_{num_tries}"] = ca.Answer(
           value=generated_string,
-          kind=ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+          kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
           correct=is_correct
         )
         answer_text_set.add(generated_string)
@@ -335,18 +335,18 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     """Build question body and collect answers."""
     answers = list(self.answers.values())
 
-    body = ContentAST.Section()
+    body = ca.Section()
 
     body.add_element(
-      ContentAST.OnlyHtml([
-        ContentAST.Paragraph([
+      ca.OnlyHtml([
+        ca.Paragraph([
           "Given the following grammar, which of the below strings are part of the language?"
         ])
       ])
     )
     body.add_element(
-      ContentAST.OnlyLatex([
-        ContentAST.Paragraph([
+      ca.OnlyLatex([
+        ca.Paragraph([
           "Given the following grammar "
           "please circle any provided strings that are part of the language (or indicate clearly if there are none), "
           "and on each blank line provide generate a new, unique string that is part of the language."
@@ -355,45 +355,45 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     )
 
     body.add_element(
-      ContentAST.Code(self.grammar_good.get_grammar_string())
+      ca.Code(self.grammar_good.get_grammar_string())
     )
 
     # Add in some answers as latex-only options to be circled
-    latex_list = ContentAST.OnlyLatex([])
+    latex_list = ca.OnlyLatex([])
     for answer in self.featured_answers:
-      latex_list.add_element(ContentAST.Paragraph([f"- `{str(answer)}`"]))
+      latex_list.add_element(ca.Paragraph([f"- `{str(answer)}`"]))
     body.add_element(latex_list)
 
     # For Latex-only, ask students to generate some more.
     body.add_element(
-      ContentAST.OnlyLatex([
-        ContentAST.AnswerBlock([AnswerTypes.String("", label="") for i in range(self.num_answer_blanks)])
+      ca.OnlyLatex([
+        ca.AnswerBlock([ca.AnswerTypes.String("", label="") for i in range(self.num_answer_blanks)])
       ])
     )
 
     return body, answers
 
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def get_body(self, *args, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(*args, **kwargs)
     return body
   
   def _get_explanation(self, *args, **kwargs):
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Remember, for a string to be part of our language, we need to be able to derive it from our grammar.",
         "Unfortunately, there isn't space here to demonstrate the derivation so please work through them on your own!"
       ])
     )
     return explanation, []
 
-  def get_explanation(self, *args, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, *args, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation
 
-  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
+  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
     
-    return ContentAST.Answer.CanvasAnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
+    return ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))

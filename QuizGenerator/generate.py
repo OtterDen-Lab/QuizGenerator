@@ -232,7 +232,7 @@ def test_all_questions(
         test_quiz,
         num_variations=1,
         title=quiz_title,
-        is_practice=True
+        is_practice=False
       )
       print(f"Quiz '{quiz_title}' pushed to Canvas")
 

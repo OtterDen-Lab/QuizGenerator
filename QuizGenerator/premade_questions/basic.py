@@ -5,7 +5,7 @@ from typing import List, Dict, Any, Tuple
 
 import logging
 
-from QuizGenerator.contentast import *
+import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin
 
@@ -21,12 +21,12 @@ class FromText(Question):
     self.answers = []
     self.possible_variations = 1
   
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     
-    return ContentAST.Section([ContentAST.Text(self.text)])
+    return ca.Section([ca.Text(self.text)])
   
-  def get_answers(self, *args, **kwargs) -> Tuple[ContentAST.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
-    return ContentAST.Answer.CanvasAnswerKind.ESSAY, []
+  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
+    return ca.Answer.CanvasAnswerKind.ESSAY, []
 
 
 @QuestionRegistry.register()
@@ -45,13 +45,13 @@ class FromGenerator(FromText, TableQuestionMixin):
     def attach_function_to_object(obj, function_code, function_name='get_body_lines'):
       function_code = "import random\n" + function_code
 
-      # Create a local namespace for exec with ContentAST available
+      # Create a local namespace for exec with content AST helpers available
       local_namespace = {
-        'ContentAST': ContentAST,
-        'Section': ContentAST.Section,
-        'Text': ContentAST.Text,
-        'Table': ContentAST.Table,
-        'Paragraph': ContentAST.Paragraph
+        'ca': ca,
+        'Section': ca.Section,
+        'Text': ca.Text,
+        'Table': ca.Table,
+        'Paragraph': ca.Paragraph
       }
 
       # Define the function dynamically using exec
@@ -70,15 +70,15 @@ class FromGenerator(FromText, TableQuestionMixin):
     self.answers = {}
 
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     return super().get_body()
 
   def refresh(self, *args, **kwargs):
     super().refresh(*args, **kwargs)
     try:
       generated_content = self.generator()
-      # Expect generator to return a ContentAST.Section or convert string to Section
-      if isinstance(generated_content, ContentAST.Section):
+      # Expect generator to return a ca.Section or convert string to Section
+      if isinstance(generated_content, ca.Section):
         self.text = ""  # Clear text since we'll override get_body
         self._generated_section = generated_content
       elif isinstance(generated_content, str):
@@ -93,7 +93,7 @@ class FromGenerator(FromText, TableQuestionMixin):
       log.debug(self.generator_text)
       exit(8)
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     if hasattr(self, '_generated_section') and self._generated_section:
       return self._generated_section
     return super().get_body()

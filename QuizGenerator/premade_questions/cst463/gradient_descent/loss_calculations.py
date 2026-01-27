@@ -6,7 +6,7 @@ import math
 import numpy as np
 from typing import List, Tuple, Dict, Any
 
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -73,18 +73,18 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
     # Individual loss answers
     for i in range(self.num_samples):
-      self.answers[f"loss_{i}"] = AnswerTypes.Float(self.individual_losses[i], label=f"Sample {i + 1} loss")
+      self.answers[f"loss_{i}"] = ca.AnswerTypes.Float(self.individual_losses[i], label=f"Sample {i + 1} loss")
 
     # Overall loss answer
-    self.answers["overall_loss"] = AnswerTypes.Float(self.overall_loss, label="Overall loss")
+    self.answers["overall_loss"] = ca.AnswerTypes.Float(self.overall_loss, label="Overall loss")
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Element, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Element, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     # Question description
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"Given the dataset below, calculate the {self._get_loss_function_short_name()} for each sample "
       f"and the overall {self._get_loss_function_short_name()}."
     ]))
@@ -97,7 +97,7 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
       answers.append(self.answers[f"loss_{i}"])
 
     # Overall loss question
-    body.add_element(ContentAST.Paragraph([
+    body.add_element(ca.Paragraph([
       f"Overall {self._get_loss_function_short_name()}: "
     ]))
     answers.append(self.answers["overall_loss"])
@@ -105,31 +105,31 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Element:
+  def get_body(self, **kwargs) -> ca.Element:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
   @abc.abstractmethod
-  def _create_data_table(self) -> ContentAST.Element:
+  def _create_data_table(self) -> ca.Element:
     """Create the data table with answer fields."""
     pass
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Element, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Element, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       f"To calculate the {self._get_loss_function_name()}, we apply the formula to each sample:"
     ]))
 
-    explanation.add_element(ContentAST.Equation(self._get_loss_function_formula(), inline=False))
+    explanation.add_element(ca.Equation(self._get_loss_function_formula(), inline=False))
 
     # Step-by-step calculations
     explanation.add_element(self._create_calculation_steps())
 
     # Completed table
-    explanation.add_element(ContentAST.Paragraph(["Completed table:"]))
+    explanation.add_element(ca.Paragraph(["Completed table:"]))
     explanation.add_element(self._create_completed_table())
 
     # Overall loss calculation
@@ -137,23 +137,23 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Element:
+  def get_explanation(self, **kwargs) -> ca.Element:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
   @abc.abstractmethod
-  def _create_calculation_steps(self) -> ContentAST.Element:
+  def _create_calculation_steps(self) -> ca.Element:
     """Create step-by-step calculation explanations."""
     pass
 
   @abc.abstractmethod
-  def _create_completed_table(self) -> ContentAST.Element:
+  def _create_completed_table(self) -> ca.Element:
     """Create the completed table with all values filled in."""
     pass
 
   @abc.abstractmethod
-  def _create_overall_loss_explanation(self) -> ContentAST.Element:
+  def _create_overall_loss_explanation(self) -> ca.Element:
     """Create explanation for overall loss calculation."""
     pass
 
@@ -225,7 +225,7 @@ class LossQuestion_Linear(LossQuestion):
     else:
       return r"L(\mathbf{y}, \mathbf{p}) = \sum_{i=1}^{k} (y_i - p_i)^2"
 
-  def _create_data_table(self) -> ContentAST.Element:
+  def _create_data_table(self) -> ca.Element:
     """Create table with input features, true values, predictions, and loss fields."""
     headers = ["x"]
 
@@ -268,12 +268,12 @@ class LossQuestion_Linear(LossQuestion):
 
     return self.create_answer_table(headers, rows, answer_columns=["loss"])
 
-  def _create_calculation_steps(self) -> ContentAST.Element:
+  def _create_calculation_steps(self) -> ca.Element:
     """Show step-by-step MSE calculations."""
-    steps = ContentAST.Section()
+    steps = ca.Section()
 
     for i, sample in enumerate(self.data):
-      steps.add_element(ContentAST.Paragraph([f"Sample {i+1}:"]))
+      steps.add_element(ca.Paragraph([f"Sample {i+1}:"]))
 
       if self.num_output_vars == 1:
         y = sample['true_values']
@@ -286,7 +286,7 @@ class LossQuestion_Linear(LossQuestion):
           calculation = f"L = ({y:.2f} - {p:.2f})^2 = ({diff:.2f})^2 = {loss:.4f}"
         else:
           calculation = f"L = ({y:.2f} - ({p:.2f}))^2 = ({diff:.2f})^2 = {loss:.4f}"
-        steps.add_element(ContentAST.Equation(calculation, inline=False))
+        steps.add_element(ca.Equation(calculation, inline=False))
       else:
         # Multi-output calculation
         y_vals = sample['true_values']
@@ -302,11 +302,11 @@ class LossQuestion_Linear(LossQuestion):
             terms.append(f"({y:.2f} - ({p:.2f}))^2")
 
         calculation = f"L = {' + '.join(terms)} = {loss:.4f}"
-        steps.add_element(ContentAST.Equation(calculation, inline=False))
+        steps.add_element(ca.Equation(calculation, inline=False))
 
     return steps
 
-  def _create_completed_table(self) -> ContentAST.Element:
+  def _create_completed_table(self) -> ca.Element:
     """Create table with all values including calculated losses."""
     headers = ["x_0", "x_1"]
 
@@ -346,20 +346,20 @@ class LossQuestion_Linear(LossQuestion):
 
       rows.append(row)
 
-    return ContentAST.Table(headers=headers, data=rows)
+    return ca.Table(headers=headers, data=rows)
 
-  def _create_overall_loss_explanation(self) -> ContentAST.Element:
+  def _create_overall_loss_explanation(self) -> ca.Element:
     """Explain overall MSE calculation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "The overall MSE is the average of individual losses:"
     ]))
 
     losses_str = " + ".join([f"{loss:.4f}" for loss in self.individual_losses])
     calculation = f"MSE = \\frac{{{losses_str}}}{{{self.num_samples}}} = {self.overall_loss:.4f}"
 
-    explanation.add_element(ContentAST.Equation(calculation, inline=False))
+    explanation.add_element(ca.Equation(calculation, inline=False))
 
     return explanation
 
@@ -416,7 +416,7 @@ class LossQuestion_Logistic(LossQuestion):
   def _get_loss_function_formula(self) -> str:
     return r"L(y, p) = -[y \ln(p) + (1-y) \ln(1-p)]"
 
-  def _create_data_table(self) -> ContentAST.Element:
+  def _create_data_table(self) -> ca.Element:
     """Create table with features, true labels, predicted probabilities, and loss fields."""
     headers = ["x", "y", "p", "loss"]
 
@@ -441,27 +441,27 @@ class LossQuestion_Logistic(LossQuestion):
 
     return self.create_answer_table(headers, rows, answer_columns=["loss"])
 
-  def _create_calculation_steps(self) -> ContentAST.Element:
+  def _create_calculation_steps(self) -> ca.Element:
     """Show step-by-step log-loss calculations."""
-    steps = ContentAST.Section()
+    steps = ca.Section()
 
     for i, sample in enumerate(self.data):
       y = sample['true_values']
       p = sample['predictions']
       loss = self.individual_losses[i]
 
-      steps.add_element(ContentAST.Paragraph([f"Sample {i+1}:"]))
+      steps.add_element(ca.Paragraph([f"Sample {i+1}:"]))
 
       if y == 1:
         calculation = f"L = -[1 \\cdot \\ln({p:.3f}) + 0 \\cdot \\ln(1-{p:.3f})] = -\\ln({p:.3f}) = {loss:.4f}"
       else:
         calculation = f"L = -[0 \\cdot \\ln({p:.3f}) + 1 \\cdot \\ln(1-{p:.3f})] = -\\ln({1-p:.3f}) = {loss:.4f}"
 
-      steps.add_element(ContentAST.Equation(calculation, inline=False))
+      steps.add_element(ca.Equation(calculation, inline=False))
 
     return steps
 
-  def _create_completed_table(self) -> ContentAST.Element:
+  def _create_completed_table(self) -> ca.Element:
     """Create table with all values including calculated losses."""
     headers = ["x_0", "x_1", "y", "p", "loss"]
 
@@ -484,20 +484,20 @@ class LossQuestion_Logistic(LossQuestion):
 
       rows.append(row)
 
-    return ContentAST.Table(headers=headers, data=rows)
+    return ca.Table(headers=headers, data=rows)
 
-  def _create_overall_loss_explanation(self) -> ContentAST.Element:
+  def _create_overall_loss_explanation(self) -> ca.Element:
     """Explain overall log-loss calculation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "The overall log-loss is the average of individual losses:"
     ]))
 
     losses_str = " + ".join([f"{loss:.4f}" for loss in self.individual_losses])
     calculation = f"\\text{{Log-Loss}} = \\frac{{{losses_str}}}{{{self.num_samples}}} = {self.overall_loss:.4f}"
 
-    explanation.add_element(ContentAST.Equation(calculation, inline=False))
+    explanation.add_element(ca.Equation(calculation, inline=False))
 
     return explanation
 
@@ -560,7 +560,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
   def _get_loss_function_formula(self) -> str:
     return r"L(\mathbf{y}, \mathbf{p}) = -\sum_{i=1}^{K} y_i \ln(p_i)"
 
-  def _create_data_table(self) -> ContentAST.Element:
+  def _create_data_table(self) -> ca.Element:
     """Create table with features, true class vectors, predicted probabilities, and loss fields."""
     headers = ["x", "y", "p", "loss"]
 
@@ -587,22 +587,22 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
 
     return self.create_answer_table(headers, rows, answer_columns=["loss"])
 
-  def _create_calculation_steps(self) -> ContentAST.Element:
+  def _create_calculation_steps(self) -> ca.Element:
     """Show step-by-step cross-entropy calculations."""
-    steps = ContentAST.Section()
+    steps = ca.Section()
 
     for i, sample in enumerate(self.data):
       y_vec = sample['true_values']
       p_vec = sample['predictions']
       loss = self.individual_losses[i]
 
-      steps.add_element(ContentAST.Paragraph([f"Sample {i+1}:"]))
+      steps.add_element(ca.Paragraph([f"Sample {i+1}:"]))
 
       # Show vector dot product calculation
       y_str = "[" + ", ".join([str(y) for y in y_vec]) + "]"
       p_str = "[" + ", ".join([f"{p:.3f}" for p in p_vec]) + "]"
 
-      steps.add_element(ContentAST.Paragraph([f"\\mathbf{{y}} = {y_str}, \\mathbf{{p}} = {p_str}"]))
+      steps.add_element(ca.Paragraph([f"\\mathbf{{y}} = {y_str}, \\mathbf{{p}} = {p_str}"]))
 
       # Find the true class (where y_i = 1)
       try:
@@ -622,11 +622,11 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
         # Fallback in case no class is set to 1 (shouldn't happen, but safety check)
         calculation = f"L = -\\mathbf{{y}} \\cdot \\ln(\\mathbf{{p}}) = {loss:.4f}"
 
-      steps.add_element(ContentAST.Equation(calculation, inline=False))
+      steps.add_element(ca.Equation(calculation, inline=False))
 
     return steps
 
-  def _create_completed_table(self) -> ContentAST.Element:
+  def _create_completed_table(self) -> ca.Element:
     """Create table with all values including calculated losses."""
     headers = ["x_0", "x_1", "y", "p", "loss"]
 
@@ -651,19 +651,19 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
 
       rows.append(row)
 
-    return ContentAST.Table(headers=headers, data=rows)
+    return ca.Table(headers=headers, data=rows)
 
-  def _create_overall_loss_explanation(self) -> ContentAST.Element:
+  def _create_overall_loss_explanation(self) -> ca.Element:
     """Explain overall cross-entropy loss calculation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    explanation.add_element(ContentAST.Paragraph([
+    explanation.add_element(ca.Paragraph([
       "The overall cross-entropy loss is the average of individual losses:"
     ]))
 
     losses_str = " + ".join([f"{loss:.4f}" for loss in self.individual_losses])
     calculation = f"\\text{{Cross-Entropy}} = \\frac{{{losses_str}}}{{{self.num_samples}}} = {self.overall_loss:.4f}"
 
-    explanation.add_element(ContentAST.Equation(calculation, inline=False))
+    explanation.add_element(ca.Equation(calculation, inline=False))
 
     return explanation

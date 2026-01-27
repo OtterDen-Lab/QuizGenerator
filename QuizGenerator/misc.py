@@ -11,7 +11,7 @@ from typing import List, Dict, Tuple, Any
 
 import fractions
 
-from QuizGenerator.contentast import ContentAST
+import QuizGenerator.contentast as ca
 
 log = logging.getLogger(__name__)
 

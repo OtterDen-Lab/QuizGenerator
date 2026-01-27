@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 from QuizGenerator.premade_questions.cst463.models.matrices import MatrixQuestion
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
@@ -59,34 +59,34 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
 
     ## Answers:
     # center_word, center_emb, context_words, context_embs, logits, probs
-    self.answers["logits"] = AnswerTypes.Vector(self.logits, label="Logits")
+    self.answers["logits"] = ca.AnswerTypes.Vector(self.logits, label="Logits")
     most_likely_idx = np.argmax(self.probs)
     most_likely_word = self.context_words[most_likely_idx]
-    self.answers["center_word"] = AnswerTypes.String(most_likely_word, label="Most likely context word")
+    self.answers["center_word"] = ca.AnswerTypes.String(most_likely_word, label="Most likely context word")
     
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     body.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Given center word: `{self.center_word}` with embedding {self.center_emb}, compute the skip-gram probabilities for each context word and identify the most likely one."
       ])
     )
     body.add_elements([
-      ContentAST.Paragraph([ContentAST.Text(f"`{w}` : "), str(e)]) for w, e in zip(self.context_words, self.context_embs)
+      ca.Paragraph([ca.Text(f"`{w}` : "), str(e)]) for w, e in zip(self.context_words, self.context_embs)
     ])
 
     answers.append(self.answers["logits"])
     answers.append(self.answers["center_word"])
     body.add_elements([
-      ContentAST.LineBreak(),
+      ca.LineBreak(),
       self.answers["logits"],
-      ContentAST.LineBreak(),
+      ca.LineBreak(),
       self.answers["center_word"]
     ])
 
@@ -95,39 +95,39 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
-    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
+    explanation = ca.Section()
+    digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "In the skip-gram model, we predict context words given a center word by computing dot products between embeddings and applying softmax."
       ])
     )
 
     # Step 1: Show embeddings
     explanation.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Step 1: Given embeddings", emphasis=True)
+      ca.Paragraph([
+        ca.Text("Step 1: Given embeddings", emphasis=True)
       ])
     )
 
     # Format center embedding
     center_emb_str = "[" + ", ".join([f"{x:.{digits}f}" for x in self.center_emb]) + "]"
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Center word `{self.center_word}`: {center_emb_str}"
       ])
     )
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Context words:"
       ])
     )
@@ -135,21 +135,21 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     for i, (word, emb) in enumerate(zip(self.context_words, self.context_embs)):
       emb_str = "[" + ", ".join([f"{x:.2f}" for x in emb]) + "]"
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"`{word}`: {emb_str}"
         ])
       )
 
     # Step 2: Compute logits (dot products)
     explanation.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Step 2: Compute logits (dot products)", emphasis=True)
+      ca.Paragraph([
+        ca.Text("Step 2: Compute logits (dot products)", emphasis=True)
       ])
     )
 
     # Show ONE example
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Example: Logit for `{self.context_words[0]}`"
       ])
     )
@@ -160,20 +160,20 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     logit_val = self.logits[0]
 
     explanation.add_element(
-      ContentAST.Equation(f"{dot_product_terms} = {logit_val:.2f}")
+      ca.Equation(f"{dot_product_terms} = {logit_val:.2f}")
     )
 
     logits_str = "[" + ", ".join([f"{x:.2f}" for x in self.logits]) + "]"
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"All logits: {logits_str}"
       ])
     )
 
     # Step 3: Apply softmax
     explanation.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Step 3: Apply softmax to get probabilities", emphasis=True)
+      ca.Paragraph([
+        ca.Text("Step 3: Apply softmax to get probabilities", emphasis=True)
       ])
     )
 
@@ -183,18 +183,18 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     exp_terms = " + ".join([f"e^{{{l:.{digits}f}}}" for l in self.logits])
 
     explanation.add_element(
-      ContentAST.Equation(f"\\text{{denominator}} = {exp_terms} = {sum_exp:.{digits}f}")
+      ca.Equation(f"\\text{{denominator}} = {exp_terms} = {sum_exp:.{digits}f}")
     )
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Probabilities:"
       ])
     )
 
     for i, (word, prob) in enumerate(zip(self.context_words, self.probs)):
       explanation.add_element(
-        ContentAST.Equation(f"P(\\text{{{word}}}) = \\frac{{e^{{{self.logits[i]:.{digits}f}}}}}{{{sum_exp:.{digits}f}}} = {prob:.{digits}f}")
+        ca.Equation(f"P(\\text{{{word}}}) = \\frac{{e^{{{self.logits[i]:.{digits}f}}}}}{{{sum_exp:.{digits}f}}} = {prob:.{digits}f}")
       )
 
     # Step 4: Identify most likely
@@ -202,15 +202,15 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     most_likely_word = self.context_words[most_likely_idx]
 
     explanation.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Conclusion:", emphasis=True),
+      ca.Paragraph([
+        ca.Text("Conclusion:", emphasis=True),
         f" The most likely context word is `{most_likely_word}` with probability {self.probs[most_likely_idx]:.{digits}f}"
       ])
     )
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

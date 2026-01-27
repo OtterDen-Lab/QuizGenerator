@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.constants import MathRanges
 from .matrices import MatrixQuestion
 
@@ -65,72 +65,72 @@ class ConvolutionCalculation(MatrixQuestion):
     self.result = self.conv2d_multi_channel(self.image, self.kernel, stride=self.stride, padding=self.padding)
     
     self.answers = {
-      f"result_{i}" : AnswerTypes.Matrix(self.result[:,:,i], label=f"Result of filter {i}")
+      f"result_{i}" : ca.AnswerTypes.Matrix(self.result[:,:,i], label=f"Result of filter {i}")
       for i in range(self.result.shape[-1])
     }
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     body.add_elements(
       [
-        ContentAST.Text("Given image represented as matrix: "),
-        ContentAST.Matrix(self.image, name="image")
+        ca.Text("Given image represented as matrix: "),
+        ca.Matrix(self.image, name="image")
       ]
     )
 
     body.add_elements(
       [
-        ContentAST.Text("And convolution filters: "),
+        ca.Text("And convolution filters: "),
       ] + [
-        ContentAST.Matrix(self.kernel[:, :, i], name=f"Filter {i}")
+        ca.Matrix(self.kernel[:, :, i], name=f"Filter {i}")
         for i in range(self.kernel.shape[-1])
       ]
     )
 
     body.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
           f"Calculate the output of the convolution operation.  Assume stride = {self.stride} and padding = {self.padding}."
         ]
       )
     )
 
-    body.add_element(ContentAST.LineBreak())
+    body.add_element(ca.LineBreak())
 
     for i in range(self.result.shape[-1]):
       answers.append(self.answers[f"result_{i}"])
       body.add_elements([
-        ContentAST.Container([
+        ca.Container([
           self.answers[f"result_{i}"],
-          ContentAST.LineBreak()
+          ca.LineBreak()
         ])
       ])
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
-    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
+    explanation = ca.Section()
+    digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "To compute a 2D convolution, we slide the filter across the input image and compute the element-wise product at each position, then sum the results."
       ])
     )
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"With stride={self.stride} and padding={self.padding}: ",
         f"stride controls how many pixels the filter moves each step, ",
         f"and padding adds zeros around the border {'(no border in this case)' if self.padding == 0 else f'({self.padding} pixels)'}."
@@ -140,19 +140,19 @@ class ConvolutionCalculation(MatrixQuestion):
     # For each filter, show one detailed example computation
     for f_idx in range(self.kernel.shape[-1]):
       explanation.add_element(
-        ContentAST.Paragraph([
-          ContentAST.Text(f"Filter {f_idx}:", emphasis=True)
+        ca.Paragraph([
+          ca.Text(f"Filter {f_idx}:", emphasis=True)
         ])
       )
 
       # Show the filter (rounded)
       explanation.add_element(
-        ContentAST.Matrix(np.round(self.kernel[:, :, f_idx], digits), name=f"Filter {f_idx}")
+        ca.Matrix(np.round(self.kernel[:, :, f_idx], digits), name=f"Filter {f_idx}")
       )
 
       # Show ONE example computation (position 0,0)
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           "Example computation at position (0, 0):"
         ])
       )
@@ -177,22 +177,22 @@ class ConvolutionCalculation(MatrixQuestion):
       result_val = self.result[0, 0, f_idx]
 
       explanation.add_element(
-        ContentAST.Equation(f"{equation_str} = {result_val:.2f}")
+        ca.Equation(f"{equation_str} = {result_val:.2f}")
       )
 
       # Show the complete output matrix (rounded)
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           "Complete output:"
         ])
       )
       explanation.add_element(
-        ContentAST.Matrix(np.round(self.result[:, :, f_idx], digits))
+        ca.Matrix(np.round(self.result[:, :, f_idx], digits))
       )
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

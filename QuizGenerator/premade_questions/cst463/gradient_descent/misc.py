@@ -2,7 +2,7 @@
 from typing import List, Tuple, Callable, Union, Any
 import sympy as sp
 
-from QuizGenerator.contentast import ContentAST
+import QuizGenerator.contentast as ca
 
 def generate_function(rng, num_variables: int, max_degree: int, use_quadratic: bool = True) -> tuple[Any, sp.Expr, sp.MutableDenseMatrix, sp.Equality]:
   """
@@ -61,7 +61,7 @@ def format_vector(vec: List[float]) -> str:
   
   vector_string = ', '.join(
     [
-      sorted(ContentAST.Answer.accepted_strings(v), key=lambda s: len(s))[0]
+      sorted(ca.Answer.accepted_strings(v), key=lambda s: len(s))[0]
       for v in vec
     ]
   )

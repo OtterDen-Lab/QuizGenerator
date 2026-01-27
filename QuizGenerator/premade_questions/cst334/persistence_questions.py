@@ -6,7 +6,7 @@ import difflib
 import logging
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
@@ -36,10 +36,10 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.disk_access_delay = self.access_delay * self.number_of_reads + self.transfer_delay
     
     self.answers.update({
-      "answer__rotational_delay"  : AnswerTypes.Float(self.rotational_delay),
-      "answer__access_delay"      : AnswerTypes.Float(self.access_delay),
-      "answer__transfer_delay"    : AnswerTypes.Float(self.transfer_delay),
-      "answer__disk_access_delay" : AnswerTypes.Float(self.disk_access_delay),
+      "answer__rotational_delay"  : ca.AnswerTypes.Float(self.rotational_delay),
+      "answer__access_delay"      : ca.AnswerTypes.Float(self.access_delay),
+      "answer__transfer_delay"    : ca.AnswerTypes.Float(self.transfer_delay),
+      "answer__disk_access_delay" : ca.AnswerTypes.Float(self.disk_access_delay),
     })
   
   def _get_body(self, *args, **kwargs):
@@ -94,16 +94,16 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     return body, answers
 
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def get_body(self, *args, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(*args, **kwargs)
     return body
 
   def _get_explanation(self):
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
     
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "To calculate the total disk access time (or \"delay\"), "
         "we should first calculate each of the individual parts.",
         r"Since we know that  $t_{total} = (\text{# of reads}) \cdot t_{access} + t_{transfer}$"
@@ -113,8 +113,8 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
     
     explanation.add_elements([
-      ContentAST.Paragraph(["Starting with the rotation delay, we calculate:"]),
-      ContentAST.Equation(
+      ca.Paragraph(["Starting with the rotation delay, we calculate:"]),
+      ca.Equation(
         "t_{rotation} = "
         + f"\\frac{{1 minute}}{{{self.hard_drive_rotation_speed}revolutions}}"
         + r"\cdot \frac{60 seconds}{1 minute} \cdot \frac{1000 ms}{1 second} \cdot \frac{1 revolution}{2} = "
@@ -123,10 +123,10 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ])
     
     explanation.add_elements([
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Now we can calculate:",
       ]),
-      ContentAST.Equation(
+      ca.Equation(
         f"t_{{access}} "
         f"= t_{{rotation}} + t_{{seek}} "
         f"= {self.rotational_delay:0.2f}ms + {self.seek_delay:0.2f}ms = {self.access_delay:0.2f}ms"
@@ -134,8 +134,8 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ])
     
     explanation.add_elements([
-      ContentAST.Paragraph([r"Next we need to calculate our transfer delay, $t_{transfer}$, which we do as:"]),
-      ContentAST.Equation(
+      ca.Paragraph([r"Next we need to calculate our transfer delay, $t_{transfer}$, which we do as:"]),
+      ca.Equation(
         f"t_{{transfer}} "
         f"= \\frac{{{self.number_of_reads} \\cdot {self.size_of_reads}KB}}{{1}} \\cdot \\frac{{1MB}}{{1024KB}} "
         f"\\cdot \\frac{{1 second}}{{{self.transfer_rate}MB}} \\cdot \\frac{{1000ms}}{{1second}} "
@@ -144,8 +144,8 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ])
     
     explanation.add_elements([
-      ContentAST.Paragraph(["Putting these together we get:"]),
-      ContentAST.Equation(
+      ca.Paragraph(["Putting these together we get:"]),
+      ca.Equation(
         f"t_{{total}} "
         f"= \\text{{(# reads)}} \\cdot t_{{access}} + t_{{transfer}} "
         f"= {self.number_of_reads} \\cdot {self.access_delay:0.2f} + {self.transfer_delay:0.2f} "
@@ -153,7 +153,7 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ])
     return explanation, []
 
-  def get_explanation(self) -> ContentAST.Section:
+  def get_explanation(self) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation()
     return explanation
@@ -178,10 +178,10 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.inode_index_in_block = int(self.inode_address_in_block / self.inode_size)
     
     self.answers.update({
-      "answer__inode_address": AnswerTypes.Int(self.inode_address),
-      "answer__inode_block": AnswerTypes.Int(self.inode_block),
-      "answer__inode_address_in_block": AnswerTypes.Int(self.inode_address_in_block),
-      "answer__inode_index_in_block": AnswerTypes.Int(self.inode_index_in_block),
+      "answer__inode_address": ca.AnswerTypes.Int(self.inode_address),
+      "answer__inode_block": ca.AnswerTypes.Int(self.inode_block),
+      "answer__inode_address_in_block": ca.AnswerTypes.Int(self.inode_address_in_block),
+      "answer__inode_index_in_block": ca.AnswerTypes.Int(self.inode_index_in_block),
     })
   
   def _get_body(self):
@@ -229,16 +229,16 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     return body, answers
 
-  def get_body(self) -> ContentAST.Section:
+  def get_body(self) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body()
     return body
 
   def _get_explanation(self):
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
     
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "If we are given an inode number, there are a few steps that we need to take to load the actual inode.  "
         "These consist of determining the address of the inode, which block would contain it, "
         "and then its address within the block.",
@@ -247,7 +247,7 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
     
     explanation.add_element(
-      ContentAST.Equation.make_block_equation__multiline_equals(
+      ca.Equation.make_block_equation__multiline_equals(
         r"(\text{Inode address})",
         [
           r"(\text{Inode Start Location}) + (\text{inode #}) \cdot (\text{inode size})",
@@ -257,13 +257,13 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
     
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Next, we us this to figure out what block the inode is in.  "
         "We do this directly so we know what block to load, "
         "thus minimizing the number of loads we have to make.",
       ])
     )
-    explanation.add_element(ContentAST.Equation.make_block_equation__multiline_equals(
+    explanation.add_element(ca.Equation.make_block_equation__multiline_equals(
       r"\text{Block containing inode}",
       [
         r"(\text{Inode address}) \mathbin{//} (\text{block size})",
@@ -273,7 +273,7 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ))
     
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "When we load this block, we now have in our system memory "
         "(remember, blocks on the hard drive are effectively useless to us until they're in main memory!), "
         "the inode, so next we need to figure out where it is within that block."
@@ -283,7 +283,7 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ])
     )
     
-    explanation.add_element(ContentAST.Equation.make_block_equation__multiline_equals(
+    explanation.add_element(ca.Equation.make_block_equation__multiline_equals(
       r"\text{offset within block}",
       [
         r"(\text{Inode address}) \bmod (\text{block size})",
@@ -293,12 +293,12 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ))
     
     explanation.add_element(
-      ContentAST.Text("Remember that `mod` is the same as `%`, the modulo operation.")
+      ca.Text("Remember that `mod` is the same as `%`, the modulo operation.")
     )
     
-    explanation.add_element(ContentAST.Paragraph(["and"]))
+    explanation.add_element(ca.Paragraph(["and"]))
       
-    explanation.add_element(ContentAST.Equation.make_block_equation__multiline_equals(
+    explanation.add_element(ca.Equation.make_block_equation__multiline_equals(
       r"\text{index within block}",
       [
         r"\dfrac{\text{offset within block}}{\text{inode size}}",
@@ -309,7 +309,7 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     return explanation, []
 
-  def get_explanation(self) -> ContentAST.Section:
+  def get_explanation(self) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation()
     return explanation
@@ -322,7 +322,7 @@ class VSFS_states(IOQuestion):
   
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self.answer_kind = ContentAST.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN
+    self.answer_kind = ca.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN
     
     self.num_steps = kwargs.get("num_steps", 10)
   
@@ -344,7 +344,7 @@ class VSFS_states(IOQuestion):
     ))
     self.rng.shuffle(wrong_answers)
     
-    self.answers["answer__cmd"] = ContentAST.Answer.dropdown(
+    self.answers["answer__cmd"] = ca.Answer.dropdown(
       f"{operations[-1]['cmd']}",
       baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']])),
       label="Command"
@@ -354,21 +354,21 @@ class VSFS_states(IOQuestion):
     """Build question body and collect answers."""
     answers = [self.answers["answer__cmd"]]
 
-    body = ContentAST.Section()
+    body = ca.Section()
 
-    body.add_element(ContentAST.Paragraph(["What operation happens between these two states?"]))
+    body.add_element(ca.Paragraph(["What operation happens between these two states?"]))
 
     body.add_element(
-      ContentAST.Code(
+      ca.Code(
         self.start_state,
         make_small=True
       )
     )
 
-    body.add_element(ContentAST.AnswerBlock(self.answers["answer__cmd"]))
+    body.add_element(ca.AnswerBlock(self.answers["answer__cmd"]))
 
     body.add_element(
-      ContentAST.Code(
+      ca.Code(
         self.end_state,
         make_small=True
       )
@@ -376,19 +376,19 @@ class VSFS_states(IOQuestion):
 
     return body, answers
 
-  def get_body(self) -> ContentAST.Section:
+  def get_body(self) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body()
     return body
 
   def _get_explanation(self):
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
     
     log.debug(f"self.start_state: {self.start_state}")
     log.debug(f"self.end_state: {self.end_state}")
     
     explanation.add_elements([
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "The key thing to pay attention to when solving these problems is where there are differences between the start state and the end state.",
         "In this particular problem, we can see that these lines are different:"
       ])
@@ -405,7 +405,7 @@ class VSFS_states(IOQuestion):
       )
     
     explanation.add_element(
-      ContentAST.Paragraph(chunk_to_add)
+      ca.Paragraph(chunk_to_add)
     )
     
     chunk_to_add = [
@@ -452,22 +452,22 @@ class VSFS_states(IOQuestion):
       chunk_to_add.append("If they have not changed, then we know we must have eithered called `link` or `unlink` and must check the references.")
       
     explanation.add_element(
-      ContentAST.Paragraph(chunk_to_add)
+      ca.Paragraph(chunk_to_add)
     )
     
     explanation.add_elements([
-      ContentAST.Paragraph(["The overall changes are highlighted with `*` symbols below"])
+      ca.Paragraph(["The overall changes are highlighted with `*` symbols below"])
     ])
     
     explanation.add_element(
-      ContentAST.Code(
+      ca.Code(
         highlight_changes(self.start_state, self.end_state)
       )
     )
 
     return explanation, []
 
-  def get_explanation(self) -> ContentAST.Section:
+  def get_explanation(self) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation()
     return explanation

@@ -4,7 +4,7 @@ import logging
 import math
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)
@@ -31,19 +31,19 @@ class BitsAndBytes(MathQuestion):
     self.num_bytes = int(math.pow(2, self.num_bits))
     
     if self.from_binary:
-      self.answers = {"answer": AnswerTypes.Int(self.num_bytes,
+      self.answers = {"answer": ca.AnswerTypes.Int(self.num_bytes,
                                                label="Address space size", unit="Bytes")}
     else:
-      self.answers = {"answer": AnswerTypes.Int(self.num_bits,
+      self.answers = {"answer": ca.AnswerTypes.Int(self.num_bits,
                                                label="Number of bits in address", unit="bits")}
   
   def _get_body(self, **kwargs):
     """Build question body and collect answers."""
     answers = [self.answers['answer']]
 
-    body = ContentAST.Section()
+    body = ca.Section()
     body.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Given that we have "
         f"{self.num_bits if self.from_binary else self.num_bytes} {'bits' if self.from_binary else 'bytes'}, "
         f"how many {'bits' if not self.from_binary else 'bytes'} "
@@ -51,44 +51,44 @@ class BitsAndBytes(MathQuestion):
       ])
     )
 
-    body.add_element(ContentAST.AnswerBlock(self.answers['answer']))
+    body.add_element(ca.AnswerBlock(self.answers['answer']))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
   def _get_explanation(self, **kwargs):
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
     
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Remember that for these problems we use one of these two equations (which are equivalent)"
       ])
     )
     explanation.add_elements([
-      ContentAST.Equation(r"log_{2}(\text{#bytes}) = \text{#bits}"),
-      ContentAST.Equation(r"2^{(\text{#bits})} = \text{#bytes}")
+      ca.Equation(r"log_{2}(\text{#bytes}) = \text{#bits}"),
+      ca.Equation(r"2^{(\text{#bits})} = \text{#bytes}")
     ])
     
     explanation.add_element(
-      ContentAST.Paragraph(["Therefore, we calculate:"])
+      ca.Paragraph(["Therefore, we calculate:"])
     )
     
     if self.from_binary:
       explanation.add_element(
-        ContentAST.Equation(f"2 ^ {{{self.num_bits}bits}} = \\textbf{{{self.num_bytes}}}\\text{{bytes}}")
+        ca.Equation(f"2 ^ {{{self.num_bits}bits}} = \\textbf{{{self.num_bytes}}}\\text{{bytes}}")
       )
     else:
       explanation.add_element(
-        ContentAST.Equation(f"log_{{2}}({self.num_bytes} \\text{{bytes}}) = \\textbf{{{self.num_bits}}}\\text{{bits}}")
+        ca.Equation(f"log_{{2}}({self.num_bytes} \\text{{bytes}}) = \\textbf{{{self.num_bits}}}\\text{{bits}}")
       )
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -111,39 +111,39 @@ class HexAndBinary(MathQuestion):
     self.binary_val = f"0b{self.value:0{4*self.number_of_hexits}b}"
     
     if self.from_binary:
-      self.answers['answer'] = AnswerTypes.String(self.hex_val,
+      self.answers['answer'] = ca.AnswerTypes.String(self.hex_val,
                                              label="Value in hex")
     else:
-      self.answers['answer'] = AnswerTypes.String(self.binary_val,
+      self.answers['answer'] = ca.AnswerTypes.String(self.binary_val,
                                              label="Value in binary")
   
   def _get_body(self, **kwargs):
     """Build question body and collect answers."""
     answers = [self.answers['answer']]
 
-    body = ContentAST.Section()
+    body = ca.Section()
 
     body.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"Given the number {self.hex_val if not self.from_binary else self.binary_val} "
         f"please convert it to {'hex' if self.from_binary else 'binary'}.",
         "Please include base indicator all padding zeros as appropriate (e.g. 0x01 should be 0b00000001)",
       ])
     )
 
-    body.add_element(ContentAST.AnswerBlock(self.answers['answer']))
+    body.add_element(ca.AnswerBlock(self.answers['answer']))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
   def _get_explanation(self, **kwargs):
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
     
-    paragraph = ContentAST.Paragraph([
+    paragraph = ca.Paragraph([
       "The core idea for converting between binary and hex is to divide and conquer.  "
       "Specifically, each hexit (hexadecimal digit) is equivalent to 4 bits.  "
     ])
@@ -164,7 +164,7 @@ class HexAndBinary(MathQuestion):
     hex_str = f"{self.value:0{self.number_of_hexits}X}"
     
     explanation.add_element(
-      ContentAST.Table(
+      ca.Table(
         data=[
           ["0b"] + [binary_str[i:i+4] for i in range(0, len(binary_str), 4)],
           ["0x"] + list(hex_str)
@@ -177,20 +177,20 @@ class HexAndBinary(MathQuestion):
     
     if self.from_binary:
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
         f"Which gives us our hex value of: 0x{hex_str}"
         ])
       )
     else:
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"Which gives us our binary value of: 0b{binary_str}"
         ])
       )
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -223,7 +223,7 @@ class AverageMemoryAccessTime(MathQuestion):
     self.amat = self.hit_rate * self.hit_latency + (1 - self.hit_rate) * self.miss_latency
     
     self.answers = {
-      "amat": AnswerTypes.Float(self.amat, label="Average Memory Access Time", unit="cycles")
+      "amat": ca.AnswerTypes.Float(self.amat, label="Average Memory Access Time", unit="cycles")
     }
     
     # Finally, do the self.rngizing of the question, to avoid these being non-deterministic
@@ -236,14 +236,14 @@ class AverageMemoryAccessTime(MathQuestion):
     """Build question body and collect answers."""
     answers = [self.answers["amat"]]
 
-    body = ContentAST.Section()
+    body = ca.Section()
 
     # Add in background information
     body.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Please calculate the Average Memory Access Time given the below information. "),
-        ContentAST.Text(
-          f"Please round your answer to {ContentAST.Answer.DEFAULT_ROUNDING_DIGITS} decimal points. ",
+      ca.Paragraph([
+        ca.Text("Please calculate the Average Memory Access Time given the below information. "),
+        ca.Text(
+          f"Please round your answer to {ca.Answer.DEFAULT_ROUNDING_DIGITS} decimal points. ",
           hide_from_latex=True
         )
       ])
@@ -260,28 +260,28 @@ class AverageMemoryAccessTime(MathQuestion):
       table_data.append(["Hit Rate", f"{100 * self.hit_rate: 0.2f}%"])
 
     body.add_element(
-      ContentAST.Table(
+      ca.Table(
         data=table_data
       )
     )
 
-    body.add_element(ContentAST.LineBreak())
+    body.add_element(ca.LineBreak())
 
-    body.add_element(ContentAST.AnswerBlock(self.answers["amat"]))
+    body.add_element(ca.AnswerBlock(self.answers["amat"]))
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
 
   def _get_explanation(self, **kwargs):
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
     
     # Add in General explanation
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Remember that to calculate the Average Memory Access Time "
         "we weight both the hit and miss times by their relative likelihood.",
         "That is, we calculate:"
@@ -290,18 +290,18 @@ class AverageMemoryAccessTime(MathQuestion):
     
     # Add in equations
     explanation.add_element(
-      ContentAST.Equation.make_block_equation__multiline_equals(
+      ca.Equation.make_block_equation__multiline_equals(
         lhs="AMAT",
         rhs=[
           r"(hit\_rate)*(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
-          f"({self.hit_rate: 0.{ContentAST.Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.{ContentAST.Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.miss_latency}) = {self.amat: 0.{ContentAST.Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
+          f"({self.hit_rate: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.miss_latency}) = {self.amat: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
         ]
       )
     )
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

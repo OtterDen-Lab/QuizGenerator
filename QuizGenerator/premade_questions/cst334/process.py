@@ -13,7 +13,7 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
@@ -356,15 +356,15 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     
     for job_id in sorted(self.job_stats.keys()):
       self.answers.update({
-        f"answer__response_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["Response"]),
-        f"answer__turnaround_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["TAT"]),
+        f"answer__response_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["Response"]),
+        f"answer__turnaround_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["TAT"]),
       })
     self.answers.update({
-      "answer__average_response_time": AnswerTypes.Float(
+      "answer__average_response_time": ca.AnswerTypes.Float(
         sum([job.response_time for job in jobs]) / len(jobs),
         label="Overall average response time"
       ),
-      "answer__average_turnaround_time": AnswerTypes.Float(
+      "answer__average_turnaround_time": ca.AnswerTypes.Float(
         sum([job.turnaround_time for job in jobs]) / len(jobs),
         label="Overall average TAT"
       )
@@ -380,7 +380,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         Tuple of (body_ast, answers_list)
     """
     from typing import List
-    answers: List[ContentAST.Answer] = []
+    answers: List[ca.Answer] = []
 
     # Create table data for scheduling results
     table_rows = []
@@ -410,7 +410,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     answers.append(avg_tat_answer)
 
     # Create average answer block
-    average_block = ContentAST.AnswerBlock([avg_response_answer, avg_tat_answer])
+    average_block = ca.AnswerBlock([avg_response_answer, avg_tat_answer])
 
     # Use mixin to create complete body
     intro_text = (
@@ -418,8 +418,8 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       f"Break any ties using the job number."
     )
 
-    instructions = ContentAST.OnlyHtml([ContentAST.Paragraph([
-      f"Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of {ContentAST.Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal. "
+    instructions = ca.OnlyHtml([ca.Paragraph([
+      f"Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of {ca.Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal. "
       "Examples of appropriately formatted answers would be `0`, `3/2`, `1 1/3`, `1.6667`, and `1.25`. "
       "Note that answers that can be rounded to whole numbers should be, rather than being left in fractional form."
     ])])
@@ -428,7 +428,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     body.add_element(average_block)
     return body, answers
 
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def get_body(self, *args, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(*args, **kwargs)
     return body
@@ -439,32 +439,32 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     Returns:
         Tuple of (explanation_ast, answers_list)
     """
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"To calculate the overall Turnaround and Response times using {self.scheduler_algorithm} "
         f"we want to first start by calculating the respective target and response times of all of our individual jobs."
       ])
     )
 
     explanation.add_elements([
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "We do this by subtracting arrival time from either the completion time or the start time.  That is:"
         ]),
-      ContentAST.Equation("Job_{TAT} = Job_{completion} - Job_{arrival\_time}"),
-      ContentAST.Equation("Job_{response} = Job_{start} - Job_{arrival\_time}"),
+      ca.Equation("Job_{TAT} = Job_{completion} - Job_{arrival\_time}"),
+      ca.Equation("Job_{response} = Job_{start} - Job_{arrival\_time}"),
     ])
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"For each of our {len(self.job_stats.keys())} jobs, we can make these calculations.",
       ])
     )
 
     ## Add in TAT
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "For turnaround time (TAT) this would be:"
       ] + [
         f"Job{job_id}_TAT "
@@ -479,7 +479,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       f"{self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f}" for job_id in sorted(self.job_stats.keys())
     ])
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"We then calculate the average of these to find the average TAT time",
         f"Avg(TAT) = ({summation_line}) / ({len(self.job_stats.keys())}) "
         f"= {self.overall_stats['TAT']:0.{self.ROUNDING_DIGITS}f}",
@@ -489,7 +489,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     ## Add in Response
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "For response time this would be:"
       ] + [
       f"Job{job_id}_response "
@@ -504,7 +504,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       f"{self.job_stats[job_id]['Response']:0.{self.ROUNDING_DIGITS}f}" for job_id in sorted(self.job_stats.keys())
     ])
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         f"We then calculate the average of these to find the average Response time",
         f"Avg(Response) "
         f"= ({summation_line}) / ({len(self.job_stats.keys())}) "
@@ -514,7 +514,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     )
 
     explanation.add_element(
-      ContentAST.Table(
+      ca.Table(
         headers=["Time", "Events"],
         data=[
           [f"{t:02.{self.ROUNDING_DIGITS}f}s"] + ['\n'.join(self.timeline[t])]
@@ -524,7 +524,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     )
 
     explanation.add_element(
-      ContentAST.Picture(
+      ca.Picture(
         img_data=self.make_image(),
         caption="Process Scheduling Overview"
       )
@@ -532,7 +532,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
@@ -907,13 +907,13 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     for job_id in sorted(self.job_stats.keys()):
       self.answers.update({
-        f"answer__turnaround_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["TAT"])
+        f"answer__turnaround_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["TAT"])
       })
 
     return self.is_interesting()
 
   def _get_body(self, *args, **kwargs):
-    answers: List[ContentAST.Answer] = []
+    answers: List[ca.Answer] = []
 
     queue_rows = []
     for i in reversed(range(self.num_queues)):
@@ -923,7 +923,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         self.queue_quantums[i],
         "infinite" if allotment is None else allotment
       ])
-    queue_table = ContentAST.Table(
+    queue_table = ca.Table(
       headers=["Queue", "Quantum", "Allotment"],
       data=queue_rows
     )
@@ -953,38 +953,38 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     instructions = (
       f"Compute the turnaround time (TAT) for each job. "
-      f"Round to at most {ContentAST.Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal."
+      f"Round to at most {ca.Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal."
     )
 
-    body = ContentAST.Section()
-    body.add_element(ContentAST.Paragraph([intro_text]))
+    body = ca.Section()
+    body.add_element(ca.Paragraph([intro_text]))
     body.add_element(queue_table)
     if self.boost_interval is not None:
-      body.add_element(ContentAST.Paragraph([
+      body.add_element(ca.Paragraph([
         f"Every {self.boost_interval} time units, all jobs are boosted to "
         f"Q{self.num_queues - 1}. After a boost, scheduling restarts with the "
         "lowest job number in that queue."
       ]))
-    body.add_element(ContentAST.Paragraph([instructions]))
+    body.add_element(ca.Paragraph([instructions]))
     body.add_element(scheduling_table)
     return body, answers
 
-  def get_body(self, *args, **kwargs) -> ContentAST.Section:
+  def get_body(self, *args, **kwargs) -> ca.Section:
     body, _ = self._get_body(*args, **kwargs)
     return body
 
   def _get_explanation(self, **kwargs):
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Turnaround time (TAT) is the completion time minus the arrival time.",
         "We calculate it for each job after simulating the schedule."
       ])
     )
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "For each job:"
       ] + [
         f"Job{job_id}_TAT = "
@@ -996,7 +996,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     explanation.add_element(
-      ContentAST.Table(
+      ca.Table(
         headers=["Time", "Events"],
         data=[
           [f"{t:0.{self.ROUNDING_DIGITS}f}s"] + ['\n'.join(events)]
@@ -1017,7 +1017,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     explanation.add_element(
-      ContentAST.Picture(
+      ca.Picture(
         img_data=self.make_image(),
         caption="MLFQ Scheduling Overview"
       )
@@ -1025,7 +1025,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     explanation, _ = self._get_explanation(**kwargs)
     return explanation
 

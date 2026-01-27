@@ -7,7 +7,7 @@ from typing import List, Tuple
 
 from .matrices import MatrixQuestion
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
@@ -64,65 +64,65 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # x_seq, W_xh, W_hh, b_h, h_0, h_states
     
-    self.answers["output_sequence"] = AnswerTypes.Matrix(value=self.h_states, label="Hidden states")
+    self.answers["output_sequence"] = ca.AnswerTypes.Matrix(value=self.h_states, label="Hidden states")
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     body.add_element(
-      ContentAST.Paragraph([
-        ContentAST.Text("Given the below information about an RNN, please calculate the output sequence."),
+      ca.Paragraph([
+        ca.Text("Given the below information about an RNN, please calculate the output sequence."),
         "Assume that you are using a tanh activation function."
       ])
     )
     body.add_element(
       self.create_info_table(
         {
-          ContentAST.Container(["Input sequence, ", ContentAST.Equation("x_{seq}", inline=True)]) : ContentAST.Matrix(self.x_seq),
-          ContentAST.Container(["Input weights, ",  ContentAST.Equation("W_{xh}", inline=True)])  : ContentAST.Matrix(self.W_xh),
-          ContentAST.Container(["Hidden weights, ", ContentAST.Equation("W_{hh}", inline=True)])  : ContentAST.Matrix(self.W_hh),
-          ContentAST.Container(["Bias, ",           ContentAST.Equation("b_{h}", inline=True)])   : ContentAST.Matrix(self.b_h),
-          ContentAST.Container(["Hidden states, ",  ContentAST.Equation("h_{0}", inline=True)])   : ContentAST.Matrix(self.h_0),
+          ca.Container(["Input sequence, ", ca.Equation("x_{seq}", inline=True)]) : ca.Matrix(self.x_seq),
+          ca.Container(["Input weights, ",  ca.Equation("W_{xh}", inline=True)])  : ca.Matrix(self.W_xh),
+          ca.Container(["Hidden weights, ", ca.Equation("W_{hh}", inline=True)])  : ca.Matrix(self.W_hh),
+          ca.Container(["Bias, ",           ca.Equation("b_{h}", inline=True)])   : ca.Matrix(self.b_h),
+          ca.Container(["Hidden states, ",  ca.Equation("h_{0}", inline=True)])   : ca.Matrix(self.h_0),
         }
       )
     )
 
-    body.add_element(ContentAST.LineBreak())
+    body.add_element(ca.LineBreak())
 
     answers.append(self.answers["output_sequence"])
     body.add_element(self.answers["output_sequence"])
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
-    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
+    explanation = ca.Section()
+    digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
 
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
     "For an RNN forward pass, we compute the hidden state at each time step using:"
       ])
     )
 
     explanation.add_element(
-      ContentAST.Equation(r"h_t = \tanh(x_t W_{xh} + h_{t-1} W_{hh} + b_h)")
+      ca.Equation(r"h_t = \tanh(x_t W_{xh} + h_{t-1} W_{hh} + b_h)")
     )
 
     explanation.add_element(
-      ContentAST.Paragraph([
-        "Where the input contributes via ", ContentAST.Equation("W_{xh}", inline=True),
-        ", the previous hidden state contributes via ", ContentAST.Equation("W_{hh}", inline=True),
-        ", and ", ContentAST.Equation("b_h", inline=True), " is the bias."
+      ca.Paragraph([
+        "Where the input contributes via ", ca.Equation("W_{xh}", inline=True),
+        ", the previous hidden state contributes via ", ca.Equation("W_{hh}", inline=True),
+        ", and ", ca.Equation("b_h", inline=True), " is the bias."
       ])
     )
 
@@ -137,12 +137,12 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     seq_len = len(self.x_seq)
     num_examples = min(2, seq_len)
 
-    explanation.add_element(ContentAST.Paragraph([""]))
+    explanation.add_element(ca.Paragraph([""]))
 
     for t in range(num_examples):
       explanation.add_element(
-        ContentAST.Paragraph([
-          ContentAST.Text(f"Example: Timestep {t}", emphasis=True)
+        ca.Paragraph([
+          ca.Text(f"Example: Timestep {t}", emphasis=True)
         ])
       )
 
@@ -162,53 +162,53 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
       h_result = np.tanh(pre_activation)
 
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           "Input contribution: ",
-          ContentAST.Equation(f'x_{t} W_{{xh}}', inline=True),
+          ca.Equation(f'x_{t} W_{{xh}}', inline=True),
           f" = {format_array(x_contribution)}"
         ])
       )
 
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           "Hidden contribution: ",
-          ContentAST.Equation(f'{h_prev_label} W_{{hh}}', inline=True),
+          ca.Equation(f'{h_prev_label} W_{{hh}}', inline=True),
           f"{h_prev_desc} = {format_array(h_contribution)}"
         ])
       )
 
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           f"Pre-activation: {format_array(pre_activation)}"
         ])
       )
 
       explanation.add_element(
-        ContentAST.Paragraph([
+        ca.Paragraph([
           "After tanh: ",
-          ContentAST.Equation(f'h_{t}', inline=True),
+          ca.Equation(f'h_{t}', inline=True),
           f" = {format_array(h_result)}"
         ])
       )
 
       # Add visual separator between timesteps (except after the last one)
       if t < num_examples - 1:
-        explanation.add_element(ContentAST.Paragraph([""]))
+        explanation.add_element(ca.Paragraph([""]))
 
     # Show complete output sequence (rounded)
     explanation.add_element(
-      ContentAST.Paragraph([
+      ca.Paragraph([
         "Complete hidden state sequence (each row is one timestep):"
       ])
     )
 
     explanation.add_element(
-      ContentAST.Matrix(np.round(self.h_states, digits))
+      ca.Matrix(np.round(self.h_states, digits))
     )
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

@@ -15,7 +15,7 @@ import re
 
 import yaml
 
-from QuizGenerator.contentast import ContentAST
+import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry, QuestionGroup
 
 log = logging.getLogger(__name__)
@@ -38,8 +38,8 @@ class Quiz:
     raw_description = kwargs.get("description", None)
     if raw_description:
       # Create a ContentAST document from the description text
-      desc_doc = ContentAST.Document()
-      desc_doc.add_element(ContentAST.Paragraph([raw_description]))
+      desc_doc = ca.Document()
+      desc_doc.add_element(ca.Paragraph([raw_description]))
       self.description = desc_doc.render("html")
     else:
       self.description = None
@@ -418,8 +418,8 @@ class Quiz:
 
     return optimized_questions
 
-  def get_quiz(self, **kwargs) -> ContentAST.Document:
-    quiz = ContentAST.Document(title=self.name)
+  def get_quiz(self, **kwargs) -> ca.Document:
+    quiz = ca.Document(title=self.name)
 
     # Extract master RNG seed (if provided) and remove from kwargs
     master_seed = kwargs.pop('rng_seed', None)

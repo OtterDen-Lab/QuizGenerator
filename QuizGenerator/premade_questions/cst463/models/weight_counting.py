@@ -6,7 +6,7 @@ import numpy as np
 from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.contentast import ContentAST, AnswerTypes
+import QuizGenerator.contentast as ca
 from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)
@@ -85,25 +85,25 @@ class WeightCounting(Question, abc.ABC):
         continue
     
     self.num_parameters = self.model.count_params()
-    self.answers["num_parameters"] = AnswerTypes.Int(self.num_parameters, label="Number of Parameters")
+    self.answers["num_parameters"] = ca.AnswerTypes.Int(self.num_parameters, label="Number of Parameters")
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
-    body = ContentAST.Section()
+    body = ca.Section()
     answers = []
 
     body.add_element(
-      ContentAST.Paragraph(
+      ca.Paragraph(
         [
-          ContentAST.Text("Given the below model, how many parameters does it use?")
+          ca.Text("Given the below model, how many parameters does it use?")
         ]
       )
     )
 
     body.add_element(
-      ContentAST.Code(
+      ca.Code(
         self.model_to_python(
           self.model,
           fields=self.fields
@@ -111,23 +111,23 @@ class WeightCounting(Question, abc.ABC):
       )
     )
 
-    body.add_element(ContentAST.LineBreak())
+    body.add_element(ca.LineBreak())
 
     answers.append(self.answers["num_parameters"])
     body.add_element(self.answers["num_parameters"])
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ContentAST.Section:
+  def get_body(self, **kwargs) -> ca.Section:
     """Build question body (backward compatible interface)."""
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
-    explanation = ContentAST.Section()
+    explanation = ca.Section()
 
-    def markdown_summary(model) -> ContentAST.Table:
+    def markdown_summary(model) -> ca.Table:
       # Ensure the model is built by running build() or calling it once
       if not model.built:
         try:
@@ -155,19 +155,19 @@ class WeightCounting(Question, abc.ABC):
         data.append([name, ltype, outshape, params])
 
       data.append(["**Total**", "", "", f"**{total_params}**"])
-      return ContentAST.Table(data=data, headers=["Layer", "Type", "Output Shape", "Params"])
+      return ca.Table(data=data, headers=["Layer", "Type", "Output Shape", "Params"])
 
 
     summary_lines = []
     self.model.summary(print_fn=lambda x: summary_lines.append(x))
     explanation.add_element(
-      # ContentAST.Text('\n'.join(summary_lines))
+      # ca.Text('\n'.join(summary_lines))
       markdown_summary(self.model)
     )
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ContentAST.Section:
+  def get_explanation(self, **kwargs) -> ca.Section:
     """Build question explanation (backward compatible interface)."""
     explanation, _ = self._get_explanation(**kwargs)
     return explanation

@@ -12,7 +12,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 from typing import Optional
-from QuizGenerator.contentast import ContentAST
+import QuizGenerator.contentast as ca
 
 import logging
 log = logging.getLogger(__name__)
@@ -31,7 +31,7 @@ def measure_typst_content(typst_content: str, page_width_cm: float = 18.0) -> Op
     """
 
     # Get the Typst header which includes fillline and other helper functions
-    typst_header = ContentAST.Document.TYPST_HEADER
+    typst_header = ca.Document.TYPST_HEADER
 
     # Create temporary Typst file with measurement wrapper
     typst_code = textwrap.dedent(f"""
