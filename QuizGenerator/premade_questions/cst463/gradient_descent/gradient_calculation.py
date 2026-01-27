@@ -5,8 +5,8 @@ import logging
 from typing import List, Tuple
 import sympy as sp
 
-from QuizGenerator.contentast import ContentAST
-from QuizGenerator.question import Question, Answer, QuestionRegistry
+from QuizGenerator.contentast import ContentAST, AnswerTypes
+from QuizGenerator.question import Question, QuestionRegistry
 from .misc import generate_function, format_vector
 
 log = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class DerivativeQuestion(Question, abc.ABC):
       # Use auto_float for Canvas compatibility with integers and decimals
       # Label includes the partial derivative notation
       label = f"∂f/∂x_{i} at ({eval_point_str})"
-      self.answers[answer_key] = Answer.auto_float(answer_key, gradient_value, label=label)
+      self.answers[answer_key] = AnswerTypes.Float(gradient_value, label=label)
 
   def _create_gradient_vector_answer(self) -> None:
     """Create a single gradient vector answer for PDF format."""
@@ -75,9 +75,9 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # Format as vector for display using consistent formatting
     vector_str = format_vector(gradient_values)
-    self.answers["gradient_vector"] = Answer.string("gradient_vector", vector_str, pdf_only=True)
+    self.answers["gradient_vector"] = AnswerTypes.String(vector_str, pdf_only=True)
 
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -131,7 +131,7 @@ class DerivativeQuestion(Question, abc.ABC):
     body, _ = self._get_body(**kwargs)
     return body
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 
@@ -162,14 +162,14 @@ class DerivativeQuestion(Question, abc.ABC):
       partial_expr = self.gradient_function[i]
       partial_value = partial_expr.subs(subs_map)
 
-      # Use Answer.accepted_strings for clean numerical formatting
+      # Use ContentAST.Answer.accepted_strings for clean numerical formatting
       try:
         numerical_value = float(partial_value)
       except (TypeError, ValueError):
         numerical_value = float(partial_value.evalf())
 
       # Get clean string representation
-      clean_value = sorted(Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
+      clean_value = sorted(ContentAST.Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
 
       explanation.add_element(
         ContentAST.Paragraph([
@@ -284,7 +284,7 @@ class DerivativeChain(DerivativeQuestion):
     f = sp.Function('f')
     self.equation = sp.Eq(f(*self.variables), self.function)
 
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 
@@ -369,14 +369,14 @@ class DerivativeChain(DerivativeQuestion):
       partial_expr = self.gradient_function[i]
       partial_value = partial_expr.subs(subs_map)
 
-      # Use Answer.accepted_strings for clean numerical formatting
+      # Use ContentAST.Answer.accepted_strings for clean numerical formatting
       try:
         numerical_value = float(partial_value)
       except (TypeError, ValueError):
         numerical_value = float(partial_value.evalf())
 
       # Get clean string representation
-      clean_value = sorted(Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
+      clean_value = sorted(ContentAST.Answer.accepted_strings(numerical_value), key=lambda s: len(s))[0]
 
       explanation.add_element(
         ContentAST.Paragraph([

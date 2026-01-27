@@ -5,8 +5,8 @@ import abc
 import difflib
 import logging
 
-from QuizGenerator.question import Question, Answer, QuestionRegistry
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.question import Question, QuestionRegistry
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
@@ -36,22 +36,10 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.disk_access_delay = self.access_delay * self.number_of_reads + self.transfer_delay
     
     self.answers.update({
-      "answer__rotational_delay": Answer.float_value(
-        "answer__rotational_delay",
-        self.rotational_delay
-      ),
-      "answer__access_delay": Answer.float_value(
-        "answer__access_delay",
-        self.access_delay
-      ),
-      "answer__transfer_delay": Answer.float_value(
-        "answer__transfer_delay",
-        self.transfer_delay
-      ),
-      "answer__disk_access_delay": Answer.float_value(
-        "answer__disk_access_delay",
-        self.disk_access_delay
-      ),
+      "answer__rotational_delay"  : AnswerTypes.Float(self.rotational_delay),
+      "answer__access_delay"      : AnswerTypes.Float(self.access_delay),
+      "answer__transfer_delay"    : AnswerTypes.Float(self.transfer_delay),
+      "answer__disk_access_delay" : AnswerTypes.Float(self.disk_access_delay),
     })
   
   def _get_body(self, *args, **kwargs):
@@ -190,10 +178,10 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.inode_index_in_block = int(self.inode_address_in_block / self.inode_size)
     
     self.answers.update({
-      "answer__inode_address": Answer.integer("answer__inode_address", self.inode_address),
-      "answer__inode_block": Answer.integer("answer__inode_block", self.inode_block),
-      "answer__inode_address_in_block": Answer.integer("answer__inode_address_in_block", self.inode_address_in_block),
-      "answer__inode_index_in_block": Answer.integer("answer__inode_index_in_block", self.inode_index_in_block),
+      "answer__inode_address": AnswerTypes.Int(self.inode_address),
+      "answer__inode_block": AnswerTypes.Int(self.inode_block),
+      "answer__inode_address_in_block": AnswerTypes.Int(self.inode_address_in_block),
+      "answer__inode_index_in_block": AnswerTypes.Int(self.inode_index_in_block),
     })
   
   def _get_body(self):
@@ -334,7 +322,7 @@ class VSFS_states(IOQuestion):
   
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self.answer_kind = Answer.AnswerKind.MULTIPLE_DROPDOWN
+    self.answer_kind = ContentAST.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN
     
     self.num_steps = kwargs.get("num_steps", 10)
   
@@ -356,11 +344,8 @@ class VSFS_states(IOQuestion):
     ))
     self.rng.shuffle(wrong_answers)
     
-    self.answers["answer__cmd"] = Answer(
-      "answer__cmd",
+    self.answers["answer__cmd"] = ContentAST.Answer.dropdown(
       f"{operations[-1]['cmd']}",
-      kind=Answer.AnswerKind.MULTIPLE_DROPDOWN,
-      correct=True,
       baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']])),
       label="Command"
     )

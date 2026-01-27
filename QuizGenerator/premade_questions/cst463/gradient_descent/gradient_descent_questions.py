@@ -6,8 +6,8 @@ import math
 from typing import List, Tuple, Callable, Union, Any
 import sympy as sp
 
-from QuizGenerator.contentast import ContentAST
-from QuizGenerator.question import Question, Answer, QuestionRegistry
+from QuizGenerator.contentast import ContentAST, AnswerTypes
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 from .misc import generate_function, format_vector
@@ -98,17 +98,17 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
       # Location answer
       location_key = f"answer__location_{step}"
-      self.answers[location_key] = Answer.vector_value(location_key, list(result['location']), label=f"Location at step {step}")
+      self.answers[location_key] = AnswerTypes.Vector(list(result['location']), label=f"Location at step {step}")
 
       # Gradient answer
       gradient_key = f"answer__gradient_{step}"
-      self.answers[gradient_key] = Answer.vector_value(gradient_key, list(result['gradient']), label=f"Gradient at step {step}")
+      self.answers[gradient_key] = AnswerTypes.Vector(list(result['gradient']), label=f"Gradient at step {step}")
 
       # Update answer
       update_key = f"answer__update_{step}"
-      self.answers[update_key] = Answer.vector_value(update_key, list(result['update']), label=f"Update at step {step}")
+      self.answers[update_key] = AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -179,7 +179,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 

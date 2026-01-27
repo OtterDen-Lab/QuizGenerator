@@ -6,7 +6,6 @@ These mixins provide reusable patterns for common question structures.
 
 import abc
 from typing import Dict, List, Any, Union
-from QuizGenerator.misc import Answer
 from QuizGenerator.contentast import ContentAST
 
 
@@ -68,13 +67,13 @@ class TableQuestionMixin:
     """
     answer_columns = answer_columns or []
     
-    def format_cell(row_data: Dict, column: str) -> Union[str, Answer]:
+    def format_cell(row_data: Dict, column: str) -> Union[str, ContentAST.Answer]:
       """Format a cell based on whether it should be an answer or plain data"""
       value = row_data.get(column, "")
 
       # If this column should contain answers and the value is an Answer object
       # Answer extends ContentAST.Leaf, so it can be used directly
-      if column in answer_columns and isinstance(value, Answer):
+      if column in answer_columns and isinstance(value, ContentAST.Answer):
         return value
       # If this column should contain answers but we have the answer key
       elif column in answer_columns and isinstance(value, str) and hasattr(self, 'answers'):
@@ -150,11 +149,11 @@ class TableQuestionMixin:
         ContentAST.Table with multiple answer blanks
     """
     
-    def process_cell_value(value: Any) -> Union[str, Answer]:
+    def process_cell_value(value: Any) -> Union[str, ContentAST.Answer]:
       """Convert cell values to appropriate display format"""
       # If it's already an Answer object, use it directly
       # Answer extends ContentAST.Leaf so it can be used in the AST
-      if isinstance(value, Answer):
+      if isinstance(value, ContentAST.Answer):
         return value
       # If it's a string that looks like an answer key, try to resolve it
       elif isinstance(value, str) and value.startswith("answer__") and hasattr(self, 'answers'):
@@ -369,9 +368,9 @@ class MultiPartQuestionMixin:
     Example:
         # For a 3-part question
         {
-            'a': Answer.integer('a', 5),
-            'b': Answer.integer('b', 12),
-            'c': Answer.integer('c', -3)
+            'a': ContentAST.Answer.integer('a', 5),
+            'b': ContentAST.Answer.integer('b', 12),
+            'c': ContentAST.Answer.integer('c', -3)
         }
     """
     if not self.is_multipart():

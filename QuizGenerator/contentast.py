@@ -2,16 +2,12 @@ from __future__ import annotations
 
 import abc
 import enum
-import re
 import textwrap
 from io import BytesIO
 from typing import List, Callable
 
-import numpy
 import pypandoc
 import markdown
-
-# from QuizGenerator.misc import Answer
 
 from QuizGenerator.qrcode_generator import QuestionQRCode
 import re
@@ -19,8 +15,14 @@ import re
 import logging
 import os
 import uuid
+import itertools
+import math
+import decimal
+import fractions
+import numpy as np
 
 log = logging.getLogger(__name__)
+
 
 class ContentAST:
   """
@@ -1201,7 +1203,6 @@ class ContentAST:
       super().__init__("[matrix]")
 
       # Convert numpy ndarray to list format if needed
-      import numpy as np
       if isinstance(data, np.ndarray):
         if data.ndim == 1:
           # 1D array: convert to column vector [[v1], [v2], [v3]]
@@ -1291,7 +1292,7 @@ class ContentAST:
     def render_html(self, **kwargs):
       matrix_env = "smallmatrix" if self.inline else f"{self.bracket_type}matrix"
       rows = []
-      if isinstance(self.data, numpy.ndarray):
+      if isinstance(self.data, np.ndarray):
         data = self.data.tolist()
       else:
         data = self.data
@@ -1466,718 +1467,6 @@ class ContentAST:
       result.append(")")
 
       return "\n".join(result)
-
-  class Answer(Leaf):
-    """
-    Unified answer class combining data storage, Canvas export, and rendering.
-
-    Extends ContentAST.Leaf to integrate seamlessly with the ContentAST tree while
-    maintaining all Canvas export functionality.
-
-    CRITICAL: Use this for ALL answer inputs in questions.
-    Creates appropriate input fields that work across both PDF and Canvas formats.
-    In PDF, renders as blank lines for students to fill in.
-    In HTML/Canvas, can display the answer for checking.
-
-    Example:
-        # Basic answer field
-        ans = ContentAST.Answer.integer("result", 42, label="Result", unit="MB")
-        body.add_element(ans)
-        answers.append(ans)  # Track for Canvas export
-    """
-
-    DEFAULT_ROUNDING_DIGITS = 4
-
-    class AnswerKind(enum.Enum):
-      BLANK = "fill_in_multiple_blanks_question"
-      MULTIPLE_ANSWER = "multiple_answers_question"
-      ESSAY = "essay_question"
-      MULTIPLE_DROPDOWN = "multiple_dropdowns_question"
-      NUMERICAL_QUESTION = "numerical_question"
-
-    class VariableKind(enum.Enum):
-      STR = enum.auto()
-      INT = enum.auto()
-      FLOAT = enum.auto()
-      BINARY = enum.auto()
-      HEX = enum.auto()
-      BINARY_OR_HEX = enum.auto()
-      AUTOFLOAT = enum.auto()
-      LIST = enum.auto()
-      VECTOR = enum.auto()
-      MATRIX = enum.auto()
-
-    def __init__(
-        self,
-        key=None,  # Can be str (new pattern) or Answer object (old wrapper pattern)
-        value=None,
-        kind: 'ContentAST.Answer.AnswerKind' = None,
-        variable_kind: 'ContentAST.Answer.VariableKind' = None,
-        # Data fields (from misc.Answer)
-        display=None,
-        length=None,
-        correct=True,
-        baffles=None,
-        pdf_only=False,
-        # Rendering fields (from ContentAST.Answer)
-        label: str = "",
-        unit: str = "",
-        blank_length=5,
-        # Backward compatibility for old wrapper pattern
-        answer=None  # Old pattern: ContentAST.Answer(answer=misc_answer_obj)
-    ):
-      # BACKWARD COMPATIBILITY: Handle old wrapper pattern
-      # Old: ContentAST.Answer(Answer.string("key", "value"))
-      # Old: ContentAST.Answer(answer=some_answer_obj, label="...")
-      if answer is not None or (key is not None and isinstance(key, ContentAST.Answer)):
-        # Old wrapper pattern detected
-        wrapped_answer = answer if answer is not None else key
-
-        if wrapped_answer is None:
-          raise ValueError("Must provide either 'key' and 'value', or 'answer' parameter")
-
-        # Copy all fields from wrapped answer
-        super().__init__(content=label if label else wrapped_answer.label)
-        self.key = wrapped_answer.key
-        self.value = wrapped_answer.value
-        self.kind = wrapped_answer.kind
-        self.variable_kind = wrapped_answer.variable_kind
-        self.display = wrapped_answer.display
-        self.length = wrapped_answer.length
-        self.correct = wrapped_answer.correct
-        self.baffles = wrapped_answer.baffles
-        self.pdf_only = wrapped_answer.pdf_only
-
-        # Use provided rendering fields or copy from wrapped answer
-        self.label = label if label else wrapped_answer.label
-        self.unit = unit if unit else (wrapped_answer.unit if hasattr(wrapped_answer, 'unit') else "")
-        self.blank_length = blank_length if blank_length != 5 else (wrapped_answer.blank_length if hasattr(wrapped_answer, 'blank_length') else 5)
-        return
-
-      # NEW PATTERN: Normal construction
-      if key is None:
-        raise ValueError("Must provide 'key' parameter for new Answer pattern, or 'answer' parameter for old wrapper pattern")
-
-      # Initialize Leaf with label as content
-      super().__init__(content=label if label else "")
-
-      # Data fields
-      self.key = key
-      self.value = value
-      self.kind = kind if kind is not None else ContentAST.Answer.AnswerKind.BLANK
-      self.variable_kind = variable_kind if variable_kind is not None else ContentAST.Answer.VariableKind.STR
-
-      # For list values in display, show the first option (or join them with /)
-      if display is not None:
-        self.display = display
-      elif isinstance(value, list) and self.variable_kind == ContentAST.Answer.VariableKind.STR:
-        self.display = value[0] if len(value) == 1 else " / ".join(value)
-      else:
-        self.display = value
-
-      self.length = length  # Used for bits and hex to be printed appropriately
-      self.correct = correct
-      self.baffles = baffles
-      self.pdf_only = pdf_only
-
-      # Rendering fields
-      self.label = label
-      self.unit = unit
-      self.blank_length = blank_length
-
-    # Canvas export methods (from misc.Answer)
-    def get_for_canvas(self, single_answer=False) -> List[dict]:
-      """Generate Canvas answer dictionaries based on variable_kind."""
-      import itertools
-      import math
-      import decimal
-      import fractions
-
-      # If this answer is PDF-only, don't send it to Canvas
-      if self.pdf_only:
-        return []
-
-      canvas_answers = []
-
-      if self.variable_kind == ContentAST.Answer.VariableKind.BINARY:
-        canvas_answers = [
-          {
-            "blank_id": self.key,
-            "answer_text": f"{self.value:0{self.length if self.length is not None else 0}b}",
-            "answer_weight": 100 if self.correct else 0,
-          },
-          {
-            "blank_id": self.key,
-            "answer_text": f"0b{self.value:0{self.length if self.length is not None else 0}b}",
-            "answer_weight": 100 if self.correct else 0,
-          }
-        ]
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.HEX:
-        canvas_answers = [
-          {
-            "blank_id": self.key,
-            "answer_text": f"{self.value:0{(self.length // 8) + 1 if self.length is not None else 0}X}",
-            "answer_weight": 100 if self.correct else 0,
-          },
-          {
-            "blank_id": self.key,
-            "answer_text": f"0x{self.value:0{(self.length // 8) + 1 if self.length is not None else 0}X}",
-            "answer_weight": 100 if self.correct else 0,
-          }
-        ]
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.BINARY_OR_HEX:
-        canvas_answers = [
-          {
-            "blank_id": self.key,
-            "answer_text": f"{self.value:0{self.length if self.length is not None else 0}b}",
-            "answer_weight": 100 if self.correct else 0,
-          },
-          {
-            "blank_id": self.key,
-            "answer_text": f"0b{self.value:0{self.length if self.length is not None else 0}b}",
-            "answer_weight": 100 if self.correct else 0,
-          },
-          {
-            "blank_id": self.key,
-            "answer_text": f"{self.value:0{math.ceil(self.length / 8) if self.length is not None else 0}X}",
-            "answer_weight": 100 if self.correct else 0,
-          },
-          {
-            "blank_id": self.key,
-            "answer_text": f"0x{self.value:0{math.ceil(self.length / 8) if self.length is not None else 0}X}",
-            "answer_weight": 100 if self.correct else 0,
-          },
-          {
-            "blank_id": self.key,
-            "answer_text": f"{self.value}",
-            "answer_weight": 100 if self.correct else 0,
-          },
-        ]
-
-      elif self.variable_kind in [
-        ContentAST.Answer.VariableKind.AUTOFLOAT,
-        ContentAST.Answer.VariableKind.FLOAT,
-        ContentAST.Answer.VariableKind.INT
-      ]:
-        if single_answer:
-          canvas_answers = [
-            {
-              "numerical_answer_type": "exact_answer",
-              "answer_text": round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS),
-              "answer_exact": round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS),
-              "answer_error_margin": 0.1,
-              "answer_weight": 100 if self.correct else 0,
-            }
-          ]
-        else:
-          # Use the accepted_strings helper
-          answer_strings = ContentAST.Answer.accepted_strings(
-            self.value,
-            allow_integer=True,
-            allow_simple_fraction=True,
-            max_denominator=60,
-            allow_mixed=True,
-            include_spaces=False,
-            include_fixed_even_if_integer=True
-          )
-
-          canvas_answers = [
-            {
-              "blank_id": self.key,
-              "answer_text": answer_string,
-              "answer_weight": 100 if self.correct else 0,
-            }
-            for answer_string in answer_strings
-          ]
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.VECTOR:
-        # Get all answer variations
-        answer_variations = [
-          ContentAST.Answer.accepted_strings(dimension_value)
-          for dimension_value in self.value
-        ]
-
-        canvas_answers = []
-        for combination in itertools.product(*answer_variations):
-          # Add parentheses format
-          canvas_answers.append({
-            "blank_id": self.key,
-            "answer_weight": 100 if self.correct else 0,
-            "answer_text": f"({', '.join(list(combination))})",
-          })
-
-          # Add non-parentheses format for single-element vectors
-          if len(combination) == 1:
-            canvas_answers.append({
-              "blank_id": self.key,
-              "answer_weight": 100 if self.correct else 0,
-              "answer_text": f"{', '.join(combination)}",
-            })
-        return canvas_answers
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.LIST:
-        canvas_answers = [
-          {
-            "blank_id": self.key,
-            "answer_text": ', '.join(map(str, possible_state)),
-            "answer_weight": 100 if self.correct else 0,
-          }
-          for possible_state in [self.value]
-        ]
-
-      else:
-        # For string answers, check if value is a list of acceptable alternatives
-        if isinstance(self.value, list):
-          canvas_answers = [
-            {
-              "blank_id": self.key,
-              "answer_text": str(alt),
-              "answer_weight": 100 if self.correct else 0,
-            }
-            for alt in self.value
-          ]
-        else:
-          canvas_answers = [{
-            "blank_id": self.key,
-            "answer_text": self.value,
-            "answer_weight": 100 if self.correct else 0,
-          }]
-
-      # Add baffles (incorrect answer choices)
-      if self.baffles is not None:
-        for baffle in self.baffles:
-          canvas_answers.append({
-            "blank_id": self.key,
-            "answer_text": baffle,
-            "answer_weight": 0,
-          })
-
-      return canvas_answers
-
-    def get_display_string(self) -> str:
-      """Get the formatted display string for this answer (for grading/answer keys)."""
-      import math
-
-      def fix_negative_zero(x):
-        """Fix -0.0 display issue."""
-        return 0.0 if x == 0 else x
-
-      if self.variable_kind == ContentAST.Answer.VariableKind.BINARY_OR_HEX:
-        hex_digits = math.ceil(self.length / 4) if self.length is not None else 0
-        return f"0x{self.value:0{hex_digits}X}"
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.BINARY:
-        return f"0b{self.value:0{self.length if self.length is not None else 0}b}"
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.HEX:
-        hex_digits = (self.length // 4) + 1 if self.length is not None else 0
-        return f"0x{self.value:0{hex_digits}X}"
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.AUTOFLOAT:
-        rounded = round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-        return f"{fix_negative_zero(rounded)}"
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.FLOAT:
-        if isinstance(self.value, (list, tuple)):
-          rounded = round(self.value[0], ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-          return f"{fix_negative_zero(rounded)}"
-        rounded = round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-        return f"{fix_negative_zero(rounded)}"
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.INT:
-        return str(int(self.value))
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.LIST:
-        return ", ".join(str(v) for v in self.value)
-
-      elif self.variable_kind == ContentAST.Answer.VariableKind.VECTOR:
-        def fix_negative_zero(x):
-          return 0.0 if x == 0 else x
-        return ", ".join(str(fix_negative_zero(round(v, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS))) for v in self.value)
-
-      else:
-        return str(self.display if hasattr(self, 'display') else self.value)
-
-    # Rendering methods (override Leaf's defaults)
-    def render_markdown(self, **kwargs):
-      return f"{self.label + (':' if len(self.label) > 0 else '')} [{self.key}] {self.unit}".strip()
-
-    def render_html(self, show_answers=False, can_be_numerical=False, **kwargs):
-      if can_be_numerical:
-        return f"Calculate {self.label}"
-      if show_answers:
-        answer_display = self.get_display_string()
-        label_part = f"{self.label}:" if self.label else ""
-        unit_part = f" {self.unit}" if self.unit else ""
-        return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
-      else:
-        return self.render_markdown(**kwargs)
-
-    def render_latex(self, **kwargs):
-      return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.blank_length}}} {self.unit}".strip()
-
-    def render_typst(self, **kwargs):
-      """Render answer blank as an underlined space in Typst."""
-      blank_width = self.blank_length * 0.75  # Convert character length to cm
-      blank = f"#fillline(width: {blank_width}cm)"
-
-      label_part = f"{self.label}:" if self.label else ""
-      unit_part = f" {self.unit}" if self.unit else ""
-
-      return f"{label_part} {blank}{unit_part}".strip()
-
-    # Factory methods for common answer types
-    @classmethod
-    def binary_hex(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
-      """Create an answer that accepts binary or hex format"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.BINARY_OR_HEX,
-        length=length,
-        **kwargs
-      )
-
-    @classmethod
-    def auto_float(cls, key: str, value: float, **kwargs) -> 'ContentAST.Answer':
-      """Create an answer that accepts multiple float formats (decimal, fraction, mixed)"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.AUTOFLOAT,
-        **kwargs
-      )
-
-    @classmethod
-    def integer(cls, key: str, value: int, **kwargs) -> 'ContentAST.Answer':
-      """Create an integer answer"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.INT,
-        **kwargs
-      )
-
-    @classmethod
-    def string(cls, key: str, value: str, **kwargs) -> 'ContentAST.Answer':
-      """Create a string answer"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.STR,
-        **kwargs
-      )
-
-    @classmethod
-    def binary(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
-      """Create a binary-only answer"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.BINARY,
-        length=length,
-        **kwargs
-      )
-
-    @classmethod
-    def hex_value(cls, key: str, value: int, length: int = None, **kwargs) -> 'ContentAST.Answer':
-      """Create a hex-only answer"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.HEX,
-        length=length,
-        **kwargs
-      )
-
-    @classmethod
-    def float_value(cls, key: str, value, **kwargs) -> 'ContentAST.Answer':
-      """Create a simple float answer (no fraction conversion)"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.FLOAT,
-        **kwargs
-      )
-
-    @classmethod
-    def list_value(cls, key: str, value: list, **kwargs) -> 'ContentAST.Answer':
-      """Create a list answer (comma-separated values)"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.LIST,
-        **kwargs
-      )
-
-    @classmethod
-    def vector_value(cls, key: str, value: List[float], **kwargs) -> 'ContentAST.Answer':
-      """Create a vector answer"""
-      return cls(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.VECTOR,
-        **kwargs
-      )
-
-    @classmethod
-    def dropdown(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
-      """Create a dropdown answer with wrong answer choices (baffles)"""
-      return cls(
-        key=key,
-        value=value,
-        kind=cls.AnswerKind.MULTIPLE_DROPDOWN,
-        baffles=baffles,
-        **kwargs
-      )
-
-    @classmethod
-    def multiple_choice(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
-      """Create a multiple choice answer with wrong answer choices (baffles)"""
-      return cls(
-        key=key,
-        value=value,
-        kind=cls.AnswerKind.MULTIPLE_ANSWER,
-        baffles=baffles,
-        **kwargs
-      )
-
-    @classmethod
-    def essay(cls, key: str, **kwargs) -> 'ContentAST.Answer':
-      """Create an essay question (no specific correct answer)"""
-      return cls(
-        key=key,
-        value="",  # Essays don't have predetermined answers
-        kind=cls.AnswerKind.ESSAY,
-        **kwargs
-      )
-
-    @classmethod
-    def matrix(cls, key: str, value, **kwargs):
-      """Create a matrix answer (returns MatrixAnswer instance)"""
-      return ContentAST.MatrixAnswer(
-        key=key,
-        value=value,
-        variable_kind=cls.VariableKind.MATRIX,
-        **kwargs
-      )
-
-    # Static helper methods
-    @staticmethod
-    def _to_fraction(x):
-      """Convert int/float/decimal.Decimal/fractions.Fraction/str to fractions.Fraction exactly."""
-      import fractions
-      import decimal
-
-      if isinstance(x, fractions.Fraction):
-        return x
-      if isinstance(x, int):
-        return fractions.Fraction(x, 1)
-      if isinstance(x, decimal.Decimal):
-        # exact conversion of decimal.Decimal to fractions.Fraction
-        sign, digits, exp = x.as_tuple()
-        n = 0
-        for d in digits:
-          n = n * 10 + d
-        n = -n if sign else n
-        if exp >= 0:
-          return fractions.Fraction(n * (10 ** exp), 1)
-        else:
-          return fractions.Fraction(n, 10 ** (-exp))
-      if isinstance(x, str):
-        s = x.strip()
-        if '/' in s:
-          a, b = s.split('/', 1)
-          return fractions.Fraction(int(a.strip()), int(b.strip()))
-        return fractions.Fraction(decimal.Decimal(s))
-      # float or other numerics
-      return fractions.Fraction(decimal.Decimal(str(x)))
-
-    @staticmethod
-    def accepted_strings(
-        value,
-        *,
-        allow_integer=True,
-        allow_simple_fraction=True,
-        max_denominator=720,
-        allow_mixed=False,
-        include_spaces=False,
-        include_fixed_even_if_integer=False
-    ):
-      """Return a sorted list of strings you can paste into Canvas as alternate correct answers."""
-      import decimal
-      import fractions
-
-      decimal.getcontext().prec = max(34, (ContentAST.Answer.DEFAULT_ROUNDING_DIGITS or 0) + 10)
-      f = ContentAST.Answer._to_fraction(value)
-      outs = set()
-
-      # Integer form
-      if f.denominator == 1 and allow_integer:
-        outs.add(str(f.numerator))
-        if include_fixed_even_if_integer:
-          q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-          d = decimal.Decimal(f.numerator).quantize(q, rounding=decimal.ROUND_HALF_UP)
-          outs.add(format(d, 'f'))
-
-      # Fixed-decimal form
-      q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-      d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
-      outs.add(format(d, 'f'))
-
-      # Trimmed decimal
-      if ContentAST.Answer.DEFAULT_ROUNDING_DIGITS:
-        q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
-        d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
-        s = format(d, 'f').rstrip('0').rstrip('.')
-        if s.startswith('.'):
-          s = '0' + s
-        if s == '-0':
-          s = '0'
-        outs.add(s)
-
-      # Simple fraction
-      if allow_simple_fraction:
-        fr = f.limit_denominator(max_denominator)
-        if fr == f:
-          a, b = fr.numerator, fr.denominator
-          outs.add(f"{a}/{b}")
-          if include_spaces:
-            outs.add(f"{a} / {b}")
-          if allow_mixed and b != 1 and abs(a) > b:
-            sign = '-' if a < 0 else ''
-            A = abs(a)
-            whole, rem = divmod(A, b)
-            outs.add(f"{sign}{whole} {rem}/{b}")
-
-      return sorted(outs, key=lambda s: (len(s), s))
-
-  class MatrixAnswer(Answer):
-    """
-    Matrix answers generate multiple blank_ids (e.g., M_0_0, M_0_1, M_1_0, M_1_1).
-    """
-
-    def get_for_canvas(self, single_answer=False) -> List[dict]:
-      """Generate Canvas answers for each matrix element."""
-      import numpy as np
-
-      canvas_answers = []
-
-      # Generate a per-index set of answers for each matrix element
-      for i, j in np.ndindex(self.value.shape):
-        entry_strings = ContentAST.Answer.accepted_strings(
-          self.value[i, j],
-          allow_integer=True,
-          allow_simple_fraction=True,
-          max_denominator=60,
-          allow_mixed=True,
-          include_spaces=False,
-          include_fixed_even_if_integer=True
-        )
-        canvas_answers.extend([
-          {
-            "blank_id": f"{self.key}_{i}_{j}",  # Indexed per cell
-            "answer_text": answer_string,
-            "answer_weight": 100 if self.correct else 0,
-          }
-          for answer_string in entry_strings
-        ])
-
-      return canvas_answers
-
-    def render_html(self, **kwargs):
-      """Render as table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          ContentAST.Answer.float_value(
-            key=f"{self.key}_{i}_{j}",
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-
-      if self.label:
-        return ContentAST.Container([
-          ContentAST.Text(f"{self.label} = "),
-          table
-        ]).render_html(**kwargs)
-      return table.render_html(**kwargs)
-
-    def render_latex(self, **kwargs):
-      """Render as LaTeX table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          ContentAST.Answer.float_value(
-            key=f"{self.key}_{i}_{j}",
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-
-      if self.label:
-        return ContentAST.Container([
-          ContentAST.Text(f"{self.label} = "),
-          table
-        ]).render_latex(**kwargs)
-      return table.render_latex(**kwargs)
-
-    def render_markdown(self, **kwargs):
-      """Render as markdown table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          ContentAST.Answer.float_value(
-            key=f"{self.key}_{i}_{j}",
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-
-      if self.label:
-        return ContentAST.Container([
-          ContentAST.Text(f"{self.label} = "),
-          table
-        ]).render_markdown(**kwargs)
-      return table.render_markdown(**kwargs)
-
-    def render_typst(self, **kwargs):
-      """Render as Typst table of answer blanks."""
-      # Create sub-Answer for each cell
-      data = [
-        [
-          ContentAST.Answer.float_value(
-            key=f"{self.key}_{i}_{j}",
-            value=self.value[i, j],
-            blank_length=5
-          )
-          for j in range(self.value.shape[1])
-        ]
-        for i in range(self.value.shape[0])
-      ]
-      table = ContentAST.Table(data)
-
-      if self.label:
-        return ContentAST.Container([
-          ContentAST.Text(f"{self.label} = "),
-          table
-        ]).render_typst(**kwargs)
-      return table.render_typst(**kwargs)
 
   class LineBreak(Text):
     def __init__(self, *args, **kwargs):
@@ -2822,4 +2111,537 @@ class ContentAST:
       if output_format != "html":
         return ""
       return super().render(output_format, **kwargs)
+  
+  class Answer(Leaf):
+    """
+    Unified answer class combining data storage, Canvas export, and rendering.
+
+    Extends ContentAST.Leaf to integrate seamlessly with the ContentAST tree while
+    maintaining all Canvas export functionality.
+
+    CRITICAL: Use this for ALL answer inputs in questions.
+    Creates appropriate input fields that work across both PDF and Canvas formats.
+    In PDF, renders as blank lines for students to fill in.
+    In HTML/Canvas, can display the answer for checking.
+
+    Example:
+        # Basic answer field
+        ans = ContentAST.Answer.integer("result", 42, label="Result", unit="MB")
+        body.add_element(ans)
+        answers.append(ans)  # Track for Canvas export
+    """
+
+    DEFAULT_ROUNDING_DIGITS = 4
+
+    class CanvasAnswerKind(enum.Enum):
+      BLANK = "fill_in_multiple_blanks_question"
+      MULTIPLE_ANSWER = "multiple_answers_question"
+      ESSAY = "essay_question"
+      MULTIPLE_DROPDOWN = "multiple_dropdowns_question"
+      NUMERICAL_QUESTION = "numerical_question"
+
+    class VariableKind(enum.Enum):
+      STR = enum.auto()
+      INT = enum.auto()
+      FLOAT = enum.auto()
+      BINARY = enum.auto()
+      HEX = enum.auto()
+      BINARY_OR_HEX = enum.auto()
+      AUTOFLOAT = enum.auto()
+      LIST = enum.auto()
+      VECTOR = enum.auto()
+      MATRIX = enum.auto()
+
+    def __init__(
+        self,
+        value=None,
+        kind: ContentAST.Answer.CanvasAnswerKind = None,
+        variable_kind: ContentAST.Answer.VariableKind = None,
+        *,
+        # Data fields (from misc.Answer)
+        display=None,
+        length=None,
+        correct=True,
+        baffles=None,
+        pdf_only=False,
+        # Rendering fields (from ContentAST.Answer)
+        label: str = "",
+        unit: str = "",
+        blank_length=5,
+    ):
+      
+      # Initialize Leaf with label as content
+      super().__init__(content=label if label else "")
+
+      # Data fields
+      self.key = str(uuid.uuid4())
+      self.value = value
+      self.kind = kind if kind is not None else ContentAST.Answer.CanvasAnswerKind.BLANK
+      self.variable_kind = variable_kind if variable_kind is not None else ContentAST.Answer.VariableKind.STR
+
+      # For list values in display, show the first option (or join them with /)
+      if display is not None:
+        self.display = display
+      elif isinstance(value, list) and isinstance(self.variable_kind, AnswerTypes.String):
+        self.display = value[0] if len(value) == 1 else " / ".join(value)
+      else:
+        self.display = value
+
+      self.length = length  # Used for bits and hex to be printed appropriately
+      self.correct = correct
+      self.baffles = baffles
+      self.pdf_only = pdf_only
+
+      # Rendering fields
+      self.label = label
+      self.unit = unit
+      self.blank_length = blank_length
+
+    # Canvas export methods (from misc.Answer)
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      """Generate Canvas answer dictionaries based on variable_kind."""
+      
+      # If this answer is PDF-only, don't send it to Canvas
+      if self.pdf_only:
+        return []
+
+      canvas_answers = []
+      if isinstance(self.value, list):
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": str(alt),
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for alt in self.value
+        ]
+      else:
+        canvas_answers = [{
+          "blank_id": self.key,
+          "answer_text": self.value,
+          "answer_weight": 100 if self.correct else 0,
+        }]
+
+      # Add baffles (incorrect answer choices)
+      if self.baffles is not None:
+        for baffle in self.baffles:
+          canvas_answers.append({
+            "blank_id": self.key,
+            "answer_text": baffle,
+            "answer_weight": 0,
+          })
+
+      return canvas_answers
+
+    def get_display_string(self) -> str:
+      """Get the formatted display string for this answer (for grading/answer keys)."""
+      return str(self.display if hasattr(self, 'display') else self.value)
+
+    # Rendering methods (override Leaf's defaults)
+    def render_markdown(self, **kwargs):
+      return f"{self.label + (':' if len(self.label) > 0 else '')} [{self.key}] {self.unit}".strip()
+
+    def render_html(self, show_answers=False, can_be_numerical=False, **kwargs):
+      if can_be_numerical:
+        return f"Calculate {self.label}"
+      if show_answers:
+        answer_display = self.get_display_string()
+        label_part = f"{self.label}:" if self.label else ""
+        unit_part = f" {self.unit}" if self.unit else ""
+        return f"{label_part} <strong>{answer_display}</strong>{unit_part}".strip()
+      else:
+        return self.render_markdown(**kwargs)
+
+    def render_latex(self, **kwargs):
+      return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.blank_length}}} {self.unit}".strip()
+
+    def render_typst(self, **kwargs):
+      """Render answer blank as an underlined space in Typst."""
+      blank_width = self.blank_length * 0.75  # Convert character length to cm
+      blank = f"#fillline(width: {blank_width}cm)"
+
+      label_part = f"{self.label}:" if self.label else ""
+      unit_part = f" {self.unit}" if self.unit else ""
+
+      return f"{label_part} {blank}{unit_part}".strip()
+    
+    # Factory methods for common answer types
+    @classmethod
+    def dropdown(cls, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
+      """Create a dropdown answer with wrong answer choices (baffles)"""
+      return cls(
+        value=value,
+        kind=cls.CanvasAnswerKind.MULTIPLE_DROPDOWN,
+        baffles=baffles,
+        **kwargs
+      )
+
+    @classmethod
+    def multiple_choice(cls, key: str, value: str, baffles: list = None, **kwargs) -> 'ContentAST.Answer':
+      """Create a multiple choice answer with wrong answer choices (baffles)"""
+      return cls(
+        value=value,
+        kind=cls.CanvasAnswerKind.MULTIPLE_ANSWER,
+        baffles=baffles,
+        **kwargs
+      )
+
+    # Static helper methods
+    @staticmethod
+    def _to_fraction(x):
+      """Convert int/float/decimal.Decimal/fractions.Fraction/str to fractions.Fraction exactly."""
+      if isinstance(x, fractions.Fraction):
+        return x
+      if isinstance(x, int):
+        return fractions.Fraction(x, 1)
+      if isinstance(x, decimal.Decimal):
+        # exact conversion of decimal.Decimal to fractions.Fraction
+        sign, digits, exp = x.as_tuple()
+        n = 0
+        for d in digits:
+          n = n * 10 + d
+        n = -n if sign else n
+        if exp >= 0:
+          return fractions.Fraction(n * (10 ** exp), 1)
+        else:
+          return fractions.Fraction(n, 10 ** (-exp))
+      if isinstance(x, str):
+        s = x.strip()
+        if '/' in s:
+          a, b = s.split('/', 1)
+          return fractions.Fraction(int(a.strip()), int(b.strip()))
+        return fractions.Fraction(decimal.Decimal(s))
+      # float or other numerics
+      return fractions.Fraction(decimal.Decimal(str(x)))
+
+    @staticmethod
+    def accepted_strings(
+        value,
+        *,
+        allow_integer=True,
+        allow_simple_fraction=True,
+        max_denominator=720,
+        allow_mixed=False,
+        include_spaces=False,
+        include_fixed_even_if_integer=False
+    ):
+      """Return a sorted list of strings you can paste into Canvas as alternate correct answers."""
+      decimal.getcontext().prec = max(34, (ContentAST.Answer.DEFAULT_ROUNDING_DIGITS or 0) + 10)
+      f = ContentAST.Answer._to_fraction(value)
+      outs = set()
+
+      # Integer form
+      if f.denominator == 1 and allow_integer:
+        outs.add(str(f.numerator))
+        if include_fixed_even_if_integer:
+          q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+          d = decimal.Decimal(f.numerator).quantize(q, rounding=decimal.ROUND_HALF_UP)
+          outs.add(format(d, 'f'))
+
+      # Fixed-decimal form
+      q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+      d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
+      outs.add(format(d, 'f'))
+
+      # Trimmed decimal
+      if ContentAST.Answer.DEFAULT_ROUNDING_DIGITS:
+        q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+        d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
+        s = format(d, 'f').rstrip('0').rstrip('.')
+        if s.startswith('.'):
+          s = '0' + s
+        if s == '-0':
+          s = '0'
+        outs.add(s)
+
+      # Simple fraction
+      if allow_simple_fraction:
+        fr = f.limit_denominator(max_denominator)
+        if fr == f:
+          a, b = fr.numerator, fr.denominator
+          outs.add(f"{a}/{b}")
+          if include_spaces:
+            outs.add(f"{a} / {b}")
+          if allow_mixed and b != 1 and abs(a) > b:
+            sign = '-' if a < 0 else ''
+            A = abs(a)
+            whole, rem = divmod(A, b)
+            outs.add(f"{sign}{whole} {rem}/{b}")
+
+      return sorted(outs, key=lambda s: (len(s), s))
+    
+    @staticmethod
+    def fix_negative_zero(x):
+      """Fix -0.0 display issue."""
+      return 0.0 if x == 0 else x
+
+
+class AnswerTypes:
+  # Multibase answers that can accept either hex, binary or decimal
+  class MultiBase(ContentAST.Answer):
+    """
+    These are answers that can accept answers in any sort of format, and default to displaying in hex when written out.
+    This will be the parent class for Binary, Hex, and Integer answers most likely.
+    """
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+
+      canvas_answers = [
+        {
+          "blank_id": self.key,
+          "answer_text": f"{self.value:0{self.length if self.length is not None else 0}b}",
+          "answer_weight": 100 if self.correct else 0,
+        },
+        {
+          "blank_id": self.key,
+          "answer_text": f"0b{self.value:0{self.length if self.length is not None else 0}b}",
+          "answer_weight": 100 if self.correct else 0,
+        },
+        {
+          "blank_id": self.key,
+          "answer_text": f"{self.value:0{math.ceil(self.length / 8) if self.length is not None else 0}X}",
+          "answer_weight": 100 if self.correct else 0,
+        },
+        {
+          "blank_id": self.key,
+          "answer_text": f"0x{self.value:0{math.ceil(self.length / 8) if self.length is not None else 0}X}",
+          "answer_weight": 100 if self.correct else 0,
+        },
+        {
+          "blank_id": self.key,
+          "answer_text": f"{self.value}",
+          "answer_weight": 100 if self.correct else 0,
+        },
+      ]
+      
+      return canvas_answers
+
+    def get_display_string(self) -> str:
+      # This is going to be the default for multi-base answers, but may change later.
+      hex_digits = (self.length // 4) + 1 if self.length is not None else 0
+      return f"0x{self.value:0{hex_digits}X}"
+  
+  class Hex(MultiBase):
+    pass
+  
+  class Binary(MultiBase):
+    def get_display_string(self) -> str:
+      return f"0b{self.value:0{self.length if self.length is not None else 0}b}"
+  
+  class Decimal(MultiBase):
+    def get_display_string(self) -> str:
+      return f"{self.value:0{self.length if self.length is not None else 0}}"
+
+  # Concrete type answers
+  class Float(ContentAST.Answer):
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      if single_answer:
+        canvas_answers = [
+          {
+            "numerical_answer_type": "exact_answer",
+            "answer_text": round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS),
+            "answer_exact": round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS),
+            "answer_error_margin": 0.1,
+            "answer_weight": 100 if self.correct else 0,
+          }
+        ]
+      else:
+        # Use the accepted_strings helper
+        answer_strings = ContentAST.Answer.accepted_strings(
+          self.value,
+          allow_integer=True,
+          allow_simple_fraction=True,
+          max_denominator=60,
+          allow_mixed=True,
+          include_spaces=False,
+          include_fixed_even_if_integer=True
+        )
+        
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": answer_string,
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for answer_string in answer_strings
+        ]
+      return canvas_answers
+  
+    def get_display_string(self) -> str:
+      rounded = round(self.value, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
+      return f"{self.fix_negative_zero(rounded)}"
+  
+  class Int(ContentAST.Answer):
+
+    # Canvas export methods (from misc.Answer)
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      canvas_answers = [
+        {
+          "blank_id": self.key,
+          "answer_text": str(int(self.value)),
+          "answer_weight": 100 if self.correct else 0,
+        }
+      ]
+      return canvas_answers
+
+  # Open Ended
+  class OpenEnded(ContentAST.Answer):
+    def __init__(self, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.kind=ContentAST.Answer.CanvasAnswerKind.ESSAY
+  
+  class String(ContentAST.Answer):
+    pass
+  
+  class List(ContentAST.Answer):
+    def __init__(self, order_matters=True, *args, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.order_matters = order_matters
+    
+    def get_for_canvas(self, single_answer=False):
+      if self.order_matters:
+        canvas_answers = [
+          {
+            "blank_id": self.key,
+            "answer_text": ', '.join(map(str, self.value)),
+            "answer_weight": 100 if self.correct else 0,
+          },
+          {
+            "blank_id": self.key,
+            "answer_text": ','.join(map(str, self.value)),
+            "answer_weight": 100 if self.correct else 0,
+          }
+        ]
+      else:
+        canvas_answers = []
+        
+        # With spaces
+        canvas_answers.extend([
+          {
+            "blank_id": self.key,
+            "answer_text": ', '.join(map(str, possible_state)),
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for possible_state in itertools.permutations(self.value)
+        ])
+        
+        # Without spaces
+        canvas_answers.extend([
+          {
+            "blank_id": self.key,
+            "answer_text": ','.join(map(str, possible_state)),
+            "answer_weight": 100 if self.correct else 0,
+          }
+          for possible_state in itertools.permutations(self.value)
+        ])
+      return canvas_answers
+
+    def get_display_string(self) -> str:
+      """Get the formatted display string for this answer (for grading/answer keys)."""
+      return ", ".join(str(v) for v in self.value)
+
+  # Math types
+  class Vector(ContentAST.Answer):
+    """
+    These are self-contained vectors that will go in a single answer block
+    """
+    
+    # Canvas export methods (from misc.Answer)
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      # Get all answer variations
+      answer_variations = [
+        ContentAST.Answer.accepted_strings(dimension_value)
+        for dimension_value in self.value
+      ]
+      
+      canvas_answers = []
+      for combination in itertools.product(*answer_variations):
+        # Add without anything surrounding
+        canvas_answers.extend([
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"{', '.join(combination)}",
+          },
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"{','.join(combination)}",
+          },
+          # Add parentheses format
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"({', '.join(list(combination))})",
+          },
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"({','.join(list(combination))})",
+          },
+          # Add square brackets
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"[{', '.join(list(combination))}]",
+          },
+          {
+            "blank_id": self.key,
+            "answer_weight": 100 if self.correct else 0,
+            "answer_text": f"[{','.join(list(combination))}]",
+          }
+        ])
+      return canvas_answers
+      
+    def get_display_string(self) -> str:
+      return ", ".join(
+        str(self.fix_negative_zero(round(v, ContentAST.Answer.DEFAULT_ROUNDING_DIGITS))).rstrip('0').rstrip('.') for v in self.value
+      )
+      
+  class CompoundAnswers(ContentAST.Answer):
+    pass
+    """
+    Going forward, this might make a lot of sense to have a SubAnswer class that we can iterate over.
+    We would convert into this shared format and just iterate over it whenever we need to.
+    """
+  
+  class Matrix(CompoundAnswers):
+    """
+    Matrix answers generate multiple blank_ids (e.g., M_0_0, M_0_1, M_1_0, M_1_1).
+    """
+    
+    def __init__(self, value, *args, **kwargs):
+      super().__init__(value=value, *args, **kwargs)
+      
+      self.data = [
+        [
+          AnswerTypes.Float(
+            value=self.value[i, j],
+            blank_length=5
+          )
+          for j in range(self.value.shape[1])
+        ]
+        for i in range(self.value.shape[0])
+      ]
+    
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      """Generate Canvas answers for each matrix element."""
+      canvas_answers = []
+      
+      for sub_answer in itertools.chain.from_iterable(self.data):
+        canvas_answers.extend(sub_answer.get_for_canvas())
+      
+      return canvas_answers
+    
+    def render(self, *args, **kwargs) -> str:
+      table = ContentAST.Table(self.data)
+    
+      if self.label:
+        return ContentAST.Container(
+          [
+            ContentAST.Text(f"{self.label} = "),
+            table
+          ]
+        ).render(*args, **kwargs)
+      return table.render(*args, **kwargs)
+    
   

@@ -5,8 +5,8 @@ import keras
 import numpy as np
 from typing import List, Tuple
 
-from QuizGenerator.question import Question, QuestionRegistry, Answer
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.question import Question, QuestionRegistry
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)
@@ -85,15 +85,11 @@ class WeightCounting(Question, abc.ABC):
         continue
     
     self.num_parameters = self.model.count_params()
-    self.answers["num_parameters"] = Answer.integer(
-      "num_parameters",
-      self.num_parameters,
-      label="Number of Parameters"
-    )
+    self.answers["num_parameters"] = AnswerTypes.Int(self.num_parameters, label="Number of Parameters")
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -127,7 +123,7 @@ class WeightCounting(Question, abc.ABC):
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
 

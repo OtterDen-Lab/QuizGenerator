@@ -2,8 +2,8 @@
 import abc
 import logging
 
-from QuizGenerator.question import Question, QuestionRegistry, Answer
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.question import Question, QuestionRegistry
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.mixins import MathOperationQuestion
 
 log = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
     - ContentAST.Matrix for mathematical matrices
     - ContentAST.Equation.make_block_equation__multiline_equals for step-by-step solutions
     - ContentAST.OnlyHtml for Canvas-specific content
-    - Answer.integer for numerical answers
+    - ContentAST.Answer.integer for numerical answers
     """
     def __init__(self, *args, **kwargs):
         kwargs["topic"] = kwargs.get("topic", Question.Topic.MATH)
@@ -169,7 +169,7 @@ class MatrixAddition(MatrixMathQuestion):
             for i in range(rows):
                 for j in range(cols):
                     answer_key = f"answer_{i}_{j}"
-                    self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+                    self.answers[answer_key] = AnswerTypes.Int(result[i][j])
         else:
             # For multipart questions, use subpart letter format
             letter = chr(ord('a') + subpart_index)
@@ -178,7 +178,7 @@ class MatrixAddition(MatrixMathQuestion):
             for i in range(rows):
                 for j in range(cols):
                     answer_key = f"subpart_{letter}_{i}_{j}"
-                    self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+                    self.answers[answer_key] = AnswerTypes.Int(result[i][j])
 
     def refresh(self, *args, **kwargs):
         """Override refresh to set rows/cols for compatibility."""
@@ -299,7 +299,7 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
             for i in range(rows):
                 for j in range(cols):
                     answer_key = f"answer_{i}_{j}"
-                    self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+                    self.answers[answer_key] = AnswerTypes.Int(result[i][j])
         else:
             # For multipart questions, use subpart letter format
             letter = chr(ord('a') + subpart_index)
@@ -308,7 +308,7 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
             for i in range(rows):
                 for j in range(cols):
                     answer_key = f"subpart_{letter}_{i}_{j}"
-                    self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+                    self.answers[answer_key] = AnswerTypes.Int(result[i][j])
 
     def refresh(self, *args, **kwargs):
         """Override refresh to handle different scalars per subpart."""
@@ -501,31 +501,27 @@ class MatrixMultiplication(MatrixMathQuestion):
             # For single questions, use the old answer format
             # Dimension answers
             if result is not None:
-                self.answers["result_rows"] = Answer.integer("result_rows", self.result_rows,
-                                                             label="Number of rows in result")
-                self.answers["result_cols"] = Answer.integer("result_cols", self.result_cols,
-                                                             label="Number of columns in result")
+                self.answers["result_rows"] = AnswerTypes.Int(self.result_rows, label="Number of rows in result")
+                self.answers["result_cols"] = AnswerTypes.Int(self.result_cols, label="Number of columns in result")
 
                 # Matrix element answers
                 for i in range(self.max_dim):
                     for j in range(self.max_dim):
                         answer_key = f"answer_{i}_{j}"
                         if i < self.result_rows and j < self.result_cols:
-                            self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+                            self.answers[answer_key] = AnswerTypes.Int(result[i][j])
                         else:
-                            self.answers[answer_key] = Answer.string(answer_key, "-")
+                            self.answers[answer_key] = AnswerTypes.String("-")
             else:
                 # Multiplication not possible
-                self.answers["result_rows"] = Answer.string("result_rows", "-",
-                                                            label="Number of rows in result")
-                self.answers["result_cols"] = Answer.string("result_cols", "-",
-                                                            label="Number of columns in result")
+                self.answers["result_rows"] = AnswerTypes.String("-", label="Number of rows in result")
+                self.answers["result_cols"] = AnswerTypes.String("-", label="Number of columns in result")
 
                 # All matrix elements are "-"
                 for i in range(self.max_dim):
                     for j in range(self.max_dim):
                         answer_key = f"answer_{i}_{j}"
-                        self.answers[answer_key] = Answer.string(answer_key, "-")
+                        self.answers[answer_key] = AnswerTypes.String("-")
         else:
             # For multipart questions, use subpart letter format
             letter = chr(ord('a') + subpart_index)
@@ -537,7 +533,7 @@ class MatrixMultiplication(MatrixMathQuestion):
                 for i in range(rows):
                     for j in range(cols):
                         answer_key = f"subpart_{letter}_{i}_{j}"
-                        self.answers[answer_key] = Answer.integer(answer_key, result[i][j])
+                        self.answers[answer_key] = AnswerTypes.Int(result[i][j])
 
     def _add_single_question_answers(self, body):
         """Add Canvas-only answer fields for MatrixMultiplication with dash instruction.

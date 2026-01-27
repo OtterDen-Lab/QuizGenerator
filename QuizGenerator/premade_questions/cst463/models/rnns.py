@@ -6,8 +6,8 @@ import numpy as np
 from typing import List, Tuple
 
 from .matrices import MatrixQuestion
-from QuizGenerator.question import Question, QuestionRegistry, Answer
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.question import Question, QuestionRegistry
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
@@ -64,11 +64,11 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # x_seq, W_xh, W_hh, b_h, h_0, h_states
     
-    self.answers["output_sequence"] = Answer.matrix(key="output_sequence", value=self.h_states, label="Hidden states")
+    self.answers["output_sequence"] = AnswerTypes.Matrix(value=self.h_states, label="Hidden states")
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -103,10 +103,10 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
-    digits = Answer.DEFAULT_ROUNDING_DIGITS
+    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
 
     explanation.add_element(
       ContentAST.Paragraph([

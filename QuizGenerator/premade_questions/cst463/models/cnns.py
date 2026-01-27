@@ -5,9 +5,8 @@ import keras
 import numpy as np
 from typing import List, Tuple
 
-from QuizGenerator.question import Question, QuestionRegistry, Answer
-from QuizGenerator.misc import MatrixAnswer
-from QuizGenerator.contentast import ContentAST
+from QuizGenerator.question import Question, QuestionRegistry
+from QuizGenerator.contentast import ContentAST, AnswerTypes
 from QuizGenerator.constants import MathRanges
 from .matrices import MatrixQuestion
 
@@ -66,13 +65,13 @@ class ConvolutionCalculation(MatrixQuestion):
     self.result = self.conv2d_multi_channel(self.image, self.kernel, stride=self.stride, padding=self.padding)
     
     self.answers = {
-      f"result_{i}" : MatrixAnswer(f"result_{i}", self.result[:,:,i], label=f"Result of filter {i}")
+      f"result_{i}" : AnswerTypes.Matrix(self.result[:,:,i], label=f"Result of filter {i}")
       for i in range(self.result.shape[-1])
     }
     
     return True
   
-  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_body(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question body and collect answers."""
     body = ContentAST.Section()
     answers = []
@@ -119,10 +118,10 @@ class ConvolutionCalculation(MatrixQuestion):
     body, _ = self._get_body(**kwargs)
     return body
   
-  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[Answer]]:
+  def _get_explanation(self, **kwargs) -> Tuple[ContentAST.Section, List[ContentAST.Answer]]:
     """Build question explanation."""
     explanation = ContentAST.Section()
-    digits = Answer.DEFAULT_ROUNDING_DIGITS
+    digits = ContentAST.Answer.DEFAULT_ROUNDING_DIGITS
 
     explanation.add_element(
       ContentAST.Paragraph([

@@ -13,8 +13,8 @@ from typing import List
 
 import matplotlib.pyplot as plt
 
-from QuizGenerator.contentast import ContentAST
-from QuizGenerator.question import Question, Answer, QuestionRegistry, RegenerableChoiceMixin
+from QuizGenerator.contentast import ContentAST, AnswerTypes
+from QuizGenerator.question import Question, QuestionRegistry, RegenerableChoiceMixin
 from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
@@ -356,23 +356,15 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     
     for job_id in sorted(self.job_stats.keys()):
       self.answers.update({
-        f"answer__response_time_job{job_id}": Answer.auto_float(
-          f"answer__response_time_job{job_id}",
-          self.job_stats[job_id]["Response"]
-        ),
-        f"answer__turnaround_time_job{job_id}": Answer.auto_float(
-          f"answer__turnaround_time_job{job_id}",
-          self.job_stats[job_id]["TAT"]
-        ),
+        f"answer__response_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["Response"]),
+        f"answer__turnaround_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["TAT"]),
       })
     self.answers.update({
-      "answer__average_response_time": Answer.auto_float(
-        "answer__average_response_time",
+      "answer__average_response_time": AnswerTypes.Float(
         sum([job.response_time for job in jobs]) / len(jobs),
         label="Overall average response time"
       ),
-      "answer__average_turnaround_time": Answer.auto_float(
-        "answer__average_turnaround_time",
+      "answer__average_turnaround_time": AnswerTypes.Float(
         sum([job.turnaround_time for job in jobs]) / len(jobs),
         label="Overall average TAT"
       )
@@ -388,7 +380,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         Tuple of (body_ast, answers_list)
     """
     from typing import List
-    answers: List[Answer] = []
+    answers: List[ContentAST.Answer] = []
 
     # Create table data for scheduling results
     table_rows = []
@@ -427,7 +419,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     )
 
     instructions = ContentAST.OnlyHtml([ContentAST.Paragraph([
-      f"Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of {Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal. "
+      f"Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of {ContentAST.Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal. "
       "Examples of appropriately formatted answers would be `0`, `3/2`, `1 1/3`, `1.6667`, and `1.25`. "
       "Note that answers that can be rounded to whole numbers should be, rather than being left in fractional form."
     ])])
@@ -915,16 +907,13 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     for job_id in sorted(self.job_stats.keys()):
       self.answers.update({
-        f"answer__turnaround_time_job{job_id}": Answer.auto_float(
-          f"answer__turnaround_time_job{job_id}",
-          self.job_stats[job_id]["TAT"]
-        )
+        f"answer__turnaround_time_job{job_id}": AnswerTypes.Float(self.job_stats[job_id]["TAT"])
       })
 
     return self.is_interesting()
 
   def _get_body(self, *args, **kwargs):
-    answers: List[Answer] = []
+    answers: List[ContentAST.Answer] = []
 
     queue_rows = []
     for i in reversed(range(self.num_queues)):
@@ -964,7 +953,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     instructions = (
       f"Compute the turnaround time (TAT) for each job. "
-      f"Round to at most {Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal."
+      f"Round to at most {ContentAST.Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal."
     )
 
     body = ContentAST.Section()
