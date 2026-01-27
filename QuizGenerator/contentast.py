@@ -2338,6 +2338,23 @@ class ContentAST:
           d = decimal.Decimal(f.numerator).quantize(q, rounding=decimal.ROUND_HALF_UP)
           outs.add(format(d, 'f'))
 
+      # Simple fraction
+      if allow_simple_fraction:
+        fr = f.limit_denominator(max_denominator)
+        if fr == f:
+          a, b = fr.numerator, fr.denominator
+          if fr.denominator > 1:
+            outs.add(f"{a}/{b}")
+            if include_spaces:
+              outs.add(f"{a} / {b}")
+            if allow_mixed and b != 1 and abs(a) > b:
+              sign = '-' if a < 0 else ''
+              A = abs(a)
+              whole, rem = divmod(A, b)
+              outs.add(f"{sign}{whole} {rem}/{b}")
+          else:
+            return sorted(outs, key=lambda s: (len(s), s))
+
       # Fixed-decimal form
       q = decimal.Decimal(1).scaleb(-ContentAST.Answer.DEFAULT_ROUNDING_DIGITS)
       d = (decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)).quantize(q, rounding=decimal.ROUND_HALF_UP)
@@ -2353,20 +2370,6 @@ class ContentAST:
         if s == '-0':
           s = '0'
         outs.add(s)
-
-      # Simple fraction
-      if allow_simple_fraction:
-        fr = f.limit_denominator(max_denominator)
-        if fr == f:
-          a, b = fr.numerator, fr.denominator
-          outs.add(f"{a}/{b}")
-          if include_spaces:
-            outs.add(f"{a} / {b}")
-          if allow_mixed and b != 1 and abs(a) > b:
-            sign = '-' if a < 0 else ''
-            A = abs(a)
-            whole, rem = divmod(A, b)
-            outs.add(f"{sign}{whole} {rem}/{b}")
 
       return sorted(outs, key=lambda s: (len(s), s))
     
