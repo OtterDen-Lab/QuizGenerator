@@ -39,12 +39,13 @@ the exact question and answer without needing the original exam file.
 """
 
 import argparse
+import base64
 import json
 import sys
 import logging
 import os
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Callable
 
 # Load environment variables from .env file
 try:
@@ -140,7 +141,39 @@ def parse_qr_data(qr_string: str) -> Dict[str, Any]:
     return {}
 
 
-def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _inline_image_upload(img_data) -> str:
+  img_data.seek(0)
+  b64 = base64.b64encode(img_data.read()).decode("ascii")
+  return f"data:image/png;base64,{b64}"
+
+
+def _resolve_upload_func(
+  image_mode: str,
+  upload_func: Optional[Callable]
+) -> Optional[Callable]:
+  if image_mode == "inline":
+    return _inline_image_upload
+  if image_mode == "upload":
+    if upload_func is None:
+      raise ValueError("image_mode='upload' requires upload_func")
+    return upload_func
+  if image_mode == "none":
+    return None
+  raise ValueError(f"Unknown image_mode: {image_mode}")
+
+
+def _render_html(element, upload_func=None, **kwargs) -> str:
+  if upload_func is None:
+    return element.render("html", **kwargs)
+  return element.render("html", upload_func=upload_func, **kwargs)
+
+
+def regenerate_question_answer(
+  qr_data: Dict[str, Any],
+  *,
+  image_mode: str = "inline",
+  upload_func: Optional[Callable] = None
+) -> Optional[Dict[str, Any]]:
   """
   Regenerate question and extract answer using QR code metadata.
 
@@ -156,8 +189,9 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
           "seed": int,
           "version": str,
           "answers": dict,
-          "explanation_markdown": str | None  # Markdown explanation (None if not available)
-      }
+      "explanation_markdown": str | None  # Markdown explanation (None if not available)
+      "explanation_html": str | None  # HTML explanation (None if not available)
+  }
   """
   question_num = qr_data.get('q')
   points = qr_data.get('pts')
@@ -220,8 +254,14 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
     # Also store the raw answer objects for easier access
     result['answer_objects'] = question.answers
     
+    resolved_upload_func = _resolve_upload_func(image_mode, upload_func)
+
     # Generate HTML answer key for grading
-    question_html = question_ast.body.render("html", show_answers=True)
+    question_html = _render_html(
+      question_ast.body,
+      show_answers=True,
+      upload_func=resolved_upload_func
+    )
     result['answer_key_html'] = question_html
 
     # Generate markdown explanation for students
@@ -231,6 +271,16 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
       result['explanation_markdown'] = None
     else:
       result['explanation_markdown'] = explanation_markdown
+
+    # Generate HTML explanation (optional for web UIs)
+    explanation_html = _render_html(
+      question_ast.explanation,
+      upload_func=resolved_upload_func
+    )
+    if not explanation_html or "[Please reach out to your professor for clarification]" in explanation_html:
+      result["explanation_html"] = None
+    else:
+      result["explanation_html"] = explanation_html
 
     log.info(f"  Successfully regenerated question with {len(canvas_answers)} answer(s)")
     
@@ -243,7 +293,13 @@ def regenerate_question_answer(qr_data: Dict[str, Any]) -> Optional[Dict[str, An
     return result
 
 
-def regenerate_from_encrypted(encrypted_data: str, points: float = 1.0) -> Dict[str, Any]:
+def regenerate_from_encrypted(
+  encrypted_data: str,
+  points: float = 1.0,
+  *,
+  image_mode: str = "inline",
+  upload_func: Optional[Callable] = None
+) -> Dict[str, Any]:
   """
   Regenerate question answers from encrypted QR code data (RECOMMENDED API).
 
@@ -253,6 +309,8 @@ def regenerate_from_encrypted(encrypted_data: str, points: float = 1.0) -> Dict[
   Args:
       encrypted_data: The encrypted 's' field from the QR code JSON
       points: Point value for the question (default: 1.0)
+      image_mode: "inline", "upload", or "none" for HTML image handling
+      upload_func: Optional upload function used when image_mode="upload"
 
   Returns:
       Dictionary with regenerated answers:
@@ -266,6 +324,7 @@ def regenerate_from_encrypted(encrypted_data: str, points: float = 1.0) -> Dict[
           "answer_objects": dict,  # Raw Answer objects with values/tolerances
           "answer_key_html": str,  # HTML rendering of question with answers shown
           "explanation_markdown": str | None  # Markdown explanation (None if not available)
+          "explanation_html": str | None  # HTML explanation (None if not available)
       }
 
   Raises:
@@ -287,12 +346,21 @@ def regenerate_from_encrypted(encrypted_data: str, points: float = 1.0) -> Dict[
   kwargs = decrypted.get('config', {})
   
   # Use the existing regeneration logic
-  return regenerate_from_metadata(question_type, seed, version, points, kwargs)
+  return regenerate_from_metadata(
+    question_type,
+    seed,
+    version,
+    points,
+    kwargs,
+    image_mode=image_mode,
+    upload_func=upload_func
+  )
 
 
 def regenerate_from_metadata(
     question_type: str, seed: int, version: str,
-    points: float = 1.0, kwargs: Optional[Dict[str, Any]] = None
+    points: float = 1.0, kwargs: Optional[Dict[str, Any]] = None,
+    *, image_mode: str = "inline", upload_func: Optional[Callable] = None
 ) -> Dict[str, Any]:
   """
   Regenerate question answers from explicit metadata fields.
@@ -306,6 +374,8 @@ def regenerate_from_metadata(
       points: Point value for the question (default: 1.0)
       kwargs: Optional dictionary of question-specific configuration parameters
               (e.g., {"num_bits_va": 32, "max_value": 100})
+      image_mode: "inline", "upload", or "none" for HTML image handling
+      upload_func: Optional upload function used when image_mode="upload"
 
   Returns:
       Dictionary with regenerated answers (same format as regenerate_from_encrypted)
@@ -335,14 +405,27 @@ def regenerate_from_metadata(
     # Extract answers
     answer_kind, canvas_answers = question.get_answers()
     
+    resolved_upload_func = _resolve_upload_func(image_mode, upload_func)
+
     # Generate HTML answer key for grading
-    question_html = question_ast.body.render("html", show_answers=True)
+    question_html = _render_html(
+      question_ast.body,
+      show_answers=True,
+      upload_func=resolved_upload_func
+    )
 
     # Generate markdown explanation for students
     explanation_markdown = question_ast.explanation.render("markdown")
     # Return None if explanation is empty or contains the default placeholder
     if not explanation_markdown or "[Please reach out to your professor for clarification]" in explanation_markdown:
       explanation_markdown = None
+
+    explanation_html = _render_html(
+      question_ast.explanation,
+      upload_func=resolved_upload_func
+    )
+    if not explanation_html or "[Please reach out to your professor for clarification]" in explanation_html:
+      explanation_html = None
 
     result = {
       "question_type": question_type,
@@ -355,7 +438,8 @@ def regenerate_from_metadata(
       },
       "answer_objects": question.answers,
       "answer_key_html": question_html,
-      "explanation_markdown": explanation_markdown
+      "explanation_markdown": explanation_markdown,
+      "explanation_html": explanation_html
     }
     
     # Include kwargs in result if provided
@@ -407,6 +491,9 @@ def display_answer_summary(question_data: Dict[str, Any]) -> None:
   if 'explanation_markdown' in question_data and question_data['explanation_markdown'] is not None:
     print("Markdown explanation available in result['explanation_markdown']")
 
+  if 'explanation_html' in question_data and question_data['explanation_html'] is not None:
+    print("HTML explanation available in result['explanation_html']")
+
   print("=" * 60)
 
 
@@ -445,6 +532,12 @@ def main():
     action='store_true',
     help='Enable verbose debug logging'
   )
+  parser.add_argument(
+    '--image-mode',
+    choices=['inline', 'none'],
+    default='inline',
+    help='HTML image handling (default: inline)'
+  )
 
   args = parser.parse_args()
 
@@ -467,7 +560,11 @@ def main():
   if args.encrypted_str:
     try:
       log.info(f"Decoding encrypted string (points={args.points})")
-      result = regenerate_from_encrypted(args.encrypted_str, args.points)
+      result = regenerate_from_encrypted(
+        args.encrypted_str,
+        args.points,
+        image_mode=args.image_mode
+      )
 
       # Format result similar to regenerate_question_answer output
       question_data = {
@@ -479,7 +576,8 @@ def main():
         "answers": result["answers"],
         "answer_objects": result["answer_objects"],
         "answer_key_html": result["answer_key_html"],
-        "explanation_markdown": result.get("explanation_markdown")
+        "explanation_markdown": result.get("explanation_markdown"),
+        "explanation_html": result.get("explanation_html")
       }
 
       if "kwargs" in result:
@@ -517,7 +615,10 @@ def main():
         continue
 
       # Regenerate question and answer
-      question_data = regenerate_question_answer(qr_data)
+      question_data = regenerate_question_answer(
+        qr_data,
+        image_mode=args.image_mode
+      )
 
       if question_data:
         results.append(question_data)
