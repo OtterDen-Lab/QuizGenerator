@@ -241,7 +241,8 @@ def regenerate_question_answer(
     )
     
     # Generate question with the specific seed
-    question_ast = question.get_question(rng_seed=seed)
+    instance = question.instantiate(rng_seed=seed)
+    question_ast = question._build_question_ast(instance)
     
     # Extract answers
     answer_kind, canvas_answers = question.get_answers()
@@ -400,7 +401,8 @@ def regenerate_from_metadata(
     )
     
     # Generate question with the specific seed
-    question_ast = question.get_question(rng_seed=seed)
+    instance = question.instantiate(rng_seed=seed)
+    question_ast = question._build_question_ast(instance)
     
     # Extract answers
     answer_kind, canvas_answers = question.get_answers()
