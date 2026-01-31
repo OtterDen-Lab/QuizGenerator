@@ -361,6 +361,25 @@ class RegenerableChoiceMixin:
       self.config_params[param_name] = random_choice.name
       return random_choice
 
+  def _prepare_regenerable_choices(self, base_seed):
+    if not (hasattr(self, '_regenerable_choices') and self._regenerable_choices):
+      return
+    choice_rng = random.Random(base_seed)
+    for param_name, choice_info in self._regenerable_choices.items():
+      if choice_info['fixed_value'] is None:
+        enum_class = choice_info['enum_class']
+        random_choice = choice_rng.choice(list(enum_class))
+        # Temporarily set this as the fixed value so all refresh() calls use it
+        choice_info['_temp_fixed_value'] = random_choice.name
+        # Store in config_params
+        self.config_params[param_name] = random_choice.name
+
+  def _clear_regenerable_choices(self):
+    if not (hasattr(self, '_regenerable_choices') and self._regenerable_choices):
+      return
+    for param_name, choice_info in self._regenerable_choices.items():
+      if '_temp_fixed_value' in choice_info:
+        del choice_info['_temp_fixed_value']
 
 class Question(abc.ABC):
   """
@@ -526,25 +545,6 @@ class Question(abc.ABC):
     with open(path_to_yaml) as fid:
       question_dicts = yaml.safe_load_all(fid)
   
-  def _prepare_regenerable_choices(self, base_seed):
-    if not (hasattr(self, '_regenerable_choices') and self._regenerable_choices):
-      return
-    choice_rng = random.Random(base_seed)
-    for param_name, choice_info in self._regenerable_choices.items():
-      if choice_info['fixed_value'] is None:
-        enum_class = choice_info['enum_class']
-        random_choice = choice_rng.choice(list(enum_class))
-        # Temporarily set this as the fixed value so all refresh() calls use it
-        choice_info['_temp_fixed_value'] = random_choice.name
-        # Store in config_params
-        self.config_params[param_name] = random_choice.name
-
-  def _clear_regenerable_choices(self):
-    if not (hasattr(self, '_regenerable_choices') and self._regenerable_choices):
-      return
-    for param_name, choice_info in self._regenerable_choices.items():
-      if '_temp_fixed_value' in choice_info:
-        del choice_info['_temp_fixed_value']
 
   def instantiate(self, **kwargs) -> QuestionInstance:
     """
@@ -555,7 +555,8 @@ class Question(abc.ABC):
 
     # Pre-select any regenerable choices using the base seed
     # This ensures the policy/algorithm stays constant across backoff attempts
-    self._prepare_regenerable_choices(base_seed)
+    if isinstance(self, RegenerableChoiceMixin):
+      self._prepare_regenerable_choices(base_seed)
 
     backoff_counter = 0
     is_interesting = False
@@ -568,7 +569,8 @@ class Question(abc.ABC):
       backoff_counter += 1
 
     # Clear temporary fixed values
-    self._clear_regenerable_choices()
+    if isinstance(self, RegenerableChoiceMixin):
+      self._clear_regenerable_choices()
 
     # Store the actual seed used and question metadata for QR code generation
     actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
