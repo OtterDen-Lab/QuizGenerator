@@ -361,7 +361,7 @@ class RegenerableChoiceMixin:
       self.config_params[param_name] = random_choice.name
       return random_choice
 
-  def _prepare_regenerable_choices(self, base_seed):
+  def pre_instantiate(self, base_seed, **kwargs):
     if not (hasattr(self, '_regenerable_choices') and self._regenerable_choices):
       return
     choice_rng = random.Random(base_seed)
@@ -374,7 +374,7 @@ class RegenerableChoiceMixin:
         # Store in config_params
         self.config_params[param_name] = random_choice.name
 
-  def _clear_regenerable_choices(self):
+  def post_instantiate(self, instance, **kwargs):
     if not (hasattr(self, '_regenerable_choices') and self._regenerable_choices):
       return
     for param_name, choice_info in self._regenerable_choices.items():
@@ -555,59 +555,65 @@ class Question(abc.ABC):
 
     # Pre-select any regenerable choices using the base seed
     # This ensures the policy/algorithm stays constant across backoff attempts
-    if isinstance(self, RegenerableChoiceMixin):
-      self._prepare_regenerable_choices(base_seed)
+    self.pre_instantiate(base_seed, **kwargs)
 
-    backoff_counter = 0
-    is_interesting = False
-    while not is_interesting:
-      # Increment seed for each backoff attempt to maintain deterministic behavior
-      current_seed = None if base_seed is None else base_seed + backoff_counter
-      # Pass config_params to refresh so custom kwargs from YAML are available
-      self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0), **self.config_params)
-      is_interesting = self.is_interesting()
-      backoff_counter += 1
+    instance = None
+    try:
+      backoff_counter = 0
+      is_interesting = False
+      while not is_interesting:
+        # Increment seed for each backoff attempt to maintain deterministic behavior
+        current_seed = None if base_seed is None else base_seed + backoff_counter
+        # Pass config_params to refresh so custom kwargs from YAML are available
+        self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0), **self.config_params)
+        is_interesting = self.is_interesting()
+        backoff_counter += 1
 
-    # Clear temporary fixed values
-    if isinstance(self, RegenerableChoiceMixin):
-      self._clear_regenerable_choices()
+      # Store the actual seed used and question metadata for QR code generation
+      actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
 
-    # Store the actual seed used and question metadata for QR code generation
-    actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
+      components = self.build_question_components(**kwargs)
+      # Cache components for legacy access
+      self._components = components
 
-    components = self.build_question_components(**kwargs)
-    # Cache components for legacy access
-    self._components = components
-
-    # Collect answers from explicit lists and inline AST
-    inline_body_answers = self._collect_answers_from_ast(components.body)
-    answers = self._merge_answers(
-      components.answers,
-      inline_body_answers
-    )
-
-    # Fallback for legacy dict-based answers
-    if len(answers) == 0 and len(self.answers.values()) > 0:
-      answers = list(self.answers.values())
-
-    can_be_numerical = self._can_be_numerical_from_answers(answers)
-
-    return QuestionInstance(
-      body=components.body,
-      explanation=components.explanation,
-      answers=answers,
-      answer_kind=self.answer_kind,
-      can_be_numerical=can_be_numerical,
-      value=self.points_value,
-      spacing=self.spacing,
-      topic=self.topic,
-      flags=RegenerationFlags(
-        question_class_name=self._get_registered_name(),
-        generation_seed=actual_seed,
-        question_version=self.VERSION,
-        config_params=dict(self.config_params)
+      # Collect answers from explicit lists and inline AST
+      inline_body_answers = self._collect_answers_from_ast(components.body)
+      answers = self._merge_answers(
+        components.answers,
+        inline_body_answers
       )
-    )
+
+      # Fallback for legacy dict-based answers
+      if len(answers) == 0 and len(self.answers.values()) > 0:
+        answers = list(self.answers.values())
+
+      can_be_numerical = self._can_be_numerical_from_answers(answers)
+
+      instance = QuestionInstance(
+        body=components.body,
+        explanation=components.explanation,
+        answers=answers,
+        answer_kind=self.answer_kind,
+        can_be_numerical=can_be_numerical,
+        value=self.points_value,
+        spacing=self.spacing,
+        topic=self.topic,
+        flags=RegenerationFlags(
+          question_class_name=self._get_registered_name(),
+          generation_seed=actual_seed,
+          question_version=self.VERSION,
+          config_params=dict(self.config_params)
+        )
+      )
+      return instance
+    finally:
+      self.post_instantiate(instance, **kwargs)
+
+  def pre_instantiate(self, base_seed, **kwargs):
+    pass
+
+  def post_instantiate(self, instance, **kwargs):
+    pass
    
   @abc.abstractmethod
   def get_body(self, **kwargs) -> ca.Section:
