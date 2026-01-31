@@ -552,6 +552,8 @@ class Question(abc.ABC):
     """
     # Generate the question, retrying with incremented seeds until we get an interesting one
     base_seed = kwargs.get("rng_seed", None)
+    build_kwargs = dict(kwargs)
+    build_kwargs.pop("rng_seed", None)
 
     # Pre-select any regenerable choices using the base seed
     # This ensures the policy/algorithm stays constant across backoff attempts
@@ -572,7 +574,7 @@ class Question(abc.ABC):
       # Store the actual seed used and question metadata for QR code generation
       actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
 
-      components = self.build_question_components(**kwargs)
+      components = self.build(rng_seed=current_seed, **build_kwargs)
       # Cache components for legacy access
       self._components = components
 
@@ -664,12 +666,11 @@ class Question(abc.ABC):
       [ca.Text("[Please reach out to your professor for clarification]")]
     ), []
 
-  def build_question_components(self, **kwargs) -> QuestionComponents:
+  def build(self, *, rng_seed=None, **kwargs) -> QuestionComponents:
     """
-    Build question components (body, answers, explanation) in single pass.
+    Build question content (body, answers, explanation) for a given seed.
 
-    Calls _get_body() and _get_explanation() which return tuples of
-    (content, answers).
+    This should only generate content; metadata like points/spacing belong in instantiate().
     """
     # Build body with its answers
     body, body_answers = self._get_body()
@@ -770,7 +771,7 @@ class Question(abc.ABC):
     # Try component-based approach first (new pattern)
     if self._components is None:
       try:
-        self._components = self.build_question_components()
+        self._components = self.build()
       except Exception as e:
         # If component building fails, fall back to dict
         log.debug(f"Failed to build question components: {e}, falling back to dict")
