@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import abc
+import warnings
 import io
 import dataclasses
 import datetime
@@ -617,14 +618,20 @@ class Question(abc.ABC):
   def post_instantiate(self, instance, **kwargs):
     pass
    
-  @abc.abstractmethod
   def get_body(self, **kwargs) -> ca.Section:
     """
-    Gets the body of the question during generation
+    Gets the body of the question during generation (backward compatible wrapper).
+    Calls _get_body() and returns just the body.
     :param kwargs:
     :return: (ca.Section) Containing question body
     """
-    pass
+    warnings.warn(
+      "Question.get_body() is deprecated; implement build() or _get_body() instead.",
+      DeprecationWarning,
+      stacklevel=2
+    )
+    body, _ = self._get_body()
+    return body
   
   def get_explanation(self, **kwargs) -> ca.Section:
     """

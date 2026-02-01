@@ -354,22 +354,6 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     self.average_response = self.overall_stats["Response"]
     self.average_tat = self.overall_stats["TAT"]
     
-    for job_id in sorted(self.job_stats.keys()):
-      self.answers.update({
-        f"answer__response_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["Response"]),
-        f"answer__turnaround_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["TAT"]),
-      })
-    self.answers.update({
-      "answer__average_response_time": ca.AnswerTypes.Float(
-        sum([job.response_time for job in jobs]) / len(jobs),
-        label="Overall average response time"
-      ),
-      "answer__average_turnaround_time": ca.AnswerTypes.Float(
-        sum([job.turnaround_time for job in jobs]) / len(jobs),
-        label="Overall average TAT"
-      )
-    })
-
     # Return whether this workload is interesting
     return self.is_interesting()
   
@@ -385,16 +369,17 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     # Create table data for scheduling results
     table_rows = []
     for job_id in sorted(self.job_stats.keys()):
+      response_answer = ca.AnswerTypes.Float(self.job_stats[job_id]["Response"])
+      tat_answer = ca.AnswerTypes.Float(self.job_stats[job_id]["TAT"])
+      answers.append(response_answer)
+      answers.append(tat_answer)
       table_rows.append({
         "Job ID": f"Job{job_id}",
         "Arrival": self.job_stats[job_id]["arrival_time"],
         "Duration": self.job_stats[job_id]["duration"],
-        "Response Time": f"answer__response_time_job{job_id}",  # Answer key
-        "TAT": f"answer__turnaround_time_job{job_id}"  # Answer key
+        "Response Time": response_answer,
+        "TAT": tat_answer
       })
-      # Collect answers for this job
-      answers.append(self.answers[f"answer__response_time_job{job_id}"])
-      answers.append(self.answers[f"answer__turnaround_time_job{job_id}"])
 
     # Create table using mixin
     scheduling_table = self.create_answer_table(
@@ -404,8 +389,14 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     )
 
     # Collect average answers
-    avg_response_answer = self.answers["answer__average_response_time"]
-    avg_tat_answer = self.answers["answer__average_turnaround_time"]
+    avg_response_answer = ca.AnswerTypes.Float(
+      self.overall_stats["Response"],
+      label="Overall average response time"
+    )
+    avg_tat_answer = ca.AnswerTypes.Float(
+      self.overall_stats["TAT"],
+      label="Overall average TAT"
+    )
     answers.append(avg_response_answer)
     answers.append(avg_tat_answer)
 
@@ -427,11 +418,6 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     body = self.create_fill_in_table_body(intro_text, instructions, scheduling_table)
     body.add_element(average_block)
     return body, answers
-
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(*args, **kwargs)
-    return body
   
   def _get_explanation(self, **kwargs):
     """

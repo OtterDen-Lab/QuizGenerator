@@ -1,12 +1,12 @@
 #!env python
 from __future__ import annotations
 
-from typing import List, Dict, Any, Tuple
+from typing import Tuple
 
 import logging
 
 import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry
+from QuizGenerator.question import Question, QuestionRegistry, QuestionComponents
 from QuizGenerator.mixins import TableQuestionMixin
 
 log = logging.getLogger(__name__)
@@ -18,15 +18,10 @@ class FromText(Question):
   def __init__(self, *args, text, **kwargs):
     super().__init__(*args, **kwargs)
     self.text = text
-    self.answers = []
     self.possible_variations = 1
   
-  def get_body(self, **kwargs) -> ca.Section:
-    
-    return ca.Section([ca.Text(self.text)])
-  
-  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
-    return ca.Answer.CanvasAnswerKind.ESSAY, []
+  def _get_body(self) -> Tuple[ca.Element, List[ca.Answer]]:
+    return ca.Section([ca.Text(self.text)]), []
 
 
 @QuestionRegistry.register()
@@ -67,36 +62,26 @@ class FromGenerator(FromText, TableQuestionMixin):
     # Attach the function dynamically
     attach_function_to_object(self, generator, "generator")
     
-    self.answers = {}
-
-
-  def get_body(self, **kwargs) -> ca.Section:
-    return super().get_body()
-
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
+  def build(self, *, rng_seed=None, **kwargs) -> QuestionComponents:
     try:
       generated_content = self.generator()
-      # Expect generator to return a ca.Section or convert string to Section
       if isinstance(generated_content, ca.Section):
-        self.text = ""  # Clear text since we'll override get_body
-        self._generated_section = generated_content
+        body = generated_content
       elif isinstance(generated_content, str):
-        self.text = generated_content
-        self._generated_section = None
+        body = ca.Section([ca.Text(generated_content)])
       else:
-        # Fallback
-        self.text = str(generated_content)
-        self._generated_section = None
+        body = ca.Section([ca.Text(str(generated_content))])
     except TypeError as e:
       log.error(f"Error generating from text: {e}")
       log.debug(self.generator_text)
       exit(8)
 
-  def get_body(self, **kwargs) -> ca.Section:
-    if hasattr(self, '_generated_section') and self._generated_section:
-      return self._generated_section
-    return super().get_body()
+    explanation, _ = self._get_explanation()
+    return QuestionComponents(
+      body=body,
+      answers=[],
+      explanation=explanation
+    )
 
 
 class TrueFalse(FromText):
