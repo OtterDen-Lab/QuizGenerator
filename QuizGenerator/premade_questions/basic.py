@@ -1,7 +1,7 @@
 #!env python
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Tuple, List
 
 import logging
 
