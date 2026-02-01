@@ -40,7 +40,6 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     super().refresh(rng_seed=rng_seed, *args, **kwargs)
     self._generate_data()
     self._calculate_losses()
-    self._create_answers()
 
   @abc.abstractmethod
   def _generate_data(self):
@@ -67,16 +66,13 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     """Return the short name of the loss function (used in question body)."""
     pass
 
-  def _create_answers(self):
-    """Create answer objects for individual losses and overall loss."""
-    self.answers = {}
-
-    # Individual loss answers
-    for i in range(self.num_samples):
-      self.answers[f"loss_{i}"] = ca.AnswerTypes.Float(self.individual_losses[i], label=f"Sample {i + 1} loss")
-
-    # Overall loss answer
-    self.answers["overall_loss"] = ca.AnswerTypes.Float(self.overall_loss, label="Overall loss")
+  def _build_loss_answers(self) -> Tuple[List[ca.Answer], ca.Answer]:
+    answers = [
+      ca.AnswerTypes.Float(self.individual_losses[i], label=f"Sample {i + 1} loss")
+      for i in range(self.num_samples)
+    ]
+    overall = ca.AnswerTypes.Float(self.overall_loss, label="Overall loss")
+    return answers, overall
 
   def _get_body(self, **kwargs) -> Tuple[ca.Element, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -90,28 +86,21 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     ]))
 
     # Data table (contains individual loss answers)
-    body.add_element(self._create_data_table())
-
-    # Collect individual loss answers
-    for i in range(self.num_samples):
-      answers.append(self.answers[f"loss_{i}"])
+    loss_answers, overall_answer = self._build_loss_answers()
+    body.add_element(self._create_data_table(loss_answers))
+    answers.extend(loss_answers)
 
     # Overall loss question
     body.add_element(ca.Paragraph([
       f"Overall {self._get_loss_function_short_name()}: "
     ]))
-    answers.append(self.answers["overall_loss"])
-    body.add_element(self.answers["overall_loss"])
+    answers.append(overall_answer)
+    body.add_element(overall_answer)
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Element:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-
   @abc.abstractmethod
-  def _create_data_table(self) -> ca.Element:
+  def _create_data_table(self, loss_answers: List[ca.Answer]) -> ca.Element:
     """Create the data table with answer fields."""
     pass
 
@@ -136,11 +125,6 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     explanation.add_element(self._create_overall_loss_explanation())
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Element:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
 
   @abc.abstractmethod
   def _create_calculation_steps(self) -> ca.Element:
@@ -225,7 +209,7 @@ class LossQuestion_Linear(LossQuestion):
     else:
       return r"L(\mathbf{y}, \mathbf{p}) = \sum_{i=1}^{k} (y_i - p_i)^2"
 
-  def _create_data_table(self) -> ca.Element:
+  def _create_data_table(self, loss_answers: List[ca.Answer]) -> ca.Element:
     """Create table with input features, true values, predictions, and loss fields."""
     headers = ["x"]
 
@@ -262,7 +246,7 @@ class LossQuestion_Linear(LossQuestion):
           row[f"p_{j}"] = f"{sample['predictions'][j]:.2f}"
 
       # Loss answer field
-      row["loss"] = self.answers[f"loss_{i}"]
+      row["loss"] = loss_answers[i]
 
       rows.append(row)
 
@@ -416,7 +400,7 @@ class LossQuestion_Logistic(LossQuestion):
   def _get_loss_function_formula(self) -> str:
     return r"L(y, p) = -[y \ln(p) + (1-y) \ln(1-p)]"
 
-  def _create_data_table(self) -> ca.Element:
+  def _create_data_table(self, loss_answers: List[ca.Answer]) -> ca.Element:
     """Create table with features, true labels, predicted probabilities, and loss fields."""
     headers = ["x", "y", "p", "loss"]
 
@@ -435,7 +419,7 @@ class LossQuestion_Logistic(LossQuestion):
       row["p"] = f"{sample['predictions']:.3f}"
 
       # Loss answer field
-      row["loss"] = self.answers[f"loss_{i}"]
+      row["loss"] = loss_answers[i]
 
       rows.append(row)
 
@@ -560,7 +544,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
   def _get_loss_function_formula(self) -> str:
     return r"L(\mathbf{y}, \mathbf{p}) = -\sum_{i=1}^{K} y_i \ln(p_i)"
 
-  def _create_data_table(self) -> ca.Element:
+  def _create_data_table(self, loss_answers: List[ca.Answer]) -> ca.Element:
     """Create table with features, true class vectors, predicted probabilities, and loss fields."""
     headers = ["x", "y", "p", "loss"]
 
@@ -581,7 +565,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
       row["p"] = p_vector
 
       # Loss answer field
-      row["loss"] = self.answers[f"loss_{i}"]
+      row["loss"] = loss_answers[i]
 
       rows.append(row)
 

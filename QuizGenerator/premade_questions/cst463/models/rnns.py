@@ -64,8 +64,6 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # x_seq, W_xh, W_hh, b_h, h_0, h_states
     
-    self.answers["output_sequence"] = ca.AnswerTypes.Matrix(value=self.h_states, label="Hidden states")
-    
     return True
   
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
@@ -93,16 +91,12 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
 
     body.add_element(ca.LineBreak())
 
-    answers.append(self.answers["output_sequence"])
-    body.add_element(self.answers["output_sequence"])
+    output_answer = ca.AnswerTypes.Matrix(value=self.h_states, label="Hidden states")
+    answers.append(output_answer)
+    body.add_element(output_answer)
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-  
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
@@ -207,9 +201,3 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-

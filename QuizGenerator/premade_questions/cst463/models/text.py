@@ -59,12 +59,10 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
 
     ## Answers:
     # center_word, center_emb, context_words, context_embs, logits, probs
-    self.answers["logits"] = ca.AnswerTypes.Vector(self.logits, label="Logits")
     most_likely_idx = np.argmax(self.probs)
     most_likely_word = self.context_words[most_likely_idx]
-    self.answers["center_word"] = ca.AnswerTypes.String(most_likely_word, label="Most likely context word")
-    
-    
+    self.logits_answer = ca.AnswerTypes.Vector(self.logits, label="Logits")
+    self.center_word_answer = ca.AnswerTypes.String(most_likely_word, label="Most likely context word")
     return True
   
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
@@ -81,13 +79,13 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
       ca.Paragraph([ca.Text(f"`{w}` : "), str(e)]) for w, e in zip(self.context_words, self.context_embs)
     ])
 
-    answers.append(self.answers["logits"])
-    answers.append(self.answers["center_word"])
+    answers.append(self.logits_answer)
+    answers.append(self.center_word_answer)
     body.add_elements([
       ca.LineBreak(),
-      self.answers["logits"],
+      self.logits_answer,
       ca.LineBreak(),
-      self.answers["center_word"]
+      self.center_word_answer
     ])
 
     log.debug(f"output: {self.logits}")
@@ -95,11 +93,6 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-  
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
@@ -209,9 +202,3 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-

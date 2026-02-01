@@ -7,7 +7,7 @@ import math
 import numpy as np
 import uuid
 import os
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -556,21 +556,6 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     # Run forward pass to get correct answers
     self._forward_pass()
 
-    # Create answer fields
-    self._create_answers()
-
-  def _create_answers(self):
-    """Create answer fields for forward pass values."""
-    self.answers = {}
-
-    # Hidden layer activations
-    for i in range(self.num_hidden):
-      key = f"h{i+1}"
-      self.answers[key] = ca.AnswerTypes.Float(float(self.a1[i]), label=f"h_{i + 1}")
-
-    # Output
-    self.answers["y_pred"] = ca.AnswerTypes.Float(float(self.a2[0]), label="ŷ")
-
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
@@ -599,20 +584,14 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       f"**Hidden layer activation:** {self._get_activation_name()}"
     ]))
 
-    # Collect answers
     for i in range(self.num_hidden):
-      answers.append(self.answers[f"h{i+1}"])
+      answers.append(ca.AnswerTypes.Float(float(self.a1[i]), label=f"h_{i + 1}"))
 
-    answers.append(self.answers["y_pred"])
+    answers.append(ca.AnswerTypes.Float(float(self.a2[0]), label="ŷ"))
 
     body.add_element(ca.AnswerBlock(answers))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -694,11 +673,6 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register()
 class BackpropGradientQuestion(SimpleNeuralNetworkBase):
@@ -729,26 +703,6 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Round loss to display precision (4 decimal places)
     self.loss = round(self.loss, 4)
     self._compute_output_gradient()
-
-    # Create answer fields for specific weight gradients
-    self._create_answers()
-
-  def _create_answers(self):
-    """Create answer fields for weight gradients."""
-    self.answers = {}
-
-    # Ask for gradients of 2-3 weights
-    # Include at least one from each layer
-
-    # Gradient for W2 (hidden to output)
-    for i in range(self.num_hidden):
-      key = f"dL_dw2_{i}"
-      self.answers[key] = ca.AnswerTypes.Float(self._compute_gradient_W2(i), label=f"∂L/∂w_{i + 3}")
-
-    # Gradient for W1 (input to hidden) - pick first hidden neuron
-    for j in range(self.num_inputs):
-      key = f"dL_dw1_0{j}"
-      self.answers[key] = ca.AnswerTypes.Float(self._compute_gradient_W1(0, j), label=f"∂L/∂w_1{j + 1}")
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -783,22 +737,21 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       "**Calculate the following gradients:**"
     ]))
 
-    # Collect W2 gradient answers
     for i in range(self.num_hidden):
-      answers.append(self.answers[f"dL_dw2_{i}"])
+      answers.append(ca.AnswerTypes.Float(
+        self._compute_gradient_W2(i),
+        label=f"∂L/∂w_{i + 3}"
+      ))
 
-    # Collect W1 gradient answers (first hidden neuron)
     for j in range(self.num_inputs):
-      answers.append(self.answers[f"dL_dw1_0{j}"])
+      answers.append(ca.AnswerTypes.Float(
+        self._compute_gradient_W1(0, j),
+        label=f"∂L/∂w_1{j + 1}"
+      ))
 
     body.add_element(ca.AnswerBlock(answers))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -874,11 +827,6 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register()
 class EnsembleAveragingQuestion(Question):
@@ -911,21 +859,6 @@ class EnsembleAveragingQuestion(Question):
     # Round to make calculations easier
     self.predictions = [round(p, 1) for p in self.predictions]
 
-    # Create answers
-    self._create_answers()
-
-  def _create_answers(self):
-    """Create answer fields for ensemble statistics."""
-    self.answers = {}
-
-    # Mean prediction
-    mean_pred = np.mean(self.predictions)
-    self.answers["mean"] = ca.AnswerTypes.Float(float(mean_pred), label="Mean (average)")
-
-    # Median (optional, but useful)
-    median_pred = np.median(self.predictions)
-    self.answers["median"] = ca.AnswerTypes.Float(float(median_pred), label="Median")
-
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
@@ -948,18 +881,14 @@ class EnsembleAveragingQuestion(Question):
       "To create an ensemble, calculate the combined prediction using the following methods:"
     ]))
 
-    # Collect answers
-    answers.append(self.answers["mean"])
-    answers.append(self.answers["median"])
+    mean_pred = np.mean(self.predictions)
+    median_pred = np.median(self.predictions)
+    answers.append(ca.AnswerTypes.Float(float(mean_pred), label="Mean (average)"))
+    answers.append(ca.AnswerTypes.Float(float(median_pred), label="Median"))
 
     body.add_element(ca.AnswerBlock(answers))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -1010,11 +939,6 @@ class EnsembleAveragingQuestion(Question):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register()
 class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
@@ -1061,9 +985,6 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     # Compute updated weights
     self._compute_weight_updates()
 
-    # Create answers
-    self._create_answers()
-
   def _compute_weight_updates(self):
     """Compute new weights after gradient descent step."""
     # Update W2
@@ -1077,24 +998,6 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     for j in range(self.num_inputs):
       grad = self._compute_gradient_W1(0, j)
       self.new_W1[0, j] = self.W1[0, j] - self.learning_rate * grad
-
-  def _create_answers(self):
-    """Create answer fields for all steps."""
-    self.answers = {}
-
-    # Forward pass answers
-    self.answers["y_pred"] = ca.AnswerTypes.Float(float(self.a2[0]), label="1. Forward Pass - Network output ŷ")
-
-    # Loss answer
-    self.answers["loss"] = ca.AnswerTypes.Float(float(self.loss), label="2. Loss")
-
-    # Gradient answers (for key weights)
-    self.answers["grad_w3"] = ca.AnswerTypes.Float(self._compute_gradient_W2(0), label="3. Gradient ∂L/∂w₃")
-    self.answers["grad_w11"] = ca.AnswerTypes.Float(self._compute_gradient_W1(0, 0), label="4. Gradient ∂L/∂w₁₁")
-
-    # Updated weight answers
-    self.answers["new_w3"] = ca.AnswerTypes.Float(float(self.new_W2[0, 0]), label="5. Updated w₃:")
-    self.answers["new_w11"] = ca.AnswerTypes.Float(float(self.new_W1[0, 0]), label="6. Updated w₁₁:")
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -1145,22 +1048,25 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     # Network parameters table
     body.add_element(self._generate_parameter_table(include_activations=False))
 
-    # Collect answers
-    answers.append(self.answers["y_pred"])
-    answers.append(self.answers["loss"])
-    answers.append(self.answers["grad_w3"])
-    answers.append(self.answers["grad_w11"])
-    answers.append(self.answers["new_w3"])
-    answers.append(self.answers["new_w11"])
+    answers.append(ca.AnswerTypes.Float(
+      float(self.a2[0]),
+      label="1. Forward Pass - Network output ŷ"
+    ))
+    answers.append(ca.AnswerTypes.Float(float(self.loss), label="2. Loss"))
+    answers.append(ca.AnswerTypes.Float(
+      self._compute_gradient_W2(0),
+      label="3. Gradient ∂L/∂w₃"
+    ))
+    answers.append(ca.AnswerTypes.Float(
+      self._compute_gradient_W1(0, 0),
+      label="4. Gradient ∂L/∂w₁₁"
+    ))
+    answers.append(ca.AnswerTypes.Float(float(self.new_W2[0, 0]), label="5. Updated w₃:"))
+    answers.append(ca.AnswerTypes.Float(float(self.new_W1[0, 0]), label="6. Updated w₁₁:"))
 
     body.add_element(ca.AnswerBlock(answers))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -1287,8 +1193,3 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ]))
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation

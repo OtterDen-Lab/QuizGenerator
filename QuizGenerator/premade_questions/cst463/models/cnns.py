@@ -64,11 +64,6 @@ class ConvolutionCalculation(MatrixQuestion):
 
     self.result = self.conv2d_multi_channel(self.image, self.kernel, stride=self.stride, padding=self.padding)
     
-    self.answers = {
-      f"result_{i}" : ca.AnswerTypes.Matrix(self.result[:,:,i], label=f"Result of filter {i}")
-      for i in range(self.result.shape[-1])
-    }
-    
     return True
   
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
@@ -103,21 +98,17 @@ class ConvolutionCalculation(MatrixQuestion):
     body.add_element(ca.LineBreak())
 
     for i in range(self.result.shape[-1]):
-      answers.append(self.answers[f"result_{i}"])
+      answer = ca.AnswerTypes.Matrix(self.result[:, :, i], label=f"Result of filter {i}")
+      answers.append(answer)
       body.add_elements([
         ca.Container([
-          self.answers[f"result_{i}"],
+          answer,
           ca.LineBreak()
         ])
       ])
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-  
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
@@ -191,8 +182,3 @@ class ConvolutionCalculation(MatrixQuestion):
       )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation

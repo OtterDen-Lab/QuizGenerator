@@ -61,9 +61,6 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     ## Answers:
     # Q, K, V, output, weights
 
-    self.answers["weights"] = ca.AnswerTypes.Matrix(self.weights, label="Weights")
-    self.answers["output"] = ca.AnswerTypes.Matrix(self.output, label="Output")
-    
     return True
   
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
@@ -84,22 +81,19 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
       )
     )
 
-    answers.append(self.answers["weights"])
-    answers.append(self.answers["output"])
+    weights_answer = ca.AnswerTypes.Matrix(self.weights, label="Weights")
+    output_answer = ca.AnswerTypes.Matrix(self.output, label="Output")
+    answers.append(weights_answer)
+    answers.append(output_answer)
     body.add_elements([
       ca.LineBreak(),
-      self.answers["weights"],
+      weights_answer,
       ca.LineBreak(),
-      self.answers["output"],
+      output_answer,
     ])
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-  
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
@@ -199,9 +193,3 @@ class AttentionForwardPass(MatrixQuestion, TableQuestionMixin):
     explanation.add_element(ca.Matrix(np.round(self.output, digits)))
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-

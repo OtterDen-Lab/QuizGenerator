@@ -85,7 +85,7 @@ class WeightCounting(Question, abc.ABC):
         continue
     
     self.num_parameters = self.model.count_params()
-    self.answers["num_parameters"] = ca.AnswerTypes.Int(self.num_parameters, label="Number of Parameters")
+    self.num_parameters_answer = ca.AnswerTypes.Int(self.num_parameters, label="Number of Parameters")
     
     return True
   
@@ -113,16 +113,11 @@ class WeightCounting(Question, abc.ABC):
 
     body.add_element(ca.LineBreak())
 
-    answers.append(self.answers["num_parameters"])
-    body.add_element(self.answers["num_parameters"])
+    answers.append(self.num_parameters_answer)
+    body.add_element(self.num_parameters_answer)
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-  
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
@@ -166,11 +161,6 @@ class WeightCounting(Question, abc.ABC):
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
 
 
 @QuestionRegistry.register("cst463.WeightCounting-CNN")

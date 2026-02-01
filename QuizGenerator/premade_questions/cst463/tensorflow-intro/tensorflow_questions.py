@@ -6,7 +6,7 @@ import logging
 import re
 import numpy as np
 import sympy as sp
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
@@ -78,21 +78,6 @@ class ParameterCountingQuestion(Question):
 
     self.total_params = self.total_weights + self.total_biases
 
-    # Create answers
-    self._create_answers()
-
-  def _create_answers(self):
-    """Create answer fields."""
-    self.answers = {}
-
-    self.answers["total_weights"] = ca.AnswerTypes.Int(self.total_weights, label="Total weights")
-
-    if self.include_biases:
-      self.answers["total_biases"] = ca.AnswerTypes.Int(self.total_biases, label="Total biases")
-      self.answers["total_params"] = ca.AnswerTypes.Int(self.total_params, label="Total trainable parameters")
-    else:
-      self.answers["total_params"] = ca.AnswerTypes.Int(self.total_params, label="Total trainable parameters")
-
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
@@ -124,33 +109,33 @@ class ParameterCountingQuestion(Question):
     table_data = []
     table_data.append(["Parameter Type", "Count"])
 
-    answers.append(self.answers["total_weights"])
+    total_weights_answer = ca.AnswerTypes.Int(self.total_weights, label="Total weights")
+    total_biases_answer = None
+    total_params_answer = ca.AnswerTypes.Int(self.total_params, label="Total trainable parameters")
+
+    answers.append(total_weights_answer)
     table_data.append([
       "Total weights (connections between layers)",
-      self.answers["total_weights"]
+      total_weights_answer
     ])
 
     if self.include_biases:
-      answers.append(self.answers["total_biases"])
+      total_biases_answer = ca.AnswerTypes.Int(self.total_biases, label="Total biases")
+      answers.append(total_biases_answer)
       table_data.append([
         "Total biases",
-        self.answers["total_biases"]
+        total_biases_answer
       ])
 
-    answers.append(self.answers["total_params"])
+    answers.append(total_params_answer)
     table_data.append([
       "Total trainable parameters",
-      self.answers["total_params"]
+      total_params_answer
     ])
 
     body.add_element(ca.Table(data=table_data))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -221,11 +206,6 @@ class ParameterCountingQuestion(Question):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register()
 class ActivationFunctionComputationQuestion(Question):
@@ -276,9 +256,6 @@ class ActivationFunctionComputationQuestion(Question):
     # Compute outputs
     self.output_vector = self._compute_activation(self.input_vector)
 
-    # Create answers
-    self._create_answers()
-
   def _compute_activation(self, inputs):
     """Compute activation function output."""
     if self.activation == self.ACTIVATION_RELU:
@@ -325,19 +302,6 @@ class ActivationFunctionComputationQuestion(Question):
 
     return ""
 
-  def _create_answers(self):
-    """Create answer fields."""
-    self.answers = {}
-
-    if self.activation == self.ACTIVATION_SOFTMAX:
-      # Softmax: single vector answer
-      self.answers["output"] = ca.AnswerTypes.Vector(self.output_vector, label="Output vector")
-    else:
-      # Element-wise: individual answers
-      for i, output in enumerate(self.output_vector):
-        key = f"output_{i}"
-        self.answers[key] = ca.AnswerTypes.Float(float(output), label=f"Output for input {self.input_vector[i]:.1f}")
-
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
@@ -367,10 +331,11 @@ class ActivationFunctionComputationQuestion(Question):
         "Compute the output vector:"
       ]))
 
-      answers.append(self.answers["output"])
+      output_answer = ca.AnswerTypes.Vector(self.output_vector, label="Output vector")
+      answers.append(output_answer)
       table_data = []
       table_data.append(["Output Vector"])
-      table_data.append([self.answers["output"]])
+      table_data.append([output_answer])
 
       body.add_element(ca.Table(data=table_data))
 
@@ -383,7 +348,10 @@ class ActivationFunctionComputationQuestion(Question):
       table_data.append(["Input", "Output"])
 
       for i, x in enumerate(self.input_vector):
-        answer = self.answers[f"output_{i}"]
+        answer = ca.AnswerTypes.Float(
+          float(self.output_vector[i]),
+          label=f"Output for input {self.input_vector[i]:.1f}"
+        )
         answers.append(answer)
         table_data.append([
           ca.Equation(f"{x:.1f}", inline=True),
@@ -393,11 +361,6 @@ class ActivationFunctionComputationQuestion(Question):
       body.add_element(ca.Table(data=table_data))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -470,11 +433,6 @@ class ActivationFunctionComputationQuestion(Question):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register()
 class RegularizationCalculationQuestion(Question):
@@ -538,19 +496,6 @@ class RegularizationCalculationQuestion(Question):
     self.grad_reg_w0 = self.lambda_reg * self.weights[0]
     self.grad_total_w0 = self.grad_base_w0 + self.grad_reg_w0
 
-    # Create answers
-    self._create_answers()
-
-  def _create_answers(self):
-    """Create answer fields."""
-    self.answers = {}
-
-    self.answers["prediction"] = ca.AnswerTypes.Float(float(self.prediction), label="Prediction ŷ")
-    self.answers["base_loss"] = ca.AnswerTypes.Float(float(self.base_loss), label="Base MSE loss")
-    self.answers["l2_penalty"] = ca.AnswerTypes.Float(float(self.l2_penalty), label="L2 penalty")
-    self.answers["total_loss"] = ca.AnswerTypes.Float(float(self.total_loss), label="Total loss")
-    self.answers["grad_total_w0"] = ca.AnswerTypes.Float(float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
-
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
@@ -604,44 +549,45 @@ class RegularizationCalculationQuestion(Question):
     table_data = []
     table_data.append(["Calculation", "Value"])
 
-    answers.append(self.answers["prediction"])
+    prediction_answer = ca.AnswerTypes.Float(float(self.prediction), label="Prediction ŷ")
+    base_loss_answer = ca.AnswerTypes.Float(float(self.base_loss), label="Base MSE loss")
+    l2_penalty_answer = ca.AnswerTypes.Float(float(self.l2_penalty), label="L2 penalty")
+    total_loss_answer = ca.AnswerTypes.Float(float(self.total_loss), label="Total loss")
+    grad_total_w0_answer = ca.AnswerTypes.Float(float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
+
+    answers.append(prediction_answer)
     table_data.append([
       ca.Paragraph(["Prediction ", ca.Equation(r"\hat{y}", inline=True)]),
-      self.answers["prediction"]
+      prediction_answer
     ])
 
-    answers.append(self.answers["base_loss"])
+    answers.append(base_loss_answer)
     table_data.append([
       ca.Paragraph(["Base MSE loss: ", ca.Equation(r"L_{base} = (1/2)(y - \hat{y})^2", inline=True)]),
-      self.answers["base_loss"]
+      base_loss_answer
     ])
 
-    answers.append(self.answers["l2_penalty"])
+    answers.append(l2_penalty_answer)
     table_data.append([
       ca.Paragraph(["L2 penalty: ", ca.Equation(r"L_{reg} = (\lambda/2)\sum w_i^2", inline=True)]),
-      self.answers["l2_penalty"]
+      l2_penalty_answer
     ])
 
-    answers.append(self.answers["total_loss"])
+    answers.append(total_loss_answer)
     table_data.append([
       ca.Paragraph(["Total loss: ", ca.Equation(r"L_{total} = L_{base} + L_{reg}", inline=True)]),
-      self.answers["total_loss"]
+      total_loss_answer
     ])
 
-    answers.append(self.answers["grad_total_w0"])
+    answers.append(grad_total_w0_answer)
     table_data.append([
       ca.Paragraph(["Gradient: ", ca.Equation(r"\frac{\partial L_{total}}{\partial w_0}", inline=True)]),
-      self.answers["grad_total_w0"]
+      grad_total_w0_answer
     ])
 
     body.add_element(ca.Table(data=table_data))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -735,11 +681,6 @@ class RegularizationCalculationQuestion(Question):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register()
 class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin):
@@ -809,23 +750,6 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
         for w, grad in zip(self.current_weights, self.gradients)
       ]
 
-    # Create answers
-    self._create_answers()
-
-  def _create_answers(self):
-    """Create answer fields."""
-    self.answers = {}
-
-    # New velocity
-    self.answers["velocity"] = ca.AnswerTypes.Vector(self.new_velocity, label="New velocity")
-
-    # New weights with momentum
-    self.answers["weights_momentum"] = ca.AnswerTypes.Vector(self.new_weights, label="Weights (momentum)")
-
-    # Vanilla SGD weights for comparison
-    if self.show_vanilla_sgd:
-      self.answers["weights_sgd"] = ca.AnswerTypes.Vector(self.sgd_weights, label="Weights (vanilla SGD)")
-
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
@@ -889,36 +813,36 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     table_data = []
     table_data.append(["Update Type", "Formula", "Result"])
 
-    answers.append(self.answers["velocity"])
+    velocity_answer = ca.AnswerTypes.Vector(self.new_velocity, label="New velocity")
+    weights_momentum_answer = ca.AnswerTypes.Vector(self.new_weights, label="Weights (momentum)")
+    weights_sgd_answer = None
+
+    answers.append(velocity_answer)
     table_data.append([
       "New velocity",
       ca.Equation(r"v' = \beta v + (1-\beta)\nabla f", inline=True),
-      self.answers["velocity"]
+      velocity_answer
     ])
 
-    answers.append(self.answers["weights_momentum"])
+    answers.append(weights_momentum_answer)
     table_data.append([
       "Weights (momentum)",
       ca.Equation(r"w' = w - \alpha v'", inline=True),
-      self.answers["weights_momentum"]
+      weights_momentum_answer
     ])
 
     if self.show_vanilla_sgd:
-      answers.append(self.answers["weights_sgd"])
+      weights_sgd_answer = ca.AnswerTypes.Vector(self.sgd_weights, label="Weights (vanilla SGD)")
+      answers.append(weights_sgd_answer)
       table_data.append([
         "Weights (vanilla SGD)",
         ca.Equation(r"w' = w - \alpha \nabla f", inline=True),
-        self.answers["weights_sgd"]
+        weights_sgd_answer
       ])
 
     body.add_element(ca.Table(data=table_data))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -1002,8 +926,3 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       ]))
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation

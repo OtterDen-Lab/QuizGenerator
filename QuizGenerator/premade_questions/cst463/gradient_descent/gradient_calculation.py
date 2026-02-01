@@ -32,9 +32,9 @@ class DerivativeQuestion(Question, abc.ABC):
     else:
       return f"\\frac{{\\partial f}}{{\\partial x_{var_index}}}"
 
-  def _create_derivative_answers(self, evaluation_point: List[float]) -> None:
+  def _create_derivative_answers(self, evaluation_point: List[float]) -> List[ca.Answer]:
     """Create answer fields for each partial derivative at the evaluation point."""
-    self.answers = {}
+    answers: List[ca.Answer] = []
 
     # Evaluate gradient at the specified point
     subs_map = dict(zip(self.variables, evaluation_point))
@@ -57,9 +57,11 @@ class DerivativeQuestion(Question, abc.ABC):
       # Use auto_float for Canvas compatibility with integers and decimals
       # Label includes the partial derivative notation
       label = f"∂f/∂x_{i} at ({eval_point_str})"
-      self.answers[answer_key] = ca.AnswerTypes.Float(gradient_value, label=label)
+      answers.append(ca.AnswerTypes.Float(gradient_value, label=label))
 
-  def _create_gradient_vector_answer(self) -> None:
+    return answers
+
+  def _create_gradient_vector_answer(self) -> ca.Answer:
     """Create a single gradient vector answer for PDF format."""
     # Format gradient as vector notation
     subs_map = dict(zip(self.variables, self.evaluation_point))
@@ -75,7 +77,7 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # Format as vector for display using consistent formatting
     vector_str = format_vector(gradient_values)
-    self.answers["gradient_vector"] = ca.AnswerTypes.String(vector_str, pdf_only=True)
+    return ca.AnswerTypes.String(vector_str, pdf_only=True)
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -109,8 +111,8 @@ class DerivativeQuestion(Question, abc.ABC):
     )
 
     # For Canvas: Use OnlyHtml to show individual partial derivatives
-    for i in range(self.num_variables):
-      answer = self.answers[f"partial_derivative_{i}"]
+    derivative_answers = self._create_derivative_answers(self.evaluation_point)
+    for i, answer in enumerate(derivative_answers):
       answers.append(answer)
       body.add_element(
         ca.OnlyHtml([
@@ -125,11 +127,6 @@ class DerivativeQuestion(Question, abc.ABC):
       )
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
@@ -182,11 +179,6 @@ class DerivativeQuestion(Question, abc.ABC):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register("DerivativeBasic")
 class DerivativeBasic(DerivativeQuestion):
@@ -203,11 +195,8 @@ class DerivativeBasic(DerivativeQuestion):
     # Generate evaluation point
     self.evaluation_point = self._generate_evaluation_point()
 
-    # Create answers
+    # Create answers for evaluation point (used in _get_body)
     self._create_derivative_answers(self.evaluation_point)
-
-    # For PDF: Create single gradient vector answer
-    self._create_gradient_vector_answer()
 
 
 @QuestionRegistry.register("DerivativeChain")
@@ -229,9 +218,6 @@ class DerivativeChain(DerivativeQuestion):
 
         # Create answers - this will raise ValueError if we get complex numbers
         self._create_derivative_answers(self.evaluation_point)
-
-        # For PDF: Create single gradient vector answer
-        self._create_gradient_vector_answer()
 
         # If we get here, everything worked
         break

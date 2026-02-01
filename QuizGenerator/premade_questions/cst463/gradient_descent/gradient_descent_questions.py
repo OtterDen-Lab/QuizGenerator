@@ -89,24 +89,22 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     # Perform gradient descent
     self.gradient_descent_results = self._perform_gradient_descent()
     
-    # Set up answers
-    self.answers = {}
-
-    # Answers for each step
+    # Build answers for each step
+    self.step_answers = {}
     for i, result in enumerate(self.gradient_descent_results):
       step = result['step']
 
       # Location answer
       location_key = f"answer__location_{step}"
-      self.answers[location_key] = ca.AnswerTypes.Vector(list(result['location']), label=f"Location at step {step}")
+      self.step_answers[location_key] = ca.AnswerTypes.Vector(list(result['location']), label=f"Location at step {step}")
 
       # Gradient answer
       gradient_key = f"answer__gradient_{step}"
-      self.answers[gradient_key] = ca.AnswerTypes.Vector(list(result['gradient']), label=f"Gradient at step {step}")
+      self.step_answers[gradient_key] = ca.AnswerTypes.Vector(list(result['gradient']), label=f"Gradient at step {step}")
 
       # Update answer
       update_key = f"answer__update_{step}"
-      self.answers[update_key] = ca.AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
+      self.step_answers[update_key] = ca.AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
   
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -147,20 +145,20 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
         # Fill in starting location for first row with default formatting
         row["location"] = f"{format_vector(self.starting_point)}"
-        row[headers[2]] = f"answer__gradient_{step}"  # gradient column
-        row[headers[3]] = f"answer__update_{step}"  # update column
+        row[headers[2]] = self.step_answers[f"answer__gradient_{step}"]  # gradient column
+        row[headers[3]] = self.step_answers[f"answer__update_{step}"]  # update column
         # Collect answers for this step (no location answer for step 1)
-        answers.append(self.answers[f"answer__gradient_{step}"])
-        answers.append(self.answers[f"answer__update_{step}"])
+        answers.append(self.step_answers[f"answer__gradient_{step}"])
+        answers.append(self.step_answers[f"answer__update_{step}"])
       else:
         # Subsequent rows - all answer fields
-        row["location"] = f"answer__location_{step}"
-        row[headers[2]] = f"answer__gradient_{step}"  # gradient column
-        row[headers[3]] = f"answer__update_{step}"  # update column
+        row["location"] = self.step_answers[f"answer__location_{step}"]
+        row[headers[2]] = self.step_answers[f"answer__gradient_{step}"]
+        row[headers[3]] = self.step_answers[f"answer__update_{step}"]
         # Collect all answers for this step
-        answers.append(self.answers[f"answer__location_{step}"])
-        answers.append(self.answers[f"answer__gradient_{step}"])
-        answers.append(self.answers[f"answer__update_{step}"])
+        answers.append(self.step_answers[f"answer__location_{step}"])
+        answers.append(self.step_answers[f"answer__gradient_{step}"])
+        answers.append(self.step_answers[f"answer__update_{step}"])
       table_rows.append(row)
 
     # Create the table using mixin
@@ -174,11 +172,6 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-  
   def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
@@ -323,8 +316,3 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
