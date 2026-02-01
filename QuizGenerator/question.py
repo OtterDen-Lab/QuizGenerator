@@ -556,18 +556,22 @@ class Question(abc.ABC):
     try:
       backoff_counter = 0
       is_interesting = False
+      ctx = None
       while not is_interesting:
         # Increment seed for each backoff attempt to maintain deterministic behavior
         current_seed = None if base_seed is None else base_seed + backoff_counter
-        # Pass config_params to refresh so custom kwargs from YAML are available
-        self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0), **self.config_params)
-        is_interesting = self.is_interesting()
+        ctx = self.build_context(
+          rng_seed=current_seed,
+          hard_refresh=(backoff_counter > 0),
+          **self.config_params
+        )
+        is_interesting = self.is_interesting_ctx(ctx)
         backoff_counter += 1
 
       # Store the actual seed used and question metadata for QR code generation
       actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
 
-      components = self.build(rng_seed=current_seed, **build_kwargs)
+      components = self.build(rng_seed=current_seed, context=ctx, **build_kwargs)
 
       # Collect answers from explicit lists and inline AST
       inline_body_answers = self._collect_answers_from_ast(components.body)
@@ -626,17 +630,20 @@ class Question(abc.ABC):
       [ca.Text("[Please reach out to your professor for clarification]")]
     ), []
 
-  def build(self, *, rng_seed=None, **kwargs) -> QuestionComponents:
+  def build(self, *, rng_seed=None, context=None, **kwargs) -> QuestionComponents:
     """
     Build question content (body, answers, explanation) for a given seed.
 
     This should only generate content; metadata like points/spacing belong in instantiate().
     """
+    if context is None:
+      context = self.build_context(rng_seed=rng_seed, **kwargs)
+
     # Build body with its answers
-    body, body_answers = self._get_body()
+    body, body_answers = self._build_body(context)
 
     # Build explanation (answers are not collected from explanations)
-    explanation, explanation_answers = self._get_explanation()
+    explanation, explanation_answers = self._build_explanation(context)
     if len(explanation_answers) > 0:
       log.warning(
         f"Question '{self.name}' returned answers from explanation; these are ignored."
@@ -647,6 +654,28 @@ class Question(abc.ABC):
       answers=body_answers,
       explanation=explanation
     )
+
+  def build_context(self, *, rng_seed=None, **kwargs):
+    """
+    Build the deterministic context for a question instance.
+
+    Default implementation uses refresh() to populate self.* state and returns None.
+    Override to return a context dict and avoid persistent self.* state.
+    """
+    self.refresh(rng_seed=rng_seed, **kwargs)
+    return None
+
+  def is_interesting_ctx(self, context) -> bool:
+    """Context-aware hook; defaults to existing is_interesting()."""
+    return self.is_interesting()
+
+  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+    """Context-aware body builder. Defaults to _get_body() for legacy questions."""
+    return self._get_body()
+
+  def _build_explanation(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+    """Context-aware explanation builder. Defaults to _get_explanation() for legacy questions."""
+    return self._get_explanation()
 
   def _collect_answers_from_ast(self, element: ca.Element) -> List[ca.Answer]:
     """Traverse AST and collect embedded Answer elements."""
