@@ -891,11 +891,6 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       for job in jobs
     }
 
-    for job_id in sorted(self.job_stats.keys()):
-      self.answers.update({
-        f"answer__turnaround_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["TAT"])
-      })
-
     return self.is_interesting()
 
   def _get_body(self, *args, **kwargs):
@@ -916,13 +911,14 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     table_rows = []
     for job_id in sorted(self.job_stats.keys()):
+      tat_answer = ca.AnswerTypes.Float(self.job_stats[job_id]["TAT"])
+      answers.append(tat_answer)
       table_rows.append({
         "Job ID": f"Job{job_id}",
         "Arrival": self.job_stats[job_id]["arrival_time"],
         "Duration": self.job_stats[job_id]["duration"],
-        "TAT": f"answer__turnaround_time_job{job_id}",
+        "TAT": tat_answer,
       })
-      answers.append(self.answers[f"answer__turnaround_time_job{job_id}"])
 
     scheduling_table = self.create_answer_table(
       headers=["Job ID", "Arrival", "Duration", "TAT"],
@@ -954,10 +950,6 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     body.add_element(ca.Paragraph([instructions]))
     body.add_element(scheduling_table)
     return body, answers
-
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    body, _ = self._get_body(*args, **kwargs)
-    return body
 
   def _get_explanation(self, **kwargs):
     explanation = ca.Section()

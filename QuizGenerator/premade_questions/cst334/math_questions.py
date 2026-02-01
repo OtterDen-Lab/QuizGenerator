@@ -29,17 +29,22 @@ class BitsAndBytes(MathQuestion):
     self.from_binary = (0 == self.rng.randint(0,1))
     self.num_bits = self.rng.randint(self.MIN_BITS, self.MAX_BITS)
     self.num_bytes = int(math.pow(2, self.num_bits))
-    
-    if self.from_binary:
-      self.answers = {"answer": ca.AnswerTypes.Int(self.num_bytes,
-                                               label="Address space size", unit="Bytes")}
-    else:
-      self.answers = {"answer": ca.AnswerTypes.Int(self.num_bits,
-                                               label="Number of bits in address", unit="bits")}
   
   def _get_body(self, **kwargs):
     """Build question body and collect answers."""
-    answers = [self.answers['answer']]
+    if self.from_binary:
+      answer = ca.AnswerTypes.Int(
+        self.num_bytes,
+        label="Address space size",
+        unit="Bytes"
+      )
+    else:
+      answer = ca.AnswerTypes.Int(
+        self.num_bits,
+        label="Number of bits in address",
+        unit="bits"
+      )
+    answers = [answer]
 
     body = ca.Section()
     body.add_element(
@@ -51,14 +56,9 @@ class BitsAndBytes(MathQuestion):
       ])
     )
 
-    body.add_element(ca.AnswerBlock(self.answers['answer']))
+    body.add_element(ca.AnswerBlock(answer))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs):
     explanation = ca.Section()
@@ -110,16 +110,13 @@ class HexAndBinary(MathQuestion):
     self.hex_val = f"0x{self.value:0{self.number_of_hexits}X}"
     self.binary_val = f"0b{self.value:0{4*self.number_of_hexits}b}"
     
-    if self.from_binary:
-      self.answers['answer'] = ca.AnswerTypes.String(self.hex_val,
-                                             label="Value in hex")
-    else:
-      self.answers['answer'] = ca.AnswerTypes.String(self.binary_val,
-                                             label="Value in binary")
-  
   def _get_body(self, **kwargs):
     """Build question body and collect answers."""
-    answers = [self.answers['answer']]
+    if self.from_binary:
+      answer = ca.AnswerTypes.String(self.hex_val, label="Value in hex")
+    else:
+      answer = ca.AnswerTypes.String(self.binary_val, label="Value in binary")
+    answers = [answer]
 
     body = ca.Section()
 
@@ -131,14 +128,9 @@ class HexAndBinary(MathQuestion):
       ])
     )
 
-    body.add_element(ca.AnswerBlock(self.answers['answer']))
+    body.add_element(ca.AnswerBlock(answer))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs):
     explanation = ca.Section()
@@ -222,10 +214,6 @@ class AverageMemoryAccessTime(MathQuestion):
     # Calculate the AverageMemoryAccessTime (which is the answer itself)
     self.amat = self.hit_rate * self.hit_latency + (1 - self.hit_rate) * self.miss_latency
     
-    self.answers = {
-      "amat": ca.AnswerTypes.Float(self.amat, label="Average Memory Access Time", unit="cycles")
-    }
-    
     # Finally, do the self.rngizing of the question, to avoid these being non-deterministic
     self.show_miss_rate = self.rng.random() > 0.5
     
@@ -234,7 +222,12 @@ class AverageMemoryAccessTime(MathQuestion):
   
   def _get_body(self, **kwargs):
     """Build question body and collect answers."""
-    answers = [self.answers["amat"]]
+    answer = ca.AnswerTypes.Float(
+      self.amat,
+      label="Average Memory Access Time",
+      unit="cycles"
+    )
+    answers = [answer]
 
     body = ca.Section()
 
@@ -267,14 +260,9 @@ class AverageMemoryAccessTime(MathQuestion):
 
     body.add_element(ca.LineBreak())
 
-    body.add_element(ca.AnswerBlock(self.answers["amat"]))
+    body.add_element(ca.AnswerBlock(answer))
 
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs):
     explanation = ca.Section()
