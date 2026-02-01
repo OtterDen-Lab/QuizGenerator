@@ -62,7 +62,7 @@ class FromGenerator(FromText, TableQuestionMixin):
     # Attach the function dynamically
     attach_function_to_object(self, generator, "generator")
     
-  def build(self, *, rng_seed=None, **kwargs) -> QuestionComponents:
+  def build(self, *, rng_seed=None, context=None, **kwargs) -> QuestionComponents:
     try:
       generated_content = self.generator()
       if isinstance(generated_content, ca.Section):
@@ -76,10 +76,14 @@ class FromGenerator(FromText, TableQuestionMixin):
       log.debug(self.generator_text)
       exit(8)
 
-    explanation, _ = self._get_explanation()
+    explanation = self._build_explanation(context or {})
+    answers = self._merge_answers(
+      self._collect_answers_from_ast(body),
+      self._collect_answers_from_ast(explanation)
+    )
     return QuestionComponents(
       body=body,
-      answers=[],
+      answers=answers,
       explanation=explanation
     )
 

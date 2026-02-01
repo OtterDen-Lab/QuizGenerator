@@ -391,16 +391,17 @@ class Question(abc.ABC):
   NEVER create manual LaTeX, HTML, or Markdown strings. The content AST system
   ensures consistent rendering across PDF/LaTeX and Canvas/HTML formats.
 
-  Required Methods:
-    - _get_body(): Return Tuple[ca.Section, List[ca.Answer]] with body and answers
-    - _get_explanation(): Return Tuple[ca.Section, List[ca.Answer]] with explanation
+  Primary extension points:
+    - build(...): Simple path. Override to generate body + explanation in one place.
+    - _build_context/_build_body/_build_explanation: Context path.
+      Default _build_context uses refresh() for legacy questions.
 
   Required Class Attributes:
     - VERSION (str): Question version number (e.g., "1.0")
       Increment when RNG logic changes to ensure reproducibility
 
   Content AST Usage Examples:
-    def _get_body(self):
+    def _build_body(cls, context):
         body = ca.Section()
         answers = []
         body.add_element(ca.Paragraph(["Calculate the matrix:"]))
@@ -413,7 +414,7 @@ class Question(abc.ABC):
         ans = ca.Answer.integer("result", 42, label="Result")
         answers.append(ans)
         body.add_element(ans)
-        return body, answers
+        return body
 
   Common Content AST Elements:
     - ca.Paragraph: Text blocks
@@ -430,7 +431,7 @@ class Question(abc.ABC):
     - Do NOT increment for:
       * Cosmetic changes (formatting, wording)
       * Bug fixes that don't affect answer generation
-      * Changes to _get_explanation() only
+      * Changes to _build_explanation() only
 
   See existing questions in premade_questions/ for patterns and examples.
   """
@@ -547,6 +548,8 @@ class Question(abc.ABC):
     base_seed = kwargs.get("rng_seed", None)
     build_kwargs = dict(kwargs)
     build_kwargs.pop("rng_seed", None)
+    # Include config params so build() implementations can access YAML-provided settings.
+    build_kwargs = {**self.config_params, **build_kwargs}
 
     # Pre-select any regenerable choices using the base seed
     # This ensures the policy/algorithm stays constant across backoff attempts
@@ -560,7 +563,7 @@ class Question(abc.ABC):
       while not is_interesting:
         # Increment seed for each backoff attempt to maintain deterministic behavior
         current_seed = None if base_seed is None else base_seed + backoff_counter
-        ctx = self.build_context(
+        ctx = self._build_context(
           rng_seed=current_seed,
           hard_refresh=(backoff_counter > 0),
           **self.config_params
@@ -608,76 +611,70 @@ class Question(abc.ABC):
   def post_instantiate(self, instance, **kwargs):
     pass
    
-  def _get_body(self) -> Tuple[ca.Element, List[ca.Answer]]:
-    """
-    Build question body and collect answers (new pattern).
-    Questions should override this to return (body, answers) tuple.
-
-    Returns:
-        Tuple of (body_ast, answers_list)
-    """
-    raise NotImplementedError("Questions must implement _get_body().")
-
-  def _get_explanation(self) -> Tuple[ca.Element, List[ca.Answer]]:
-    """
-    Build question explanation and collect answers (new pattern).
-    Questions can override this to include answers in explanations.
-
-    Returns:
-        Tuple of (explanation_ast, answers_list)
-    """
-    return ca.Section(
-      [ca.Text("[Please reach out to your professor for clarification]")]
-    ), []
-
   def build(self, *, rng_seed=None, context=None, **kwargs) -> QuestionComponents:
     """
     Build question content (body, answers, explanation) for a given seed.
 
     This should only generate content; metadata like points/spacing belong in instantiate().
     """
+    cls = self.__class__
     if context is None:
-      context = self.build_context(rng_seed=rng_seed, **kwargs)
+      context = self._build_context(rng_seed=rng_seed, **kwargs)
 
-    # Build body with its answers
-    body, body_answers = self._build_body(context)
+    # Build body + explanation. Each may return just an Element or (Element, answers).
+    body, body_answers = cls._normalize_build_output(self._build_body(context))
+    explanation, explanation_answers = cls._normalize_build_output(self._build_explanation(context))
 
-    # Build explanation (answers are not collected from explanations)
-    explanation, explanation_answers = self._build_explanation(context)
-    if len(explanation_answers) > 0:
-      log.warning(
-        f"Question '{self.name}' returned answers from explanation; these are ignored."
-      )
+    # Collect inline answers from both body and explanation.
+    inline_body_answers = cls._collect_answers_from_ast(body)
+    inline_explanation_answers = cls._collect_answers_from_ast(explanation)
+
+    answers = cls._merge_answers(
+      body_answers,
+      explanation_answers,
+      inline_body_answers,
+      inline_explanation_answers
+    )
 
     return QuestionComponents(
       body=body,
-      answers=body_answers,
+      answers=answers,
       explanation=explanation
     )
 
-  def build_context(self, *, rng_seed=None, **kwargs):
+  def _build_context(self, *, rng_seed=None, **kwargs):
     """
     Build the deterministic context for a question instance.
 
-    Default implementation uses refresh() to populate self.* state and returns None.
     Override to return a context dict and avoid persistent self.* state.
     """
+    # Legacy fallback: refresh() populates instance state.
     self.refresh(rng_seed=rng_seed, **kwargs)
-    return None
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
-  def is_interesting_ctx(self, context) -> bool:
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
     """Context-aware hook; defaults to existing is_interesting()."""
-    return self.is_interesting()
+    return True
 
-  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
-    """Context-aware body builder. Defaults to _get_body() for legacy questions."""
-    return self._get_body()
+  def _build_body(self, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
+    """Context-aware body builder."""
+    if hasattr(self, "_get_body"):
+      return self._get_body()
+    raise NotImplementedError("Questions must implement _build_body().")
 
-  def _build_explanation(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
-    """Context-aware explanation builder. Defaults to _get_explanation() for legacy questions."""
-    return self._get_explanation()
+  def _build_explanation(self, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
+    """Context-aware explanation builder."""
+    if hasattr(self, "_get_explanation"):
+      return self._get_explanation()
+    return ca.Section(
+      [ca.Text("[Please reach out to your professor for clarification]")]
+    )
 
-  def _collect_answers_from_ast(self, element: ca.Element) -> List[ca.Answer]:
+  @classmethod
+  def _collect_answers_from_ast(cls, element: ca.Element) -> List[ca.Answer]:
     """Traverse AST and collect embedded Answer elements."""
     answers: List[ca.Answer] = []
 
@@ -694,7 +691,8 @@ class Question(abc.ABC):
     visit(element)
     return answers
 
-  def _merge_answers(self, *answer_lists: List[ca.Answer]) -> List[ca.Answer]:
+  @classmethod
+  def _merge_answers(cls, *answer_lists: List[ca.Answer]) -> List[ca.Answer]:
     """Merge answers while preserving order and removing duplicates by key/id."""
     merged: List[ca.Answer] = []
     seen: set[str] = set()
@@ -710,11 +708,22 @@ class Question(abc.ABC):
         merged.append(ans)
     return merged
 
-  def _can_be_numerical_from_answers(self, answers: List[ca.Answer]) -> bool:
+  @classmethod
+  def _can_be_numerical_from_answers(cls, answers: List[ca.Answer]) -> bool:
     return (
       len(answers) == 1
       and isinstance(answers[0], ca.AnswerTypes.Float)
     )
+
+  @classmethod
+  def _normalize_build_output(
+    cls,
+    result: ca.Element | Tuple[ca.Element, List[ca.Answer]]
+  ) -> Tuple[ca.Element, List[ca.Answer]]:
+    if isinstance(result, tuple):
+      body, answers = result
+      return body, list(answers or [])
+    return result, []
 
   def _answers_for_canvas(
       self,
