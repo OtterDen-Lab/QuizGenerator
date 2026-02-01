@@ -2,6 +2,7 @@
 import abc
 import logging
 import math
+import random
 
 from QuizGenerator.question import Question, QuestionRegistry
 import QuizGenerator.contentast as ca
@@ -22,45 +23,51 @@ class BitsAndBytes(MathQuestion):
   MIN_BITS = MathRanges.DEFAULT_MIN_MATH_BITS
   MAX_BITS = MathRanges.DEFAULT_MAX_MATH_BITS
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
-    # Generate the important parts of the problem
-    self.from_binary = (0 == self.rng.randint(0,1))
-    self.num_bits = self.rng.randint(self.MIN_BITS, self.MAX_BITS)
-    self.num_bytes = int(math.pow(2, self.num_bits))
-  
-  def _get_body(self, **kwargs):
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    from_binary = (0 == rng.randint(0, 1))
+    num_bits = rng.randint(cls.MIN_BITS, cls.MAX_BITS)
+    num_bytes = int(math.pow(2, num_bits))
+    return {
+      "from_binary": from_binary,
+      "num_bits": num_bits,
+      "num_bytes": num_bytes,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    if self.from_binary:
+    if context["from_binary"]:
       answer = ca.AnswerTypes.Int(
-        self.num_bytes,
+        context["num_bytes"],
         label="Address space size",
         unit="Bytes"
       )
     else:
       answer = ca.AnswerTypes.Int(
-        self.num_bits,
+        context["num_bits"],
         label="Number of bits in address",
         unit="bits"
       )
-    answers = [answer]
 
     body = ca.Section()
     body.add_element(
       ca.Paragraph([
         f"Given that we have "
-        f"{self.num_bits if self.from_binary else self.num_bytes} {'bits' if self.from_binary else 'bytes'}, "
-        f"how many {'bits' if not self.from_binary else 'bytes'} "
-        f"{'do we need to address our memory' if not self.from_binary else 'of memory can be addressed'}?"
+        f"{context['num_bits'] if context['from_binary'] else context['num_bytes']} "
+        f"{'bits' if context['from_binary'] else 'bytes'}, "
+        f"how many {'bits' if not context['from_binary'] else 'bytes'} "
+        f"{'do we need to address our memory' if not context['from_binary'] else 'of memory can be addressed'}?"
       ])
     )
 
     body.add_element(ca.AnswerBlock(answer))
 
-    return body, answers
+    return body
 
-  def _get_explanation(self, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     explanation = ca.Section()
     
     explanation.add_element(
@@ -77,16 +84,20 @@ class BitsAndBytes(MathQuestion):
       ca.Paragraph(["Therefore, we calculate:"])
     )
     
-    if self.from_binary:
+    if context["from_binary"]:
       explanation.add_element(
-        ca.Equation(f"2 ^ {{{self.num_bits}bits}} = \\textbf{{{self.num_bytes}}}\\text{{bytes}}")
+        ca.Equation(
+          f"2 ^ {{{context['num_bits']}bits}} = \\textbf{{{context['num_bytes']}}}\\text{{bytes}}"
+        )
       )
     else:
       explanation.add_element(
-        ca.Equation(f"log_{{2}}({self.num_bytes} \\text{{bytes}}) = \\textbf{{{self.num_bits}}}\\text{{bits}}")
+        ca.Equation(
+          f"log_{{2}}({context['num_bytes']} \\text{{bytes}}) = \\textbf{{{context['num_bits']}}}\\text{{bits}}"
+        )
       )
 
-    return explanation, []
+    return explanation
 
 
 @QuestionRegistry.register()
@@ -95,39 +106,46 @@ class HexAndBinary(MathQuestion):
   MIN_HEXITS = 1
   MAX_HEXITS = 8
   
-  def refresh(self, **kwargs):
-    super().refresh(**kwargs)
-    
-    self.from_binary = self.rng.choice([True, False])
-    self.number_of_hexits = self.rng.randint(1, 8)
-    self.value = self.rng.randint(1, 16**self.number_of_hexits)
-    
-    self.hex_val = f"0x{self.value:0{self.number_of_hexits}X}"
-    self.binary_val = f"0b{self.value:0{4*self.number_of_hexits}b}"
-    
-  def _get_body(self, **kwargs):
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    from_binary = rng.choice([True, False])
+    number_of_hexits = rng.randint(1, 8)
+    value = rng.randint(1, 16**number_of_hexits)
+    hex_val = f"0x{value:0{number_of_hexits}X}"
+    binary_val = f"0b{value:0{4*number_of_hexits}b}"
+    return {
+      "from_binary": from_binary,
+      "number_of_hexits": number_of_hexits,
+      "value": value,
+      "hex_val": hex_val,
+      "binary_val": binary_val,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    if self.from_binary:
-      answer = ca.AnswerTypes.String(self.hex_val, label="Value in hex")
+    if context["from_binary"]:
+      answer = ca.AnswerTypes.String(context["hex_val"], label="Value in hex")
     else:
-      answer = ca.AnswerTypes.String(self.binary_val, label="Value in binary")
-    answers = [answer]
+      answer = ca.AnswerTypes.String(context["binary_val"], label="Value in binary")
 
     body = ca.Section()
 
     body.add_element(
       ca.Paragraph([
-        f"Given the number {self.hex_val if not self.from_binary else self.binary_val} "
-        f"please convert it to {'hex' if self.from_binary else 'binary'}.",
+        f"Given the number {context['hex_val'] if not context['from_binary'] else context['binary_val']} "
+        f"please convert it to {'hex' if context['from_binary'] else 'binary'}.",
         "Please include base indicator all padding zeros as appropriate (e.g. 0x01 should be 0b00000001)",
       ])
     )
 
     body.add_element(ca.AnswerBlock(answer))
 
-    return body, answers
+    return body
 
-  def _get_explanation(self, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     explanation = ca.Section()
     
     paragraph = ca.Paragraph([
@@ -135,7 +153,7 @@ class HexAndBinary(MathQuestion):
       "Specifically, each hexit (hexadecimal digit) is equivalent to 4 bits.  "
     ])
     
-    if self.from_binary:
+    if context["from_binary"]:
       paragraph.add_line(
         "Therefore, we need to consider each group of 4 bits together and convert them to the appropriate hexit."
       )
@@ -147,8 +165,8 @@ class HexAndBinary(MathQuestion):
     explanation.add_element(paragraph)
     
     # Generate translation table
-    binary_str = f"{self.value:0{4*self.number_of_hexits}b}"
-    hex_str = f"{self.value:0{self.number_of_hexits}X}"
+    binary_str = f"{context['value']:0{4*context['number_of_hexits']}b}"
+    hex_str = f"{context['value']:0{context['number_of_hexits']}X}"
     
     explanation.add_element(
       ca.Table(
@@ -162,7 +180,7 @@ class HexAndBinary(MathQuestion):
       )
     )
     
-    if self.from_binary:
+    if context["from_binary"]:
       explanation.add_element(
         ca.Paragraph([
         f"Which gives us our hex value of: 0x{hex_str}"
@@ -175,7 +193,7 @@ class HexAndBinary(MathQuestion):
         ])
       )
 
-    return explanation, []
+    return explanation
 
 
 @QuestionRegistry.register()
@@ -183,41 +201,38 @@ class AverageMemoryAccessTime(MathQuestion):
   
   CHANCE_OF_99TH_PERCENTILE = 0.75
   
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
-    
-    # Figure out how many orders of magnitude different we are
-    orders_of_magnitude_different = self.rng.randint(1,4)
-    self.hit_latency = self.rng.randint(1,9)
-    self.miss_latency = int(self.rng.randint(1, 9) * math.pow(10, orders_of_magnitude_different))
-    
-    # Add in a complication of making it sometimes very, very close
-    if self.rng.random() < self.CHANCE_OF_99TH_PERCENTILE:
-      # Then let's make it very close to 99%
-      self.hit_rate = (99 + self.rng.random()) / 100
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    orders_of_magnitude_different = rng.randint(1, 4)
+    hit_latency = rng.randint(1, 9)
+    miss_latency = int(rng.randint(1, 9) * math.pow(10, orders_of_magnitude_different))
+
+    if rng.random() < cls.CHANCE_OF_99TH_PERCENTILE:
+      hit_rate = (99 + rng.random()) / 100
     else:
-      self.hit_rate = self.rng.random()
-      
-    # Calculate the hit rate
-    self.hit_rate = round(self.hit_rate, 4)
-    
-    # Calculate the AverageMemoryAccessTime (which is the answer itself)
-    self.amat = self.hit_rate * self.hit_latency + (1 - self.hit_rate) * self.miss_latency
-    
-    # Finally, do the self.rngizing of the question, to avoid these being non-deterministic
-    self.show_miss_rate = self.rng.random() > 0.5
-    
-    # At this point, everything in the question should be set.
-    pass
-  
-  def _get_body(self, **kwargs):
+      hit_rate = rng.random()
+
+    hit_rate = round(hit_rate, 4)
+    amat = hit_rate * hit_latency + (1 - hit_rate) * miss_latency
+    show_miss_rate = rng.random() > 0.5
+
+    return {
+      "hit_latency": hit_latency,
+      "miss_latency": miss_latency,
+      "hit_rate": hit_rate,
+      "amat": amat,
+      "show_miss_rate": show_miss_rate,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
     answer = ca.AnswerTypes.Float(
-      self.amat,
+      context["amat"],
       label="Average Memory Access Time",
       unit="cycles"
     )
-    answers = [answer]
 
     body = ca.Section()
 
@@ -232,15 +247,15 @@ class AverageMemoryAccessTime(MathQuestion):
       ])
     )
     table_data = [
-      ["Hit Latency", f"{self.hit_latency} cycles"],
-      ["Miss Latency", f"{self.miss_latency} cycles"]
+      ["Hit Latency", f"{context['hit_latency']} cycles"],
+      ["Miss Latency", f"{context['miss_latency']} cycles"]
     ]
 
     # Add in either miss rate or hit rate -- we only need one of them
-    if self.show_miss_rate:
-      table_data.append(["Miss Rate", f"{100 * (1 - self.hit_rate): 0.2f}%"])
+    if context["show_miss_rate"]:
+      table_data.append(["Miss Rate", f"{100 * (1 - context['hit_rate']): 0.2f}%"])
     else:
-      table_data.append(["Hit Rate", f"{100 * self.hit_rate: 0.2f}%"])
+      table_data.append(["Hit Rate", f"{100 * context['hit_rate']: 0.2f}%"])
 
     body.add_element(
       ca.Table(
@@ -252,9 +267,10 @@ class AverageMemoryAccessTime(MathQuestion):
 
     body.add_element(ca.AnswerBlock(answer))
 
-    return body, answers
+    return body
 
-  def _get_explanation(self, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     explanation = ca.Section()
     
     # Add in General explanation
@@ -272,9 +288,11 @@ class AverageMemoryAccessTime(MathQuestion):
         lhs="AMAT",
         rhs=[
           r"(hit\_rate)*(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
-          f"({self.hit_rate: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.hit_latency}) + ({1 - self.hit_rate: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({self.miss_latency}) = {self.amat: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
+          f"({context['hit_rate']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({context['hit_latency']}) + "
+          f"({1 - context['hit_rate']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({context['miss_latency']}) = "
+          f"{context['amat']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
         ]
       )
     )
 
-    return explanation, []
+    return explanation
