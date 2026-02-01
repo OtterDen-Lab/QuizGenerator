@@ -374,8 +374,3 @@ class DerivativeChain(DerivativeQuestion):
       )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation

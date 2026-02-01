@@ -1,6 +1,7 @@
 #!env python
 import abc
 import logging
+from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry
 import QuizGenerator.contentast as ca
@@ -154,7 +155,7 @@ class MatrixAddition(MatrixMathQuestion):
             self.matrix_b = self.operand_b
             # rows and cols should already be set by generate_operands
 
-    def get_explanation(self, **kwargs) -> ca.Section:
+    def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
         explanation = ca.Section()
 
         explanation.add_element(
@@ -214,7 +215,7 @@ class MatrixAddition(MatrixMathQuestion):
                 )
             )
 
-        return explanation
+        return explanation, []
 
 
 @QuestionRegistry.register()
@@ -317,7 +318,7 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
         matrix_latex = ca.Matrix.to_latex(operand_a, "b")
         return f"{self.scalar} \\cdot {matrix_latex}"
 
-    def get_explanation(self, **kwargs) -> ca.Section:
+    def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
         explanation = ca.Section()
 
         explanation.add_element(
@@ -374,7 +375,7 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
                 )
             )
 
-        return explanation
+        return explanation, []
 
 
 @QuestionRegistry.register()
@@ -513,7 +514,7 @@ class MatrixMultiplication(MatrixMathQuestion):
             self.matrix_a = self.operand_a
             self.matrix_b = self.operand_b
 
-    def get_explanation(self, **kwargs) -> ca.Section:
+    def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
         explanation = ca.Section()
 
         if self.is_multipart():
@@ -583,4 +584,4 @@ class MatrixMultiplication(MatrixMathQuestion):
                 ])
             )
 
-        return explanation
+        return explanation, []

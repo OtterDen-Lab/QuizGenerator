@@ -391,7 +391,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     table = self.create_parameter_answer_table(
       parameter_info=parameter_info,
       answer_label="Physical Address",
-      answer_key=answer,
+      answer=answer,
       transpose=True
     )
 

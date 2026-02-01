@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import abc
-import warnings
 import io
 import dataclasses
 import datetime
@@ -387,7 +386,7 @@ class Question(abc.ABC):
   Base class for all quiz questions with cross-format rendering support.
 
   CRITICAL: When implementing Question subclasses, ALWAYS use content AST elements
-  for all content in get_body() and get_explanation() methods.
+  for all content in _get_body() and _get_explanation() methods.
 
   NEVER create manual LaTeX, HTML, or Markdown strings. The content AST system
   ensures consistent rendering across PDF/LaTeX and Canvas/HTML formats.
@@ -395,9 +394,6 @@ class Question(abc.ABC):
   Required Methods:
     - _get_body(): Return Tuple[ca.Section, List[ca.Answer]] with body and answers
     - _get_explanation(): Return Tuple[ca.Section, List[ca.Answer]] with explanation
-
-  Note: get_body() and get_explanation() are provided for backward compatibility
-  and call the _get_* methods, returning just the first element of the tuple.
 
   Required Class Attributes:
     - VERSION (str): Question version number (e.g., "1.0")
@@ -434,7 +430,7 @@ class Question(abc.ABC):
     - Do NOT increment for:
       * Cosmetic changes (formatting, wording)
       * Bug fixes that don't affect answer generation
-      * Changes to get_explanation() only
+      * Changes to _get_explanation() only
 
   See existing questions in premade_questions/ for patterns and examples.
   """
@@ -522,13 +518,9 @@ class Question(abc.ABC):
 
     self.extra_attrs = kwargs # clear page, etc.
 
-    self.answers = {}
     self.possible_variations = float('inf')
 
     self.rng_seed_offset = kwargs.get("rng_seed_offset", 0)
-
-    # Component caching for unified Answer architecture
-    self._components: QuestionComponents = None
 
     # To be used throughout when generating random things
     self.rng = random.Random()
@@ -576,8 +568,6 @@ class Question(abc.ABC):
       actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
 
       components = self.build(rng_seed=current_seed, **build_kwargs)
-      # Cache components for legacy access
-      self._components = components
 
       # Collect answers from explicit lists and inline AST
       inline_body_answers = self._collect_answers_from_ast(components.body)
@@ -585,10 +575,6 @@ class Question(abc.ABC):
         components.answers,
         inline_body_answers
       )
-
-      # Fallback for legacy dict-based answers
-      if len(answers) == 0 and len(self.answers.values()) > 0:
-        answers = list(self.answers.values())
 
       can_be_numerical = self._can_be_numerical_from_answers(answers)
 
@@ -618,37 +604,6 @@ class Question(abc.ABC):
   def post_instantiate(self, instance, **kwargs):
     pass
    
-  def get_body(self, **kwargs) -> ca.Section:
-    """
-    Gets the body of the question during generation (backward compatible wrapper).
-    Calls _get_body() and returns just the body.
-    :param kwargs:
-    :return: (ca.Section) Containing question body
-    """
-    warnings.warn(
-      "Question.get_body() is deprecated; implement build() or _get_body() instead.",
-      DeprecationWarning,
-      stacklevel=2
-    )
-    body, _ = self._get_body()
-    return body
-  
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """
-    Gets the body of the question during generation (backward compatible wrapper).
-    Calls _get_explanation() and returns just the explanation.
-    :param kwargs:
-    :return: (ca.Section) Containing question explanation or None
-    """
-    # Try new pattern first
-    if hasattr(self, '_get_explanation') and callable(getattr(self, '_get_explanation')):
-      explanation, _ = self._get_explanation()
-      return explanation
-    # Fallback: default explanation
-    return ca.Section(
-      [ca.Text("[Please reach out to your professor for clarification]")]
-    )
-
   def _get_body(self) -> Tuple[ca.Element, List[ca.Answer]]:
     """
     Build question body and collect answers (new pattern).
@@ -657,9 +612,7 @@ class Question(abc.ABC):
     Returns:
         Tuple of (body_ast, answers_list)
     """
-    # Fallback: call old get_body() and return empty answers
-    body = self.get_body()
-    return body, []
+    raise NotImplementedError("Questions must implement _get_body().")
 
   def _get_explanation(self) -> Tuple[ca.Element, List[ca.Answer]]:
     """
@@ -771,46 +724,6 @@ class Question(abc.ABC):
 
     return question_ast
 
-  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
-    """
-    Return answers from cached components (new pattern) or self.answers dict (old pattern).
-    """
-    # Try component-based approach first (new pattern)
-    if self._components is None:
-      try:
-        self._components = self.build()
-      except Exception as e:
-        # If component building fails, fall back to dict
-        log.debug(f"Failed to build question components: {e}, falling back to dict")
-        pass
-
-    # Use components if available and non-empty
-    if self._components is not None and len(self._components.answers) > 0:
-      answers = self._components.answers
-      if self.can_be_numerical():
-        return (
-          ca.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
-          list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in answers]))
-        )
-      return (
-        self.answer_kind,
-        list(itertools.chain(*[a.get_for_canvas() for a in answers]))
-      )
-
-    # Fall back to dict pattern (old pattern)
-    if len(self.answers.values()) > 0:
-      if self.can_be_numerical():
-        return (
-          ca.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
-          list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in self.answers.values()]))
-        )
-      return (
-        self.answer_kind,
-        list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
-      )
-
-    return (ca.Answer.CanvasAnswerKind.ESSAY, [])
-    
   def refresh(self, rng_seed=None, *args, **kwargs):
     """If it is necessary to regenerate aspects between usages, this is the time to do it.
     This base implementation simply resets everything.
@@ -819,8 +732,6 @@ class Question(abc.ABC):
     :param **kwargs:
     :return: bool - True if the generated question is interesting, False otherwise
     """
-    self.answers = {}
-    self._components = None  # Clear component cache
     # Seed the RNG directly with the provided seed (no offset)
     self.rng.seed(rng_seed)
     # Note: We don't call is_interesting() here because child classes need to
@@ -874,15 +785,6 @@ class Question(abc.ABC):
       "neutral_comments_html": explanation_html
     }
   
-  def can_be_numerical(self):
-    if self._components is not None and len(self._components.answers) > 0:
-      return self._can_be_numerical_from_answers(self._components.answers)
-    if (len(self.answers.values()) == 1
-          and isinstance(list(self.answers.values())[0], ca.AnswerTypes.Float)
-    ):
-      return True
-    return False
-
   def _get_registered_name(self) -> str:
     """
     Get the registered name for this question class.

@@ -75,11 +75,6 @@ class TableQuestionMixin:
       # Answer extends ca.Leaf, so it can be used directly
       if column in answer_columns and isinstance(value, ca.Answer):
         return value
-      # If this column should contain answers but we have the answer key
-      elif column in answer_columns and isinstance(value, str) and hasattr(self, 'answers'):
-        answer_obj = self.answers.get(value)
-        if answer_obj:
-          return answer_obj
 
       # Otherwise return as plain data
       return str(value)
@@ -98,7 +93,7 @@ class TableQuestionMixin:
       self,
       parameter_info: Dict[str, Any],
       answer_label: str,
-      answer_key: str | ca.Answer,
+      answer: ca.Answer,
       transpose: bool = True
   ) -> ca.Table:
     """
@@ -110,7 +105,7 @@ class TableQuestionMixin:
     Args:
         parameter_info: Dictionary of {parameter_name: value}
         answer_label: Label for the answer row
-        answer_key: Key to look up the answer in self.answers
+        answer: Answer object to embed in the table
         transpose: Whether to show as vertical table (default: True)
 
     Returns:
@@ -120,12 +115,7 @@ class TableQuestionMixin:
     data = [[key, str(value)] for key, value in parameter_info.items()]
     
     # Add answer row - Answer extends ca.Leaf so it can be used directly
-    if isinstance(answer_key, ca.Answer):
-      data.append([answer_label, answer_key])
-    elif hasattr(self, 'answers') and answer_key in self.answers:
-      data.append([answer_label, self.answers[answer_key]])
-    else:
-      data.append([answer_label, f"[{answer_key}]"])  # Fallback
+    data.append([answer_label, answer])
     
     return ca.Table(
       data=data,
@@ -157,11 +147,6 @@ class TableQuestionMixin:
       # Answer extends ca.Leaf so it can be used in the AST
       if isinstance(value, ca.Answer):
         return value
-      # If it's a string that looks like an answer key, try to resolve it
-      elif isinstance(value, str) and value.startswith("answer__") and hasattr(self, 'answers'):
-        answer_obj = self.answers.get(value)
-        if answer_obj:
-          return answer_obj
       # Otherwise return as-is
       return str(value)
     
@@ -359,35 +344,6 @@ class MultiPartQuestionMixin:
     
     return body
   
-  def get_subpart_answers(self):
-    """
-    Retrieve answers organized by subpart for multipart questions.
-
-    Returns:
-        dict: Dictionary mapping subpart letters ('a', 'b', 'c') to their answers.
-              Returns empty dict if not a multipart question.
-
-    Example:
-        # For a 3-part question
-        {
-            'a': ca.Answer.integer('a', 5),
-            'b': ca.Answer.integer('b', 12),
-            'c': ca.Answer.integer('c', -3)
-        }
-    """
-    if not self.is_multipart():
-      return {}
-    
-    subpart_answers = {}
-    for i in range(self.num_subquestions):
-      letter = chr(ord('a') + i)
-      # Look for answers with subpart keys
-      answer_key = f"subpart_{letter}"
-      if hasattr(self, 'answers') and answer_key in self.answers:
-        subpart_answers[letter] = self.answers[answer_key]
-    
-    return subpart_answers
-
 
 class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
   """
@@ -523,11 +479,6 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
 
     return body, answers
 
-  def get_body(self):
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body()
-    return body
-
   def _add_single_question_answers(self, body):
     """Add Canvas-only answer fields for single questions. Subclasses can override.
 
@@ -554,11 +505,6 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
 
     return explanation, []
 
-  def get_explanation(self):
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
-    return explanation
-  
   def get_explanation_intro(self):
     """Get the intro text for explanations. Subclasses should override."""
     return "The calculation is performed as follows:"

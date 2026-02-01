@@ -88,11 +88,6 @@ class BitsAndBytes(MathQuestion):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register()
 class HexAndBinary(MathQuestion):
@@ -181,11 +176,6 @@ class HexAndBinary(MathQuestion):
       )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
 
 
 @QuestionRegistry.register()
@@ -288,9 +278,3 @@ class AverageMemoryAccessTime(MathQuestion):
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-  

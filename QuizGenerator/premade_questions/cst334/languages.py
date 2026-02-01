@@ -3,8 +3,7 @@ from __future__ import annotations
 
 import abc
 import enum
-import itertools
-from typing import List, Dict, Optional, Tuple, Any
+from typing import List, Dict, Optional
 
 from QuizGenerator.question import QuestionRegistry, Question
 
@@ -154,6 +153,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       kwargs['grammar_str_bad'] = grammar_str_bad
 
     super().__init__(*args, **kwargs)
+    self.answer_kind = ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER
 
     # Store whether grammars are fixed (provided) or should be randomized
     self.fixed_grammars = grammar_str_good is not None and grammar_str_bad is not None
@@ -384,6 +384,4 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     )
     return explanation, []
 
-  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
-    
-    return ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answer_options]))
+  

@@ -518,11 +518,6 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-  
   def is_interesting(self) -> bool:
     duration_sum = sum([self.job_stats[job_id]['duration'] for job_id in self.job_stats.keys()])
     tat_sum = sum([self.job_stats[job_id]['TAT'] for job_id in self.job_stats.keys()])
@@ -1002,10 +997,6 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
 
   def make_image(self):
     fig, ax = plt.subplots(1, 1, figsize=self.IMAGE_FIGSIZE, dpi=self.IMAGE_DPI)
