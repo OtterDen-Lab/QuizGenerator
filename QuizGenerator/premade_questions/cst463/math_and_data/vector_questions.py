@@ -118,7 +118,9 @@ class VectorAddition(VectorMathQuestion):
     raise NotImplementedError("Multipart not supported")
 
   def create_single_answers(self, result):
-    self.answers["result"] = ca.AnswerTypes.Vector(result)
+    answer = ca.AnswerTypes.Vector(result)
+    self._single_answer = answer
+    return [answer]
 
   def _get_body(self):
     """Build question body and collect answers."""
@@ -136,12 +138,11 @@ class VectorAddition(VectorMathQuestion):
         " = "
     ]))
 
-    # Canvas-only answer field - use stored answer for consistent UUID
-    answer = self.answers["result"]
+    answer = getattr(self, "_single_answer", ca.AnswerTypes.Vector(self.result))
     body.add_element(ca.OnlyHtml([ca.Paragraph(["Enter your answer as a column vector:"])]))
     body.add_element(ca.OnlyHtml([answer]))
 
-    return body, list(self.answers.values())
+    return body, [answer]
 
   def _get_explanation(self):
     """Build question explanation."""
@@ -197,7 +198,9 @@ class VectorScalarMultiplication(VectorMathQuestion):
     raise NotImplementedError("Multipart not supported")
 
   def create_single_answers(self, result):
-    self.answers["result"] = ca.AnswerTypes.Vector(result)
+    answer = ca.AnswerTypes.Vector(result)
+    self._single_answer = answer
+    return [answer]
 
   def _get_body(self):
     """Build question body and collect answers."""
@@ -213,12 +216,11 @@ class VectorScalarMultiplication(VectorMathQuestion):
         " = "
     ]))
 
-    # Canvas-only answer field - use stored answer
-    answer = self.answers["result"]
+    answer = getattr(self, "_single_answer", ca.AnswerTypes.Vector(self.result))
     body.add_element(ca.OnlyHtml([ca.Paragraph(["Enter your answer as a column vector:"])]))
     body.add_element(ca.OnlyHtml([answer]))
 
-    return body, list(self.answers.values())
+    return body, [answer]
 
   def _get_explanation(self):
     """Build question explanation."""
@@ -260,7 +262,9 @@ class VectorDotProduct(VectorMathQuestion):
     raise NotImplementedError("Multipart not supported")
 
   def create_single_answers(self, result):
-    self.answers["dot_product"] = ca.AnswerTypes.Int(result)
+    answer = ca.AnswerTypes.Int(result)
+    self._single_answer = answer
+    return [answer]
 
   def _get_body(self):
     """Build question body and collect answers."""
@@ -278,11 +282,10 @@ class VectorDotProduct(VectorMathQuestion):
         " = "
     ]))
 
-    # Canvas-only answer field - use stored answer
-    answer = self.answers["dot_product"]
+    answer = getattr(self, "_single_answer", ca.AnswerTypes.Int(self.result))
     body.add_element(ca.OnlyHtml([answer]))
 
-    return body, list(self.answers.values())
+    return body, [answer]
 
   def _get_explanation(self):
     """Build question explanation."""
@@ -327,7 +330,9 @@ class VectorMagnitude(VectorMathQuestion):
     raise NotImplementedError("Multipart not supported")
 
   def create_single_answers(self, result):
-    self.answers["magnitude"] = ca.AnswerTypes.Float(result)
+    answer = ca.AnswerTypes.Float(result)
+    self._single_answer = answer
+    return [answer]
 
   def _get_body(self):
     """Build question body and collect answers."""
@@ -343,11 +348,10 @@ class VectorMagnitude(VectorMathQuestion):
         "|| = "
     ]))
 
-    # Canvas-only answer field - use stored answer
-    answer = self.answers["magnitude"]
+    answer = getattr(self, "_single_answer", ca.AnswerTypes.Float(self.result))
     body.add_element(ca.OnlyHtml([answer]))
 
-    return body, list(self.answers.values())
+    return body, [answer]
 
   def _get_explanation(self):
     """Build question explanation."""

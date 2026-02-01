@@ -35,7 +35,7 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
         """Convert a matrix to content AST table format."""
         return [[f"{prefix}{matrix[i][j]}" for j in range(len(matrix[0]))] for i in range(len(matrix))]
 
-    def _create_answer_table(self, rows, cols, answers_dict, answer_prefix="answer"):
+    def _create_answer_table(self, answer_matrix):
         """Create a table with answer blanks for matrix results.
 
         Returns:
@@ -43,14 +43,13 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
         """
         table_data = []
         answers = []
-        for i in range(rows):
-            row = []
-            for j in range(cols):
-                answer_key = f"{answer_prefix}_{i}_{j}"
-                ans = answers_dict[answer_key]
-                row.append(ans)
-                answers.append(ans)
-            table_data.append(row)
+        for row in answer_matrix:
+            table_row = []
+            for ans in row:
+                table_row.append(ans)
+                if isinstance(ans, ca.Answer):
+                    answers.append(ans)
+            table_data.append(table_row)
         return ca.Table(data=table_data, padding=True), answers
 
     # Implement MathOperationQuestion abstract methods
@@ -78,38 +77,17 @@ class MatrixMathQuestion(MathOperationQuestion, Question):
         """
         answers = []
 
-        # For matrices, we typically show result dimensions and answer table
-        if hasattr(self, 'result_rows') and hasattr(self, 'result_cols'):
-            # Matrix multiplication case with dimension answers
-            if hasattr(self, 'answers') and "result_rows" in self.answers:
-                rows_ans = self.answers["result_rows"]
-                cols_ans = self.answers["result_cols"]
-                answers.extend([rows_ans, cols_ans])
-                body.add_element(
-                    ca.OnlyHtml([
-                        ca.AnswerBlock([rows_ans, cols_ans])
-                    ])
-                )
-
         # Matrix result table
         if hasattr(self, 'result') and self.result:
-            rows = len(self.result)
-            cols = len(self.result[0])
-            table, table_answers = self._create_answer_table(rows, cols, self.answers)
+            answer_matrix = [
+                [ca.AnswerTypes.Int(value) for value in row]
+                for row in self.result
+            ]
+            table, table_answers = self._create_answer_table(answer_matrix)
             answers.extend(table_answers)
             body.add_element(
                 ca.OnlyHtml([
                     ca.Paragraph(["Result matrix:"]),
-                    table
-                ])
-            )
-        elif hasattr(self, 'max_dim'):
-            # Matrix multiplication with max dimensions
-            table, table_answers = self._create_answer_table(self.max_dim, self.max_dim, self.answers)
-            answers.extend(table_answers)
-            body.add_element(
-                ca.OnlyHtml([
-                    ca.Paragraph(["Result matrix (use '-' if cell doesn't exist):"]),
                     table
                 ])
             )
@@ -162,23 +140,9 @@ class MatrixAddition(MatrixMathQuestion):
 
     def create_subquestion_answers(self, subpart_index, result):
         """Create answer objects for matrix addition result."""
-        if subpart_index == 0 and not self.is_multipart():
-            # For single questions, use the old answer format
-            rows = len(result)
-            cols = len(result[0])
-            for i in range(rows):
-                for j in range(cols):
-                    answer_key = f"answer_{i}_{j}"
-                    self.answers[answer_key] = ca.AnswerTypes.Int(result[i][j])
-        else:
-            # For multipart questions, use subpart letter format
-            letter = chr(ord('a') + subpart_index)
-            rows = len(result)
-            cols = len(result[0])
-            for i in range(rows):
-                for j in range(cols):
-                    answer_key = f"subpart_{letter}_{i}_{j}"
-                    self.answers[answer_key] = ca.AnswerTypes.Int(result[i][j])
+        rows = len(result)
+        cols = len(result[0])
+        return [ca.AnswerTypes.Int(result[i][j]) for i in range(rows) for j in range(cols)]
 
     def refresh(self, *args, **kwargs):
         """Override refresh to set rows/cols for compatibility."""
@@ -292,23 +256,9 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
 
     def create_subquestion_answers(self, subpart_index, result):
         """Create answer objects for matrix scalar multiplication result."""
-        if subpart_index == 0 and not self.is_multipart():
-            # For single questions, use the old answer format
-            rows = len(result)
-            cols = len(result[0])
-            for i in range(rows):
-                for j in range(cols):
-                    answer_key = f"answer_{i}_{j}"
-                    self.answers[answer_key] = ca.AnswerTypes.Int(result[i][j])
-        else:
-            # For multipart questions, use subpart letter format
-            letter = chr(ord('a') + subpart_index)
-            rows = len(result)
-            cols = len(result[0])
-            for i in range(rows):
-                for j in range(cols):
-                    answer_key = f"subpart_{letter}_{i}_{j}"
-                    self.answers[answer_key] = ca.AnswerTypes.Int(result[i][j])
+        rows = len(result)
+        cols = len(result[0])
+        return [ca.AnswerTypes.Int(result[i][j]) for i in range(rows) for j in range(cols)]
 
     def refresh(self, *args, **kwargs):
         """Override refresh to handle different scalars per subpart."""
@@ -321,7 +271,7 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
             self.cols = self.rng.randint(self.MIN_SIZE, self.MAX_SIZE)
 
             # Clear any existing data
-            self.answers = {}
+            self._generated_answers = []
 
             # Generate multiple subquestions with different scalars
             self.subquestion_data = []
@@ -340,7 +290,8 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
                 })
 
                 # Create answers for this subpart
-                self.create_subquestion_answers(i, result)
+                subpart_answers = self.create_subquestion_answers(i, result) or []
+                self._generated_answers.extend(subpart_answers)
         else:
             # For single questions, generate scalar first
             self.scalar = self._generate_scalar()
@@ -497,43 +448,16 @@ class MatrixMultiplication(MatrixMathQuestion):
 
     def create_subquestion_answers(self, subpart_index, result):
         """Create answer objects for matrix multiplication result."""
-        if subpart_index == 0 and not self.is_multipart():
-            # For single questions, use the old answer format
-            # Dimension answers
-            if result is not None:
-                self.answers["result_rows"] = ca.AnswerTypes.Int(self.result_rows, label="Number of rows in result")
-                self.answers["result_cols"] = ca.AnswerTypes.Int(self.result_cols, label="Number of columns in result")
+        if not self.is_multipart():
+            return []
 
-                # Matrix element answers
-                for i in range(self.max_dim):
-                    for j in range(self.max_dim):
-                        answer_key = f"answer_{i}_{j}"
-                        if i < self.result_rows and j < self.result_cols:
-                            self.answers[answer_key] = ca.AnswerTypes.Int(result[i][j])
-                        else:
-                            self.answers[answer_key] = ca.AnswerTypes.String("-")
-            else:
-                # Multiplication not possible
-                self.answers["result_rows"] = ca.AnswerTypes.String("-", label="Number of rows in result")
-                self.answers["result_cols"] = ca.AnswerTypes.String("-", label="Number of columns in result")
+        # For multipart, result should always be valid
+        if result is None:
+            return []
 
-                # All matrix elements are "-"
-                for i in range(self.max_dim):
-                    for j in range(self.max_dim):
-                        answer_key = f"answer_{i}_{j}"
-                        self.answers[answer_key] = ca.AnswerTypes.String("-")
-        else:
-            # For multipart questions, use subpart letter format
-            letter = chr(ord('a') + subpart_index)
-
-            # For multipart, result should always be valid
-            if result is not None:
-                rows = len(result)
-                cols = len(result[0])
-                for i in range(rows):
-                    for j in range(cols):
-                        answer_key = f"subpart_{letter}_{i}_{j}"
-                        self.answers[answer_key] = ca.AnswerTypes.Int(result[i][j])
+        rows = len(result)
+        cols = len(result[0])
+        return [ca.AnswerTypes.Int(result[i][j]) for i in range(rows) for j in range(cols)]
 
     def _add_single_question_answers(self, body):
         """Add Canvas-only answer fields for MatrixMultiplication with dash instruction.
@@ -544,18 +468,32 @@ class MatrixMultiplication(MatrixMathQuestion):
         answers = []
 
         # Dimension answers for matrix multiplication
-        if hasattr(self, 'answers') and "result_rows" in self.answers:
-            rows_ans = self.answers["result_rows"]
-            cols_ans = self.answers["result_cols"]
-            answers.extend([rows_ans, cols_ans])
-            body.add_element(
-                ca.OnlyHtml([
-                    ca.AnswerBlock([rows_ans, cols_ans])
-                ])
-            )
+        if self.result is not None:
+            rows_ans = ca.AnswerTypes.Int(self.result_rows, label="Number of rows in result")
+            cols_ans = ca.AnswerTypes.Int(self.result_cols, label="Number of columns in result")
+        else:
+            rows_ans = ca.AnswerTypes.String("-", label="Number of rows in result")
+            cols_ans = ca.AnswerTypes.String("-", label="Number of columns in result")
+
+        answers.extend([rows_ans, cols_ans])
+        body.add_element(
+            ca.OnlyHtml([
+                ca.AnswerBlock([rows_ans, cols_ans])
+            ])
+        )
 
         # Matrix result table with dash instruction
-        table, table_answers = self._create_answer_table(self.max_dim, self.max_dim, self.answers)
+        answer_matrix = []
+        for i in range(self.max_dim):
+            row = []
+            for j in range(self.max_dim):
+                if self.result is not None and i < self.result_rows and j < self.result_cols:
+                    row.append(ca.AnswerTypes.Int(self.result[i][j]))
+                else:
+                    row.append(ca.AnswerTypes.String("-"))
+            answer_matrix.append(row)
+
+        table, table_answers = self._create_answer_table(answer_matrix)
         answers.extend(table_answers)
         body.add_element(
             ca.OnlyHtml([

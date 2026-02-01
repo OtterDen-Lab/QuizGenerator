@@ -264,34 +264,34 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     if not self.fixed_grammars:
       self._select_random_grammar()
 
-    self.answers = {}
+    self.answer_options = []
 
     # Create answers with proper ca.Answer signature
     # value is the generated string, correct indicates if it's a valid answer
     good_string = self.grammar_good.generate(self.include_spaces)
-    self.answers["answer_good"] = ca.Answer(
+    self.answer_options.append(ca.Answer(
       value=good_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=True
-    )
+    ))
 
     bad_string = self.grammar_bad.generate(self.include_spaces)
-    self.answers["answer_bad"] = ca.Answer(
+    self.answer_options.append(ca.Answer(
       value=bad_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=False
-    )
+    ))
 
     bad_early_string = self.grammar_bad.generate(self.include_spaces, early_exit=True)
-    self.answers["answer_bad_early"] = ca.Answer(
+    self.answer_options.append(ca.Answer(
       value=bad_early_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=False
-    )
+    ))
 
-    answer_text_set = {a.value for a in self.answers.values()}
+    answer_text_set = {a.value for a in self.answer_options}
     num_tries = 0
-    while len(self.answers) < 10 and num_tries < self.MAX_TRIES:
+    while len(self.answer_options) < 10 and num_tries < self.MAX_TRIES:
 
       correct = self.rng.choice([True, False])
       if not correct:
@@ -308,11 +308,11 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       is_correct = correct and not early_exit
 
       if len(generated_string) < self.MAX_LENGTH and generated_string not in answer_text_set:
-        self.answers[f"answer_{num_tries}"] = ca.Answer(
+        self.answer_options.append(ca.Answer(
           value=generated_string,
           kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
           correct=is_correct
-        )
+        ))
         answer_text_set.add(generated_string)
       num_tries += 1
     
@@ -333,7 +333,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
   
   def _get_body(self, *args, **kwargs):
     """Build question body and collect answers."""
-    answers = list(self.answers.values())
+    answers = list(self.answer_options)
 
     body = ca.Section()
 
@@ -373,11 +373,6 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
 
     return body, answers
 
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(*args, **kwargs)
-    return body
-  
   def _get_explanation(self, *args, **kwargs):
     """Build question explanation."""
     explanation = ca.Section()
@@ -389,11 +384,6 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     )
     return explanation, []
 
-  def get_explanation(self, *args, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(*args, **kwargs)
-    return explanation
-
   def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
     
-    return ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
+    return ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answer_options]))

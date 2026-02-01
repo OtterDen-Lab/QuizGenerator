@@ -454,7 +454,7 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
     super().refresh(*args, **kwargs)
     
     # Clear any existing data
-    self.answers = {}
+    self._generated_answers = []
     
     if self.is_multipart():
       # Generate multiple subquestions
@@ -475,14 +475,16 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
         )
         
         # Create answers for this subpart
-        self.create_subquestion_answers(i, result)
+        subpart_answers = self.create_subquestion_answers(i, result) or []
+        self._generated_answers.extend(subpart_answers)
     else:
       # Single question (original behavior)
       self.operand_a, self.operand_b = self.generate_operands()
       self.result = self.calculate_single_result(self.operand_a, self.operand_b)
       
       # Create answers
-      self.create_single_answers(self.result)
+      single_answers = self.create_single_answers(self.result) or []
+      self._generated_answers.extend(single_answers)
   
   def generate_subquestion_data(self):
     """Generate LaTeX content for each subpart of the question."""
@@ -506,8 +508,7 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
       subpart_data = self.generate_subquestion_data()
       repeated_part = self.create_repeated_problem_part(subpart_data)
       body.add_element(repeated_part)
-      # Collect answers from self.answers dict
-      answers = list(self.answers.values())
+      answers = list(self._generated_answers)
     else:
       # Single equation display
       equation_latex = self.format_single_equation(self.operand_a, self.operand_b)
