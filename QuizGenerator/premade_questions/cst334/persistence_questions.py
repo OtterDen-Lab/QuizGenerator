@@ -34,21 +34,18 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.access_delay = self.rotational_delay + self.seek_delay
     self.transfer_delay = 1000 * (self.size_of_reads * self.number_of_reads) / 1024 / self.transfer_rate
     self.disk_access_delay = self.access_delay * self.number_of_reads + self.transfer_delay
-    
-    self.answers.update({
-      "answer__rotational_delay"  : ca.AnswerTypes.Float(self.rotational_delay),
-      "answer__access_delay"      : ca.AnswerTypes.Float(self.access_delay),
-      "answer__transfer_delay"    : ca.AnswerTypes.Float(self.transfer_delay),
-      "answer__disk_access_delay" : ca.AnswerTypes.Float(self.disk_access_delay),
-    })
   
   def _get_body(self, *args, **kwargs):
     """Build question body and collect answers."""
+    rotational_answer = ca.AnswerTypes.Float(self.rotational_delay)
+    access_answer = ca.AnswerTypes.Float(self.access_delay)
+    transfer_answer = ca.AnswerTypes.Float(self.transfer_delay)
+    disk_access_answer = ca.AnswerTypes.Float(self.disk_access_delay)
     answers = [
-      self.answers["answer__rotational_delay"],
-      self.answers["answer__access_delay"],
-      self.answers["answer__transfer_delay"],
-      self.answers["answer__disk_access_delay"],
+      rotational_answer,
+      access_answer,
+      transfer_answer,
+      disk_access_answer,
     ]
 
     # Create parameter info table using mixin
@@ -64,10 +61,10 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     # Create answer table with multiple rows using mixin
     answer_rows = [
-      {"Variable": "Rotational Delay", "Value": "answer__rotational_delay"},
-      {"Variable": "Access Delay", "Value": "answer__access_delay"},
-      {"Variable": "Transfer Delay", "Value": "answer__transfer_delay"},
-      {"Variable": "Total Disk Access Delay", "Value": "answer__disk_access_delay"}
+      {"Variable": "Rotational Delay", "Value": rotational_answer},
+      {"Variable": "Access Delay", "Value": access_answer},
+      {"Variable": "Transfer Delay", "Value": transfer_answer},
+      {"Variable": "Total Disk Access Delay", "Value": disk_access_answer}
     ]
 
     answer_table = self.create_answer_table(
@@ -93,11 +90,6 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     return body, answers
-
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(*args, **kwargs)
-    return body
 
   def _get_explanation(self):
     explanation = ca.Section()
@@ -153,11 +145,6 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ])
     return explanation, []
 
-  def get_explanation(self) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
-    return explanation
-
 
 @QuestionRegistry.register()
 class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
@@ -176,21 +163,18 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     self.inode_block = self.inode_address // self.block_size
     self.inode_address_in_block = self.inode_address % self.block_size
     self.inode_index_in_block = int(self.inode_address_in_block / self.inode_size)
-    
-    self.answers.update({
-      "answer__inode_address": ca.AnswerTypes.Int(self.inode_address),
-      "answer__inode_block": ca.AnswerTypes.Int(self.inode_block),
-      "answer__inode_address_in_block": ca.AnswerTypes.Int(self.inode_address_in_block),
-      "answer__inode_index_in_block": ca.AnswerTypes.Int(self.inode_index_in_block),
-    })
   
   def _get_body(self):
     """Build question body and collect answers."""
+    inode_address_answer = ca.AnswerTypes.Int(self.inode_address)
+    inode_block_answer = ca.AnswerTypes.Int(self.inode_block)
+    inode_address_in_block_answer = ca.AnswerTypes.Int(self.inode_address_in_block)
+    inode_index_in_block_answer = ca.AnswerTypes.Int(self.inode_index_in_block)
     answers = [
-      self.answers["answer__inode_address"],
-      self.answers["answer__inode_block"],
-      self.answers["answer__inode_address_in_block"],
-      self.answers["answer__inode_index_in_block"],
+      inode_address_answer,
+      inode_block_answer,
+      inode_address_in_block_answer,
+      inode_index_in_block_answer,
     ]
 
     # Create parameter info table using mixin
@@ -205,10 +189,10 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     # Create answer table with multiple rows using mixin
     answer_rows = [
-      {"Variable": "Inode address", "Value": "answer__inode_address"},
-      {"Variable": "Block containing inode", "Value": "answer__inode_block"},
-      {"Variable": "Inode address (offset) within block", "Value": "answer__inode_address_in_block"},
-      {"Variable": "Inode index within block", "Value": "answer__inode_index_in_block"}
+      {"Variable": "Inode address", "Value": inode_address_answer},
+      {"Variable": "Block containing inode", "Value": inode_block_answer},
+      {"Variable": "Inode address (offset) within block", "Value": inode_address_in_block_answer},
+      {"Variable": "Inode index within block", "Value": inode_index_in_block_answer}
     ]
 
     answer_table = self.create_answer_table(
@@ -228,11 +212,6 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     return body, answers
-
-  def get_body(self) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body()
-    return body
 
   def _get_explanation(self):
     explanation = ca.Section()
@@ -309,11 +288,6 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     return explanation, []
 
-  def get_explanation(self) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
-    return explanation
-
 
 @QuestionRegistry.register()
 class VSFS_states(IOQuestion):
@@ -344,7 +318,7 @@ class VSFS_states(IOQuestion):
     ))
     self.rng.shuffle(wrong_answers)
     
-    self.answers["answer__cmd"] = ca.Answer.dropdown(
+    self.command_answer = ca.Answer.dropdown(
       f"{operations[-1]['cmd']}",
       baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']])),
       label="Command"
@@ -352,7 +326,7 @@ class VSFS_states(IOQuestion):
   
   def _get_body(self):
     """Build question body and collect answers."""
-    answers = [self.answers["answer__cmd"]]
+    answers = [self.command_answer]
 
     body = ca.Section()
 
@@ -365,7 +339,7 @@ class VSFS_states(IOQuestion):
       )
     )
 
-    body.add_element(ca.AnswerBlock(self.answers["answer__cmd"]))
+    body.add_element(ca.AnswerBlock(self.command_answer))
 
     body.add_element(
       ca.Code(
@@ -375,11 +349,6 @@ class VSFS_states(IOQuestion):
     )
 
     return body, answers
-
-  def get_body(self) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body()
-    return body
 
   def _get_explanation(self):
     explanation = ca.Section()
@@ -466,9 +435,3 @@ class VSFS_states(IOQuestion):
     )
 
     return explanation, []
-
-  def get_explanation(self) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
-    return explanation
-  

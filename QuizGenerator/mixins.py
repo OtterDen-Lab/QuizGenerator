@@ -98,7 +98,7 @@ class TableQuestionMixin:
       self,
       parameter_info: Dict[str, Any],
       answer_label: str,
-      answer_key: str,
+      answer_key: str | ca.Answer,
       transpose: bool = True
   ) -> ca.Table:
     """
@@ -120,7 +120,9 @@ class TableQuestionMixin:
     data = [[key, str(value)] for key, value in parameter_info.items()]
     
     # Add answer row - Answer extends ca.Leaf so it can be used directly
-    if hasattr(self, 'answers') and answer_key in self.answers:
+    if isinstance(answer_key, ca.Answer):
+      data.append([answer_label, answer_key])
+    elif hasattr(self, 'answers') and answer_key in self.answers:
       data.append([answer_label, self.answers[answer_key]])
     else:
       data.append([answer_label, f"[{answer_key}]"])  # Fallback

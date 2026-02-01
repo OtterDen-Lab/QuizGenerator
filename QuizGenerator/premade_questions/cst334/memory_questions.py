@@ -48,13 +48,12 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     # Select what kind of question we are going to be
     self.blank_kind = self.rng.choice(list(self.Target))
     
-    self.answers['answer'] = self.possible_answers[self.blank_kind]
-    
     return
   
   def _get_body(self, **kwargs):
     """Build question body and collect answers."""
-    answers = [self.answers['answer']]  # Collect the answer
+    answer = self.possible_answers[self.blank_kind]
+    answers = [answer]  # Collect the answer
 
     # Create table data with one blank cell
     table_data = [{}]
@@ -81,11 +80,6 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     )
     body.add_element(table)
     return body, answers
-
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
 
   def _get_explanation(self, **kwargs):
     """Build question explanation."""
@@ -115,11 +109,6 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
 
 
 @QuestionRegistry.register()
@@ -236,29 +225,28 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       log.debug(f"cache_state: \"{cache_state}\"")
       if was_hit:
         number_of_hits += 1
+      hit_value = 'hit' if was_hit else 'miss'
+      evicted_value = '-' if evicted is None else f"{evicted}"
+      cache_state_value = copy.copy(cache_state)
+
       self.request_results[request_number] = {
-        "request": (f"[answer__request]", request),
-        "hit": (f"[answer__hit-{request_number}]", ('hit' if was_hit else 'miss')),
-        "evicted": (f"[answer__evicted-{request_number}]", ('-' if evicted is None else f"{evicted}")),
-        "cache_state": (f"[answer__cache_state-{request_number}]", ','.join(map(str, cache_state)))
+        "request": request,
+        "hit_value": hit_value,
+        "evicted_value": evicted_value,
+        "cache_state_value": cache_state_value,
+        "hit_answer": ca.AnswerTypes.String(hit_value),
+        "evicted_answer": ca.AnswerTypes.String(evicted_value),
+        "cache_state_answer": ca.AnswerTypes.List(
+          value=cache_state_value,
+          order_matters=True
+        ),
       }
-      
-      self.answers.update(
-        {
-          f"answer__hit-{request_number}": ca.AnswerTypes.String(('hit' if was_hit else 'miss')),
-          f"answer__evicted-{request_number}": ca.AnswerTypes.String(('-' if evicted is None else f"{evicted}")),
-          f"answer__cache_state-{request_number}": ca.AnswerTypes.List(value=copy.copy(cache_state), order_matters=True),
-        }
-      )
     
     self.hit_rate = 100 * number_of_hits / (self.num_requests)
-    self.answers.update(
-      {
-        "answer__hit_rate": ca.AnswerTypes.Float(self.hit_rate,
-          label=f"Hit rate, excluding non-capacity misses",
-          unit="%"
-        )
-      }
+    self.hit_rate_answer = ca.AnswerTypes.Float(
+      self.hit_rate,
+      label="Hit rate, excluding non-capacity misses",
+      unit="%"
     )
 
     # Return whether this workload is interesting
@@ -271,18 +259,19 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     # Create table data for cache simulation
     table_rows = []
     for request_number in sorted(self.request_results.keys()):
+      result = self.request_results[request_number]
       table_rows.append(
         {
           "Page Requested": f"{self.requests[request_number]}",
-          "Hit/Miss": f"answer__hit-{request_number}",  # Answer key
-          "Evicted": f"answer__evicted-{request_number}",  # Answer key
-          "Cache State": f"answer__cache_state-{request_number}"  # Answer key
+          "Hit/Miss": result["hit_answer"],
+          "Evicted": result["evicted_answer"],
+          "Cache State": result["cache_state_answer"]
         }
       )
       # Collect answers for this request
-      answers.append(self.answers[f"answer__hit-{request_number}"])
-      answers.append(self.answers[f"answer__evicted-{request_number}"])
-      answers.append(self.answers[f"answer__cache_state-{request_number}"])
+      answers.append(result["hit_answer"])
+      answers.append(result["evicted_answer"])
+      answers.append(result["cache_state_answer"])
 
     # Create table using mixin - automatically handles answer conversion
     cache_table = self.create_answer_table(
@@ -292,11 +281,10 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     )
 
     # Collect hit rate answer
-    hit_rate_answer = self.answers["answer__hit_rate"]
-    answers.append(hit_rate_answer)
+    answers.append(self.hit_rate_answer)
 
     # Create hit rate answer block
-    hit_rate_block = ca.AnswerBlock(hit_rate_answer)
+    hit_rate_block = ca.AnswerBlock(self.hit_rate_answer)
 
     # Use mixin to create complete body
     intro_text = (
@@ -317,11 +305,6 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     body.add_element(hit_rate_block)
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-
   def _get_explanation(self, **kwargs):
     """Build question explanation."""
     explanation = ca.Section()
@@ -333,10 +316,10 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         headers=["Page", "Hit/Miss", "Evicted", "Cache State"],
         data=[
           [
-            self.request_results[request]["request"][1],
-            self.request_results[request]["hit"][1],
-            f'{self.request_results[request]["evicted"][1]}',
-            f'{self.request_results[request]["cache_state"][1]}',
+            self.request_results[request]["request"],
+            self.request_results[request]["hit_value"],
+            f'{self.request_results[request]["evicted_value"]}',
+            f'{",".join(map(str, self.request_results[request]["cache_state_value"]))}',
           ]
           for (request_number, request) in enumerate(sorted(self.request_results.keys()))
         ]
@@ -355,11 +338,6 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
   
   def is_interesting(self) -> bool:
     # todo: interesting is more likely based on whether I can differentiate between it and another algo,
@@ -392,17 +370,16 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     self.base = self.rng.randint(1, int(math.pow(2, base_bits))) * self.bounds
     self.virtual_address = self.rng.randint(1, int(self.bounds / self.PROBABILITY_OF_VALID))
     
+  def _get_body(self):
+    """Build question body and collect answers."""
     if self.virtual_address < self.bounds:
-      self.answers["answer"] = ca.AnswerTypes.Hex(
+      answer = ca.AnswerTypes.Hex(
         self.base + self.virtual_address,
         length=math.ceil(math.log2(self.base + self.virtual_address))
       )
     else:
-      self.answers["answer"] = ca.AnswerTypes.String("INVALID")
-  
-  def _get_body(self):
-    """Build question body and collect answers."""
-    answers = [self.answers["answer"]]
+      answer = ca.AnswerTypes.String("INVALID")
+    answers = [answer]
 
     # Use mixin to create parameter table with answer
     parameter_info = {
@@ -414,7 +391,7 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     table = self.create_parameter_answer_table(
       parameter_info=parameter_info,
       answer_label="Physical Address",
-      answer_key="answer",
+      answer_key=answer,
       transpose=True
     )
 
@@ -427,11 +404,6 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
       parameter_table=table
     )
     return body, answers
-
-  def get_body(self) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body()
-    return body
 
   def _get_explanation(self):
     """Build question explanation."""
@@ -481,11 +453,6 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
       )
 
     return explanation, []
-
-  def get_explanation(self) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
-    return explanation
 
 
 @QuestionRegistry.register()
@@ -578,23 +545,18 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     self.physical_address = self.base[self.segment] + self.offset
     
     # Set answers based on whether it's in bounds or not
+  def _get_body(self):
+    """Build question body and collect answers."""
+    segment_answer = ca.AnswerTypes.String(self.segment, label="Segment name")
     if self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
-      self.answers["answer__physical_address"] = ca.AnswerTypes.Binary(
+      physical_answer = ca.AnswerTypes.Binary(
         self.physical_address,
         length=self.physical_bits,
         label="Physical Address"
       )
     else:
-      self.answers["answer__physical_address"] = ca.AnswerTypes.String("INVALID", label="Physical Address")
-
-    self.answers["answer__segment"] = ca.AnswerTypes.String(self.segment, label="Segment name")
-  
-  def _get_body(self):
-    """Build question body and collect answers."""
-    answers = [
-      self.answers["answer__segment"],
-      self.answers["answer__physical_address"]
-    ]
+      physical_answer = ca.AnswerTypes.String("INVALID", label="Physical Address")
+    answers = [segment_answer, physical_answer]
 
     body = ca.Section()
 
@@ -628,16 +590,11 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
 
     body.add_element(
       ca.AnswerBlock([
-        self.answers["answer__segment"],
-        self.answers["answer__physical_address"]
+        segment_answer,
+        physical_answer
       ])
     )
     return body, answers
-
-  def get_body(self) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body()
-    return body
 
   def _get_explanation(self):
     explanation = ca.Section()
@@ -736,11 +693,6 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
 
     return explanation, []
 
-  def get_explanation(self) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
-    return explanation
-
 
 @QuestionRegistry.register()
 class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
@@ -810,41 +762,31 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       # Once we have a unique random entry, put it into the Page Table
       self.page_table[vpn] = pte
 
-    self.answers.update(
-      {
-        "answer__vpn": ca.AnswerTypes.Binary(self.vpn, length=self.num_bits_vpn, label="VPN"),
-        "answer__offset": ca.AnswerTypes.Binary(self.offset, length=self.num_bits_offset, label="Offset"),
-        "answer__pte": ca.AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1), label="PTE"),
-      }
-    )
-
-    if self.is_valid:
-      self.answers.update(
-        {
-          "answer__is_valid": ca.AnswerTypes.String("VALID", label="VALID or INVALID?"),
-          "answer__pfn": ca.AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
-          "answer__physical_address": ca.AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
-          ),
-        }
-      )
-    else:
-      self.answers.update(
-        {
-          "answer__is_valid": ca.AnswerTypes.String("INVALID", label="VALID or INVALID?"),
-          "answer__pfn": ca.AnswerTypes.String("INVALID", label="PFN"),
-          "answer__physical_address": ca.AnswerTypes.String("INVALID", label="Physical Address"),
-        }
-      )
-  
   def _get_body(self, *args, **kwargs):
     """Build question body and collect answers."""
+    vpn_answer = ca.AnswerTypes.Binary(self.vpn, length=self.num_bits_vpn, label="VPN")
+    offset_answer = ca.AnswerTypes.Binary(self.offset, length=self.num_bits_offset, label="Offset")
+    pte_answer = ca.AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1), label="PTE")
+    if self.is_valid:
+      is_valid_answer = ca.AnswerTypes.String("VALID", label="VALID or INVALID?")
+      pfn_answer = ca.AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN")
+      physical_answer = ca.AnswerTypes.Binary(
+        self.physical_address,
+        length=(self.num_bits_pfn + self.num_bits_offset),
+        label="Physical Address"
+      )
+    else:
+      is_valid_answer = ca.AnswerTypes.String("INVALID", label="VALID or INVALID?")
+      pfn_answer = ca.AnswerTypes.String("INVALID", label="PFN")
+      physical_answer = ca.AnswerTypes.String("INVALID", label="Physical Address")
+
     answers = [
-      self.answers["answer__vpn"],
-      self.answers["answer__offset"],
-      self.answers["answer__pte"],
-      self.answers["answer__is_valid"],
-      self.answers["answer__pfn"],
-      self.answers["answer__physical_address"],
+      vpn_answer,
+      offset_answer,
+      pte_answer,
+      is_valid_answer,
+      pfn_answer,
+      physical_answer,
     ]
 
     body = ca.Section()
@@ -893,21 +835,16 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     body.add_element(
       ca.AnswerBlock([
-        self.answers["answer__vpn"],
-        self.answers["answer__offset"],
-        self.answers["answer__pte"],
-        self.answers["answer__is_valid"],
-        self.answers["answer__pfn"],
-        self.answers["answer__physical_address"],
+        vpn_answer,
+        offset_answer,
+        pte_answer,
+        is_valid_answer,
+        pfn_answer,
+        physical_answer,
       ])
     )
 
     return body, answers
-
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(*args, **kwargs)
-    return body
   
   def _get_explanation(self, *args, **kwargs):
     """Build question explanation."""
@@ -1015,11 +952,6 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     return explanation, []
-
-  def get_explanation(self, *args, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(*args, **kwargs)
-    return explanation
 
 
 @QuestionRegistry.register()
@@ -1170,65 +1102,42 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
           self.page_tables[pt_num][pti] = pte_val
 
-    # Set up answers
-    self.answers.update({
-      "answer__pdi": ca.AnswerTypes.Binary(self.pdi, length=self.num_bits_pdi,
-                                       label="PDI (Page Directory Index)"),
-      "answer__pti": ca.AnswerTypes.Binary(self.pti, length=self.num_bits_pti,
-                                       label="PTI (Page Table Index)"),
-      "answer__offset": ca.AnswerTypes.Binary(self.offset, length=self.num_bits_offset,
-                                          label="Offset"),
-      "answer__pd_entry": ca.AnswerTypes.Binary(self.pd_entry, length=(self.num_bits_pfn + 1),
-                                            label="PD Entry (from Page Directory)"),
-      "answer__pt_number": (
-        ca.AnswerTypes.Binary(self.page_table_number, length=self.num_bits_pfn,
-                          label="Page Table Number")
-        if self.pd_valid
-        else ca.AnswerTypes.String("INVALID", label="Page Table Number")
-      ),
-    })
-
-    # PTE answer: if PD is valid, accept the actual PTE value from the table
-    # (regardless of whether that PTE is valid or invalid)
-    if self.pd_valid:
-      self.answers.update({
-        "answer__pte": ca.AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1),
-                                         label="PTE (from Page Table)"),
-      })
-    else:
-      # If PD is invalid, student can't look up the page table
-      # Accept both "INVALID" (for consistency) and "N/A" (for accuracy)
-      self.answers.update({
-        "answer__pte": ca.AnswerTypes.String(["INVALID", "N/A"], label="PTE (from Page Table)"),
-      })
-
-    # Validity, PFN, and Physical Address depend on BOTH levels being valid
-    if self.pd_valid and self.pt_valid:
-      self.answers.update({
-        "answer__is_valid": ca.AnswerTypes.String("VALID", label="VALID or INVALID?"),
-        "answer__pfn": ca.AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN"),
-        "answer__physical_address": ca.AnswerTypes.Binary(self.physical_address, length=(self.num_bits_pfn + self.num_bits_offset), label="Physical Address"
-        ),
-      })
-    else:
-      self.answers.update({
-        "answer__is_valid": ca.AnswerTypes.String("INVALID", label="VALID or INVALID?"),
-        "answer__pfn": ca.AnswerTypes.String("INVALID", label="PFN"),
-        "answer__physical_address": ca.AnswerTypes.String("INVALID", label="Physical Address"),
-      })
-
   def _get_body(self, *args, **kwargs):
     """Build question body and collect answers."""
+    pdi_answer = ca.AnswerTypes.Binary(self.pdi, length=self.num_bits_pdi, label="PDI (Page Directory Index)")
+    pti_answer = ca.AnswerTypes.Binary(self.pti, length=self.num_bits_pti, label="PTI (Page Table Index)")
+    offset_answer = ca.AnswerTypes.Binary(self.offset, length=self.num_bits_offset, label="Offset")
+    pd_entry_answer = ca.AnswerTypes.Binary(self.pd_entry, length=(self.num_bits_pfn + 1), label="PD Entry (from Page Directory)")
+    if self.pd_valid:
+      pt_number_answer = ca.AnswerTypes.Binary(self.page_table_number, length=self.num_bits_pfn, label="Page Table Number")
+      pte_answer = ca.AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1), label="PTE (from Page Table)")
+    else:
+      pt_number_answer = ca.AnswerTypes.String("INVALID", label="Page Table Number")
+      pte_answer = ca.AnswerTypes.String(["INVALID", "N/A"], label="PTE (from Page Table)")
+
+    if self.pd_valid and self.pt_valid:
+      is_valid_answer = ca.AnswerTypes.String("VALID", label="VALID or INVALID?")
+      pfn_answer = ca.AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN")
+      physical_answer = ca.AnswerTypes.Binary(
+        self.physical_address,
+        length=(self.num_bits_pfn + self.num_bits_offset),
+        label="Physical Address"
+      )
+    else:
+      is_valid_answer = ca.AnswerTypes.String("INVALID", label="VALID or INVALID?")
+      pfn_answer = ca.AnswerTypes.String("INVALID", label="PFN")
+      physical_answer = ca.AnswerTypes.String("INVALID", label="Physical Address")
+
     answers = [
-      self.answers["answer__pdi"],
-      self.answers["answer__pti"],
-      self.answers["answer__offset"],
-      self.answers["answer__pd_entry"],
-      self.answers["answer__pt_number"],
-      self.answers["answer__pte"],
-      self.answers["answer__is_valid"],
-      self.answers["answer__pfn"],
-      self.answers["answer__physical_address"],
+      pdi_answer,
+      pti_answer,
+      offset_answer,
+      pd_entry_answer,
+      pt_number_answer,
+      pte_answer,
+      is_valid_answer,
+      pfn_answer,
+      physical_answer,
     ]
 
     body = ca.Section()
@@ -1331,24 +1240,19 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Answer block
     body.add_element(
       ca.AnswerBlock([
-        self.answers["answer__pdi"],
-        self.answers["answer__pti"],
-        self.answers["answer__offset"],
-        self.answers["answer__pd_entry"],
-        self.answers["answer__pt_number"],
-        self.answers["answer__pte"],
-        self.answers["answer__is_valid"],
-        self.answers["answer__pfn"],
-        self.answers["answer__physical_address"],
+        pdi_answer,
+        pti_answer,
+        offset_answer,
+        pd_entry_answer,
+        pt_number_answer,
+        pte_answer,
+        is_valid_answer,
+        pfn_answer,
+        physical_answer,
       ])
     )
 
     return body, answers
-
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(*args, **kwargs)
-    return body
 
   def _get_explanation(self, *args, **kwargs):
     """Build question explanation."""
@@ -1490,8 +1394,3 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       )
 
     return explanation, []
-
-  def get_explanation(self, *args, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(*args, **kwargs)
-    return explanation
