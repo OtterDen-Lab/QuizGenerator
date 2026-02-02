@@ -47,7 +47,8 @@ class FromGenerator(FromText, TableQuestionMixin):
     self.possible_variations = kwargs.get("possible_variations", float('inf'))
     
     def attach_function_to_object(obj, function_code, function_name='get_body_lines'):
-      function_code = "import random\n" + function_code
+      # Provide a deterministic RNG handle for generator snippets.
+      function_code = "rng = self.rng\n" + function_code
 
       # Create a local namespace for exec with content AST helpers available
       local_namespace = {
