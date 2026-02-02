@@ -34,73 +34,77 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     
     return logits, probs
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    self.rng = np.random.RandomState(kwargs.get("rng_seed", None))
-    
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = cls.get_rng(rng_seed)
+    digits = cls.get_digits_to_round(digits_to_round=kwargs.get("digits_to_round"))
+
     embed_dim = kwargs.get("embed_dim", 3)
     num_contexts = kwargs.get("num_contexts", 3)
-    
-    # Vocabulary pool
-    vocab = ['cat', 'dog', 'run', 'jump', 'happy', 'sad', 'tree', 'house',
-             'walk', 'sleep', 'fast', 'slow', 'big', 'small']
-    
-    # Sample words
-    self.selected_words = self.rng.choice(vocab, size=num_contexts + 1, replace=False)
-    self.center_word = self.selected_words[0]
-    self.context_words = self.selected_words[1:]
-    
-    # Small integer embeddings
 
-    self.center_emb = self.get_rounded_matrix((embed_dim,), -2, 3)
-    self.context_embs = self.get_rounded_matrix((num_contexts, embed_dim), -2, 3)
-    
-    self.logits, self.probs = self.skipgram_predict(self.center_emb, self.context_embs)
+    vocab = [
+      'cat', 'dog', 'run', 'jump', 'happy', 'sad', 'tree', 'house',
+      'walk', 'sleep', 'fast', 'slow', 'big', 'small'
+    ]
 
-    ## Answers:
-    # center_word, center_emb, context_words, context_embs, logits, probs
-    self.answers["logits"] = ca.AnswerTypes.Vector(self.logits, label="Logits")
-    most_likely_idx = np.argmax(self.probs)
-    most_likely_word = self.context_words[most_likely_idx]
-    self.answers["center_word"] = ca.AnswerTypes.String(most_likely_word, label="Most likely context word")
-    
-    
-    return True
-  
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+    selected_words = rng.choice(vocab, size=num_contexts + 1, replace=False)
+    center_word = selected_words[0]
+    context_words = selected_words[1:]
+
+    center_emb = cls.get_rounded_matrix(rng, (embed_dim,), -2, 3, digits)
+    context_embs = cls.get_rounded_matrix(rng, (num_contexts, embed_dim), -2, 3, digits)
+
+    logits, probs = cls.skipgram_predict(center_emb, context_embs)
+
+    most_likely_idx = np.argmax(probs)
+    most_likely_word = context_words[most_likely_idx]
+
+    return {
+      "digits": digits,
+      "embed_dim": embed_dim,
+      "num_contexts": num_contexts,
+      "center_word": center_word,
+      "context_words": context_words,
+      "center_emb": center_emb,
+      "context_embs": context_embs,
+      "logits": logits,
+      "probs": probs,
+      "most_likely_word": most_likely_word,
+    }
+
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
 
     body.add_element(
       ca.Paragraph([
-        f"Given center word: `{self.center_word}` with embedding {self.center_emb}, compute the skip-gram probabilities for each context word and identify the most likely one."
+        f"Given center word: `{context['center_word']}` with embedding {context['center_emb']}, compute the skip-gram probabilities for each context word and identify the most likely one."
       ])
     )
     body.add_elements([
-      ca.Paragraph([ca.Text(f"`{w}` : "), str(e)]) for w, e in zip(self.context_words, self.context_embs)
+      ca.Paragraph([ca.Text(f"`{w}` : "), str(e)]) for w, e in zip(context["context_words"], context["context_embs"])
     ])
 
-    answers.append(self.answers["logits"])
-    answers.append(self.answers["center_word"])
+    logits_answer = ca.AnswerTypes.Vector(context["logits"], label="Logits")
+    center_word_answer = ca.AnswerTypes.String(context["most_likely_word"], label="Most likely context word")
+    answers.append(logits_answer)
+    answers.append(center_word_answer)
     body.add_elements([
       ca.LineBreak(),
-      self.answers["logits"],
+      logits_answer,
       ca.LineBreak(),
-      self.answers["center_word"]
+      center_word_answer
     ])
 
-    log.debug(f"output: {self.logits}")
-    log.debug(f"weights: {self.probs}")
+    log.debug(f"output: {context['logits']}")
+    log.debug(f"weights: {context['probs']}")
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-  
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
     digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
@@ -119,10 +123,10 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     )
 
     # Format center embedding
-    center_emb_str = "[" + ", ".join([f"{x:.{digits}f}" for x in self.center_emb]) + "]"
+    center_emb_str = "[" + ", ".join([f"{x:.{digits}f}" for x in context["center_emb"]]) + "]"
     explanation.add_element(
       ca.Paragraph([
-        f"Center word `{self.center_word}`: {center_emb_str}"
+        f"Center word `{context['center_word']}`: {center_emb_str}"
       ])
     )
 
@@ -132,7 +136,7 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
       ])
     )
 
-    for i, (word, emb) in enumerate(zip(self.context_words, self.context_embs)):
+    for i, (word, emb) in enumerate(zip(context["context_words"], context["context_embs"])):
       emb_str = "[" + ", ".join([f"{x:.2f}" for x in emb]) + "]"
       explanation.add_element(
         ca.Paragraph([
@@ -150,20 +154,20 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
     # Show ONE example
     explanation.add_element(
       ca.Paragraph([
-        f"Example: Logit for `{self.context_words[0]}`"
+        f"Example: Logit for `{context['context_words'][0]}`"
       ])
     )
 
-    context_emb = self.context_embs[0]
-    dot_product_terms = " + ".join([f"({self.center_emb[j]:.2f} \\times {context_emb[j]:.2f})"
-                                    for j in range(len(self.center_emb))])
-    logit_val = self.logits[0]
+    context_emb = context["context_embs"][0]
+    dot_product_terms = " + ".join([f"({context['center_emb'][j]:.2f} \\times {context_emb[j]:.2f})"
+                                    for j in range(len(context["center_emb"]))])
+    logit_val = context["logits"][0]
 
     explanation.add_element(
       ca.Equation(f"{dot_product_terms} = {logit_val:.2f}")
     )
 
-    logits_str = "[" + ", ".join([f"{x:.2f}" for x in self.logits]) + "]"
+    logits_str = "[" + ", ".join([f"{x:.2f}" for x in context["logits"]]) + "]"
     explanation.add_element(
       ca.Paragraph([
         f"All logits: {logits_str}"
@@ -177,10 +181,10 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
       ])
     )
 
-    exp_logits = np.exp(self.logits)
+    exp_logits = np.exp(context["logits"])
     sum_exp = exp_logits.sum()
 
-    exp_terms = " + ".join([f"e^{{{l:.{digits}f}}}" for l in self.logits])
+    exp_terms = " + ".join([f"e^{{{l:.{digits}f}}}" for l in context["logits"]])
 
     explanation.add_element(
       ca.Equation(f"\\text{{denominator}} = {exp_terms} = {sum_exp:.{digits}f}")
@@ -192,26 +196,20 @@ class word2vec__skipgram(MatrixQuestion, TableQuestionMixin):
       ])
     )
 
-    for i, (word, prob) in enumerate(zip(self.context_words, self.probs)):
+    for i, (word, prob) in enumerate(zip(context["context_words"], context["probs"])):
       explanation.add_element(
-        ca.Equation(f"P(\\text{{{word}}}) = \\frac{{e^{{{self.logits[i]:.{digits}f}}}}}{{{sum_exp:.{digits}f}}} = {prob:.{digits}f}")
+        ca.Equation(f"P(\\text{{{word}}}) = \\frac{{e^{{{context['logits'][i]:.{digits}f}}}}}{{{sum_exp:.{digits}f}}} = {prob:.{digits}f}")
       )
 
     # Step 4: Identify most likely
-    most_likely_idx = np.argmax(self.probs)
-    most_likely_word = self.context_words[most_likely_idx]
+    most_likely_idx = np.argmax(context["probs"])
+    most_likely_word = context["context_words"][most_likely_idx]
 
     explanation.add_element(
       ca.Paragraph([
         ca.Text("Conclusion:", emphasis=True),
-        f" The most likely context word is `{most_likely_word}` with probability {self.probs[most_likely_idx]:.{digits}f}"
+        f" The most likely context word is `{most_likely_word}` with probability {context['probs'][most_likely_idx]:.{digits}f}"
       ])
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-

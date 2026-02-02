@@ -22,7 +22,6 @@ from typing import List, Dict, Any, Tuple, Optional
 import canvasapi.course, canvasapi.quiz
 
 import QuizGenerator.contentast as ca
-from QuizGenerator.performance import timer, PerformanceTracker
 
 import logging
 log = logging.getLogger(__name__)
@@ -34,6 +33,29 @@ class QuestionComponents:
     body: ca.Element
     answers: List[ca.Answer]
     explanation: ca.Element
+
+
+@dataclasses.dataclass(frozen=True)
+class RegenerationFlags:
+    """Minimal metadata needed to regenerate a question instance."""
+    question_class_name: str
+    generation_seed: Optional[int]
+    question_version: str
+    config_params: Dict[str, Any]
+
+
+@dataclasses.dataclass(frozen=True)
+class QuestionInstance:
+    """Fully-instantiated question with content, answers, and regeneration metadata."""
+    body: ca.Element
+    explanation: ca.Element
+    answers: List[ca.Answer]
+    answer_kind: ca.Answer.CanvasAnswerKind
+    can_be_numerical: bool
+    value: float
+    spacing: float
+    topic: "Question.Topic"
+    flags: RegenerationFlags
 
 
 # Spacing presets for questions
@@ -147,7 +169,7 @@ class QuestionRegistry:
             raise ValueError(f"Unknown question type: {question_type}")
 
     new_question : Question = cls._registry[question_key](**kwargs)
-    # Note: Don't call refresh() here - it will be called by get_question()
+    # Note: Don't build context here - instantiate() handles it
     # Calling it here would consume RNG calls and break QR code regeneration
     return new_question
     
@@ -212,21 +234,21 @@ class QuestionRegistry:
 class RegenerableChoiceMixin:
   """
   Mixin for questions that need to make random choices from enums/lists that are:
-  1. Different across multiple refreshes (when the same Question instance is reused for multiple PDFs)
+  1. Different across multiple builds (when the same Question instance is reused for multiple PDFs)
   2. Reproducible from QR code config_params
 
   The Problem:
   ------------
   When generating multiple PDFs, Quiz.from_yaml() creates Question instances ONCE.
-  These instances are then refresh()ed multiple times with different RNG seeds.
+  These instances are then built multiple times with different RNG seeds.
   If a question randomly selects an algorithm/policy in __init__(), all PDFs get the same choice
   because __init__() only runs once with an unseeded RNG.
 
   The Solution:
   -------------
   1. In __init__(): Register choices with fixed values (if provided) or None (for random)
-  2. In refresh(): Make random selections using the seeded RNG, store in config_params
-  3. Result: Each refresh gets a different random choice, and it's captured for QR codes
+  2. In _build_context(): Make random selections using the seeded RNG, store in config_params
+  3. Result: Each build gets a different random choice, and it's captured for QR codes
 
   Usage Example:
   --------------
@@ -240,11 +262,11 @@ class RegenerableChoiceMixin:
           self.register_choice('scheduler_kind', self.Kind, scheduler_kind, kwargs)
           super().__init__(**kwargs)
 
-      def refresh(self, **kwargs):
-          super().refresh(**kwargs)
+      def _build_context(self, rng_seed=None, **kwargs):
+          self.rng.seed(rng_seed)
           # Get the choice (randomly selected or from config_params)
           self.scheduler_algorithm = self.get_choice('scheduler_kind', self.Kind)
-          # ... rest of refresh logic
+          # ... rest of build logic
   """
 
   def __init__(self, *args, **kwargs):
@@ -281,7 +303,7 @@ class RegenerableChoiceMixin:
   def get_choice(self, param_name: str, enum_class: type[enum.Enum]) -> enum.Enum:
     """
     Get the choice for a registered parameter.
-    Should be called in refresh() AFTER super().refresh().
+    Should be called in _build_context() AFTER seeding the RNG.
 
     Args:
         param_name: The parameter name registered earlier
@@ -294,7 +316,7 @@ class RegenerableChoiceMixin:
     if choice_info is None:
       raise ValueError(f"Choice '{param_name}' not registered. Call register_choice() in __init__() first.")
 
-    # Check for temporary fixed value (set during backoff loop in get_question())
+    # Check for temporary fixed value (set during backoff loop in instantiate())
     fixed_value = choice_info.get('_temp_fixed_value', choice_info['fixed_value'])
 
     # CRITICAL: Always consume an RNG call to keep RNG state synchronized between
@@ -339,30 +361,47 @@ class RegenerableChoiceMixin:
       self.config_params[param_name] = random_choice.name
       return random_choice
 
+  def pre_instantiate(self, base_seed, **kwargs):
+    if not (hasattr(self, '_regenerable_choices') and self._regenerable_choices):
+      return
+    choice_rng = random.Random(base_seed)
+    for param_name, choice_info in self._regenerable_choices.items():
+      if choice_info['fixed_value'] is None:
+        enum_class = choice_info['enum_class']
+        random_choice = choice_rng.choice(list(enum_class))
+        # Temporarily set this as the fixed value so all builds use it
+        choice_info['_temp_fixed_value'] = random_choice.name
+        # Store in config_params
+        self.config_params[param_name] = random_choice.name
+
+  def post_instantiate(self, instance, **kwargs):
+    if not (hasattr(self, '_regenerable_choices') and self._regenerable_choices):
+      return
+    for param_name, choice_info in self._regenerable_choices.items():
+      if '_temp_fixed_value' in choice_info:
+        del choice_info['_temp_fixed_value']
 
 class Question(abc.ABC):
   """
   Base class for all quiz questions with cross-format rendering support.
 
   CRITICAL: When implementing Question subclasses, ALWAYS use content AST elements
-  for all content in get_body() and get_explanation() methods.
+  for all content in _build_body() and _build_explanation() methods.
 
   NEVER create manual LaTeX, HTML, or Markdown strings. The content AST system
   ensures consistent rendering across PDF/LaTeX and Canvas/HTML formats.
 
-  Required Methods:
-    - _get_body(): Return Tuple[ca.Section, List[ca.Answer]] with body and answers
-    - _get_explanation(): Return Tuple[ca.Section, List[ca.Answer]] with explanation
-
-  Note: get_body() and get_explanation() are provided for backward compatibility
-  and call the _get_* methods, returning just the first element of the tuple.
+  Primary extension points:
+    - build(...): Simple path. Override to generate body + explanation in one place.
+    - _build_context/_build_body/_build_explanation: Context path.
+      Default _build_context is required for all questions.
 
   Required Class Attributes:
     - VERSION (str): Question version number (e.g., "1.0")
       Increment when RNG logic changes to ensure reproducibility
 
   Content AST Usage Examples:
-    def _get_body(self):
+    def _build_body(cls, context):
         body = ca.Section()
         answers = []
         body.add_element(ca.Paragraph(["Calculate the matrix:"]))
@@ -375,7 +414,7 @@ class Question(abc.ABC):
         ans = ca.Answer.integer("result", 42, label="Result")
         answers.append(ans)
         body.add_element(ans)
-        return body, answers
+        return body
 
   Common Content AST Elements:
     - ca.Paragraph: Text blocks
@@ -392,7 +431,7 @@ class Question(abc.ABC):
     - Do NOT increment for:
       * Cosmetic changes (formatting, wording)
       * Bug fixes that don't affect answer generation
-      * Changes to get_explanation() only
+      * Changes to _build_explanation() only
 
   See existing questions in premade_questions/ for patterns and examples.
   """
@@ -480,13 +519,9 @@ class Question(abc.ABC):
 
     self.extra_attrs = kwargs # clear page, etc.
 
-    self.answers = {}
     self.possible_variations = float('inf')
 
     self.rng_seed_offset = kwargs.get("rng_seed_offset", 0)
-
-    # Component caching for unified Answer architecture
-    self._components: QuestionComponents = None
 
     # To be used throughout when generating random things
     self.rng = random.Random()
@@ -504,214 +539,260 @@ class Question(abc.ABC):
     with open(path_to_yaml) as fid:
       question_dicts = yaml.safe_load_all(fid)
   
-  def get_question(self, **kwargs) -> ca.Question:
+
+  def instantiate(self, **kwargs) -> QuestionInstance:
     """
-    Gets the question in AST format
-    :param kwargs:
-    :return: (ca.Question) Containing question.
+    Instantiate a question once, returning content, answers, and regeneration metadata.
     """
     # Generate the question, retrying with incremented seeds until we get an interesting one
-    with timer("question_refresh", question_name=self.name, question_type=self.__class__.__name__):
-      base_seed = kwargs.get("rng_seed", None)
+    base_seed = kwargs.get("rng_seed", None)
+    build_kwargs = dict(kwargs)
+    build_kwargs.pop("rng_seed", None)
+    # Include config params so build() implementations can access YAML-provided settings.
+    build_kwargs = {**self.config_params, **build_kwargs}
 
-      # Pre-select any regenerable choices using the base seed
-      # This ensures the policy/algorithm stays constant across backoff attempts
-      if hasattr(self, '_regenerable_choices') and self._regenerable_choices:
-        # Seed a temporary RNG with the base seed to make the choices
-        choice_rng = random.Random(base_seed)
-        for param_name, choice_info in self._regenerable_choices.items():
-          if choice_info['fixed_value'] is None:
-            # No fixed value - pick randomly and store it as fixed for this get_question() call
-            enum_class = choice_info['enum_class']
-            random_choice = choice_rng.choice(list(enum_class))
-            # Temporarily set this as the fixed value so all refresh() calls use it
-            choice_info['_temp_fixed_value'] = random_choice.name
-            # Store in config_params
-            self.config_params[param_name] = random_choice.name
+    # Pre-select any regenerable choices using the base seed
+    # This ensures the policy/algorithm stays constant across backoff attempts
+    self.pre_instantiate(base_seed, **kwargs)
 
+    instance = None
+    try:
       backoff_counter = 0
       is_interesting = False
+      ctx = None
       while not is_interesting:
         # Increment seed for each backoff attempt to maintain deterministic behavior
         current_seed = None if base_seed is None else base_seed + backoff_counter
-        # Pass config_params to refresh so custom kwargs from YAML are available
-        self.refresh(rng_seed=current_seed, hard_refresh=(backoff_counter > 0), **self.config_params)
-        is_interesting = self.is_interesting()
+        ctx = self._build_context(
+          rng_seed=current_seed,
+          **self.config_params
+        )
+        is_interesting = self.is_interesting_ctx(ctx)
         backoff_counter += 1
 
-      # Clear temporary fixed values
-      if hasattr(self, '_regenerable_choices') and self._regenerable_choices:
-        for param_name, choice_info in self._regenerable_choices.items():
-          if '_temp_fixed_value' in choice_info:
-            del choice_info['_temp_fixed_value']
+      # Store the actual seed used and question metadata for QR code generation
+      actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
 
-    with timer("question_body", question_name=self.name, question_type=self.__class__.__name__):
-      body = self.get_body()
+      components = self.build(rng_seed=current_seed, context=ctx, **build_kwargs)
 
-    with timer("question_explanation", question_name=self.name, question_type=self.__class__.__name__):
-      explanation = self.get_explanation()
+      # Collect answers from explicit lists and inline AST
+      inline_body_answers = self._collect_answers_from_ast(components.body)
+      answers = self._merge_answers(
+        components.answers,
+        inline_body_answers
+      )
 
-    # Store the actual seed used and question metadata for QR code generation
-    actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
-    question_ast = ca.Question(
-      body=body,
-      explanation=explanation,
-      value=self.points_value,
-      spacing=self.spacing,
-      topic=self.topic,
-      
-      can_be_numerical=self.can_be_numerical()
-    )
+      can_be_numerical = self._can_be_numerical_from_answers(answers)
 
-    # Attach regeneration metadata to the question AST
-    # Use the registered name instead of class name for better QR code regeneration
-    question_ast.question_class_name = self._get_registered_name()
-    question_ast.generation_seed = actual_seed
-    question_ast.question_version = self.VERSION
-    # Make a copy of config_params so each question AST has its own
-    # (important when the same Question instance is reused for multiple PDFs)
-    question_ast.config_params = dict(self.config_params)
+      config_params = dict(self.config_params)
+      if isinstance(ctx, dict) and ctx.get("_config_params"):
+        config_params.update(ctx.get("_config_params"))
 
-    return question_ast
-   
-  @abc.abstractmethod
-  def get_body(self, **kwargs) -> ca.Section:
-    """
-    Gets the body of the question during generation
-    :param kwargs:
-    :return: (ca.Section) Containing question body
-    """
+      instance = QuestionInstance(
+        body=components.body,
+        explanation=components.explanation,
+        answers=answers,
+        answer_kind=self.answer_kind,
+        can_be_numerical=can_be_numerical,
+        value=self.points_value,
+        spacing=self.spacing,
+        topic=self.topic,
+        flags=RegenerationFlags(
+          question_class_name=self._get_registered_name(),
+          generation_seed=actual_seed,
+          question_version=self.VERSION,
+          config_params=config_params
+        )
+      )
+      return instance
+    finally:
+      self.post_instantiate(instance, **kwargs)
+
+  def pre_instantiate(self, base_seed, **kwargs):
     pass
-  
-  def get_explanation(self, **kwargs) -> ca.Section:
+
+  def post_instantiate(self, instance, **kwargs):
+    pass
+   
+  def build(self, *, rng_seed=None, context=None, **kwargs) -> QuestionComponents:
     """
-    Gets the body of the question during generation (backward compatible wrapper).
-    Calls _get_explanation() and returns just the explanation.
-    :param kwargs:
-    :return: (ca.Section) Containing question explanation or None
+    Build question content (body, answers, explanation) for a given seed.
+
+    This should only generate content; metadata like points/spacing belong in instantiate().
     """
-    # Try new pattern first
-    if hasattr(self, '_get_explanation') and callable(getattr(self, '_get_explanation')):
-      explanation, _ = self._get_explanation()
-      return explanation
-    # Fallback: default explanation
-    return ca.Section(
-      [ca.Text("[Please reach out to your professor for clarification]")]
+    cls = self.__class__
+    if context is None:
+      context = self._build_context(rng_seed=rng_seed, **kwargs)
+
+    # Build body + explanation. Each may return just an Element or (Element, answers).
+    body, body_answers = cls._normalize_build_output(self._build_body(context))
+    explanation, explanation_answers = cls._normalize_build_output(self._build_explanation(context))
+
+    # Collect inline answers from both body and explanation.
+    inline_body_answers = cls._collect_answers_from_ast(body)
+    inline_explanation_answers = cls._collect_answers_from_ast(explanation)
+
+    answers = cls._merge_answers(
+      body_answers,
+      explanation_answers,
+      inline_body_answers,
+      inline_explanation_answers
     )
-
-  def _get_body(self) -> Tuple[ca.Element, List[ca.Answer]]:
-    """
-    Build question body and collect answers (new pattern).
-    Questions should override this to return (body, answers) tuple.
-
-    Returns:
-        Tuple of (body_ast, answers_list)
-    """
-    # Fallback: call old get_body() and return empty answers
-    body = self.get_body()
-    return body, []
-
-  def _get_explanation(self) -> Tuple[ca.Element, List[ca.Answer]]:
-    """
-    Build question explanation and collect answers (new pattern).
-    Questions can override this to include answers in explanations.
-
-    Returns:
-        Tuple of (explanation_ast, answers_list)
-    """
-    return ca.Section(
-      [ca.Text("[Please reach out to your professor for clarification]")]
-    ), []
-
-  def build_question_components(self, **kwargs) -> QuestionComponents:
-    """
-    Build question components (body, answers, explanation) in single pass.
-
-    Calls _get_body() and _get_explanation() which return tuples of
-    (content, answers).
-    """
-    # Build body with its answers
-    body, body_answers = self._get_body()
-
-    # Build explanation with its answers
-    explanation, explanation_answers = self._get_explanation()
-
-    # Combine all answers
-    all_answers = body_answers + explanation_answers
 
     return QuestionComponents(
       body=body,
-      answers=all_answers,
+      answers=answers,
       explanation=explanation
     )
 
-  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
+  def _build_context(self, *, rng_seed=None, **kwargs):
     """
-    Return answers from cached components (new pattern) or self.answers dict (old pattern).
-    """
-    # Try component-based approach first (new pattern)
-    if self._components is None:
-      try:
-        self._components = self.build_question_components()
-      except Exception as e:
-        # If component building fails, fall back to dict
-        log.debug(f"Failed to build question components: {e}, falling back to dict")
-        pass
+    Build the deterministic context for a question instance.
 
-    # Use components if available and non-empty
-    if self._components is not None and len(self._components.answers) > 0:
-      answers = self._components.answers
-      if self.can_be_numerical():
-        return (
-          ca.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
-          list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in answers]))
-        )
+    Override to return a context dict and avoid persistent self.* state.
+    """
+    rng = random.Random(rng_seed)
+    # Keep instance rng in sync for questions that still use self.rng.
+    self.rng = rng
+    return {
+      "rng_seed": rng_seed,
+      "rng": rng,
+    }
+
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    """Context-aware hook; defaults to existing is_interesting()."""
+    return True
+
+  def _build_body(self, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
+    """Context-aware body builder."""
+    raise NotImplementedError("Questions must implement _build_body().")
+
+  def _build_explanation(self, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
+    """Context-aware explanation builder."""
+    raise NotImplementedError("Questions must implement _build_explanation().")
+
+  @classmethod
+  def _collect_answers_from_ast(cls, element: ca.Element) -> List[ca.Answer]:
+    """Traverse AST and collect embedded Answer elements."""
+    answers: List[ca.Answer] = []
+
+    def visit(node):
+      if node is None:
+        return
+      if isinstance(node, ca.Answer):
+        answers.append(node)
+        return
+      if isinstance(node, ca.Table):
+        if getattr(node, "headers", None):
+          for header in node.headers:
+            visit(header)
+        for row in node.data:
+          for cell in row:
+            visit(cell)
+        return
+      if isinstance(node, ca.TableGroup):
+        for _, table in node.tables:
+          visit(table)
+        return
+      if isinstance(node, ca.Container):
+        for child in node.elements:
+          visit(child)
+        return
+      if isinstance(node, (list, tuple)):
+        for child in node:
+          visit(child)
+
+    visit(element)
+    return answers
+
+  @classmethod
+  def _merge_answers(cls, *answer_lists: List[ca.Answer]) -> List[ca.Answer]:
+    """Merge answers while preserving order and removing duplicates by key/id."""
+    merged: List[ca.Answer] = []
+    seen: set[str] = set()
+
+    for answers in answer_lists:
+      for ans in answers:
+        key = getattr(ans, "key", None)
+        if key is None:
+          key = str(id(ans))
+        if key in seen:
+          continue
+        seen.add(key)
+        merged.append(ans)
+    return merged
+
+  @classmethod
+  def _can_be_numerical_from_answers(cls, answers: List[ca.Answer]) -> bool:
+    return (
+      len(answers) == 1
+      and isinstance(answers[0], ca.AnswerTypes.Float)
+    )
+
+  @classmethod
+  def _normalize_build_output(
+    cls,
+    result: ca.Element | Tuple[ca.Element, List[ca.Answer]]
+  ) -> Tuple[ca.Element, List[ca.Answer]]:
+    if isinstance(result, tuple):
+      body, answers = result
+      return body, list(answers or [])
+    return result, []
+
+  def _answers_for_canvas(
+      self,
+      answers: List[ca.Answer],
+      can_be_numerical: bool
+  ) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str, Any]]]:
+    if len(answers) == 0:
+      return (ca.Answer.CanvasAnswerKind.ESSAY, [])
+
+    if can_be_numerical:
       return (
-        self.answer_kind,
-        list(itertools.chain(*[a.get_for_canvas() for a in answers]))
+        ca.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
+        list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in answers]))
       )
 
-    # Fall back to dict pattern (old pattern)
-    if len(self.answers.values()) > 0:
-      if self.can_be_numerical():
-        return (
-          ca.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
-          list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in self.answers.values()]))
-        )
-      return (
-        self.answer_kind,
-        list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
-      )
+    return (
+      self.answer_kind,
+      list(itertools.chain(*[a.get_for_canvas() for a in answers]))
+    )
 
-    return (ca.Answer.CanvasAnswerKind.ESSAY, [])
-    
+  def _build_question_ast(self, instance: QuestionInstance) -> ca.Question:
+    question_ast = ca.Question(
+      body=instance.body,
+      explanation=instance.explanation,
+      value=instance.value,
+      spacing=instance.spacing,
+      topic=instance.topic,
+      can_be_numerical=instance.can_be_numerical
+    )
+
+    # Attach regeneration metadata to the question AST
+    question_ast.question_class_name = instance.flags.question_class_name
+    question_ast.generation_seed = instance.flags.generation_seed
+    question_ast.question_version = instance.flags.question_version
+    question_ast.config_params = dict(instance.flags.config_params)
+
+    return question_ast
+
   def refresh(self, rng_seed=None, *args, **kwargs):
-    """If it is necessary to regenerate aspects between usages, this is the time to do it.
-    This base implementation simply resets everything.
-    :param rng_seed: random number generator seed to use when regenerating question
-    :param *args:
-    :param **kwargs:
-    :return: bool - True if the generated question is interesting, False otherwise
-    """
-    self.answers = {}
-    self._components = None  # Clear component cache
-    # Seed the RNG directly with the provided seed (no offset)
-    self.rng.seed(rng_seed)
-    # Note: We don't call is_interesting() here because child classes need to
-    # generate their workloads first. Child classes should call it at the end
-    # of their refresh() and return the result.
-    return self.is_interesting()  # Default: assume interesting if no override
+    raise NotImplementedError("refresh() has been removed; use _build_context().")
     
   def is_interesting(self) -> bool:
     return True
   
   def get__canvas(self, course: canvasapi.course.Course, quiz : canvasapi.quiz.Quiz, interest_threshold=1.0, *args, **kwargs):
-    # Get the AST for the question
-    with timer("question_get_ast", question_name=self.name, question_type=self.__class__.__name__):
-      questionAST = self.get_question(**kwargs)
-    log.debug("got question ast")
-    # Get the answers and type of question
-    question_type, answers = self.get_answers(*args, **kwargs)
+    # Instantiate once for both content and answers
+    instance = self.instantiate(**kwargs)
+    log.debug("got question instance")
+
+    questionAST = self._build_question_ast(instance)
+    question_type, answers = self._answers_for_canvas(
+      instance.answers,
+      instance.can_be_numerical
+    )
 
     # Define a helper function for uploading images to canvas
     def image_upload(img_data) -> str:
@@ -732,11 +813,8 @@ class Question(abc.ABC):
       return f"/courses/{course.id}/files/{f['id']}/preview"
 
     # Render AST to HTML for Canvas
-    with timer("ast_render_body", question_name=self.name, question_type=self.__class__.__name__):
-      question_html = questionAST.render("html", upload_func=image_upload)
-
-    with timer("ast_render_explanation", question_name=self.name, question_type=self.__class__.__name__):
-      explanation_html = questionAST.explanation.render("html", upload_func=image_upload)
+    question_html = questionAST.render("html", upload_func=image_upload)
+    explanation_html = questionAST.explanation.render("html", upload_func=image_upload)
 
     # Build appropriate dictionary to send to canvas
     return {
@@ -748,13 +826,6 @@ class Question(abc.ABC):
       "neutral_comments_html": explanation_html
     }
   
-  def can_be_numerical(self):
-    if (len(self.answers.values()) == 1
-          and isinstance(list(self.answers.values())[0], ca.AnswerTypes.Float)
-    ):
-      return True
-    return False
-
   def _get_registered_name(self) -> str:
     """
     Get the registered name for this question class.

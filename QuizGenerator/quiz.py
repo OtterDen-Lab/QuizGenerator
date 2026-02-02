@@ -206,10 +206,10 @@ class Quiz:
       if check_typst_available():
         try:
           # Render question to Typst
-          question_ast = question.get_question(**kwargs)
+          instance = question.instantiate(**kwargs)
 
           # Get just the content body (without the #question wrapper which adds spacing)
-          typst_body = question_ast.body.render("typst", **kwargs)
+          typst_body = instance.body.render("typst", **kwargs)
 
           # Measure the content
           measured_height = measure_typst_content(typst_body, page_width_cm=18.0)
@@ -236,7 +236,8 @@ class Quiz:
     spacing_height = question.spacing  # cm
 
     # Estimate content height by rendering to LaTeX and analyzing structure
-    question_ast = question.get_question(**kwargs)
+    instance = question.instantiate(**kwargs)
+    question_ast = question._build_question_ast(instance)
     latex_content = question_ast.render("latex")
 
     # Count content that adds height (rough estimates in cm)
@@ -451,9 +452,11 @@ class Quiz:
       # Generate a unique seed for this question from the master seed
       if master_seed is not None:
         question_seed = master_rng.randint(0, 2**31 - 1)
-        question_ast = question.get_question(rng_seed=question_seed, **kwargs)
+        instance = question.instantiate(rng_seed=question_seed, **kwargs)
+        question_ast = question._build_question_ast(instance)
       else:
-        question_ast = question.get_question(**kwargs)
+        instance = question.instantiate(**kwargs)
+        question_ast = question._build_question_ast(instance)
 
       # Add question number to the AST for QR code generation
       question_ast.question_number = question_number

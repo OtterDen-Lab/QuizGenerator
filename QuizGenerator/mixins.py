@@ -17,7 +17,8 @@ class TableQuestionMixin:
   across question types, reducing repetitive ca.Table creation code.
   """
   
-  def create_info_table(self, info_dict: Dict[str, Any], transpose: bool = False) -> ca.Table:
+  @staticmethod
+  def create_info_table(info_dict: Dict[str, Any], transpose: bool = False) -> ca.Table:
     """
     Creates a vertical info table (key-value pairs).
 
@@ -45,8 +46,8 @@ class TableQuestionMixin:
       transpose=transpose
     )
   
+  @staticmethod
   def create_answer_table(
-      self,
       headers: List[str],
       data_rows: List[Dict[str, Any]],
       answer_columns: List[str] = None
@@ -75,11 +76,6 @@ class TableQuestionMixin:
       # Answer extends ca.Leaf, so it can be used directly
       if column in answer_columns and isinstance(value, ca.Answer):
         return value
-      # If this column should contain answers but we have the answer key
-      elif column in answer_columns and isinstance(value, str) and hasattr(self, 'answers'):
-        answer_obj = self.answers.get(value)
-        if answer_obj:
-          return answer_obj
 
       # Otherwise return as plain data
       return str(value)
@@ -94,11 +90,11 @@ class TableQuestionMixin:
       data=table_data
     )
   
+  @staticmethod
   def create_parameter_answer_table(
-      self,
       parameter_info: Dict[str, Any],
       answer_label: str,
-      answer_key: str,
+      answer: ca.Answer,
       transpose: bool = True
   ) -> ca.Table:
     """
@@ -110,7 +106,7 @@ class TableQuestionMixin:
     Args:
         parameter_info: Dictionary of {parameter_name: value}
         answer_label: Label for the answer row
-        answer_key: Key to look up the answer in self.answers
+        answer: Answer object to embed in the table
         transpose: Whether to show as vertical table (default: True)
 
     Returns:
@@ -120,18 +116,15 @@ class TableQuestionMixin:
     data = [[key, str(value)] for key, value in parameter_info.items()]
     
     # Add answer row - Answer extends ca.Leaf so it can be used directly
-    if hasattr(self, 'answers') and answer_key in self.answers:
-      data.append([answer_label, self.answers[answer_key]])
-    else:
-      data.append([answer_label, f"[{answer_key}]"])  # Fallback
+    data.append([answer_label, answer])
     
     return ca.Table(
       data=data,
       transpose=transpose
     )
   
+  @staticmethod
   def create_fill_in_table(
-      self,
       headers: List[str],
       template_rows: List[Dict[str, Any]]
   ) -> ca.Table:
@@ -155,11 +148,6 @@ class TableQuestionMixin:
       # Answer extends ca.Leaf so it can be used in the AST
       if isinstance(value, ca.Answer):
         return value
-      # If it's a string that looks like an answer key, try to resolve it
-      elif isinstance(value, str) and value.startswith("answer__") and hasattr(self, 'answers'):
-        answer_obj = self.answers.get(value)
-        if answer_obj:
-          return answer_obj
       # Otherwise return as-is
       return str(value)
     
@@ -182,8 +170,8 @@ class BodyTemplatesMixin:
   common question layout patterns.
   """
   
+  @staticmethod
   def create_calculation_with_info_body(
-      self,
       intro_text: str,
       info_table: ca.Table,
       answer_block: ca.AnswerBlock
@@ -199,8 +187,8 @@ class BodyTemplatesMixin:
     body.add_element(answer_block)
     return body
   
+  @staticmethod
   def create_fill_in_table_body(
-      self,
       intro_text: str,
       instructions: str,
       table: ca.Table
@@ -218,8 +206,8 @@ class BodyTemplatesMixin:
     body.add_element(table)
     return body
   
+  @staticmethod
   def create_parameter_calculation_body(
-      self,
       intro_text: str,
       parameter_table: ca.Table,
       answer_table: ca.Table = None,
@@ -357,35 +345,6 @@ class MultiPartQuestionMixin:
     
     return body
   
-  def get_subpart_answers(self):
-    """
-    Retrieve answers organized by subpart for multipart questions.
-
-    Returns:
-        dict: Dictionary mapping subpart letters ('a', 'b', 'c') to their answers.
-              Returns empty dict if not a multipart question.
-
-    Example:
-        # For a 3-part question
-        {
-            'a': ca.Answer.integer('a', 5),
-            'b': ca.Answer.integer('b', 12),
-            'c': ca.Answer.integer('c', -3)
-        }
-    """
-    if not self.is_multipart():
-      return {}
-    
-    subpart_answers = {}
-    for i in range(self.num_subquestions):
-      letter = chr(ord('a') + i)
-      # Look for answers with subpart keys
-      answer_key = f"subpart_{letter}"
-      if hasattr(self, 'answers') and answer_key in self.answers:
-        subpart_answers[letter] = self.answers[answer_key]
-    
-    return subpart_answers
-
 
 class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
   """
@@ -450,40 +409,6 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
     """Create answers for single questions - just delegate to subquestion method."""
     return self.create_subquestion_answers(0, result)
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
-    # Clear any existing data
-    self.answers = {}
-    
-    if self.is_multipart():
-      # Generate multiple subquestions
-      self.subquestion_data = []
-      for i in range(self.num_subquestions):
-        # Generate unique operands for each subquestion
-        operand_a, operand_b = self.generate_operands()
-        result = self.calculate_single_result(operand_a, operand_b)
-        
-        self.subquestion_data.append(
-          {
-            'operand_a': operand_a,
-            'operand_b': operand_b,
-            'vector_a': operand_a,  # For vector compatibility
-            'vector_b': operand_b,  # For vector compatibility
-            'result': result
-          }
-        )
-        
-        # Create answers for this subpart
-        self.create_subquestion_answers(i, result)
-    else:
-      # Single question (original behavior)
-      self.operand_a, self.operand_b = self.generate_operands()
-      self.result = self.calculate_single_result(self.operand_a, self.operand_b)
-      
-      # Create answers
-      self.create_single_answers(self.result)
-  
   def generate_subquestion_data(self):
     """Generate LaTeX content for each subpart of the question."""
     subparts = []
@@ -494,7 +419,7 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
       subparts.append((operand_a_latex, self.get_operator(), operand_b_latex))
     return subparts
   
-  def _get_body(self):
+  def _build_body(self, context):
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -506,8 +431,7 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
       subpart_data = self.generate_subquestion_data()
       repeated_part = self.create_repeated_problem_part(subpart_data)
       body.add_element(repeated_part)
-      # Collect answers from self.answers dict
-      answers = list(self.answers.values())
+      answers = list(self._generated_answers)
     else:
       # Single equation display
       equation_latex = self.format_single_equation(self.operand_a, self.operand_b)
@@ -520,11 +444,6 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
 
     return body, answers
 
-  def get_body(self):
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body()
-    return body
-
   def _add_single_question_answers(self, body):
     """Add Canvas-only answer fields for single questions. Subclasses can override.
 
@@ -534,7 +453,7 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
     # Default implementation - subclasses should override for specific answer formats
     return []
 
-  def _get_explanation(self):
+  def _build_explanation(self, context):
     """Default explanation structure. Subclasses should override for specific explanations."""
     explanation = ca.Section()
 
@@ -551,11 +470,6 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
 
     return explanation, []
 
-  def get_explanation(self):
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
-    return explanation
-  
   def get_explanation_intro(self):
     """Get the intro text for explanations. Subclasses should override."""
     return "The calculation is performed as follows:"

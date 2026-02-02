@@ -241,10 +241,14 @@ def regenerate_question_answer(
     )
     
     # Generate question with the specific seed
-    question_ast = question.get_question(rng_seed=seed)
+    instance = question.instantiate(rng_seed=seed)
+    question_ast = question._build_question_ast(instance)
     
     # Extract answers
-    answer_kind, canvas_answers = question.get_answers()
+    answer_kind, canvas_answers = question._answers_for_canvas(
+      instance.answers,
+      instance.can_be_numerical
+    )
     
     result['answers'] = {
       'kind': answer_kind.value,
@@ -252,7 +256,7 @@ def regenerate_question_answer(
     }
     
     # Also store the raw answer objects for easier access
-    result['answer_objects'] = question.answers
+    result['answer_objects'] = instance.answers
     
     resolved_upload_func = _resolve_upload_func(image_mode, upload_func)
 
@@ -400,10 +404,14 @@ def regenerate_from_metadata(
     )
     
     # Generate question with the specific seed
-    question_ast = question.get_question(rng_seed=seed)
+    instance = question.instantiate(rng_seed=seed)
+    question_ast = question._build_question_ast(instance)
     
     # Extract answers
-    answer_kind, canvas_answers = question.get_answers()
+    answer_kind, canvas_answers = question._answers_for_canvas(
+      instance.answers,
+      instance.can_be_numerical
+    )
     
     resolved_upload_func = _resolve_upload_func(image_mode, upload_func)
 
@@ -436,7 +444,7 @@ def regenerate_from_metadata(
         "kind": answer_kind.value,
         "data": canvas_answers
       },
-      "answer_objects": question.answers,
+      "answer_objects": instance.answers,
       "answer_key_html": question_html,
       "explanation_markdown": explanation_markdown,
       "explanation_html": explanation_html

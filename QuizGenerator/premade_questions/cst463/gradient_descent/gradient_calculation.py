@@ -21,6 +21,16 @@ class DerivativeQuestion(Question, abc.ABC):
     self.num_variables = kwargs.get("num_variables", 2)
     self.max_degree = kwargs.get("max_degree", 2)
 
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_variables" in kwargs:
+      self.num_variables = kwargs.get("num_variables", self.num_variables)
+    if "max_degree" in kwargs:
+      self.max_degree = kwargs.get("max_degree", self.max_degree)
+    self.rng.seed(rng_seed)
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
+
   def _generate_evaluation_point(self) -> List[float]:
     """Generate a random point for gradient evaluation."""
     return [self.rng.randint(-3, 3) for _ in range(self.num_variables)]
@@ -32,9 +42,9 @@ class DerivativeQuestion(Question, abc.ABC):
     else:
       return f"\\frac{{\\partial f}}{{\\partial x_{var_index}}}"
 
-  def _create_derivative_answers(self, evaluation_point: List[float]) -> None:
+  def _create_derivative_answers(self, evaluation_point: List[float]) -> List[ca.Answer]:
     """Create answer fields for each partial derivative at the evaluation point."""
-    self.answers = {}
+    answers: List[ca.Answer] = []
 
     # Evaluate gradient at the specified point
     subs_map = dict(zip(self.variables, evaluation_point))
@@ -57,9 +67,11 @@ class DerivativeQuestion(Question, abc.ABC):
       # Use auto_float for Canvas compatibility with integers and decimals
       # Label includes the partial derivative notation
       label = f"∂f/∂x_{i} at ({eval_point_str})"
-      self.answers[answer_key] = ca.AnswerTypes.Float(gradient_value, label=label)
+      answers.append(ca.AnswerTypes.Float(gradient_value, label=label))
 
-  def _create_gradient_vector_answer(self) -> None:
+    return answers
+
+  def _create_gradient_vector_answer(self) -> ca.Answer:
     """Create a single gradient vector answer for PDF format."""
     # Format gradient as vector notation
     subs_map = dict(zip(self.variables, self.evaluation_point))
@@ -75,9 +87,9 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # Format as vector for display using consistent formatting
     vector_str = format_vector(gradient_values)
-    self.answers["gradient_vector"] = ca.AnswerTypes.String(vector_str, pdf_only=True)
+    return ca.AnswerTypes.String(vector_str, pdf_only=True)
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -109,8 +121,8 @@ class DerivativeQuestion(Question, abc.ABC):
     )
 
     # For Canvas: Use OnlyHtml to show individual partial derivatives
-    for i in range(self.num_variables):
-      answer = self.answers[f"partial_derivative_{i}"]
+    derivative_answers = self._create_derivative_answers(self.evaluation_point)
+    for i, answer in enumerate(derivative_answers):
       answers.append(answer)
       body.add_element(
         ca.OnlyHtml([
@@ -126,12 +138,7 @@ class DerivativeQuestion(Question, abc.ABC):
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -182,18 +189,13 @@ class DerivativeQuestion(Question, abc.ABC):
 
     return explanation, []
 
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
-
 
 @QuestionRegistry.register("DerivativeBasic")
 class DerivativeBasic(DerivativeQuestion):
   """Basic derivative calculation using polynomial functions."""
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Generate a basic polynomial function
     self.variables, self.function, self.gradient_function, self.equation = generate_function(
@@ -203,19 +205,20 @@ class DerivativeBasic(DerivativeQuestion):
     # Generate evaluation point
     self.evaluation_point = self._generate_evaluation_point()
 
-    # Create answers
+    # Create answers for evaluation point (used in _build_body)
     self._create_derivative_answers(self.evaluation_point)
 
-    # For PDF: Create single gradient vector answer
-    self._create_gradient_vector_answer()
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
 
 @QuestionRegistry.register("DerivativeChain")
 class DerivativeChain(DerivativeQuestion):
   """Chain rule derivative calculation using function composition."""
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Try to generate a valid function/point combination, regenerating if we hit complex numbers
     max_attempts = 10
@@ -230,9 +233,6 @@ class DerivativeChain(DerivativeQuestion):
         # Create answers - this will raise ValueError if we get complex numbers
         self._create_derivative_answers(self.evaluation_point)
 
-        # For PDF: Create single gradient vector answer
-        self._create_gradient_vector_answer()
-
         # If we get here, everything worked
         break
 
@@ -244,6 +244,10 @@ class DerivativeChain(DerivativeQuestion):
         else:
           # If we've exhausted attempts or different error, re-raise
           raise
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _generate_composed_function(self) -> None:
     """Generate a composed function f(g(x)) for chain rule practice."""
@@ -284,7 +288,7 @@ class DerivativeChain(DerivativeQuestion):
     f = sp.Function('f')
     self.equation = sp.Eq(f(*self.variables), self.function)
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -388,8 +392,3 @@ class DerivativeChain(DerivativeQuestion):
       )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation

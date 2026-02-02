@@ -4,6 +4,7 @@ from __future__ import annotations
 import abc
 import difflib
 import logging
+import random
 
 from QuizGenerator.question import Question, QuestionRegistry
 import QuizGenerator.contentast as ca
@@ -21,56 +22,60 @@ class IOQuestion(Question, abc.ABC):
 @QuestionRegistry.register()
 class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
-    self.hard_drive_rotation_speed = 100 * self.rng.randint(36, 150)  # e.g. 3600rpm to 15000rpm
-    self.seek_delay = float(round(self.rng.randrange(3, 20), 2))
-    self.transfer_rate = self.rng.randint(50, 300)
-    self.number_of_reads = self.rng.randint(1, 20)
-    self.size_of_reads = self.rng.randint(1, 10)
-    
-    self.rotational_delay = (1 / self.hard_drive_rotation_speed) * (60 / 1) * (1000 / 1) * (1/2)
-    self.access_delay = self.rotational_delay + self.seek_delay
-    self.transfer_delay = 1000 * (self.size_of_reads * self.number_of_reads) / 1024 / self.transfer_rate
-    self.disk_access_delay = self.access_delay * self.number_of_reads + self.transfer_delay
-    
-    self.answers.update({
-      "answer__rotational_delay"  : ca.AnswerTypes.Float(self.rotational_delay),
-      "answer__access_delay"      : ca.AnswerTypes.Float(self.access_delay),
-      "answer__transfer_delay"    : ca.AnswerTypes.Float(self.transfer_delay),
-      "answer__disk_access_delay" : ca.AnswerTypes.Float(self.disk_access_delay),
-    })
-  
-  def _get_body(self, *args, **kwargs):
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    hard_drive_rotation_speed = 100 * rng.randint(36, 150)
+    seek_delay = float(round(rng.randrange(3, 20), 2))
+    transfer_rate = rng.randint(50, 300)
+    number_of_reads = rng.randint(1, 20)
+    size_of_reads = rng.randint(1, 10)
+
+    rotational_delay = (1 / hard_drive_rotation_speed) * (60 / 1) * (1000 / 1) * (1/2)
+    access_delay = rotational_delay + seek_delay
+    transfer_delay = 1000 * (size_of_reads * number_of_reads) / 1024 / transfer_rate
+    disk_access_delay = access_delay * number_of_reads + transfer_delay
+
+    return {
+      "hard_drive_rotation_speed": hard_drive_rotation_speed,
+      "seek_delay": seek_delay,
+      "transfer_rate": transfer_rate,
+      "number_of_reads": number_of_reads,
+      "size_of_reads": size_of_reads,
+      "rotational_delay": rotational_delay,
+      "access_delay": access_delay,
+      "transfer_delay": transfer_delay,
+      "disk_access_delay": disk_access_delay,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    answers = [
-      self.answers["answer__rotational_delay"],
-      self.answers["answer__access_delay"],
-      self.answers["answer__transfer_delay"],
-      self.answers["answer__disk_access_delay"],
-    ]
+    rotational_answer = ca.AnswerTypes.Float(context["rotational_delay"])
+    access_answer = ca.AnswerTypes.Float(context["access_delay"])
+    transfer_answer = ca.AnswerTypes.Float(context["transfer_delay"])
+    disk_access_answer = ca.AnswerTypes.Float(context["disk_access_delay"])
 
     # Create parameter info table using mixin
     parameter_info = {
-      "Hard Drive Rotation Speed": f"{self.hard_drive_rotation_speed}RPM",
-      "Seek Delay": f"{self.seek_delay}ms",
-      "Transfer Rate": f"{self.transfer_rate}MB/s",
-      "Number of Reads": f"{self.number_of_reads}",
-      "Size of Reads": f"{self.size_of_reads}KB"
+      "Hard Drive Rotation Speed": f"{context['hard_drive_rotation_speed']}RPM",
+      "Seek Delay": f"{context['seek_delay']}ms",
+      "Transfer Rate": f"{context['transfer_rate']}MB/s",
+      "Number of Reads": f"{context['number_of_reads']}",
+      "Size of Reads": f"{context['size_of_reads']}KB"
     }
 
-    parameter_table = self.create_info_table(parameter_info)
+    parameter_table = cls.create_info_table(parameter_info)
 
     # Create answer table with multiple rows using mixin
     answer_rows = [
-      {"Variable": "Rotational Delay", "Value": "answer__rotational_delay"},
-      {"Variable": "Access Delay", "Value": "answer__access_delay"},
-      {"Variable": "Transfer Delay", "Value": "answer__transfer_delay"},
-      {"Variable": "Total Disk Access Delay", "Value": "answer__disk_access_delay"}
+      {"Variable": "Rotational Delay", "Value": rotational_answer},
+      {"Variable": "Access Delay", "Value": access_answer},
+      {"Variable": "Transfer Delay", "Value": transfer_answer},
+      {"Variable": "Total Disk Access Delay", "Value": disk_access_answer}
     ]
 
-    answer_table = self.create_answer_table(
+    answer_table = cls.create_answer_table(
       headers=["Variable", "Value"],
       data_rows=answer_rows,
       answer_columns=["Value"]
@@ -85,21 +90,17 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       f"(i.e. don't use your rounded answers to calculate your overall answer)"
     )
 
-    body = self.create_parameter_calculation_body(
+    body = cls.create_parameter_calculation_body(
       intro_text=intro_text,
       parameter_table=parameter_table,
       answer_table=answer_table,
       additional_instructions=instructions
     )
 
-    return body, answers
-
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(*args, **kwargs)
     return body
 
-  def _get_explanation(self):
+  @classmethod
+  def _build_explanation(cls, context):
     explanation = ca.Section()
     
     explanation.add_element(
@@ -116,9 +117,9 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ca.Paragraph(["Starting with the rotation delay, we calculate:"]),
       ca.Equation(
         "t_{rotation} = "
-        + f"\\frac{{1 minute}}{{{self.hard_drive_rotation_speed}revolutions}}"
+        + f"\\frac{{1 minute}}{{{context['hard_drive_rotation_speed']}revolutions}}"
         + r"\cdot \frac{60 seconds}{1 minute} \cdot \frac{1000 ms}{1 second} \cdot \frac{1 revolution}{2} = "
-        + f"{self.rotational_delay:0.2f}ms",
+        + f"{context['rotational_delay']:0.2f}ms",
       )
     ])
     
@@ -129,7 +130,7 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ca.Equation(
         f"t_{{access}} "
         f"= t_{{rotation}} + t_{{seek}} "
-        f"= {self.rotational_delay:0.2f}ms + {self.seek_delay:0.2f}ms = {self.access_delay:0.2f}ms"
+        f"= {context['rotational_delay']:0.2f}ms + {context['seek_delay']:0.2f}ms = {context['access_delay']:0.2f}ms"
       )
     ])
     
@@ -137,9 +138,9 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ca.Paragraph([r"Next we need to calculate our transfer delay, $t_{transfer}$, which we do as:"]),
       ca.Equation(
         f"t_{{transfer}} "
-        f"= \\frac{{{self.number_of_reads} \\cdot {self.size_of_reads}KB}}{{1}} \\cdot \\frac{{1MB}}{{1024KB}} "
-        f"\\cdot \\frac{{1 second}}{{{self.transfer_rate}MB}} \\cdot \\frac{{1000ms}}{{1second}} "
-        f"= {self.transfer_delay:0.2}ms"
+        f"= \\frac{{{context['number_of_reads']} \\cdot {context['size_of_reads']}KB}}{{1}} \\cdot \\frac{{1MB}}{{1024KB}} "
+        f"\\cdot \\frac{{1 second}}{{{context['transfer_rate']}MB}} \\cdot \\frac{{1000ms}}{{1second}} "
+        f"= {context['transfer_delay']:0.2}ms"
       )
     ])
     
@@ -148,70 +149,66 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ca.Equation(
         f"t_{{total}} "
         f"= \\text{{(# reads)}} \\cdot t_{{access}} + t_{{transfer}} "
-        f"= {self.number_of_reads} \\cdot {self.access_delay:0.2f} + {self.transfer_delay:0.2f} "
-        f"= {self.disk_access_delay:0.2f}ms")
+        f"= {context['number_of_reads']} \\cdot {context['access_delay']:0.2f} + {context['transfer_delay']:0.2f} "
+        f"= {context['disk_access_delay']:0.2f}ms")
     ])
-    return explanation, []
-
-  def get_explanation(self) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
     return explanation
 
 
 @QuestionRegistry.register()
 class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
-    # Calculating this first to use blocksize as an even multiple of it
-    self.inode_size = 2**self.rng.randint(6, 10)
-    
-    self.block_size = self.inode_size * self.rng.randint(8, 20)
-    self.inode_number = self.rng.randint(0, 256)
-    self.inode_start_location = self.block_size * self.rng.randint(2, 5)
-    
-    self.inode_address = self.inode_start_location + self.inode_number * self.inode_size
-    self.inode_block = self.inode_address // self.block_size
-    self.inode_address_in_block = self.inode_address % self.block_size
-    self.inode_index_in_block = int(self.inode_address_in_block / self.inode_size)
-    
-    self.answers.update({
-      "answer__inode_address": ca.AnswerTypes.Int(self.inode_address),
-      "answer__inode_block": ca.AnswerTypes.Int(self.inode_block),
-      "answer__inode_address_in_block": ca.AnswerTypes.Int(self.inode_address_in_block),
-      "answer__inode_index_in_block": ca.AnswerTypes.Int(self.inode_index_in_block),
-    })
-  
-  def _get_body(self):
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    inode_size = 2**rng.randint(6, 10)
+    block_size = inode_size * rng.randint(8, 20)
+    inode_number = rng.randint(0, 256)
+    inode_start_location = block_size * rng.randint(2, 5)
+
+    inode_address = inode_start_location + inode_number * inode_size
+    inode_block = inode_address // block_size
+    inode_address_in_block = inode_address % block_size
+    inode_index_in_block = int(inode_address_in_block / inode_size)
+
+    return {
+      "inode_size": inode_size,
+      "block_size": block_size,
+      "inode_number": inode_number,
+      "inode_start_location": inode_start_location,
+      "inode_address": inode_address,
+      "inode_block": inode_block,
+      "inode_address_in_block": inode_address_in_block,
+      "inode_index_in_block": inode_index_in_block,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    answers = [
-      self.answers["answer__inode_address"],
-      self.answers["answer__inode_block"],
-      self.answers["answer__inode_address_in_block"],
-      self.answers["answer__inode_index_in_block"],
-    ]
+    inode_address_answer = ca.AnswerTypes.Int(context["inode_address"])
+    inode_block_answer = ca.AnswerTypes.Int(context["inode_block"])
+    inode_address_in_block_answer = ca.AnswerTypes.Int(context["inode_address_in_block"])
+    inode_index_in_block_answer = ca.AnswerTypes.Int(context["inode_index_in_block"])
 
     # Create parameter info table using mixin
     parameter_info = {
-      "Block Size": f"{self.block_size} Bytes",
-      "Inode Number": f"{self.inode_number}",
-      "Inode Start Location": f"{self.inode_start_location} Bytes",
-      "Inode size": f"{self.inode_size} Bytes"
+      "Block Size": f"{context['block_size']} Bytes",
+      "Inode Number": f"{context['inode_number']}",
+      "Inode Start Location": f"{context['inode_start_location']} Bytes",
+      "Inode size": f"{context['inode_size']} Bytes"
     }
 
-    parameter_table = self.create_info_table(parameter_info)
+    parameter_table = cls.create_info_table(parameter_info)
 
     # Create answer table with multiple rows using mixin
     answer_rows = [
-      {"Variable": "Inode address", "Value": "answer__inode_address"},
-      {"Variable": "Block containing inode", "Value": "answer__inode_block"},
-      {"Variable": "Inode address (offset) within block", "Value": "answer__inode_address_in_block"},
-      {"Variable": "Inode index within block", "Value": "answer__inode_index_in_block"}
+      {"Variable": "Inode address", "Value": inode_address_answer},
+      {"Variable": "Block containing inode", "Value": inode_block_answer},
+      {"Variable": "Inode address (offset) within block", "Value": inode_address_in_block_answer},
+      {"Variable": "Inode index within block", "Value": inode_index_in_block_answer}
     ]
 
-    answer_table = self.create_answer_table(
+    answer_table = cls.create_answer_table(
       headers=["Variable", "Value"],
       data_rows=answer_rows,
       answer_columns=["Value"]
@@ -220,21 +217,17 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     # Use mixin to create complete body with both tables
     intro_text = "Given the information below, please calculate the following values."
 
-    body = self.create_parameter_calculation_body(
+    body = cls.create_parameter_calculation_body(
       intro_text=intro_text,
       parameter_table=parameter_table,
       answer_table=answer_table,
       # additional_instructions=instructions
     )
 
-    return body, answers
-
-  def get_body(self) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body()
     return body
 
-  def _get_explanation(self):
+  @classmethod
+  def _build_explanation(cls, context):
     explanation = ca.Section()
     
     explanation.add_element(
@@ -251,8 +244,8 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
         r"(\text{Inode address})",
         [
           r"(\text{Inode Start Location}) + (\text{inode #}) \cdot (\text{inode size})",
-          f"{self.inode_start_location} + {self.inode_number} \\cdot {self.inode_size}",
-          f"{self.inode_address}"
+          f"{context['inode_start_location']} + {context['inode_number']} \\cdot {context['inode_size']}",
+          f"{context['inode_address']}"
         ])
     )
     
@@ -267,8 +260,8 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       r"\text{Block containing inode}",
       [
         r"(\text{Inode address}) \mathbin{//} (\text{block size})",
-        f"{self.inode_address} \\mathbin{{//}} {self.block_size}",
-        f"{self.inode_block}"
+        f"{context['inode_address']} \\mathbin{{//}} {context['block_size']}",
+        f"{context['inode_block']}"
       ]
     ))
     
@@ -287,8 +280,8 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       r"\text{offset within block}",
       [
         r"(\text{Inode address}) \bmod (\text{block size})",
-        f"{self.inode_address} \\bmod {self.block_size}",
-        f"{self.inode_address_in_block}"
+        f"{context['inode_address']} \\bmod {context['block_size']}",
+        f"{context['inode_address_in_block']}"
       ]
     ))
     
@@ -302,16 +295,11 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       r"\text{index within block}",
       [
         r"\dfrac{\text{offset within block}}{\text{inode size}}",
-        f"\\dfrac{{{self.inode_address_in_block}}}{{{self.inode_size}}}",
-        f"{self.inode_index_in_block}"
+        f"\\dfrac{{{context['inode_address_in_block']}}}{{{context['inode_size']}}}",
+        f"{context['inode_index_in_block']}"
       ]
     ))
 
-    return explanation, []
-
-  def get_explanation(self) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
     return explanation
 
 
@@ -323,69 +311,61 @@ class VSFS_states(IOQuestion):
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.answer_kind = ca.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN
-    
-    self.num_steps = kwargs.get("num_steps", 10)
-  
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
-    fs = self.vsfs(4, 4, self.rng)
-    operations = fs.run_for_steps(self.num_steps)
-    
-    self.start_state = operations[-1]["start_state"]
-    self.end_state = operations[-1]["end_state"]
-    
-    wrong_answers = list(filter(
-      lambda o: o != operations[-1]["cmd"],
-      map(
-        lambda o: o["cmd"],
-        operations
-      )
-    ))
-    self.rng.shuffle(wrong_answers)
-    
-    self.answers["answer__cmd"] = ca.Answer.dropdown(
+
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    num_steps = kwargs.get("num_steps", 10)
+
+    fs = cls.vsfs(4, 4, rng)
+    operations = fs.run_for_steps(num_steps)
+
+    start_state = operations[-1]["start_state"]
+    end_state = operations[-1]["end_state"]
+
+    command_answer = ca.Answer.dropdown(
       f"{operations[-1]['cmd']}",
       baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']])),
       label="Command"
     )
-  
-  def _get_body(self):
-    """Build question body and collect answers."""
-    answers = [self.answers["answer__cmd"]]
 
+    return {
+      "start_state": start_state,
+      "end_state": end_state,
+      "command_answer": command_answer,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
+    """Build question body and collect answers."""
     body = ca.Section()
 
     body.add_element(ca.Paragraph(["What operation happens between these two states?"]))
 
     body.add_element(
       ca.Code(
-        self.start_state,
+        context["start_state"],
         make_small=True
       )
     )
 
-    body.add_element(ca.AnswerBlock(self.answers["answer__cmd"]))
+    body.add_element(ca.AnswerBlock(context["command_answer"]))
 
     body.add_element(
       ca.Code(
-        self.end_state,
+        context["end_state"],
         make_small=True
       )
     )
 
-    return body, answers
-
-  def get_body(self) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body()
     return body
 
-  def _get_explanation(self):
+  @classmethod
+  def _build_explanation(cls, context):
     explanation = ca.Section()
     
-    log.debug(f"self.start_state: {self.start_state}")
-    log.debug(f"self.end_state: {self.end_state}")
+    log.debug(f"start_state: {context['start_state']}")
+    log.debug(f"end_state: {context['end_state']}")
     
     explanation.add_elements([
       ca.Paragraph([
@@ -396,7 +376,7 @@ class VSFS_states(IOQuestion):
     
     chunk_to_add = []
     lines_that_changed = []
-    for start_line, end_line in zip(self.start_state.split('\n'), self.end_state.split('\n')):
+    for start_line, end_line in zip(context["start_state"].split('\n'), context["end_state"].split('\n')):
       if start_line == end_line:
         continue
       lines_that_changed.append((start_line, end_line))
@@ -461,14 +441,8 @@ class VSFS_states(IOQuestion):
     
     explanation.add_element(
       ca.Code(
-        highlight_changes(self.start_state, self.end_state)
+        highlight_changes(context["start_state"], context["end_state"])
       )
     )
 
-    return explanation, []
-
-  def get_explanation(self) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation()
     return explanation
-  

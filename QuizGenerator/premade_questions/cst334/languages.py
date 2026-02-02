@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import abc
 import enum
-import itertools
-from typing import List, Dict, Optional, Tuple, Any
+import random
+from typing import List, Dict, Optional
 
 from QuizGenerator.question import QuestionRegistry, Question
 
@@ -154,27 +154,16 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       kwargs['grammar_str_bad'] = grammar_str_bad
 
     super().__init__(*args, **kwargs)
+    self.answer_kind = ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER
 
-    # Store whether grammars are fixed (provided) or should be randomized
-    self.fixed_grammars = grammar_str_good is not None and grammar_str_bad is not None
-    if self.fixed_grammars:
-      self.grammar_str_good = grammar_str_good
-      self.grammar_str_bad = grammar_str_bad
-      self.include_spaces = kwargs.get("include_spaces", False)
-      self.MAX_LENGTH = kwargs.get("max_length", 30)
-      self.grammar_good = BNF.parse_bnf(self.grammar_str_good, self.rng)
-      self.grammar_bad = BNF.parse_bnf(self.grammar_str_bad, self.rng)
-
-    self.num_answer_options = kwargs.get("num_answer_options", 4)
-    self.num_answer_blanks = kwargs.get("num_answer_blanks", 4)
-
-  def _select_random_grammar(self):
-    """Select and set a random grammar. Called from refresh() to ensure each PDF gets different grammar."""
-    which_grammar = self.rng.choice(range(4))
+  @classmethod
+  def _select_random_grammar(cls, rng):
+    """Select and return a random grammar configuration."""
+    which_grammar = rng.choice(range(4))
 
     if which_grammar == 0:
       # todo: make a few different kinds of grammars that could be picked
-      self.grammar_str_good = """
+      grammar_str_good = """
         <expression> ::= <term> | <expression> + <term> | <expression> - <term>
         <term>       ::= <factor> | <term> * <factor> | <term> / <factor>
         <factor>     ::= <number>
@@ -182,17 +171,17 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         <digit>      ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
       """
       # Adding in a plus to number
-      self.grammar_str_bad = """
+      grammar_str_bad = """
         <expression> ::= <term> | <expression> + <term> | <expression> - <term>
         <term>       ::= <factor> | <term> * <factor> | <term> / <factor>
         <factor>     ::= <number>
         <number>     ::= <digit> + | <digit> <number>
         <digit>      ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
       """
-      self.include_spaces = False
-      self.MAX_LENGTH = 30
+      include_spaces = False
+      max_length = 30
     elif which_grammar == 1:
-      self.grammar_str_good = """
+      grammar_str_good = """
         <sentence> ::= <subject> <verb> <object>
         <subject> ::= The cat | A dog | The bird | A child | <adjective> <animal>
         <animal> ::= cat | dog | bird | child
@@ -200,7 +189,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         <verb> ::= chases | sees | hates | loves
         <object> ::= the ball | the toy | the tree | <adjective> <object>
       """
-      self.grammar_str_bad = """
+      grammar_str_bad = """
         <sentence> ::= <subject> <verb> <object>
         <subject> ::= The human | The dog | A bird | Some child | A <adjective> <animal>
         <animal> ::= cat | dog | bird | child
@@ -208,10 +197,10 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         <verb> ::= chases | sees | hates | loves
         <object> ::= the ball | the toy | the tree | <adjective> <object>
       """
-      self.include_spaces = True
-      self.MAX_LENGTH = 100
+      include_spaces = True
+      max_length = 100
     elif which_grammar == 2:
-      self.grammar_str_good = """
+      grammar_str_good = """
         <poem> ::= <line> | <line> <poem>
         <line> ::= <subject> <verb> <object> <modifier>
         <subject> ::= whispers | shadows | dreams | echoes | <compound-subject>
@@ -223,7 +212,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         <modifier> ::= silently | violently | mysteriously | endlessly | <recursive-modifier>
         <recursive-modifier> ::= <modifier> and <modifier>
       """
-      self.grammar_str_bad = """
+      grammar_str_bad = """
         <bad-poem> ::= <almost-valid-line> | <bad-poem> <bad-poem>
         <almost-valid-line> ::= <tricky-subject> <tricky-verb> <tricky-object> <tricky-modifier>
         <tricky-subject> ::= whispers | shadows and and | <duplicate-subject>
@@ -238,103 +227,126 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         <modifier-subject-swap> ::= whispers silently
         <duplicate-modifier> ::= silently silently
       """
-      self.include_spaces = True
-      self.MAX_LENGTH = 100
+      include_spaces = True
+      max_length = 100
     elif which_grammar == 3:
-      self.grammar_str_good = """
+      grammar_str_good = """
         <A> ::= a <B> a |
         <B> ::= b <C> b |
         <C> ::= c <A> c |
       """
-      self.grammar_str_bad = """
+      grammar_str_bad = """
         <A> ::= a <B> c
         <B> ::= b <C> a |
         <C> ::= c <A> b |
       """
-      self.include_spaces = False
-      self.MAX_LENGTH = 100
+      include_spaces = False
+      max_length = 100
 
-    self.grammar_good = BNF.parse_bnf(self.grammar_str_good, self.rng)
-    self.grammar_bad = BNF.parse_bnf(self.grammar_str_bad, self.rng)
+    return {
+      "grammar_str_good": grammar_str_good,
+      "grammar_str_bad": grammar_str_bad,
+      "include_spaces": include_spaces,
+      "max_length": max_length,
+    }
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
 
-    # Re-select random grammar for each refresh if not using fixed grammars
-    if not self.fixed_grammars:
-      self._select_random_grammar()
+    grammar_str_good = kwargs.get("grammar_str_good")
+    grammar_str_bad = kwargs.get("grammar_str_bad")
 
-    self.answers = {}
+    if grammar_str_good is not None and grammar_str_bad is not None:
+      include_spaces = kwargs.get("include_spaces", False)
+      max_length = kwargs.get("max_length", 30)
+    else:
+      selection = cls._select_random_grammar(rng)
+      grammar_str_good = selection["grammar_str_good"]
+      grammar_str_bad = selection["grammar_str_bad"]
+      include_spaces = selection["include_spaces"]
+      max_length = selection["max_length"]
 
-    # Create answers with proper ca.Answer signature
-    # value is the generated string, correct indicates if it's a valid answer
-    good_string = self.grammar_good.generate(self.include_spaces)
-    self.answers["answer_good"] = ca.Answer(
+    grammar_good = BNF.parse_bnf(grammar_str_good, rng)
+    grammar_bad = BNF.parse_bnf(grammar_str_bad, rng)
+
+    num_answer_options = kwargs.get("num_answer_options", 4)
+    num_answer_blanks = kwargs.get("num_answer_blanks", 4)
+
+    answer_options = []
+
+    good_string = grammar_good.generate(include_spaces)
+    answer_options.append(ca.Answer(
       value=good_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=True
-    )
+    ))
 
-    bad_string = self.grammar_bad.generate(self.include_spaces)
-    self.answers["answer_bad"] = ca.Answer(
+    bad_string = grammar_bad.generate(include_spaces)
+    answer_options.append(ca.Answer(
       value=bad_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=False
-    )
+    ))
 
-    bad_early_string = self.grammar_bad.generate(self.include_spaces, early_exit=True)
-    self.answers["answer_bad_early"] = ca.Answer(
+    bad_early_string = grammar_bad.generate(include_spaces, early_exit=True)
+    answer_options.append(ca.Answer(
       value=bad_early_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=False
-    )
+    ))
 
-    answer_text_set = {a.value for a in self.answers.values()}
+    answer_text_set = {a.value for a in answer_options}
     num_tries = 0
-    while len(self.answers) < 10 and num_tries < self.MAX_TRIES:
-
-      correct = self.rng.choice([True, False])
+    while len(answer_options) < 10 and num_tries < cls.MAX_TRIES:
+      correct = rng.choice([True, False])
       if not correct:
-        early_exit = self.rng.choice([True, False])
+        early_exit = rng.choice([True, False])
       else:
         early_exit = False
 
       generated_string = (
-        self.grammar_good
+        grammar_good
         if correct or early_exit
-        else self.grammar_bad
-      ).generate(self.include_spaces, early_exit=early_exit)
+        else grammar_bad
+      ).generate(include_spaces, early_exit=early_exit)
 
       is_correct = correct and not early_exit
 
-      if len(generated_string) < self.MAX_LENGTH and generated_string not in answer_text_set:
-        self.answers[f"answer_{num_tries}"] = ca.Answer(
+      if len(generated_string) < max_length and generated_string not in answer_text_set:
+        answer_options.append(ca.Answer(
           value=generated_string,
           kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
           correct=is_correct
-        )
+        ))
         answer_text_set.add(generated_string)
       num_tries += 1
-    
-    # Generate answers that will be used only for the latex version.
-    self.featured_answers = {
-      self.grammar_good.generate(),
-      self.grammar_bad.generate(),
-      self.grammar_good.generate(early_exit=True)
+
+    featured_answers = {
+      grammar_good.generate(),
+      grammar_bad.generate(),
+      grammar_good.generate(early_exit=True)
     }
-    while len(self.featured_answers) < self.num_answer_options:
-      self.featured_answers.add(
-        self.rng.choice([
-          lambda: self.grammar_good.generate(),
-          lambda: self.grammar_bad.generate(),
-          lambda: self.grammar_good.generate(early_exit=True),
+    while len(featured_answers) < num_answer_options:
+      featured_answers.add(
+        rng.choice([
+          lambda: grammar_good.generate(),
+          lambda: grammar_bad.generate(),
+          lambda: grammar_good.generate(early_exit=True),
         ])()
       )
-  
-  def _get_body(self, *args, **kwargs):
-    """Build question body and collect answers."""
-    answers = list(self.answers.values())
 
+    return {
+      "grammar_good": grammar_good,
+      "answer_options": answer_options,
+      "featured_answers": featured_answers,
+      "include_spaces": include_spaces,
+      "num_answer_blanks": num_answer_blanks,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
+    """Build question body and collect answers."""
     body = ca.Section()
 
     body.add_element(
@@ -355,30 +367,26 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
     )
 
     body.add_element(
-      ca.Code(self.grammar_good.get_grammar_string())
+      ca.Code(context["grammar_good"].get_grammar_string())
     )
 
     # Add in some answers as latex-only options to be circled
     latex_list = ca.OnlyLatex([])
-    for answer in self.featured_answers:
+    for answer in context["featured_answers"]:
       latex_list.add_element(ca.Paragraph([f"- `{str(answer)}`"]))
     body.add_element(latex_list)
 
     # For Latex-only, ask students to generate some more.
     body.add_element(
       ca.OnlyLatex([
-        ca.AnswerBlock([ca.AnswerTypes.String("", label="") for i in range(self.num_answer_blanks)])
+        ca.AnswerBlock([ca.AnswerTypes.String("", label="") for i in range(context["num_answer_blanks"])])
       ])
     )
 
-    return body, answers
+    return body, list(context["answer_options"])
 
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(*args, **kwargs)
-    return body
-  
-  def _get_explanation(self, *args, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     """Build question explanation."""
     explanation = ca.Section()
     explanation.add_element(
@@ -387,13 +395,6 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
         "Unfortunately, there isn't space here to demonstrate the derivation so please work through them on your own!"
       ])
     )
-    return explanation, []
-
-  def get_explanation(self, *args, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(*args, **kwargs)
     return explanation
 
-  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
-    
-    return ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER, list(itertools.chain(*[a.get_for_canvas() for a in self.answers.values()]))
+  

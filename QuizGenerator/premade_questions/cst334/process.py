@@ -8,6 +8,7 @@ import enum
 import io
 import logging
 import os
+import random
 import uuid
 from typing import List
 
@@ -119,7 +120,8 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     def has_started(self) -> bool:
       return self.response_time is None
   
-  def get_workload(self, num_jobs, *args, **kwargs) -> List[SchedulingQuestion.Job]:
+  @classmethod
+  def get_workload(cls, rng, num_jobs, *args, **kwargs) -> List[SchedulingQuestion.Job]:
     """Makes a guaranteed interesting workload by following rules
     1. First job to arrive is the longest
     2. At least 2 other jobs arrive in its runtime
@@ -132,9 +134,9 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     
     # First create a job that is relatively long-running and arrives first.
     # Set arrival time to something fairly low
-    job0_arrival = self.rng.randint(0, int(0.25 * self.MAX_ARRIVAL_TIME))
+    job0_arrival = rng.randint(0, int(0.25 * cls.MAX_ARRIVAL_TIME))
     # Set duration to something fairly long
-    job0_duration = self.rng.randint(int(self.MAX_JOB_DURATION * 0.75), self.MAX_JOB_DURATION)
+    job0_duration = rng.randint(int(cls.MAX_JOB_DURATION * 0.75), cls.MAX_JOB_DURATION)
     
     # Next, let's create a job that will test whether we are preemptive or not.
     #  The core characteristics of this job are that it:
@@ -146,24 +148,24 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     #  duration:
     #   lower: self.MIN_JOB_DURATION
     #   upper:
-    job1_arrival = self.rng.randint(
+    job1_arrival = rng.randint(
       job0_arrival + 1, # Make sure we start _after_ job0
-      job0_arrival + job0_duration - self.MIN_JOB_DURATION - 2 # Make sure we always have enough time for job1 & job2
+      job0_arrival + job0_duration - cls.MIN_JOB_DURATION - 2 # Make sure we always have enough time for job1 & job2
     )
-    job1_duration = self.rng.randint(
-      self.MIN_JOB_DURATION + 1, # default minimum and leave room for job2
+    job1_duration = rng.randint(
+      cls.MIN_JOB_DURATION + 1, # default minimum and leave room for job2
       job0_arrival + job0_duration - job1_arrival - 1 # Make sure our job ends _at least_ before job0 would end
     )
     
     # Finally, we want to differentiate between STCF and SJF
     #  So, if we don't preempt job0 we want to make it be a tough choice between the next 2 jobs when it completes.
     #  This means we want a job that arrives _before_ job0 finishes, after job1 enters, and is shorter than job1
-    job2_arrival = self.rng.randint(
+    job2_arrival = rng.randint(
       job1_arrival + 1, # Make sure we arrive after job1 so we subvert FIFO
       job0_arrival + job0_duration - 1 # ...but before job0 would exit the system
     )
-    job2_duration = self.rng.randint(
-      self.MIN_JOB_DURATION, # Make sure it's at least the minimum.
+    job2_duration = rng.randint(
+      cls.MIN_JOB_DURATION, # Make sure it's at least the minimum.
       job1_duration - 1, # Make sure it's shorter than job1
     )
     
@@ -177,12 +179,12 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     # Add more jobs as necessary, if more than 3 are requested
     if num_jobs > 3:
       job_tuples.extend([
-        (self.rng.randint(0, self.MAX_ARRIVAL_TIME), self.rng.randint(self.MIN_JOB_DURATION, self.MAX_JOB_DURATION))
+        (rng.randint(0, cls.MAX_ARRIVAL_TIME), rng.randint(cls.MIN_JOB_DURATION, cls.MAX_JOB_DURATION))
         for _ in range(num_jobs - 3)
       ])
     
     # Shuffle jobs so they are in a random order
-    self.rng.shuffle(job_tuples)
+    rng.shuffle(job_tuples)
     
     # Make workload from job tuples
     workload = []
@@ -197,30 +199,38 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     
     return workload
   
-  def run_simulation(self, jobs_to_run: List[SchedulingQuestion.Job], selector, preemptable, time_quantum=None):
+  @classmethod
+  def run_simulation(
+    cls,
+    jobs_to_run: List[SchedulingQuestion.Job],
+    selector,
+    preemptable,
+    time_quantum=None,
+    scheduler_algorithm=None
+  ):
     curr_time = 0
     selected_job: SchedulingQuestion.Job | None = None
-    
-    self.timeline = collections.defaultdict(list)
-    self.timeline[curr_time].append("Simulation Start")
+
+    timeline = collections.defaultdict(list)
+    timeline[curr_time].append("Simulation Start")
     for job in jobs_to_run:
-      self.timeline[job.arrival_time].append(f"Job{job.job_id} arrived")
-    
+      timeline[job.arrival_time].append(f"Job{job.job_id} arrived")
+
     while len(jobs_to_run) > 0:
       possible_time_slices = []
-      
+
       # Get the jobs currently in the system
       available_jobs = list(filter(
         (lambda j: j.arrival_time <= curr_time),
         jobs_to_run
       ))
-      
+
       # Get the jobs that will enter the system in the future
       future_jobs : List[SchedulingQuestion.Job] = list(filter(
         (lambda j: j.arrival_time > curr_time),
         jobs_to_run
       ))
-      
+
       # Check whether there are jobs in the system already
       if len(available_jobs) > 0:
         # Use the selector to identify what job we are going to run
@@ -229,13 +239,16 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
           key=(lambda j: selector(j, curr_time))
         )
         if selected_job.has_started():
-          self.timeline[curr_time].append(f"Starting Job{selected_job.job_id} (resp = {curr_time - selected_job.arrival_time:0.{self.ROUNDING_DIGITS}f}s)")
+          timeline[curr_time].append(
+            f"Starting Job{selected_job.job_id} "
+            f"(resp = {curr_time - selected_job.arrival_time:0.{cls.ROUNDING_DIGITS}f}s)"
+          )
         # We start the job that we selected
-        selected_job.run(curr_time, (self.scheduler_algorithm == self.Kind.RoundRobin))
-        
+        selected_job.run(curr_time, (scheduler_algorithm == cls.Kind.RoundRobin))
+
         # We could run to the end of the job
         possible_time_slices.append(selected_job.time_remaining(curr_time))
-      
+
       # Check if we are preemptable or if we haven't found any time slices yet
       if preemptable or len(possible_time_slices) == 0:
         # Then when a job enters we could stop the current task
@@ -244,32 +257,37 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
             future_jobs,
             key=(lambda j: j.arrival_time)
           )
-          possible_time_slices.append( (next_arrival.arrival_time - curr_time))
-      
+          possible_time_slices.append((next_arrival.arrival_time - curr_time))
+
       if time_quantum is not None:
         possible_time_slices.append(time_quantum)
-      
-      
+
       ## Now we pick the minimum
       try:
         next_time_slice = min(possible_time_slices)
       except ValueError:
         log.error("No jobs available to schedule")
         break
-      if self.scheduler_algorithm != SchedulingQuestion.Kind.RoundRobin:
+      if scheduler_algorithm != SchedulingQuestion.Kind.RoundRobin:
         if selected_job is not None:
-          self.timeline[curr_time].append(f"Running Job{selected_job.job_id} for {next_time_slice:0.{self.ROUNDING_DIGITS}f}s")
+          timeline[curr_time].append(
+            f"Running Job{selected_job.job_id} "
+            f"for {next_time_slice:0.{cls.ROUNDING_DIGITS}f}s"
+          )
         else:
-          self.timeline[curr_time].append(f"(No job running)")
+          timeline[curr_time].append(f"(No job running)")
       curr_time += next_time_slice
-      
+
       # We stop the job we selected, and potentially mark it as complete
       if selected_job is not None:
-        selected_job.stop(curr_time, (self.scheduler_algorithm == self.Kind.RoundRobin))
+        selected_job.stop(curr_time, (scheduler_algorithm == cls.Kind.RoundRobin))
         if selected_job.is_complete(curr_time):
-          self.timeline[curr_time].append(f"Completed Job{selected_job.job_id} (TAT = {selected_job.turnaround_time:0.{self.ROUNDING_DIGITS}f}s)")
+          timeline[curr_time].append(
+            f"Completed Job{selected_job.job_id} "
+            f"(TAT = {selected_job.turnaround_time:0.{cls.ROUNDING_DIGITS}f}s)"
+          )
       selected_job = None
-      
+
       # Filter out completed jobs
       jobs_to_run : List[SchedulingQuestion.Job] = list(filter(
         (lambda j: not j.is_complete(curr_time)),
@@ -277,103 +295,93 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       ))
       if len(jobs_to_run) == 0:
         break
+
+    return timeline
   
-  def __init__(self, num_jobs=3, scheduler_kind=None, *args, **kwargs):
-    # Preserve question-specific params for QR code config BEFORE calling super().__init__()
-    kwargs['num_jobs'] = num_jobs
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    num_jobs = kwargs.get("num_jobs", 3)
 
-    # Register the regenerable choice using the mixin
-    self.register_choice('scheduler_kind', SchedulingQuestion.Kind, scheduler_kind, kwargs)
+    scheduler_kind = kwargs.get("scheduler_kind")
+    if scheduler_kind is None:
+      scheduler_algorithm = rng.choice(list(cls.Kind))
+      config_params = {"scheduler_kind": scheduler_algorithm.name}
+    else:
+      if isinstance(scheduler_kind, cls.Kind):
+        scheduler_algorithm = scheduler_kind
+      else:
+        scheduler_algorithm = cls.get_kind_from_string(str(scheduler_kind))
+      config_params = {"scheduler_kind": scheduler_algorithm.name}
 
-    super().__init__(*args, **kwargs)
-    self.num_jobs = num_jobs
+    jobs = cls.get_workload(rng, num_jobs)
 
-  def refresh(self, *args, **kwargs):
-    # Initialize job_stats before calling super().refresh() since parent's refresh
-    # will call is_interesting() which needs this attribute to exist
-    self.job_stats = {}
-
-    # Call parent refresh which seeds RNG and calls is_interesting()
-    # Note: We ignore the parent's return value since we need to generate the workload first
-    super().refresh(*args, **kwargs)
-
-    # Use the mixin to get the scheduler (randomly selected or fixed)
-    self.scheduler_algorithm = self.get_choice('scheduler_kind', SchedulingQuestion.Kind)
-    
-    # Get workload jobs
-    jobs = self.get_workload(self.num_jobs)
-    
-    # Run simulations different depending on which algorithm we chose
-    match self.scheduler_algorithm:
+    match scheduler_algorithm:
       case SchedulingQuestion.Kind.ShortestDuration:
-        self.run_simulation(
+        timeline = cls.run_simulation(
           jobs_to_run=jobs,
           selector=(lambda j, curr_time: (j.duration, j.job_id)),
           preemptable=False,
-          time_quantum=None
+          time_quantum=None,
+          scheduler_algorithm=scheduler_algorithm
         )
       case SchedulingQuestion.Kind.ShortestTimeRemaining:
-        self.run_simulation(
+        timeline = cls.run_simulation(
           jobs_to_run=jobs,
           selector=(lambda j, curr_time: (j.time_remaining(curr_time), j.job_id)),
           preemptable=True,
-          time_quantum=None
+          time_quantum=None,
+          scheduler_algorithm=scheduler_algorithm
         )
       case SchedulingQuestion.Kind.RoundRobin:
-        self.run_simulation(
+        timeline = cls.run_simulation(
           jobs_to_run=jobs,
           selector=(lambda j, curr_time: (j.last_run, j.job_id)),
           preemptable=True,
-          time_quantum=1e-05
+          time_quantum=1e-05,
+          scheduler_algorithm=scheduler_algorithm
         )
       case _:
-        self.run_simulation(
+        timeline = cls.run_simulation(
           jobs_to_run=jobs,
           selector=(lambda j, curr_time: (j.arrival_time, j.job_id)),
           preemptable=False,
-          time_quantum=None
+          time_quantum=None,
+          scheduler_algorithm=scheduler_algorithm
         )
-      
-    # Collate stats
-    self.job_stats = {
+
+    job_stats = {
       i : {
-        "arrival_time" : job.arrival_time,            # input
-        "duration" : job.duration,          # input
-        "Response" : job.response_time,     # output
-        "TAT" : job.turnaround_time,         # output
+        "arrival_time" : job.arrival_time,
+        "duration" : job.duration,
+        "Response" : job.response_time,
+        "TAT" : job.turnaround_time,
         "state_changes" : [job.arrival_time] + job.state_change_times + [job.arrival_time + job.turnaround_time],
       }
       for (i, job) in enumerate(jobs)
     }
-    self.overall_stats = {
+    overall_stats = {
       "Response" : sum([job.response_time for job in jobs]) / len(jobs),
       "TAT" : sum([job.turnaround_time for job in jobs]) / len(jobs)
     }
-    
-    # todo: make this less convoluted
-    self.average_response = self.overall_stats["Response"]
-    self.average_tat = self.overall_stats["TAT"]
-    
-    for job_id in sorted(self.job_stats.keys()):
-      self.answers.update({
-        f"answer__response_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["Response"]),
-        f"answer__turnaround_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["TAT"]),
-      })
-    self.answers.update({
-      "answer__average_response_time": ca.AnswerTypes.Float(
-        sum([job.response_time for job in jobs]) / len(jobs),
-        label="Overall average response time"
-      ),
-      "answer__average_turnaround_time": ca.AnswerTypes.Float(
-        sum([job.turnaround_time for job in jobs]) / len(jobs),
-        label="Overall average TAT"
-      )
-    })
 
-    # Return whether this workload is interesting
-    return self.is_interesting()
+    return {
+      "num_jobs": num_jobs,
+      "scheduler_algorithm": scheduler_algorithm,
+      "job_stats": job_stats,
+      "overall_stats": overall_stats,
+      "timeline": timeline,
+      "_config_params": config_params,
+    }
+
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    duration_sum = sum([context["job_stats"][job_id]['duration'] for job_id in context["job_stats"].keys()])
+    tat_sum = sum([context["job_stats"][job_id]['TAT'] for job_id in context["job_stats"].keys()])
+    return (tat_sum >= duration_sum * 1.1)
   
-  def _get_body(self, *args, **kwargs):
+  @classmethod
+  def _build_body(cls, context):
     """
     Build question body and collect answers.
     Returns:
@@ -384,28 +392,35 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     # Create table data for scheduling results
     table_rows = []
-    for job_id in sorted(self.job_stats.keys()):
+    for job_id in sorted(context["job_stats"].keys()):
+      response_answer = ca.AnswerTypes.Float(context["job_stats"][job_id]["Response"])
+      tat_answer = ca.AnswerTypes.Float(context["job_stats"][job_id]["TAT"])
+      answers.append(response_answer)
+      answers.append(tat_answer)
       table_rows.append({
         "Job ID": f"Job{job_id}",
-        "Arrival": self.job_stats[job_id]["arrival_time"],
-        "Duration": self.job_stats[job_id]["duration"],
-        "Response Time": f"answer__response_time_job{job_id}",  # Answer key
-        "TAT": f"answer__turnaround_time_job{job_id}"  # Answer key
+        "Arrival": context["job_stats"][job_id]["arrival_time"],
+        "Duration": context["job_stats"][job_id]["duration"],
+        "Response Time": response_answer,
+        "TAT": tat_answer
       })
-      # Collect answers for this job
-      answers.append(self.answers[f"answer__response_time_job{job_id}"])
-      answers.append(self.answers[f"answer__turnaround_time_job{job_id}"])
 
     # Create table using mixin
-    scheduling_table = self.create_answer_table(
+    scheduling_table = cls.create_answer_table(
       headers=["Job ID", "Arrival", "Duration", "Response Time", "TAT"],
       data_rows=table_rows,
       answer_columns=["Response Time", "TAT"]
     )
 
     # Collect average answers
-    avg_response_answer = self.answers["answer__average_response_time"]
-    avg_tat_answer = self.answers["answer__average_turnaround_time"]
+    avg_response_answer = ca.AnswerTypes.Float(
+      context["overall_stats"]["Response"],
+      label="Overall average response time"
+    )
+    avg_tat_answer = ca.AnswerTypes.Float(
+      context["overall_stats"]["TAT"],
+      label="Overall average TAT"
+    )
     answers.append(avg_response_answer)
     answers.append(avg_tat_answer)
 
@@ -414,7 +429,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     # Use mixin to create complete body
     intro_text = (
-      f"Given the below information, compute the required values if using **{self.scheduler_algorithm}** scheduling. "
+      f"Given the below information, compute the required values if using **{context['scheduler_algorithm']}** scheduling. "
       f"Break any ties using the job number."
     )
 
@@ -424,16 +439,12 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       "Note that answers that can be rounded to whole numbers should be, rather than being left in fractional form."
     ])])
 
-    body = self.create_fill_in_table_body(intro_text, instructions, scheduling_table)
+    body = cls.create_fill_in_table_body(intro_text, instructions, scheduling_table)
     body.add_element(average_block)
-    return body, answers
-
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(*args, **kwargs)
     return body
   
-  def _get_explanation(self, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     """
     Build question explanation.
     Returns:
@@ -443,7 +454,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     explanation.add_element(
       ca.Paragraph([
-        f"To calculate the overall Turnaround and Response times using {self.scheduler_algorithm} "
+        f"To calculate the overall Turnaround and Response times using {context['scheduler_algorithm']} "
         f"we want to first start by calculating the respective target and response times of all of our individual jobs."
       ])
     )
@@ -458,7 +469,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
 
     explanation.add_element(
       ca.Paragraph([
-        f"For each of our {len(self.job_stats.keys())} jobs, we can make these calculations.",
+        f"For each of our {len(context['job_stats'].keys())} jobs, we can make these calculations.",
       ])
     )
 
@@ -468,21 +479,21 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         "For turnaround time (TAT) this would be:"
       ] + [
         f"Job{job_id}_TAT "
-        f"= {self.job_stats[job_id]['arrival_time'] + self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f} "
-        f"- {self.job_stats[job_id]['arrival_time']:0.{self.ROUNDING_DIGITS}f} "
-        f"= {self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f}"
-        for job_id in sorted(self.job_stats.keys())
+        f"= {context['job_stats'][job_id]['arrival_time'] + context['job_stats'][job_id]['TAT']:0.{cls.ROUNDING_DIGITS}f} "
+        f"- {context['job_stats'][job_id]['arrival_time']:0.{cls.ROUNDING_DIGITS}f} "
+        f"= {context['job_stats'][job_id]['TAT']:0.{cls.ROUNDING_DIGITS}f}"
+        for job_id in sorted(context['job_stats'].keys())
       ])
     )
 
     summation_line = ' + '.join([
-      f"{self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f}" for job_id in sorted(self.job_stats.keys())
+      f"{context['job_stats'][job_id]['TAT']:0.{cls.ROUNDING_DIGITS}f}" for job_id in sorted(context['job_stats'].keys())
     ])
     explanation.add_element(
       ca.Paragraph([
         f"We then calculate the average of these to find the average TAT time",
-        f"Avg(TAT) = ({summation_line}) / ({len(self.job_stats.keys())}) "
-        f"= {self.overall_stats['TAT']:0.{self.ROUNDING_DIGITS}f}",
+        f"Avg(TAT) = ({summation_line}) / ({len(context['job_stats'].keys())}) "
+        f"= {context['overall_stats']['TAT']:0.{cls.ROUNDING_DIGITS}f}",
       ])
     )
 
@@ -493,22 +504,22 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         "For response time this would be:"
       ] + [
       f"Job{job_id}_response "
-      f"= {self.job_stats[job_id]['arrival_time'] + self.job_stats[job_id]['Response']:0.{self.ROUNDING_DIGITS}f} "
-      f"- {self.job_stats[job_id]['arrival_time']:0.{self.ROUNDING_DIGITS}f} "
-      f"= {self.job_stats[job_id]['Response']:0.{self.ROUNDING_DIGITS}f}"
-      for job_id in sorted(self.job_stats.keys())
+      f"= {context['job_stats'][job_id]['arrival_time'] + context['job_stats'][job_id]['Response']:0.{cls.ROUNDING_DIGITS}f} "
+      f"- {context['job_stats'][job_id]['arrival_time']:0.{cls.ROUNDING_DIGITS}f} "
+      f"= {context['job_stats'][job_id]['Response']:0.{cls.ROUNDING_DIGITS}f}"
+      for job_id in sorted(context['job_stats'].keys())
     ])
     )
 
     summation_line = ' + '.join([
-      f"{self.job_stats[job_id]['Response']:0.{self.ROUNDING_DIGITS}f}" for job_id in sorted(self.job_stats.keys())
+      f"{context['job_stats'][job_id]['Response']:0.{cls.ROUNDING_DIGITS}f}" for job_id in sorted(context['job_stats'].keys())
     ])
     explanation.add_element(
       ca.Paragraph([
         f"We then calculate the average of these to find the average Response time",
         f"Avg(Response) "
-        f"= ({summation_line}) / ({len(self.job_stats.keys())}) "
-        f"= {self.overall_stats['Response']:0.{self.ROUNDING_DIGITS}f}",
+        f"= ({summation_line}) / ({len(context['job_stats'].keys())}) "
+        f"= {context['overall_stats']['Response']:0.{cls.ROUNDING_DIGITS}f}",
         "\n",
       ])
     )
@@ -517,42 +528,36 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       ca.Table(
         headers=["Time", "Events"],
         data=[
-          [f"{t:02.{self.ROUNDING_DIGITS}f}s"] + ['\n'.join(self.timeline[t])]
-          for t in sorted(self.timeline.keys())
+          [f"{t:02.{cls.ROUNDING_DIGITS}f}s"] + ['\n'.join(context['timeline'][t])]
+          for t in sorted(context['timeline'].keys())
         ]
       )
     )
 
     explanation.add_element(
       ca.Picture(
-        img_data=self.make_image(),
+        img_data=cls.make_image(context),
         caption="Process Scheduling Overview"
       )
     )
 
-    return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
     return explanation
   
-  def is_interesting(self) -> bool:
-    duration_sum = sum([self.job_stats[job_id]['duration'] for job_id in self.job_stats.keys()])
-    tat_sum = sum([self.job_stats[job_id]['TAT'] for job_id in self.job_stats.keys()])
-    return (tat_sum >= duration_sum * 1.1)
-  
-  def make_image(self):
+  @classmethod
+  def make_image(cls, context):
     
-    fig, ax = plt.subplots(1, 1, figsize=self.IMAGE_FIGSIZE, dpi=self.IMAGE_DPI)
-    
-    for x_loc in set([t for job_id in self.job_stats.keys() for t in self.job_stats[job_id]["state_changes"] ]):
+    fig, ax = plt.subplots(1, 1, figsize=cls.IMAGE_FIGSIZE, dpi=cls.IMAGE_DPI)
+
+    job_stats = context["job_stats"]
+    scheduler_algorithm = context["scheduler_algorithm"]
+
+    for x_loc in set([t for job_id in job_stats.keys() for t in job_stats[job_id]["state_changes"] ]):
       ax.axvline(x_loc, zorder=0)
-      plt.text(x_loc + 0, len(self.job_stats.keys())-0.3, f'{x_loc:0.{self.ROUNDING_DIGITS}f}s', rotation=90)
-    
-    if self.scheduler_algorithm != self.Kind.RoundRobin:
-      for y_loc, job_id in enumerate(sorted(self.job_stats.keys(), reverse=True)):
-        for i, (start, stop) in enumerate(zip(self.job_stats[job_id]["state_changes"], self.job_stats[job_id]["state_changes"][1:])):
+      plt.text(x_loc + 0, len(job_stats.keys())-0.3, f'{x_loc:0.{cls.ROUNDING_DIGITS}f}s', rotation=90)
+
+    if scheduler_algorithm != cls.Kind.RoundRobin:
+      for y_loc, job_id in enumerate(sorted(job_stats.keys(), reverse=True)):
+        for i, (start, stop) in enumerate(zip(job_stats[job_id]["state_changes"], job_stats[job_id]["state_changes"][1:])):
           ax.barh(
             y = [y_loc],
             left = [start],
@@ -563,19 +568,19 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
           )
     else:
       job_deltas = collections.defaultdict(int)
-      for job_id in self.job_stats.keys():
-        job_deltas[self.job_stats[job_id]["state_changes"][0]] += 1
-        job_deltas[self.job_stats[job_id]["state_changes"][1]] -= 1
+      for job_id in job_stats.keys():
+        job_deltas[job_stats[job_id]["state_changes"][0]] += 1
+        job_deltas[job_stats[job_id]["state_changes"][1]] -= 1
       
       regimes_ranges = zip(sorted(job_deltas.keys()), sorted(job_deltas.keys())[1:])
       
       for (low, high) in regimes_ranges:
         jobs_in_range = [
-          i for i, job_id in enumerate(list(self.job_stats.keys())[::-1])
+          i for i, job_id in enumerate(list(job_stats.keys())[::-1])
           if
-          (self.job_stats[job_id]["state_changes"][0] <= low)
+          (job_stats[job_id]["state_changes"][0] <= low)
           and
-          (self.job_stats[job_id]["state_changes"][1] >= high)
+          (job_stats[job_id]["state_changes"][1] >= high)
         ]
         
         if len(jobs_in_range) == 0: continue
@@ -584,15 +589,15 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
           y = jobs_in_range,
           left = [low for _ in jobs_in_range],
           width = [high - low for _ in jobs_in_range],
-          color=f"{ 1 - ((len(jobs_in_range) - 1) / (len(self.job_stats.keys())))}",
+          color=f"{ 1 - ((len(jobs_in_range) - 1) / (len(job_stats.keys())))}",
         )
     
     # Plot the overall TAT
     ax.barh(
-      y = [i for i in range(len(self.job_stats))][::-1],
-      left = [self.job_stats[job_id]["arrival_time"] for job_id in sorted(self.job_stats.keys())],
-      width = [self.job_stats[job_id]["TAT"] for job_id in sorted(self.job_stats.keys())],
-      tick_label = [f"Job{job_id}" for job_id in sorted(self.job_stats.keys())],
+      y = [i for i in range(len(job_stats))][::-1],
+      left = [job_stats[job_id]["arrival_time"] for job_id in sorted(job_stats.keys())],
+      width = [job_stats[job_id]["TAT"] for job_id in sorted(job_stats.keys())],
+      tick_label = [f"Job{job_id}" for job_id in sorted(job_stats.keys())],
       color=(0,0,0,0),
       edgecolor='black',
       linewidth=2,
@@ -603,20 +608,24 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     # Save to BytesIO object instead of a file
     buffer = io.BytesIO()
     plt.tight_layout()
-    plt.savefig(buffer, format='png', dpi=self.IMAGE_DPI, bbox_inches='tight', pad_inches=0.2)
+    plt.savefig(buffer, format='png', dpi=cls.IMAGE_DPI, bbox_inches='tight', pad_inches=0.2)
     plt.close(fig)
     
     # Reset buffer position to the beginning
     buffer.seek(0)
     return buffer
     
-  def make_image_file(self, image_dir="imgs"):
+  @classmethod
+  def make_image_file(cls, context, image_dir="imgs"):
     
-    image_buffer = self.make_image()
+    image_buffer = cls.make_image(context)
     
     # Original file-saving logic
     if not os.path.exists(image_dir): os.mkdir(image_dir)
-    image_path = os.path.join(image_dir, f"{str(self.scheduler_algorithm).replace(' ', '_')}-{uuid.uuid4()}.png")
+    image_path = os.path.join(
+      image_dir,
+      f"{str(context['scheduler_algorithm']).replace(' ', '_')}-{uuid.uuid4()}.png"
+    )
 
     with open(image_path, 'wb') as fid:
       fid.write(image_buffer.getvalue())
@@ -649,45 +658,19 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     run_intervals: List[tuple] = dataclasses.field(default_factory=list)
     max_queue_level: int = 0
 
-  def __init__(
-    self,
-    num_jobs: int = DEFAULT_NUM_JOBS,
-    num_queues: int = DEFAULT_NUM_QUEUES,
-    min_job_length: int = MIN_DURATION,
-    max_job_length: int = MAX_DURATION,
-    boost_interval: int | None = None,
-    boost_interval_range: List[int] | None = None,
-    *args,
-    **kwargs
-  ):
-    kwargs["num_jobs"] = num_jobs
-    kwargs["num_queues"] = num_queues
-    kwargs["min_job_length"] = min_job_length
-    kwargs["max_job_length"] = max_job_length
-    if boost_interval is not None:
-      kwargs["boost_interval"] = boost_interval
-    if boost_interval_range is not None:
-      kwargs["boost_interval_range"] = boost_interval_range
-    super().__init__(*args, **kwargs)
-    self.num_jobs = num_jobs
-    self.num_queues = num_queues
-    self.min_job_length = min_job_length
-    self.max_job_length = max_job_length
-    self.boost_interval = boost_interval
-    self.boost_interval_range = boost_interval_range
-
-  def get_workload(self, num_jobs: int) -> List[MLFQQuestion.Job]:
+  @classmethod
+  def get_workload(cls, rng, num_jobs: int, min_job_length: int, max_job_length: int) -> List[MLFQQuestion.Job]:
     arrivals = [0]
     if num_jobs > 1:
       arrivals.extend(
-        self.rng.randint(self.MIN_ARRIVAL, self.MAX_ARRIVAL)
+        rng.randint(cls.MIN_ARRIVAL, cls.MAX_ARRIVAL)
         for _ in range(num_jobs - 1)
       )
       if max(arrivals) == 0:
-        arrivals[-1] = self.rng.randint(1, self.MAX_ARRIVAL)
+        arrivals[-1] = rng.randint(1, cls.MAX_ARRIVAL)
 
     durations = [
-      self.rng.randint(self.min_job_length, self.max_job_length)
+      rng.randint(min_job_length, max_job_length)
       for _ in range(num_jobs)
     ]
 
@@ -703,7 +686,8 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       )
     return jobs
 
-  def _normalize_queue_params(self, values: List[int] | None, num_queues: int) -> List[int]:
+  @staticmethod
+  def _normalize_queue_params(values: List[int] | None, num_queues: int) -> List[int]:
     if values is None:
       return []
     values = list(values)
@@ -711,21 +695,83 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       values.append(values[-1])
     return values[:num_queues]
 
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    num_jobs = kwargs.get("num_jobs", cls.DEFAULT_NUM_JOBS)
+    num_queues = kwargs.get("num_queues", cls.DEFAULT_NUM_QUEUES)
+    min_job_length = kwargs.get("min_job_length", cls.MIN_DURATION)
+    max_job_length = kwargs.get("max_job_length", cls.MAX_DURATION)
+    boost_interval = kwargs.get("boost_interval", None)
+    boost_interval_range = kwargs.get("boost_interval_range", None)
+
+    if boost_interval is None and boost_interval_range:
+      low, high = boost_interval_range
+      boost_interval = rng.randint(low, high)
+
+    jobs = cls.get_workload(rng, num_jobs, min_job_length, max_job_length)
+
+    queue_quantums = [2**(num_queues - 1 - i) for i in range(num_queues)]
+    queue_quantums = cls._normalize_queue_params(queue_quantums, num_queues)
+    queue_quantums = [int(q) for q in queue_quantums]
+
+    queue_allotments = [None] + [
+      queue_quantums[i] * 2 for i in range(1, num_queues)
+    ]
+    queue_allotments = cls._normalize_queue_params(queue_allotments, num_queues)
+    queue_allotments = [
+      int(allotment) if allotment is not None else None
+      for allotment in queue_allotments
+    ]
+    queue_allotments[0] = None
+
+    timeline, boost_times, jobs = cls.run_simulation(
+      jobs,
+      queue_quantums,
+      queue_allotments,
+      boost_interval
+    )
+
+    job_stats = {
+      job.job_id: {
+        "arrival_time": job.arrival_time,
+        "duration": job.duration,
+        "Response": job.response_time,
+        "TAT": job.turnaround_time,
+        "run_intervals": list(job.run_intervals),
+      }
+      for job in jobs
+    }
+
+    return {
+      "num_jobs": num_jobs,
+      "num_queues": num_queues,
+      "min_job_length": min_job_length,
+      "max_job_length": max_job_length,
+      "boost_interval": boost_interval,
+      "queue_quantums": queue_quantums,
+      "queue_allotments": queue_allotments,
+      "timeline": timeline,
+      "boost_times": boost_times,
+      "job_stats": job_stats,
+    }
+
+  @classmethod
   def run_simulation(
-    self,
+    cls,
     jobs: List[MLFQQuestion.Job],
     queue_quantums: List[int],
     queue_allotments: List[int | None],
     boost_interval: int | None,
   ) -> None:
-    self.timeline = collections.defaultdict(list)
-    self.boost_times = []
+    timeline = collections.defaultdict(list)
+    boost_times = []
     pending = sorted(jobs, key=lambda j: (j.arrival_time, j.job_id))
     queues = [collections.deque() for _ in range(len(queue_quantums))]
     completed = set()
 
     curr_time = pending[0].arrival_time if pending else 0
-    self.timeline[curr_time].append("Simulation Start")
+    timeline[curr_time].append("Simulation Start")
     next_boost_time = None
     if boost_interval is not None:
       next_boost_time = boost_interval
@@ -738,7 +784,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         job.time_in_queue = 0
         job.remaining_quantum = None
         queues[-1].append(job)
-        self.timeline[job.arrival_time].append(
+        timeline[job.arrival_time].append(
           f"Job{job.job_id} arrived (dur = {job.duration})"
         )
 
@@ -750,17 +796,17 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       if running_job is not None and running_job.remaining_time > 0:
         jobs_to_boost.append(running_job)
       if not jobs_to_boost:
-        self.boost_times.append(curr_time)
+        boost_times.append(curr_time)
         return
       for job in sorted(jobs_to_boost, key=lambda j: j.job_id):
         job.queue_level = len(queues) - 1
         job.time_in_queue = 0
         job.remaining_quantum = None
         queues[-1].append(job)
-      self.timeline[curr_time].append(
+      timeline[curr_time].append(
         f"Boosted all jobs to Q{len(queues) - 1}"
       )
-      self.boost_times.append(curr_time)
+      boost_times.append(curr_time)
 
     enqueue_arrivals(curr_time)
 
@@ -778,7 +824,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         if next_times:
           next_time = min(next_times)
           if next_time > curr_time:
-            self.timeline[curr_time].append("CPU idle")
+            timeline[curr_time].append("CPU idle")
           curr_time = next_time
           enqueue_arrivals(curr_time)
           while next_boost_time is not None and curr_time >= next_boost_time:
@@ -807,7 +853,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         job.response_time = curr_time - job.arrival_time
 
       if slice_duration > 0:
-        self.timeline[curr_time].append(
+        timeline[curr_time].append(
           f"Running Job{job.job_id} in Q{q_idx} for {slice_duration}"
         )
         job.run_intervals.append((curr_time, curr_time + slice_duration, q_idx))
@@ -827,7 +873,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         job.turnaround_time = curr_time - job.arrival_time
         job.remaining_quantum = None
         completed.add(job.job_id)
-        self.timeline[curr_time].append(
+        timeline[curr_time].append(
           f"Completed Job{job.job_id} (TAT = {job.turnaround_time})"
         )
         continue
@@ -845,7 +891,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         job.time_in_queue = 0
         job.remaining_quantum = None
         queues[q_idx - 1].append(job)
-        self.timeline[curr_time].append(
+        timeline[curr_time].append(
           f"Demoted Job{job.job_id} to Q{q_idx - 1}"
         )
         continue
@@ -857,70 +903,18 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           job.remaining_quantum = None
         queues[q_idx].append(job)
 
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
+    return timeline, boost_times, jobs
 
-    self.num_jobs = kwargs.get("num_jobs", self.num_jobs)
-    self.num_queues = kwargs.get("num_queues", self.num_queues)
-    self.min_job_length = kwargs.get("min_job_length", self.min_job_length)
-    self.max_job_length = kwargs.get("max_job_length", self.max_job_length)
-    self.boost_interval = kwargs.get("boost_interval", self.boost_interval)
-    self.boost_interval_range = kwargs.get(
-      "boost_interval_range",
-      self.boost_interval_range
-    )
-    if self.boost_interval is None and self.boost_interval_range:
-      low, high = self.boost_interval_range
-      self.boost_interval = self.rng.randint(low, high)
-
-    jobs = self.get_workload(self.num_jobs)
-
-    queue_quantums = [2**(self.num_queues - 1 - i) for i in range(self.num_queues)]
-    queue_quantums = self._normalize_queue_params(queue_quantums, self.num_queues)
-    queue_quantums = [int(q) for q in queue_quantums]
-
-    queue_allotments = [None] + [
-      queue_quantums[i] * 2 for i in range(1, self.num_queues)
-    ]
-    queue_allotments = self._normalize_queue_params(queue_allotments, self.num_queues)
-    queue_allotments = [
-      int(allotment) if allotment is not None else None
-      for allotment in queue_allotments
-    ]
-    queue_allotments[0] = None
-
-    self.queue_quantums = queue_quantums
-    self.queue_allotments = queue_allotments
-
-    self.run_simulation(jobs, queue_quantums, queue_allotments, self.boost_interval)
-
-    self.job_stats = {
-      job.job_id: {
-        "arrival_time": job.arrival_time,
-        "duration": job.duration,
-        "Response": job.response_time,
-        "TAT": job.turnaround_time,
-        "run_intervals": list(job.run_intervals),
-      }
-      for job in jobs
-    }
-
-    for job_id in sorted(self.job_stats.keys()):
-      self.answers.update({
-        f"answer__turnaround_time_job{job_id}": ca.AnswerTypes.Float(self.job_stats[job_id]["TAT"])
-      })
-
-    return self.is_interesting()
-
-  def _get_body(self, *args, **kwargs):
+  @classmethod
+  def _build_body(cls, context):
     answers: List[ca.Answer] = []
 
     queue_rows = []
-    for i in reversed(range(self.num_queues)):
-      allotment = self.queue_allotments[i]
+    for i in reversed(range(context["num_queues"])):
+      allotment = context["queue_allotments"][i]
       queue_rows.append([
         f"Q{i}",
-        self.queue_quantums[i],
+        context["queue_quantums"][i],
         "infinite" if allotment is None else allotment
       ])
     queue_table = ca.Table(
@@ -929,16 +923,17 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     )
 
     table_rows = []
-    for job_id in sorted(self.job_stats.keys()):
+    for job_id in sorted(context["job_stats"].keys()):
+      tat_answer = ca.AnswerTypes.Float(context["job_stats"][job_id]["TAT"])
+      answers.append(tat_answer)
       table_rows.append({
         "Job ID": f"Job{job_id}",
-        "Arrival": self.job_stats[job_id]["arrival_time"],
-        "Duration": self.job_stats[job_id]["duration"],
-        "TAT": f"answer__turnaround_time_job{job_id}",
+        "Arrival": context["job_stats"][job_id]["arrival_time"],
+        "Duration": context["job_stats"][job_id]["duration"],
+        "TAT": tat_answer,
       })
-      answers.append(self.answers[f"answer__turnaround_time_job{job_id}"])
 
-    scheduling_table = self.create_answer_table(
+    scheduling_table = cls.create_answer_table(
       headers=["Job ID", "Arrival", "Duration", "TAT"],
       data_rows=table_rows,
       answer_columns=["TAT"]
@@ -946,7 +941,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     intro_text = (
       "Assume an MLFQ scheduler with round-robin inside each queue. "
-      f"New jobs enter the highest-priority queue (Q{self.num_queues - 1}) "
+      f"New jobs enter the highest-priority queue (Q{context['num_queues'] - 1}) "
       "and a job is demoted after using its total allotment for that queue. "
       "If a higher-priority job arrives, it preempts any lower-priority job."
     )
@@ -959,21 +954,18 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     body = ca.Section()
     body.add_element(ca.Paragraph([intro_text]))
     body.add_element(queue_table)
-    if self.boost_interval is not None:
+    if context["boost_interval"] is not None:
       body.add_element(ca.Paragraph([
-        f"Every {self.boost_interval} time units, all jobs are boosted to "
-        f"Q{self.num_queues - 1}. After a boost, scheduling restarts with the "
+        f"Every {context['boost_interval']} time units, all jobs are boosted to "
+        f"Q{context['num_queues'] - 1}. After a boost, scheduling restarts with the "
         "lowest job number in that queue."
       ]))
     body.add_element(ca.Paragraph([instructions]))
     body.add_element(scheduling_table)
-    return body, answers
-
-  def get_body(self, *args, **kwargs) -> ca.Section:
-    body, _ = self._get_body(*args, **kwargs)
     return body
 
-  def _get_explanation(self, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     explanation = ca.Section()
 
     explanation.add_element(
@@ -988,10 +980,10 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         "For each job:"
       ] + [
         f"Job{job_id}_TAT = "
-        f"{self.job_stats[job_id]['arrival_time'] + self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f} "
-        f"- {self.job_stats[job_id]['arrival_time']:0.{self.ROUNDING_DIGITS}f} "
-        f"= {self.job_stats[job_id]['TAT']:0.{self.ROUNDING_DIGITS}f}"
-        for job_id in sorted(self.job_stats.keys())
+        f"{context['job_stats'][job_id]['arrival_time'] + context['job_stats'][job_id]['TAT']:0.{cls.ROUNDING_DIGITS}f} "
+        f"- {context['job_stats'][job_id]['arrival_time']:0.{cls.ROUNDING_DIGITS}f} "
+        f"= {context['job_stats'][job_id]['TAT']:0.{cls.ROUNDING_DIGITS}f}"
+        for job_id in sorted(context['job_stats'].keys())
       ])
     )
 
@@ -999,10 +991,10 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ca.Table(
         headers=["Time", "Events"],
         data=[
-          [f"{t:0.{self.ROUNDING_DIGITS}f}s"] + ['\n'.join(events)]
-          for t in sorted(self.timeline.keys())
+          [f"{t:0.{cls.ROUNDING_DIGITS}f}s"] + ['\n'.join(events)]
+          for t in sorted(context['timeline'].keys())
           if (events := [
-            event for event in self.timeline[t]
+            event for event in context['timeline'][t]
             if (
               "arrived" in event
               or "Demoted" in event
@@ -1018,41 +1010,39 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     explanation.add_element(
       ca.Picture(
-        img_data=self.make_image(),
+        img_data=cls.make_image(context),
         caption="MLFQ Scheduling Overview"
       )
     )
 
-    return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    explanation, _ = self._get_explanation(**kwargs)
     return explanation
 
-  def make_image(self):
-    fig, ax = plt.subplots(1, 1, figsize=self.IMAGE_FIGSIZE, dpi=self.IMAGE_DPI)
+  @classmethod
+  def make_image(cls, context):
+    fig, ax = plt.subplots(1, 1, figsize=cls.IMAGE_FIGSIZE, dpi=cls.IMAGE_DPI)
 
-    num_jobs = len(self.job_stats)
+    job_stats = context["job_stats"]
+    num_jobs = len(job_stats)
     if num_jobs == 0:
       buffer = io.BytesIO()
       plt.tight_layout()
-      plt.savefig(buffer, format='png', dpi=self.IMAGE_DPI, bbox_inches='tight')
+      plt.savefig(buffer, format='png', dpi=cls.IMAGE_DPI, bbox_inches='tight')
       plt.close(fig)
       buffer.seek(0)
       return buffer
 
     job_colors = {
       job_id: str(0.15 + 0.7 * (idx / max(1, num_jobs - 1)))
-      for idx, job_id in enumerate(sorted(self.job_stats.keys()))
+      for idx, job_id in enumerate(sorted(job_stats.keys()))
     }
     job_lane = {
       job_id: idx
-      for idx, job_id in enumerate(sorted(self.job_stats.keys(), reverse=True))
+      for idx, job_id in enumerate(sorted(job_stats.keys(), reverse=True))
     }
     lanes_per_queue = num_jobs
 
-    for job_id in sorted(self.job_stats.keys()):
-      for start, stop, queue_level in self.job_stats[job_id]["run_intervals"]:
+    for job_id in sorted(job_stats.keys()):
+      for start, stop, queue_level in job_stats[job_id]["run_intervals"]:
         y_loc = queue_level * lanes_per_queue + job_lane[job_id]
         ax.barh(
           y=[y_loc],
@@ -1063,7 +1053,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
           color=job_colors[job_id]
         )
 
-    for queue_idx in range(self.num_queues):
+    for queue_idx in range(context["num_queues"]):
       if queue_idx % 2 == 1:
         ax.axhspan(
           queue_idx * lanes_per_queue - 0.5,
@@ -1074,8 +1064,8 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
         )
 
     arrival_times = sorted({
-      self.job_stats[job_id]["arrival_time"]
-      for job_id in self.job_stats.keys()
+      job_stats[job_id]["arrival_time"]
+      for job_id in job_stats.keys()
     })
     bottom_label_y = -0.1
     for arrival_time in arrival_times:
@@ -1083,7 +1073,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ax.text(
         arrival_time + 0.2,
         bottom_label_y,
-        f"{arrival_time:0.{self.ROUNDING_DIGITS}f}s",
+        f"{arrival_time:0.{cls.ROUNDING_DIGITS}f}s",
         color='0.2',
         rotation=90,
         ha='left',
@@ -1091,37 +1081,37 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       )
 
     completion_times = sorted({
-      self.job_stats[job_id]["arrival_time"] + self.job_stats[job_id]["TAT"]
-      for job_id in self.job_stats.keys()
+      job_stats[job_id]["arrival_time"] + job_stats[job_id]["TAT"]
+      for job_id in job_stats.keys()
     })
     for completion_time in completion_times:
       ax.axvline(completion_time, color='red', linewidth=1.5, zorder=0)
       ax.text(
         completion_time - 0.6,
-        self.num_queues * lanes_per_queue - 0.5,
-        f"{completion_time:0.{self.ROUNDING_DIGITS}f}s",
+        context["num_queues"] * lanes_per_queue - 0.5,
+        f"{completion_time:0.{cls.ROUNDING_DIGITS}f}s",
         color='red',
         rotation=90,
         ha='center',
         va='top'
       )
 
-    for boost_time in sorted(set(self.boost_times)):
+    for boost_time in sorted(set(context["boost_times"])):
       ax.axvline(boost_time, color='tab:blue', linestyle='--', linewidth=1.2, zorder=0)
 
     tick_positions = [
       q * lanes_per_queue + (lanes_per_queue - 1) / 2
-      for q in range(self.num_queues)
+      for q in range(context["num_queues"])
     ]
     ax.set_yticks(tick_positions)
-    ax.set_yticklabels([f"Q{i}" for i in range(self.num_queues)])
-    ax.set_ylim(-0.5, self.num_queues * lanes_per_queue - 0.5)
+    ax.set_yticklabels([f"Q{i}" for i in range(context["num_queues"])])
+    ax.set_ylim(-0.5, context["num_queues"] * lanes_per_queue - 0.5)
     ax.set_xlim(xmin=0)
     ax.set_xlabel("Time")
 
     buffer = io.BytesIO()
     plt.tight_layout()
-    plt.savefig(buffer, format='png', dpi=self.IMAGE_DPI, bbox_inches='tight')
+    plt.savefig(buffer, format='png', dpi=cls.IMAGE_DPI, bbox_inches='tight')
     plt.close(fig)
     buffer.seek(0)
     return buffer

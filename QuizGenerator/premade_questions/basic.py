@@ -1,7 +1,8 @@
 #!env python
 from __future__ import annotations
 
-from typing import List, Dict, Any, Tuple
+from typing import Tuple, List
+import random
 
 import logging
 
@@ -18,15 +19,18 @@ class FromText(Question):
   def __init__(self, *args, text, **kwargs):
     super().__init__(*args, **kwargs)
     self.text = text
-    self.answers = []
     self.possible_variations = 1
   
-  def get_body(self, **kwargs) -> ca.Section:
-    
-    return ca.Section([ca.Text(self.text)])
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    context["text"] = self.text
+    return context
   
-  def get_answers(self, *args, **kwargs) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str,Any]]]:
-    return ca.Answer.CanvasAnswerKind.ESSAY, []
+  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+    return ca.Section([ca.Text(context["text"])]), []
+
+  def _build_explanation(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+    return ca.Section(), []
 
 
 @QuestionRegistry.register()
@@ -43,7 +47,8 @@ class FromGenerator(FromText, TableQuestionMixin):
     self.possible_variations = kwargs.get("possible_variations", float('inf'))
     
     def attach_function_to_object(obj, function_code, function_name='get_body_lines'):
-      function_code = "import random\n" + function_code
+      # Provide a deterministic RNG handle for generator snippets.
+      function_code = "rng = self.rng\n" + function_code
 
       # Create a local namespace for exec with content AST helpers available
       local_namespace = {
@@ -66,38 +71,28 @@ class FromGenerator(FromText, TableQuestionMixin):
     self.generator_text = generator
     # Attach the function dynamically
     attach_function_to_object(self, generator, "generator")
-    
-    self.answers = {}
 
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    # Preserve prior behavior for generators that use the global random module.
+    random.seed(rng_seed)
+    return context
 
-  def get_body(self, **kwargs) -> ca.Section:
-    return super().get_body()
-
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
+  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
     try:
       generated_content = self.generator()
-      # Expect generator to return a ca.Section or convert string to Section
       if isinstance(generated_content, ca.Section):
-        self.text = ""  # Clear text since we'll override get_body
-        self._generated_section = generated_content
+        body = generated_content
       elif isinstance(generated_content, str):
-        self.text = generated_content
-        self._generated_section = None
+        body = ca.Section([ca.Text(generated_content)])
       else:
-        # Fallback
-        self.text = str(generated_content)
-        self._generated_section = None
+        body = ca.Section([ca.Text(str(generated_content))])
     except TypeError as e:
       log.error(f"Error generating from text: {e}")
       log.debug(self.generator_text)
       exit(8)
 
-  def get_body(self, **kwargs) -> ca.Section:
-    if hasattr(self, '_generated_section') and self._generated_section:
-      return self._generated_section
-    return super().get_body()
-
-
+    return body, []
+    
 class TrueFalse(FromText):
   pass

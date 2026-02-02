@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 # Note: This file does not use ca.Answer wrappers - it uses TableQuestionMixin
 # which handles answer display through create_answer_table(). The answers are created
-# with labels embedded at creation time in refresh().
+# with labels embedded at creation time in _build_context().
 
 
 class GradientDescentQuestion(Question, abc.ABC):
@@ -75,40 +75,55 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
     return results
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
-    
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_steps" in kwargs:
+      self.num_steps = kwargs.get("num_steps", self.num_steps)
+    if "num_variables" in kwargs:
+      self.num_variables = kwargs.get("num_variables", self.num_variables)
+    if "max_degree" in kwargs:
+      self.max_degree = kwargs.get("max_degree", self.max_degree)
+    if "single_variable" in kwargs:
+      self.single_variable = kwargs.get("single_variable", self.single_variable)
+      if self.single_variable:
+        self.num_variables = 1
+    if "minimize" in kwargs:
+      self.minimize = kwargs.get("minimize", self.minimize)
+
+    self.rng.seed(rng_seed)
+
     # Generate function and its properties
     self.variables, self.function, self.gradient_function, self.equation = generate_function(self.rng, self.num_variables, self.max_degree)
-    
+
     # Generate learning rate (expanded range)
     self.learning_rate = self.rng.choice([0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
-    
+
     self.starting_point = [self.rng.randint(-3, 3) for _ in range(self.num_variables)]
-    
+
     # Perform gradient descent
     self.gradient_descent_results = self._perform_gradient_descent()
-    
-    # Set up answers
-    self.answers = {}
 
-    # Answers for each step
+    # Build answers for each step
+    self.step_answers = {}
     for i, result in enumerate(self.gradient_descent_results):
       step = result['step']
 
       # Location answer
       location_key = f"answer__location_{step}"
-      self.answers[location_key] = ca.AnswerTypes.Vector(list(result['location']), label=f"Location at step {step}")
+      self.step_answers[location_key] = ca.AnswerTypes.Vector(list(result['location']), label=f"Location at step {step}")
 
       # Gradient answer
       gradient_key = f"answer__gradient_{step}"
-      self.answers[gradient_key] = ca.AnswerTypes.Vector(list(result['gradient']), label=f"Gradient at step {step}")
+      self.step_answers[gradient_key] = ca.AnswerTypes.Vector(list(result['gradient']), label=f"Gradient at step {step}")
 
       # Update answer
       update_key = f"answer__update_{step}"
-      self.answers[update_key] = ca.AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
+      self.step_answers[update_key] = ca.AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
   
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -147,20 +162,20 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
         # Fill in starting location for first row with default formatting
         row["location"] = f"{format_vector(self.starting_point)}"
-        row[headers[2]] = f"answer__gradient_{step}"  # gradient column
-        row[headers[3]] = f"answer__update_{step}"  # update column
+        row[headers[2]] = self.step_answers[f"answer__gradient_{step}"]  # gradient column
+        row[headers[3]] = self.step_answers[f"answer__update_{step}"]  # update column
         # Collect answers for this step (no location answer for step 1)
-        answers.append(self.answers[f"answer__gradient_{step}"])
-        answers.append(self.answers[f"answer__update_{step}"])
+        answers.append(self.step_answers[f"answer__gradient_{step}"])
+        answers.append(self.step_answers[f"answer__update_{step}"])
       else:
         # Subsequent rows - all answer fields
-        row["location"] = f"answer__location_{step}"
-        row[headers[2]] = f"answer__gradient_{step}"  # gradient column
-        row[headers[3]] = f"answer__update_{step}"  # update column
+        row["location"] = self.step_answers[f"answer__location_{step}"]
+        row[headers[2]] = self.step_answers[f"answer__gradient_{step}"]
+        row[headers[3]] = self.step_answers[f"answer__update_{step}"]
         # Collect all answers for this step
-        answers.append(self.answers[f"answer__location_{step}"])
-        answers.append(self.answers[f"answer__gradient_{step}"])
-        answers.append(self.answers[f"answer__update_{step}"])
+        answers.append(self.step_answers[f"answer__location_{step}"])
+        answers.append(self.step_answers[f"answer__gradient_{step}"])
+        answers.append(self.step_answers[f"answer__update_{step}"])
       table_rows.append(row)
 
     # Create the table using mixin
@@ -174,12 +189,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
     return body, answers
 
-  def get_body(self, **kwargs) -> ca.Section:
-    """Build question body (backward compatible interface)."""
-    body, _ = self._get_body(**kwargs)
-    return body
-  
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -323,8 +333,3 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     )
 
     return explanation, []
-
-  def get_explanation(self, **kwargs) -> ca.Section:
-    """Build question explanation (backward compatible interface)."""
-    explanation, _ = self._get_explanation(**kwargs)
-    return explanation
