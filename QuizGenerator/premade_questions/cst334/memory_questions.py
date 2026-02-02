@@ -6,6 +6,7 @@ import collections
 import copy
 import enum
 import logging
+import random
 import math
 from typing import List, Optional
 
@@ -31,42 +32,45 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     VPN_BITS = "# VPN Bits"
     OFFSET_BITS = "# Offset Bits"
   
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
-    
-    # Generate baselines, if not given
-    self.num_bits_va = kwargs.get("num_bits_va", self.rng.randint(2, self.MAX_BITS))
-    self.num_bits_offset = self.rng.randint(1, self.num_bits_va - 1)
-    self.num_bits_vpn = self.num_bits_va - self.num_bits_offset
-    
-    self.possible_answers = {
-      self.Target.VA_BITS: ca.AnswerTypes.Int(self.num_bits_va, unit="bits"),
-      self.Target.OFFSET_BITS: ca.AnswerTypes.Int(self.num_bits_offset, unit="bits"),
-      self.Target.VPN_BITS: ca.AnswerTypes.Int(self.num_bits_vpn, unit="bits")
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    num_bits_va = kwargs.get("num_bits_va", rng.randint(2, cls.MAX_BITS))
+    num_bits_offset = rng.randint(1, num_bits_va - 1)
+    num_bits_vpn = num_bits_va - num_bits_offset
+
+    possible_answers = {
+      cls.Target.VA_BITS: ca.AnswerTypes.Int(num_bits_va, unit="bits"),
+      cls.Target.OFFSET_BITS: ca.AnswerTypes.Int(num_bits_offset, unit="bits"),
+      cls.Target.VPN_BITS: ca.AnswerTypes.Int(num_bits_vpn, unit="bits")
     }
-    
-    # Select what kind of question we are going to be
-    self.blank_kind = self.rng.choice(list(self.Target))
-    
-    return
-  
-  def _get_body(self, **kwargs):
+    blank_kind = rng.choice(list(cls.Target))
+
+    return {
+      "num_bits_va": num_bits_va,
+      "num_bits_offset": num_bits_offset,
+      "num_bits_vpn": num_bits_vpn,
+      "possible_answers": possible_answers,
+      "blank_kind": blank_kind,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    answer = self.possible_answers[self.blank_kind]
-    answers = [answer]  # Collect the answer
+    answer = context["possible_answers"][context["blank_kind"]]
 
     # Create table data with one blank cell
     table_data = [{}]
-    for target in list(self.Target):
-      if target == self.blank_kind:
+    for target in list(cls.Target):
+      if target == context["blank_kind"]:
         # This cell should be an answer blank
-        table_data[0][target.value] = self.possible_answers[target]
+        table_data[0][target.value] = context["possible_answers"][target]
       else:
         # This cell shows the value
-        table_data[0][target.value] = f"{self.possible_answers[target].display} bits"
+        table_data[0][target.value] = f"{context['possible_answers'][target].display} bits"
 
-    table = self.create_fill_in_table(
-      headers=[t.value for t in list(self.Target)],
+    table = cls.create_fill_in_table(
+      headers=[t.value for t in list(cls.Target)],
       template_rows=table_data
     )
 
@@ -79,9 +83,10 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
       )
     )
     body.add_element(table)
-    return body, answers
+    return body
 
-  def _get_explanation(self, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -99,16 +104,16 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
     explanation.add_element(
       ca.Paragraph(
         [
-          ca.Text(f"{self.num_bits_va}", emphasis=(self.blank_kind == self.Target.VA_BITS)),
+          ca.Text(f"{context['num_bits_va']}", emphasis=(context["blank_kind"] == cls.Target.VA_BITS)),
           ca.Text(" = "),
-          ca.Text(f"{self.num_bits_vpn}", emphasis=(self.blank_kind == self.Target.VPN_BITS)),
+          ca.Text(f"{context['num_bits_vpn']}", emphasis=(context["blank_kind"] == cls.Target.VPN_BITS)),
           ca.Text(" + "),
-          ca.Text(f"{self.num_bits_offset}", emphasis=(self.blank_kind == self.Target.OFFSET_BITS))
+          ca.Text(f"{context['num_bits_offset']}", emphasis=(context["blank_kind"] == cls.Target.OFFSET_BITS))
         ]
       )
     )
 
-    return explanation, []
+    return explanation
 
 
 @QuestionRegistry.register()
@@ -196,40 +201,46 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     
     self.hit_rate = 0. # placeholder
 
-  def refresh(self, previous: Optional[CachingQuestion] = None, *args, hard_refresh: bool = False, **kwargs):
-    # Call parent refresh which seeds RNG and calls is_interesting()
-    # Note: We ignore the parent's return value since we need to generate the workload first
-    super().refresh(*args, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    num_elements = kwargs.get("num_elements", 5)
+    cache_size = kwargs.get("cache_size", 3)
+    num_requests = kwargs.get("num_requests", 10)
 
-    # Use the mixin to get the cache policy (randomly selected or fixed)
-    self.cache_policy = self.get_choice('policy', self.Kind)
+    policy = kwargs.get("policy") or kwargs.get("algo")
+    if policy is None:
+      cache_policy = rng.choice(list(cls.Kind))
+      config_params = {"policy": cache_policy.name}
+    else:
+      if isinstance(policy, cls.Kind):
+        cache_policy = policy
+      else:
+        try:
+          cache_policy = cls.Kind[str(policy)]
+        except KeyError:
+          cache_policy = cls.Kind.FIFO
+      config_params = {"policy": cache_policy.name}
 
-    self.requests = (
-        list(range(self.cache_size))  # Prime the cache with the capacity misses
-        + self.rng.choices(
-      population=list(range(self.cache_size - 1)), k=1
-    )  # Add in one request to an earlier  that will differentiate clearly between FIFO and LRU
-        + self.rng.choices(
-      population=list(range(self.cache_size, self.num_elements)), k=1
-    )  ## Add in the rest of the requests
-        + self.rng.choices(population=list(range(self.num_elements)), k=(self.num_requests - 2))
-    ## Add in the rest of the requests
+    requests = (
+        list(range(cache_size))
+        + rng.choices(population=list(range(cache_size - 1)), k=1)
+        + rng.choices(population=list(range(cache_size, num_elements)), k=1)
+        + rng.choices(population=list(range(num_elements)), k=(num_requests - 2))
     )
-    
-    self.cache = CachingQuestion.Cache(self.cache_policy, self.cache_size, self.requests)
-    
-    self.request_results = {}
+
+    cache = cls.Cache(cache_policy, cache_size, requests)
+    request_results = {}
     number_of_hits = 0
-    for (request_number, request) in enumerate(self.requests):
-      was_hit, evicted, cache_state = self.cache.query_cache(request, request_number)
-      log.debug(f"cache_state: \"{cache_state}\"")
+    for (request_number, request) in enumerate(requests):
+      was_hit, evicted, cache_state = cache.query_cache(request, request_number)
       if was_hit:
         number_of_hits += 1
       hit_value = 'hit' if was_hit else 'miss'
       evicted_value = '-' if evicted is None else f"{evicted}"
       cache_state_value = copy.copy(cache_state)
 
-      self.request_results[request_number] = {
+      request_results[request_number] = {
         "request": request,
         "hit_value": hit_value,
         "evicted_value": evicted_value,
@@ -241,28 +252,42 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
           order_matters=True
         ),
       }
-    
-    self.hit_rate = 100 * number_of_hits / (self.num_requests)
-    self.hit_rate_answer = ca.AnswerTypes.Float(
-      self.hit_rate,
+
+    hit_rate = 100 * number_of_hits / num_requests
+    hit_rate_answer = ca.AnswerTypes.Float(
+      hit_rate,
       label="Hit rate, excluding non-capacity misses",
       unit="%"
     )
 
-    # Return whether this workload is interesting
-    return self.is_interesting()
-  
-  def _get_body(self, **kwargs):
+    return {
+      "num_elements": num_elements,
+      "cache_size": cache_size,
+      "num_requests": num_requests,
+      "cache_policy": cache_policy,
+      "requests": requests,
+      "request_results": request_results,
+      "hit_rate": hit_rate,
+      "hit_rate_answer": hit_rate_answer,
+      "_config_params": config_params,
+    }
+
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    return (context["hit_rate"] / 100.0) < 0.7
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
     answers = []
 
     # Create table data for cache simulation
     table_rows = []
-    for request_number in sorted(self.request_results.keys()):
-      result = self.request_results[request_number]
+    for request_number in sorted(context["request_results"].keys()):
+      result = context["request_results"][request_number]
       table_rows.append(
         {
-          "Page Requested": f"{self.requests[request_number]}",
+          "Page Requested": f"{context['requests'][request_number]}",
           "Hit/Miss": result["hit_answer"],
           "Evicted": result["evicted_answer"],
           "Cache State": result["cache_state_answer"]
@@ -274,21 +299,18 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       answers.append(result["cache_state_answer"])
 
     # Create table using mixin - automatically handles answer conversion
-    cache_table = self.create_answer_table(
+    cache_table = cls.create_answer_table(
       headers=["Page Requested", "Hit/Miss", "Evicted", "Cache State"],
       data_rows=table_rows,
       answer_columns=["Hit/Miss", "Evicted", "Cache State"]
     )
 
-    # Collect hit rate answer
-    answers.append(self.hit_rate_answer)
-
     # Create hit rate answer block
-    hit_rate_block = ca.AnswerBlock(self.hit_rate_answer)
+    hit_rate_block = ca.AnswerBlock(context["hit_rate_answer"])
 
     # Use mixin to create complete body
     intro_text = (
-      f"Assume we are using a **{self.cache_policy}** caching policy and a cache size of **{self.cache_size}**. "
+      f"Assume we are using a **{context['cache_policy']}** caching policy and a cache size of **{context['cache_size']}**. "
       "Given the below series of requests please fill in the table. "
       "For the hit/miss column, please write either \"hit\" or \"miss\". "
       "For the eviction column, please write either the number of the evicted page or simply a dash (e.g. \"-\")."
@@ -301,11 +323,12 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       "In the case where there is a tie, order by increasing number."
     ])
 
-    body = self.create_fill_in_table_body(intro_text, instructions, cache_table)
+    body = cls.create_fill_in_table_body(intro_text, instructions, cache_table)
     body.add_element(hit_rate_block)
-    return body, answers
+    return body
 
-  def _get_explanation(self, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -316,12 +339,12 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         headers=["Page", "Hit/Miss", "Evicted", "Cache State"],
         data=[
           [
-            self.request_results[request]["request"],
-            self.request_results[request]["hit_value"],
-            f'{self.request_results[request]["evicted_value"]}',
-            f'{",".join(map(str, self.request_results[request]["cache_state_value"]))}',
+            context["request_results"][request]["request"],
+            context["request_results"][request]["hit_value"],
+            f'{context["request_results"][request]["evicted_value"]}',
+            f'{",".join(map(str, context["request_results"][request]["cache_state_value"]))}',
           ]
-          for (request_number, request) in enumerate(sorted(self.request_results.keys()))
+          for (request_number, request) in enumerate(sorted(context["request_results"].keys()))
         ]
       )
     )
@@ -331,18 +354,13 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         [
           "To calculate the hit rate we calculate the percentage of requests "
           "that were cache hits out of the total number of requests. "
-          f"In this case we are counting only all but {self.cache_size} requests, "
+          f"In this case we are counting only all but {context['cache_size']} requests, "
           f"since we are excluding capacity misses."
         ]
       )
     )
 
-    return explanation, []
-  
-  def is_interesting(self) -> bool:
-    # todo: interesting is more likely based on whether I can differentiate between it and another algo,
-    #  so maybe rerun with a different approach but same requests?
-    return (self.hit_rate / 100.0) < 0.7
+    return explanation
 
 
 class MemoryAccessQuestion(MemoryQuestion, abc.ABC):
@@ -355,47 +373,51 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
   MIN_BOUNDS_BIT = 5
   MAX_BOUNDS_BITS = 16
   
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
-    
-    max_bound_bits = kwargs.get("max_bound_bits")
-    
-    bounds_bits = self.rng.randint(
-      self.MIN_BOUNDS_BIT,
-      self.MAX_BOUNDS_BITS
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+    bounds_bits = rng.randint(
+      cls.MIN_BOUNDS_BIT,
+      cls.MAX_BOUNDS_BITS
     )
-    base_bits = self.MAX_BITS - bounds_bits
-    
-    self.bounds = int(math.pow(2, bounds_bits))
-    self.base = self.rng.randint(1, int(math.pow(2, base_bits))) * self.bounds
-    self.virtual_address = self.rng.randint(1, int(self.bounds / self.PROBABILITY_OF_VALID))
-    
-  def _get_body(self):
+    base_bits = cls.MAX_BITS - bounds_bits
+
+    bounds = int(math.pow(2, bounds_bits))
+    base = rng.randint(1, int(math.pow(2, base_bits))) * bounds
+    virtual_address = rng.randint(1, int(bounds / cls.PROBABILITY_OF_VALID))
+
+    return {
+      "bounds": bounds,
+      "base": base,
+      "virtual_address": virtual_address,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    if self.virtual_address < self.bounds:
+    if context["virtual_address"] < context["bounds"]:
       answer = ca.AnswerTypes.Hex(
-        self.base + self.virtual_address,
-        length=math.ceil(math.log2(self.base + self.virtual_address))
+        context["base"] + context["virtual_address"],
+        length=math.ceil(math.log2(context["base"] + context["virtual_address"]))
       )
     else:
       answer = ca.AnswerTypes.String("INVALID")
-    answers = [answer]
 
     # Use mixin to create parameter table with answer
     parameter_info = {
-      "Base": f"0x{self.base:X}",
-      "Bounds": f"0x{self.bounds:X}",
-      "Virtual Address": f"0x{self.virtual_address:X}"
+      "Base": f"0x{context['base']:X}",
+      "Bounds": f"0x{context['bounds']:X}",
+      "Virtual Address": f"0x{context['virtual_address']:X}"
     }
 
-    table = self.create_parameter_answer_table(
+    table = cls.create_parameter_answer_table(
       parameter_info=parameter_info,
       answer_label="Physical Address",
       answer=answer,
       transpose=True
     )
 
-    body = self.create_parameter_calculation_body(
+    body = cls.create_parameter_calculation_body(
       intro_text=(
         "Given the information in the below table, "
         "please calcuate the physical address associated with the given virtual address. "
@@ -403,9 +425,10 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
       ),
       parameter_table=table
     )
-    return body, answers
+    return body
 
-  def _get_explanation(self):
+  @classmethod
+  def _build_explanation(cls, context):
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -423,19 +446,19 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
     explanation.add_element(
       ca.Paragraph(
         [
-          f"Step 1: 0x{self.virtual_address:X} < 0x{self.bounds:X} "
-          f"--> {'***VALID***' if (self.virtual_address < self.bounds) else 'INVALID'}"
+          f"Step 1: 0x{context['virtual_address']:X} < 0x{context['bounds']:X} "
+          f"--> {'***VALID***' if (context['virtual_address'] < context['bounds']) else 'INVALID'}"
         ]
       )
     )
 
-    if self.virtual_address < self.bounds:
+    if context["virtual_address"] < context["bounds"]:
       explanation.add_element(
         ca.Paragraph(
           [
             f"Step 2: Since the previous check passed, we calculate "
-            f"0x{self.base:X} + 0x{self.virtual_address:X} "
-            f"= ***0x{self.base + self.virtual_address:X}***.",
+            f"0x{context['base']:X} + 0x{context['virtual_address']:X} "
+            f"= ***0x{context['base'] + context['virtual_address']:X}***.",
             "If it had been invalid we would have simply written INVALID"
           ]
         )
@@ -446,13 +469,13 @@ class BaseAndBounds(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin
           [
             f"Step 2: Since the previous check failed, we simply write ***INVALID***.",
             "***If*** it had been valid, we would have calculated "
-            f"0x{self.base:X} + 0x{self.virtual_address:X} "
-            f"= 0x{self.base + self.virtual_address:X}.",
+            f"0x{context['base']:X} + 0x{context['virtual_address']:X} "
+            f"= 0x{context['base'] + context['virtual_address']:X}.",
           ]
         )
       )
 
-    return explanation, []
+    return explanation
 
 
 @QuestionRegistry.register()
@@ -461,7 +484,8 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
   MIN_VIRTUAL_BITS = 5
   MAX_VIRTUAL_BITS = 10
   
-  def __within_bounds(self, segment, offset, bounds):
+  @staticmethod
+  def _within_bounds(segment, offset, bounds):
     if segment == "unallocated":
       return False
     elif bounds < offset:
@@ -469,28 +493,29 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     else:
       return True
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+
     # Pick how big each of our address spaces will be
-    self.virtual_bits = self.rng.randint(self.MIN_VIRTUAL_BITS, self.MAX_VIRTUAL_BITS)
-    self.physical_bits = self.rng.randint(self.virtual_bits + 1, self.MAX_BITS)
-    
+    virtual_bits = rng.randint(cls.MIN_VIRTUAL_BITS, cls.MAX_VIRTUAL_BITS)
+    physical_bits = rng.randint(virtual_bits + 1, cls.MAX_BITS)
+
     # Start with blank base and bounds
-    self.base = {
+    base = {
       "code": 0,
       "heap": 0,
       "stack": 0,
     }
-    self.bounds = {
+    bounds = {
       "code": 0,
       "heap": 0,
       "stack": 0,
     }
-    
+
     min_bounds = 4
-    max_bounds = int(2 ** (self.virtual_bits - 2))
-    
+    max_bounds = int(2 ** (virtual_bits - 2))
+
     def segment_collision(base, bounds):
       # lol, I think this is probably silly, but should work
       return 0 != len(
@@ -501,57 +526,66 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
           ]
         )
       )
-    
-    self.base["unallocated"] = 0
-    self.bounds["unallocated"] = 0
-    
+
+    base["unallocated"] = 0
+    bounds["unallocated"] = 0
+
     # Make random placements and check to make sure they are not overlapping
-    while (segment_collision(self.base, self.bounds)):
-      for segment in self.base.keys():
-        self.bounds[segment] = self.rng.randint(min_bounds, max_bounds - 1)
-        self.base[segment] = self.rng.randint(0, (2 ** self.physical_bits - self.bounds[segment]))
-    
+    while (segment_collision(base, bounds)):
+      for segment in base.keys():
+        bounds[segment] = rng.randint(min_bounds, max_bounds - 1)
+        base[segment] = rng.randint(0, (2 ** physical_bits - bounds[segment]))
+
     # Pick a random segment for us to use
-    self.segment = self.rng.choice(list(self.base.keys()))
-    self.segment_bits = {
+    segment = rng.choice(list(base.keys()))
+    segment_bits = {
       "code": 0,
       "heap": 1,
       "unallocated": 2,
       "stack": 3
-    }[self.segment]
-    
+    }[segment]
+
     # Try to pick a random address within that range
-    try:
-      self.offset = self.rng.randint(
-        1,
-        min(
-          [
-            max_bounds - 1,
-            int(self.bounds[self.segment] / self.PROBABILITY_OF_VALID)
-          ]
-        )
+    if segment == "unallocated":
+      offset = rng.randint(0, max_bounds - 1)
+    else:
+      max_offset = min(
+        [
+          max_bounds - 1,
+          max(1, int(bounds[segment] / cls.PROBABILITY_OF_VALID))
+        ]
       )
-    except KeyError:
-      # If we are in an unallocated section, we'll get a key error (I think)
-      self.offset = self.rng.randint(0, max_bounds - 1)
-    
+      offset = rng.randint(1, max_offset)
+
     # Calculate a virtual address based on the segment and the offset
-    self.virtual_address = (
-        (self.segment_bits << (self.virtual_bits - 2))
-        + self.offset
+    virtual_address = (
+      (segment_bits << (virtual_bits - 2))
+      + offset
     )
-    
+
     # Calculate physical address based on offset
-    self.physical_address = self.base[self.segment] + self.offset
-    
-    # Set answers based on whether it's in bounds or not
-  def _get_body(self):
+    physical_address = base[segment] + offset
+
+    return {
+      "virtual_bits": virtual_bits,
+      "physical_bits": physical_bits,
+      "base": base,
+      "bounds": bounds,
+      "segment": segment,
+      "segment_bits": segment_bits,
+      "offset": offset,
+      "virtual_address": virtual_address,
+      "physical_address": physical_address,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    segment_answer = ca.AnswerTypes.String(self.segment, label="Segment name")
-    if self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
+    segment_answer = ca.AnswerTypes.String(context["segment"], label="Segment name")
+    if cls._within_bounds(context["segment"], context["offset"], context["bounds"][context["segment"]]):
       physical_answer = ca.AnswerTypes.Binary(
-        self.physical_address,
-        length=self.physical_bits,
+        context["physical_address"],
+        length=context["physical_bits"],
         label="Physical Address"
       )
     else:
@@ -563,10 +597,10 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     body.add_element(
       ca.Paragraph(
         [
-          f"Given a virtual address space of {self.virtual_bits}bits, "
-          f"and a physical address space of {self.physical_bits}bits, "
+          f"Given a virtual address space of {context['virtual_bits']}bits, "
+          f"and a physical address space of {context['physical_bits']}bits, "
           "what is the physical address associated with the virtual address "
-          f"0b{self.virtual_address:0{self.virtual_bits}b}?",
+          f"0b{context['virtual_address']:0{context['virtual_bits']}b}?",
           "If it is invalid simply type INVALID.",
           "Note: assume that the stack grows in the same way as the code and the heap."
         ]
@@ -575,12 +609,24 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
 
     # Create segment table using mixin
     segment_rows = [
-      {"": "code", "base": f"0b{self.base['code']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['code']:0b}"},
-      {"": "heap", "base": f"0b{self.base['heap']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['heap']:0b}"},
-      {"": "stack", "base": f"0b{self.base['stack']:0{self.physical_bits}b}", "bounds": f"0b{self.bounds['stack']:0b}"}
+      {
+        "": "code",
+        "base": f"0b{context['base']['code']:0{context['physical_bits']}b}",
+        "bounds": f"0b{context['bounds']['code']:0b}"
+      },
+      {
+        "": "heap",
+        "base": f"0b{context['base']['heap']:0{context['physical_bits']}b}",
+        "bounds": f"0b{context['bounds']['heap']:0b}"
+      },
+      {
+        "": "stack",
+        "base": f"0b{context['base']['stack']:0{context['physical_bits']}b}",
+        "bounds": f"0b{context['bounds']['stack']:0b}"
+      }
     ]
 
-    segment_table = self.create_answer_table(
+    segment_table = cls.create_answer_table(
       headers=["", "base", "bounds"],
       data_rows=segment_rows,
       answer_columns=[]  # No answer columns in this table
@@ -596,7 +642,8 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
     )
     return body, answers
 
-  def _get_explanation(self):
+  @classmethod
+  def _build_explanation(cls, context):
     explanation = ca.Section()
     
     explanation.add_element(
@@ -614,15 +661,15 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
       ca.Paragraph(
         [
           f"In this problem our virtual address, "
-          f"converted to binary and including padding, is 0b{self.virtual_address:0{self.virtual_bits}b}.",
-          f"From this we know that our segment bits are 0b{self.segment_bits:02b}, "
-          f"meaning that we are in the ***{self.segment}*** segment.",
+          f"converted to binary and including padding, is 0b{context['virtual_address']:0{context['virtual_bits']}b}.",
+          f"From this we know that our segment bits are 0b{context['segment_bits']:02b}, "
+          f"meaning that we are in the ***{context['segment']}*** segment.",
           ""
         ]
       )
     )
     
-    if self.segment == "unallocated":
+    if context["segment"] == "unallocated":
       explanation.add_element(
         ca.Paragraph(
           [
@@ -634,17 +681,17 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
       explanation.add_element(
         ca.Paragraph(
           [
-            f"Since we are in the {self.segment} segment, "
-            f"we see from our table that our bounds are {self.bounds[self.segment]}. "
-            f"Remember that our check for our {self.segment} segment is: ",
-            f"`if (offset >= bounds({self.segment})) : INVALID`",
+            f"Since we are in the {context['segment']} segment, "
+            f"we see from our table that our bounds are {context['bounds'][context['segment']]}. "
+            f"Remember that our check for our {context['segment']} segment is: ",
+            f"`if (offset >= bounds({context['segment']})) : INVALID`",
             "which becomes"
-            f"`if ({self.offset:0b} > {self.bounds[self.segment]:0b}) : INVALID`"
+            f"`if ({context['offset']:0b} > {context['bounds'][context['segment']]:0b}) : INVALID`"
           ]
         )
       )
       
-      if not self.__within_bounds(self.segment, self.offset, self.bounds[self.segment]):
+      if not cls._within_bounds(context["segment"], context["offset"], context["bounds"][context["segment"]]):
         # then we are outside of bounds
         explanation.add_element(
           ca.Paragraph(
@@ -670,7 +717,7 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
             "To find the physical address we use the formula:",
             "<code>physical_address = base(segment) + offset</code>",
             "which becomes",
-            f"<code>physical_address = {self.base[self.segment]:0b} + {self.offset:0b}</code>.",
+            f"<code>physical_address = {context['base'][context['segment']]:0b} + {context['offset']:0b}</code>.",
             ""
           ]
         )
@@ -685,9 +732,9 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
       )
       explanation.add_element(
         ca.Code(
-          f"  0b{self.base[self.segment]:0{self.physical_bits}b}\n"
-          f"<u>+ 0b{self.offset:0{self.physical_bits}b}</u>\n"
-          f"  0b{self.physical_address:0{self.physical_bits}b}\n"
+          f"  0b{context['base'][context['segment']]:0{context['physical_bits']}b}\n"
+          f"<u>+ 0b{context['offset']:0{context['physical_bits']}b}</u>\n"
+          f"  0b{context['physical_address']:0{context['physical_bits']}b}\n"
         )
       )
 
@@ -704,81 +751,92 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   MAX_VPN_BITS = 8
   MAX_PFN_BITS = 16
   
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
 
-    self.num_bits_offset = self.rng.randint(self.MIN_OFFSET_BITS, self.MAX_OFFSET_BITS)
-    self.num_bits_vpn = self.rng.randint(self.MIN_VPN_BITS, self.MAX_VPN_BITS)
-    self.num_bits_pfn = self.rng.randint(max([self.MIN_PFN_BITS, self.num_bits_vpn]), self.MAX_PFN_BITS)
+    num_bits_offset = rng.randint(cls.MIN_OFFSET_BITS, cls.MAX_OFFSET_BITS)
+    num_bits_vpn = rng.randint(cls.MIN_VPN_BITS, cls.MAX_VPN_BITS)
+    num_bits_pfn = rng.randint(max([cls.MIN_PFN_BITS, num_bits_vpn]), cls.MAX_PFN_BITS)
 
-    self.virtual_address = self.rng.randint(1, 2 ** (self.num_bits_vpn + self.num_bits_offset))
+    virtual_address = rng.randint(1, 2 ** (num_bits_vpn + num_bits_offset))
 
     # Calculate these two
-    self.offset = self.virtual_address % (2 ** (self.num_bits_offset))
-    self.vpn = self.virtual_address // (2 ** (self.num_bits_offset))
+    offset = virtual_address % (2 ** (num_bits_offset))
+    vpn = virtual_address // (2 ** (num_bits_offset))
 
     # Generate this randomly
-    self.pfn = self.rng.randint(0, 2 ** (self.num_bits_pfn))
+    pfn = rng.randint(0, 2 ** (num_bits_pfn))
 
     # Calculate this
-    self.physical_address = self.pfn * (2 ** self.num_bits_offset) + self.offset
+    physical_address = pfn * (2 ** num_bits_offset) + offset
 
-    if self.rng.choices([True, False], weights=[(self.PROBABILITY_OF_VALID), (1 - self.PROBABILITY_OF_VALID)], k=1)[0]:
-      self.is_valid = True
+    if rng.choices([True, False], weights=[(cls.PROBABILITY_OF_VALID), (1 - cls.PROBABILITY_OF_VALID)], k=1)[0]:
+      is_valid = True
       # Set our actual entry to be in the table and valid
-      self.pte = self.pfn + (2 ** (self.num_bits_pfn))
-      # self.physical_address_var = VariableHex("Physical Address", self.physical_address, num_bits=(self.num_pfn_bits+self.num_offset_bits), default_presentation=VariableHex.PRESENTATION.BINARY)
-      # self.pfn_var = VariableHex("PFN", self.pfn, num_bits=self.num_pfn_bits, default_presentation=VariableHex.PRESENTATION.BINARY)
+      pte = pfn + (2 ** (num_bits_pfn))
     else:
-      self.is_valid = False
+      is_valid = False
       # Leave it as invalid
-      self.pte = self.pfn
-      # self.physical_address_var = Variable("Physical Address", "INVALID")
-      # self.pfn_var = Variable("PFN",  "INVALID")
-
-    # self.pte_var = VariableHex("PTE", self.pte, num_bits=(self.num_pfn_bits+1), default_presentation=VariableHex.PRESENTATION.BINARY)
+      pte = pfn
 
     # Generate page table (moved from get_body to ensure deterministic generation)
-    table_size = self.rng.randint(5, 8)
+    table_size = rng.randint(5, 8)
 
-    lowest_possible_bottom = max([0, self.vpn - table_size])
-    highest_possible_bottom = min([2 ** self.num_bits_vpn - table_size, self.vpn])
+    lowest_possible_bottom = max([0, vpn - table_size])
+    highest_possible_bottom = min([2 ** num_bits_vpn - table_size, vpn])
 
-    table_bottom = self.rng.randint(lowest_possible_bottom, highest_possible_bottom)
+    table_bottom = rng.randint(lowest_possible_bottom, highest_possible_bottom)
     table_top = table_bottom + table_size
 
-    self.page_table = {}
-    self.page_table[self.vpn] = self.pte
+    page_table = {}
+    page_table[vpn] = pte
 
     # Fill in the rest of the table
-    for vpn in range(table_bottom, table_top):
-      if vpn == self.vpn: continue
-      pte = self.page_table[self.vpn]
-      while pte in self.page_table.values():
-        pte = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
-        if self.rng.choices([True, False], weights=[(1 - self.PROBABILITY_OF_VALID), self.PROBABILITY_OF_VALID], k=1)[0]:
+    for vpn_idx in range(table_bottom, table_top):
+      if vpn_idx == vpn:
+        continue
+      pte_candidate = page_table[vpn]
+      while pte_candidate in page_table.values():
+        pte_candidate = rng.randint(0, 2 ** num_bits_pfn - 1)
+        if rng.choices([True, False], weights=[(1 - cls.PROBABILITY_OF_VALID), cls.PROBABILITY_OF_VALID], k=1)[0]:
           # Randomly set it to be valid
-          pte += (2 ** (self.num_bits_pfn))
+          pte_candidate += (2 ** num_bits_pfn)
       # Once we have a unique random entry, put it into the Page Table
-      self.page_table[vpn] = pte
+      page_table[vpn_idx] = pte_candidate
 
-  def _get_body(self, *args, **kwargs):
+    return {
+      'num_bits_offset': num_bits_offset,
+      'num_bits_vpn': num_bits_vpn,
+      'num_bits_pfn': num_bits_pfn,
+      'virtual_address': virtual_address,
+      'offset': offset,
+      'vpn': vpn,
+      'pfn': pfn,
+      'physical_address': physical_address,
+      'is_valid': is_valid,
+      'pte': pte,
+      'page_table': page_table,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    vpn_answer = ca.AnswerTypes.Binary(self.vpn, length=self.num_bits_vpn, label="VPN")
-    offset_answer = ca.AnswerTypes.Binary(self.offset, length=self.num_bits_offset, label="Offset")
-    pte_answer = ca.AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1), label="PTE")
-    if self.is_valid:
-      is_valid_answer = ca.AnswerTypes.String("VALID", label="VALID or INVALID?")
-      pfn_answer = ca.AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN")
+    vpn_answer = ca.AnswerTypes.Binary(context['vpn'], length=context['num_bits_vpn'], label='VPN')
+    offset_answer = ca.AnswerTypes.Binary(context['offset'], length=context['num_bits_offset'], label='Offset')
+    pte_answer = ca.AnswerTypes.Binary(context['pte'], length=(context['num_bits_pfn'] + 1), label='PTE')
+    if context['is_valid']:
+      is_valid_answer = ca.AnswerTypes.String('VALID', label='VALID or INVALID?')
+      pfn_answer = ca.AnswerTypes.Binary(context['pfn'], length=context['num_bits_pfn'], label='PFN')
       physical_answer = ca.AnswerTypes.Binary(
-        self.physical_address,
-        length=(self.num_bits_pfn + self.num_bits_offset),
-        label="Physical Address"
+        context['physical_address'],
+        length=(context['num_bits_pfn'] + context['num_bits_offset']),
+        label='Physical Address'
       )
     else:
-      is_valid_answer = ca.AnswerTypes.String("INVALID", label="VALID or INVALID?")
-      pfn_answer = ca.AnswerTypes.String("INVALID", label="PFN")
-      physical_answer = ca.AnswerTypes.String("INVALID", label="Physical Address")
+      is_valid_answer = ca.AnswerTypes.String('INVALID', label='VALID or INVALID?')
+      pfn_answer = ca.AnswerTypes.String('INVALID', label='PFN')
+      physical_answer = ca.AnswerTypes.String('INVALID', label='Physical Address')
 
     answers = [
       vpn_answer,
@@ -794,41 +852,41 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     body.add_element(
       ca.Paragraph(
         [
-          "Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.",
-          "Remember, we typically have the MSB representing valid or invalid."
+          'Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.',
+          'Remember, we typically have the MSB representing valid or invalid.'
         ]
       )
     )
 
     # Create parameter info table using mixin
     parameter_info = {
-      "Virtual Address": f"0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}",
-      "# VPN bits": f"{self.num_bits_vpn}",
-      "# PFN bits": f"{self.num_bits_pfn}"
+      'Virtual Address': f"0b{context['virtual_address']:0{context['num_bits_vpn'] + context['num_bits_offset']}b}",
+      '# VPN bits': f"{context['num_bits_vpn']}",
+      '# PFN bits': f"{context['num_bits_pfn']}"
     }
 
-    body.add_element(self.create_info_table(parameter_info))
+    body.add_element(cls.create_info_table(parameter_info))
 
     # Use the page table generated in refresh() for deterministic output
     # Add in ellipses before and after page table entries, if appropriate
     value_matrix = []
 
-    if min(self.page_table.keys()) != 0:
-      value_matrix.append(["...", "..."])
+    if min(context['page_table'].keys()) != 0:
+      value_matrix.append(['...', '...'])
 
     value_matrix.extend(
       [
-        [f"0b{vpn:0{self.num_bits_vpn}b}", f"0b{pte:0{(self.num_bits_pfn + 1)}b}"]
-        for vpn, pte in sorted(self.page_table.items())
+        [f"0b{vpn:0{context['num_bits_vpn']}b}", f"0b{pte:0{(context['num_bits_pfn'] + 1)}b}"]
+        for vpn, pte in sorted(context['page_table'].items())
       ]
     )
 
-    if (max(self.page_table.keys()) + 1) != 2 ** self.num_bits_vpn:
-      value_matrix.append(["...", "..."])
+    if (max(context['page_table'].keys()) + 1) != 2 ** context['num_bits_vpn']:
+      value_matrix.append(['...', '...'])
 
     body.add_element(
       ca.Table(
-        headers=["VPN", "PTE"],
+        headers=['VPN', 'PTE'],
         data=value_matrix
       )
     )
@@ -846,16 +904,17 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     return body, answers
   
-  def _get_explanation(self, *args, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     """Build question explanation."""
     explanation = ca.Section()
 
     explanation.add_element(
       ca.Paragraph(
         [
-          "The core idea of Paging is we want to break the virtual address into the VPN and the offset.  "
-          "From here, we get the Page Table Entry corresponding to the VPN, and check the validity of the entry.  "
-          "If it is valid, we clear the metadata and attach the PFN to the offset and have our physical address.",
+          'The core idea of Paging is we want to break the virtual address into the VPN and the offset.  '
+          'From here, we get the Page Table Entry corresponding to the VPN, and check the validity of the entry.  '
+          'If it is valid, we clear the metadata and attach the PFN to the offset and have our physical address.',
         ]
       )
     )
@@ -871,9 +930,9 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     explanation.add_element(
       ca.Paragraph(
         [
-          f"Virtual Address = VPN | offset",
-          f"<tt>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</tt> "
-          f"= <tt>0b{self.vpn:0{self.num_bits_vpn}b}</tt> | <tt>0b{self.offset:0{self.num_bits_offset}b}</tt>",
+          'Virtual Address = VPN | offset',
+          f"<tt>0b{context['virtual_address']:0{context['num_bits_vpn'] + context['num_bits_offset']}b}</tt> "
+          f"= <tt>0b{context['vpn']:0{context['num_bits_vpn']}b}</tt> | <tt>0b{context['offset']:0{context['num_bits_offset']}b}</tt>",
         ]
       )
     )
@@ -881,19 +940,19 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     explanation.add_element(
       ca.Paragraph(
         [
-          "We next use our VPN to index into our page table and find the corresponding entry."
-          f"Our Page Table Entry is ",
-          f"<tt>0b{self.pte:0{(self.num_bits_pfn + 1)}b}</tt>"
-          f"which we found by looking for our VPN in the page table.",
+          'We next use our VPN to index into our page table and find the corresponding entry.'
+          'Our Page Table Entry is ',
+          f"<tt>0b{context['pte']:0{(context['num_bits_pfn'] + 1)}b}</tt>"
+          'which we found by looking for our VPN in the page table.',
         ]
       )
     )
 
-    if self.is_valid:
+    if context['is_valid']:
       explanation.add_element(
         ca.Paragraph(
           [
-            f"In our PTE we see that the first bit is **{self.pte // (2 ** self.num_bits_pfn)}** meaning that the translation is **VALID**"
+            f"In our PTE we see that the first bit is **{context['pte'] // (2 ** context['num_bits_pfn'])}** meaning that the translation is **VALID**"
           ]
         )
       )
@@ -901,10 +960,10 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       explanation.add_element(
         ca.Paragraph(
           [
-            f"In our PTE we see that the first bit is **{self.pte // (2 ** self.num_bits_pfn)}** meaning that the translation is **INVALID**.",
-            "Therefore, we just write \"INVALID\" as our answer.",
-            "If it were valid we would complete the below steps.",
-            "<hr>"
+            f"In our PTE we see that the first bit is **{context['pte'] // (2 ** context['num_bits_pfn'])}** meaning that the translation is **INVALID**.",
+            'Therefore, we just write "INVALID" as our answer.',
+            'If it were valid we would complete the below steps.',
+            '<hr>'
           ]
         )
       )
@@ -912,18 +971,18 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     explanation.add_element(
       ca.Paragraph(
         [
-          "Next, we convert our PTE to our PFN by removing our metadata.  "
-          "In this case we're just removing the leading bit.  We can do this by applying a binary mask.",
-          f"PFN = PTE & mask",
-          f"which is,"
+          'Next, we convert our PTE to our PFN by removing our metadata.  '
+          "In this case we are just removing the leading bit.  We can do this by applying a binary mask.",
+          'PFN = PTE & mask',
+          'which is,',
         ]
       )
     )
     explanation.add_element(
       ca.Equation(
-        f"\\texttt{{{self.pfn:0{self.num_bits_pfn}b}}} "
-        f"= \\texttt{{0b{self.pte:0{self.num_bits_pfn + 1}b}}} "
-        f"\\& \\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
+        f"\\texttt{{{context['pfn']:0{context['num_bits_pfn']}b}}} "
+        f"= \\texttt{{0b{context['pte']:0{context['num_bits_pfn'] + 1}b}}} "
+        f"\\& \\texttt{{0b{(2 ** context['num_bits_pfn']) - 1:0{context['num_bits_pfn'] + 1}b}}}"
       )
     )
 
@@ -931,21 +990,21 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       [
         ca.Paragraph(
           [
-            "We then add combine our PFN and offset, "
-            "Physical Address = PFN | offset",
+            'We then add combine our PFN and offset, '
+            'Physical Address = PFN | offset',
           ]
         ),
         ca.Equation(
-          fr"{r'\mathbf{' if self.is_valid else ''}\mathtt{{0b{self.physical_address:0{self.num_bits_pfn + self.num_bits_offset}b}}}{r'}' if self.is_valid else ''} = \mathtt{{0b{self.pfn:0{self.num_bits_pfn}b}}} \mid \mathtt{{0b{self.offset:0{self.num_bits_offset}b}}}"
+          fr"{r'\mathbf{' if context['is_valid'] else ''}\mathtt{{0b{context['physical_address']:0{context['num_bits_pfn'] + context['num_bits_offset']}b}}}{r'}' if context['is_valid'] else ''} = \mathtt{{0b{context['pfn']:0{context['num_bits_pfn']}b}}} \mid \mathtt{{0b{context['offset']:0{context['num_bits_offset']}b}}}"
         )
       ]
     )
 
     explanation.add_elements(
       [
-        ca.Paragraph(["Note: Strictly speaking, this calculation is:", ]),
+        ca.Paragraph(['Note: Strictly speaking, this calculation is:', ]),
         ca.Equation(
-          fr"{r'\mathbf{' if self.is_valid else ''}\mathtt{{0b{self.physical_address:0{self.num_bits_pfn + self.num_bits_offset}b}}}{r'}' if self.is_valid else ''} = \mathtt{{0b{self.pfn:0{self.num_bits_pfn}b}{0:0{self.num_bits_offset}}}} + \mathtt{{0b{self.offset:0{self.num_bits_offset}b}}}"
+          fr"{r'\mathbf{' if context['is_valid'] else ''}\mathtt{{0b{context['physical_address']:0{context['num_bits_pfn'] + context['num_bits_offset']}b}}}{r'}' if context['is_valid'] else ''} = \mathtt{{0b{context['pfn']:0{context['num_bits_pfn']}b}{0:0{context['num_bits_offset']}}}} + \mathtt{{0b{context['offset']:0{context['num_bits_offset']}b}}}"
         ),
         ca.Paragraph(["But that's a lot of extra 0s, so I'm splitting them up for succinctness"])
       ]
@@ -966,167 +1025,214 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
   MAX_PTI_BITS = 3
   MAX_PFN_BITS = 6
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
 
     # Set up bit counts
-    self.num_bits_offset = self.rng.randint(self.MIN_OFFSET_BITS, self.MAX_OFFSET_BITS)
-    self.num_bits_pdi = self.rng.randint(self.MIN_PDI_BITS, self.MAX_PDI_BITS)
-    self.num_bits_pti = self.rng.randint(self.MIN_PTI_BITS, self.MAX_PTI_BITS)
-    self.num_bits_pfn = self.rng.randint(self.MIN_PFN_BITS, self.MAX_PFN_BITS)
+    num_bits_offset = rng.randint(cls.MIN_OFFSET_BITS, cls.MAX_OFFSET_BITS)
+    num_bits_pdi = rng.randint(cls.MIN_PDI_BITS, cls.MAX_PDI_BITS)
+    num_bits_pti = rng.randint(cls.MIN_PTI_BITS, cls.MAX_PTI_BITS)
+    num_bits_pfn = rng.randint(cls.MIN_PFN_BITS, cls.MAX_PFN_BITS)
 
     # Total VPN bits = PDI + PTI
-    self.num_bits_vpn = self.num_bits_pdi + self.num_bits_pti
- 
+    num_bits_vpn = num_bits_pdi + num_bits_pti
+
     # Generate a random virtual address
-    self.virtual_address = self.rng.randint(1, 2 ** (self.num_bits_vpn + self.num_bits_offset))
+    virtual_address = rng.randint(1, 2 ** (num_bits_vpn + num_bits_offset))
 
     # Extract components from virtual address
-    self.offset = self.virtual_address % (2 ** self.num_bits_offset)
-    vpn = self.virtual_address // (2 ** self.num_bits_offset)
+    offset = virtual_address % (2 ** num_bits_offset)
+    vpn = virtual_address // (2 ** num_bits_offset)
 
-    self.pti = vpn % (2 ** self.num_bits_pti)
-    self.pdi = vpn // (2 ** self.num_bits_pti)
+    pti = vpn % (2 ** num_bits_pti)
+    pdi = vpn // (2 ** num_bits_pti)
 
     # Generate PFN randomly
-    self.pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+    pfn = rng.randint(0, 2 ** num_bits_pfn - 1)
 
     # Calculate physical address
-    self.physical_address = self.pfn * (2 ** self.num_bits_offset) + self.offset
+    physical_address = pfn * (2 ** num_bits_offset) + offset
 
     # Determine validity at both levels
     # PD entry can be valid or invalid
-    self.pd_valid = self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]
+    pd_valid = rng.choices([True, False], weights=[cls.PROBABILITY_OF_VALID, 1 - cls.PROBABILITY_OF_VALID], k=1)[0]
 
     # PT entry only matters if PD is valid
-    if self.pd_valid:
-      self.pt_valid = self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]
+    if pd_valid:
+      pt_valid = rng.choices([True, False], weights=[cls.PROBABILITY_OF_VALID, 1 - cls.PROBABILITY_OF_VALID], k=1)[0]
     else:
-      self.pt_valid = False  # Doesn't matter, won't be checked
+      pt_valid = False  # Doesn't matter, won't be checked
 
     # Generate a page table number (PTBR - Page Table Base Register value in the PD entry)
     # This represents which page table to use
-    self.page_table_number = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+    page_table_number = rng.randint(0, 2 ** num_bits_pfn - 1)
 
     # Create PD entry: valid bit + page table number
-    if self.pd_valid:
-      self.pd_entry = (2 ** self.num_bits_pfn) + self.page_table_number
+    if pd_valid:
+      pd_entry = (2 ** num_bits_pfn) + page_table_number
     else:
-      self.pd_entry = self.page_table_number  # Invalid, no valid bit set
+      pd_entry = page_table_number  # Invalid, no valid bit set
 
     # Create PT entry: valid bit + PFN
-    if self.pt_valid:
-      self.pte = (2 ** self.num_bits_pfn) + self.pfn
+    if pt_valid:
+      pte = (2 ** num_bits_pfn) + pfn
     else:
-      self.pte = self.pfn  # Invalid, no valid bit set
+      pte = pfn  # Invalid, no valid bit set
 
     # Overall validity requires both levels to be valid
-    self.is_valid = self.pd_valid and self.pt_valid
+    is_valid = pd_valid and pt_valid
 
     # Build page directory - show 3-4 entries
-    pd_size = self.rng.randint(3, 4)
-    lowest_pd_bottom = max([0, self.pdi - pd_size])
-    highest_pd_bottom = min([2 ** self.num_bits_pdi - pd_size, self.pdi])
-    pd_bottom = self.rng.randint(lowest_pd_bottom, highest_pd_bottom)
+    pd_size = rng.randint(3, 4)
+    lowest_pd_bottom = max([0, pdi - pd_size])
+    highest_pd_bottom = min([2 ** num_bits_pdi - pd_size, pdi])
+    pd_bottom = rng.randint(lowest_pd_bottom, highest_pd_bottom)
     pd_top = pd_bottom + pd_size
 
-    self.page_directory = {}
-    self.page_directory[self.pdi] = self.pd_entry
+    page_directory = {}
+    page_directory[pdi] = pd_entry
 
     # Fill in other PD entries
-    for pdi in range(pd_bottom, pd_top):
-      if pdi == self.pdi:
+    for pdi_idx in range(pd_bottom, pd_top):
+      if pdi_idx == pdi:
         continue
       # Generate random PD entry
-      pt_num = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
-      while pt_num == self.page_table_number:  # Make sure it's different
-        pt_num = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
+      pt_num = rng.randint(0, 2 ** num_bits_pfn - 1)
+      while pt_num == page_table_number:  # Make sure it's different
+        pt_num = rng.randint(0, 2 ** num_bits_pfn - 1)
 
       # Randomly valid or invalid
-      if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
-        pd_val = (2 ** self.num_bits_pfn) + pt_num
+      if rng.choices([True, False], weights=[cls.PROBABILITY_OF_VALID, 1 - cls.PROBABILITY_OF_VALID], k=1)[0]:
+        pd_val = (2 ** num_bits_pfn) + pt_num
       else:
         pd_val = pt_num
 
-      self.page_directory[pdi] = pd_val
+      page_directory[pdi_idx] = pd_val
 
     # Build 2-3 page tables to show
     # Always include the one we need, plus 1-2 others
-    num_page_tables_to_show = self.rng.randint(2, 3)
+    num_page_tables_to_show = rng.randint(2, 3)
 
     # Get unique page table numbers from the PD entries (extract PT numbers from valid entries)
     shown_pt_numbers = set()
-    for pdi, pd_val in self.page_directory.items():
-      pt_num = pd_val % (2 ** self.num_bits_pfn)  # Extract PT number (remove valid bit)
+    for pd_val in page_directory.values():
+      pt_num = pd_val % (2 ** num_bits_pfn)  # Extract PT number (remove valid bit)
       shown_pt_numbers.add(pt_num)
 
     # Ensure our required page table is included
-    shown_pt_numbers.add(self.page_table_number)
+    shown_pt_numbers.add(page_table_number)
 
     # Limit to requested number, but ALWAYS keep the required page table
     shown_pt_numbers_list = list(shown_pt_numbers)
-    if self.page_table_number in shown_pt_numbers_list:
+    if page_table_number in shown_pt_numbers_list:
       # Remove it temporarily so we can add it back first
-      shown_pt_numbers_list.remove(self.page_table_number)
+      shown_pt_numbers_list.remove(page_table_number)
     # Start with required page table, then add others up to the limit
-    shown_pt_numbers = [self.page_table_number] + shown_pt_numbers_list[:num_page_tables_to_show - 1]
+    shown_pt_numbers = [page_table_number] + shown_pt_numbers_list[:num_page_tables_to_show - 1]
 
     # Build each page table
-    self.page_tables = {}  # Dict mapping PT number -> dict of PTI -> PTE
+    page_tables = {}  # Dict mapping PT number -> dict of PTI -> PTE
 
     # Use consistent size for all page tables for cleaner presentation
-    pt_size = self.rng.randint(2, 4)
+    pt_size = rng.randint(2, 4)
 
     # Determine the PTI range that all tables will use (based on target PTI)
     # This ensures all tables show the same PTI values for consistency
-    lowest_pt_bottom = max([0, self.pti - pt_size + 1])
-    highest_pt_bottom = min([2 ** self.num_bits_pti - pt_size, self.pti])
-    pt_bottom = self.rng.randint(lowest_pt_bottom, highest_pt_bottom)
+    lowest_pt_bottom = max([0, pti - pt_size + 1])
+    highest_pt_bottom = min([2 ** num_bits_pti - pt_size, pti])
+    pt_bottom = rng.randint(lowest_pt_bottom, highest_pt_bottom)
     pt_top = pt_bottom + pt_size
 
     # Generate all page tables using the SAME PTI range
     for pt_num in shown_pt_numbers:
-      self.page_tables[pt_num] = {}
+      page_tables[pt_num] = {}
 
-      for pti in range(pt_bottom, pt_top):
-        if pt_num == self.page_table_number and pti == self.pti:
+      for pti_idx in range(pt_bottom, pt_top):
+        if pt_num == page_table_number and pti_idx == pti:
           # Use the actual answer for the target page table entry
-          self.page_tables[pt_num][pti] = self.pte
+          page_tables[pt_num][pti_idx] = pte
         else:
           # Generate random PTE for all other entries
-          pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
-          if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
-            pte_val = (2 ** self.num_bits_pfn) + pfn
+          pfn_rand = rng.randint(0, 2 ** num_bits_pfn - 1)
+          if rng.choices([True, False], weights=[cls.PROBABILITY_OF_VALID, 1 - cls.PROBABILITY_OF_VALID], k=1)[0]:
+            pte_val = (2 ** num_bits_pfn) + pfn_rand
           else:
-            pte_val = pfn
+            pte_val = pfn_rand
 
-          self.page_tables[pt_num][pti] = pte_val
+          page_tables[pt_num][pti_idx] = pte_val
 
-  def _get_body(self, *args, **kwargs):
+    def random_pte_value():
+      pfn_rand = rng.randint(0, 2 ** num_bits_pfn - 1)
+      if rng.choices([True, False], weights=[cls.PROBABILITY_OF_VALID, 1 - cls.PROBABILITY_OF_VALID], k=1)[0]:
+        return (2 ** num_bits_pfn) + pfn_rand
+      return pfn_rand
+
+    pt_display_extras = {}
+    for pt_num, pt_entries in page_tables.items():
+      min_pti = min(pt_entries.keys())
+      max_pti = max(pt_entries.keys())
+      max_possible_pti = 2 ** num_bits_pti - 1
+      leading = None
+      trailing = None
+      if min_pti == 1:
+        leading = (0, random_pte_value())
+      if (max_possible_pti - max_pti) == 1:
+        trailing = (max_possible_pti, random_pte_value())
+      pt_display_extras[pt_num] = {
+        'leading': leading,
+        'trailing': trailing,
+      }
+
+    return {
+      'num_bits_offset': num_bits_offset,
+      'num_bits_pdi': num_bits_pdi,
+      'num_bits_pti': num_bits_pti,
+      'num_bits_pfn': num_bits_pfn,
+      'num_bits_vpn': num_bits_vpn,
+      'virtual_address': virtual_address,
+      'offset': offset,
+      'pdi': pdi,
+      'pti': pti,
+      'pfn': pfn,
+      'physical_address': physical_address,
+      'pd_valid': pd_valid,
+      'pt_valid': pt_valid,
+      'page_table_number': page_table_number,
+      'pd_entry': pd_entry,
+      'pte': pte,
+      'is_valid': is_valid,
+      'page_directory': page_directory,
+      'page_tables': page_tables,
+      'pt_display_extras': pt_display_extras,
+    }
+
+  @classmethod
+  def _build_body(cls, context):
     """Build question body and collect answers."""
-    pdi_answer = ca.AnswerTypes.Binary(self.pdi, length=self.num_bits_pdi, label="PDI (Page Directory Index)")
-    pti_answer = ca.AnswerTypes.Binary(self.pti, length=self.num_bits_pti, label="PTI (Page Table Index)")
-    offset_answer = ca.AnswerTypes.Binary(self.offset, length=self.num_bits_offset, label="Offset")
-    pd_entry_answer = ca.AnswerTypes.Binary(self.pd_entry, length=(self.num_bits_pfn + 1), label="PD Entry (from Page Directory)")
-    if self.pd_valid:
-      pt_number_answer = ca.AnswerTypes.Binary(self.page_table_number, length=self.num_bits_pfn, label="Page Table Number")
-      pte_answer = ca.AnswerTypes.Binary(self.pte, length=(self.num_bits_pfn + 1), label="PTE (from Page Table)")
+    pdi_answer = ca.AnswerTypes.Binary(context['pdi'], length=context['num_bits_pdi'], label='PDI (Page Directory Index)')
+    pti_answer = ca.AnswerTypes.Binary(context['pti'], length=context['num_bits_pti'], label='PTI (Page Table Index)')
+    offset_answer = ca.AnswerTypes.Binary(context['offset'], length=context['num_bits_offset'], label='Offset')
+    pd_entry_answer = ca.AnswerTypes.Binary(context['pd_entry'], length=(context['num_bits_pfn'] + 1), label='PD Entry (from Page Directory)')
+    if context['pd_valid']:
+      pt_number_answer = ca.AnswerTypes.Binary(context['page_table_number'], length=context['num_bits_pfn'], label='Page Table Number')
+      pte_answer = ca.AnswerTypes.Binary(context['pte'], length=(context['num_bits_pfn'] + 1), label='PTE (from Page Table)')
     else:
-      pt_number_answer = ca.AnswerTypes.String("INVALID", label="Page Table Number")
-      pte_answer = ca.AnswerTypes.String(["INVALID", "N/A"], label="PTE (from Page Table)")
+      pt_number_answer = ca.AnswerTypes.String('INVALID', label='Page Table Number')
+      pte_answer = ca.AnswerTypes.String(['INVALID', 'N/A'], label='PTE (from Page Table)')
 
-    if self.pd_valid and self.pt_valid:
-      is_valid_answer = ca.AnswerTypes.String("VALID", label="VALID or INVALID?")
-      pfn_answer = ca.AnswerTypes.Binary(self.pfn, length=self.num_bits_pfn, label="PFN")
+    if context['pd_valid'] and context['pt_valid']:
+      is_valid_answer = ca.AnswerTypes.String('VALID', label='VALID or INVALID?')
+      pfn_answer = ca.AnswerTypes.Binary(context['pfn'], length=context['num_bits_pfn'], label='PFN')
       physical_answer = ca.AnswerTypes.Binary(
-        self.physical_address,
-        length=(self.num_bits_pfn + self.num_bits_offset),
-        label="Physical Address"
+        context['physical_address'],
+        length=(context['num_bits_pfn'] + context['num_bits_offset']),
+        label='Physical Address'
       )
     else:
-      is_valid_answer = ca.AnswerTypes.String("INVALID", label="VALID or INVALID?")
-      pfn_answer = ca.AnswerTypes.String("INVALID", label="PFN")
-      physical_answer = ca.AnswerTypes.String("INVALID", label="Physical Address")
+      is_valid_answer = ca.AnswerTypes.String('INVALID', label='VALID or INVALID?')
+      pfn_answer = ca.AnswerTypes.String('INVALID', label='PFN')
+      physical_answer = ca.AnswerTypes.String('INVALID', label='Physical Address')
 
     answers = [
       pdi_answer,
@@ -1144,45 +1250,45 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     body.add_element(
       ca.Paragraph([
-        "Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.",
-        "This problem uses **two-level (hierarchical) paging**.",
-        "Remember, we typically have the MSB representing valid or invalid."
+        'Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.',
+        'This problem uses **two-level (hierarchical) paging**.',
+        'Remember, we typically have the MSB representing valid or invalid.'
       ])
     )
 
     # Create parameter info table using mixin (same format as Paging question)
     parameter_info = {
-      "Virtual Address": f"0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}",
-      "# PDI bits": f"{self.num_bits_pdi}",
-      "# PTI bits": f"{self.num_bits_pti}",
-      "# Offset bits": f"{self.num_bits_offset}",
-      "# PFN bits": f"{self.num_bits_pfn}"
+      'Virtual Address': f"0b{context['virtual_address']:0{context['num_bits_vpn'] + context['num_bits_offset']}b}",
+      '# PDI bits': f"{context['num_bits_pdi']}",
+      '# PTI bits': f"{context['num_bits_pti']}",
+      '# Offset bits': f"{context['num_bits_offset']}",
+      '# PFN bits': f"{context['num_bits_pfn']}"
     }
 
-    body.add_element(self.create_info_table(parameter_info))
+    body.add_element(cls.create_info_table(parameter_info))
 
     # Page Directory table
     pd_matrix = []
-    if min(self.page_directory.keys()) != 0:
-      pd_matrix.append(["...", "..."])
+    if min(context['page_directory'].keys()) != 0:
+      pd_matrix.append(['...', '...'])
 
     pd_matrix.extend([
-      [f"0b{pdi:0{self.num_bits_pdi}b}", f"0b{pd_val:0{self.num_bits_pfn + 1}b}"]
-      for pdi, pd_val in sorted(self.page_directory.items())
+      [f"0b{pdi:0{context['num_bits_pdi']}b}", f"0b{pd_val:0{context['num_bits_pfn'] + 1}b}"]
+      for pdi, pd_val in sorted(context['page_directory'].items())
     ])
 
-    if (max(self.page_directory.keys()) + 1) != 2 ** self.num_bits_pdi:
-      pd_matrix.append(["...", "..."])
+    if (max(context['page_directory'].keys()) + 1) != 2 ** context['num_bits_pdi']:
+      pd_matrix.append(['...', '...'])
 
     # Use a simple text paragraph - the bold will come from markdown conversion
     body.add_element(
       ca.Paragraph([
-        "**Page Directory:**"
+        '**Page Directory:**'
       ])
     )
     body.add_element(
       ca.Table(
-        headers=["PDI", "PD Entry"],
+        headers=['PDI', 'PD Entry'],
         data=pd_matrix
       )
     )
@@ -1190,49 +1296,43 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Page Tables - use TableGroup for side-by-side display
     table_group = ca.TableGroup()
 
-    for pt_num in sorted(self.page_tables.keys()):
+    for pt_num in sorted(context['page_tables'].keys()):
       pt_matrix = []
-      pt_entries = self.page_tables[pt_num]
+      pt_entries = context['page_tables'][pt_num]
 
       min_pti = min(pt_entries.keys())
       max_pti = max(pt_entries.keys())
-      max_possible_pti = 2 ** self.num_bits_pti - 1
+      max_possible_pti = 2 ** context['num_bits_pti'] - 1
 
       # Smart leading ellipsis: only if there are 2+ hidden entries before
       # (if only 1 hidden, we should just show it)
       if min_pti > 1:
-        pt_matrix.append(["...", "..."])
+        pt_matrix.append(['...', '...'])
       elif min_pti == 1:
-        # Show the 0th entry instead of "..."
-        pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
-        if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
-          pte_val = (2 ** self.num_bits_pfn) + pfn
-        else:
-          pte_val = pfn
-        pt_matrix.append([f"0b{0:0{self.num_bits_pti}b}", f"0b{pte_val:0{self.num_bits_pfn + 1}b}"])
+        leading = context['pt_display_extras'][pt_num]['leading']
+        if leading is not None:
+          leading_pti, leading_pte = leading
+          pt_matrix.append([f"0b{leading_pti:0{context['num_bits_pti']}b}", f"0b{leading_pte:0{context['num_bits_pfn'] + 1}b}"])
 
       # Add actual entries
       pt_matrix.extend([
-        [f"0b{pti:0{self.num_bits_pti}b}", f"0b{pte:0{self.num_bits_pfn + 1}b}"]
+        [f"0b{pti:0{context['num_bits_pti']}b}", f"0b{pte:0{context['num_bits_pfn'] + 1}b}"]
         for pti, pte in sorted(pt_entries.items())
       ])
 
       # Smart trailing ellipsis: only if there are 2+ hidden entries after
       hidden_after = max_possible_pti - max_pti
       if hidden_after > 1:
-        pt_matrix.append(["...", "..."])
+        pt_matrix.append(['...', '...'])
       elif hidden_after == 1:
-        # Show the last entry instead of "..."
-        pfn = self.rng.randint(0, 2 ** self.num_bits_pfn - 1)
-        if self.rng.choices([True, False], weights=[self.PROBABILITY_OF_VALID, 1 - self.PROBABILITY_OF_VALID], k=1)[0]:
-          pte_val = (2 ** self.num_bits_pfn) + pfn
-        else:
-          pte_val = pfn
-        pt_matrix.append([f"0b{max_possible_pti:0{self.num_bits_pti}b}", f"0b{pte_val:0{self.num_bits_pfn + 1}b}"])
+        trailing = context['pt_display_extras'][pt_num]['trailing']
+        if trailing is not None:
+          trailing_pti, trailing_pte = trailing
+          pt_matrix.append([f"0b{trailing_pti:0{context['num_bits_pti']}b}", f"0b{trailing_pte:0{context['num_bits_pfn'] + 1}b}"])
 
       table_group.add_table(
-        label=f"PTC 0b{pt_num:0{self.num_bits_pfn}b}:",
-        table=ca.Table(headers=["PTI", "PTE"], data=pt_matrix)
+        label=f"PTC 0b{pt_num:0{context['num_bits_pfn']}b}:",
+        table=ca.Table(headers=['PTI', 'PTE'], data=pt_matrix)
       )
 
     body.add_element(table_group)
@@ -1254,14 +1354,15 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
 
     return body, answers
 
-  def _get_explanation(self, *args, **kwargs):
+  @classmethod
+  def _build_explanation(cls, context):
     """Build question explanation."""
     explanation = ca.Section()
 
     explanation.add_element(
       ca.Paragraph([
-        "Two-level paging requires two lookups: first in the Page Directory, then in a Page Table.",
-        "The virtual address is split into three parts: PDI | PTI | Offset."
+        'Two-level paging requires two lookups: first in the Page Directory, then in a Page Table.',
+        'The virtual address is split into three parts: PDI | PTI | Offset.'
       ])
     )
 
@@ -1274,122 +1375,122 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     # Step 1: Extract PDI, PTI, Offset
     explanation.add_element(
       ca.Paragraph([
-        f"**Step 1: Extract components from Virtual Address**",
-        f"Virtual Address = PDI | PTI | Offset",
-        f"<tt>0b{self.virtual_address:0{self.num_bits_vpn + self.num_bits_offset}b}</tt> = "
-        f"<tt>0b{self.pdi:0{self.num_bits_pdi}b}</tt> | "
-        f"<tt>0b{self.pti:0{self.num_bits_pti}b}</tt> | "
-        f"<tt>0b{self.offset:0{self.num_bits_offset}b}</tt>"
+        '**Step 1: Extract components from Virtual Address**',
+        'Virtual Address = PDI | PTI | Offset',
+        f"<tt>0b{context['virtual_address']:0{context['num_bits_vpn'] + context['num_bits_offset']}b}</tt> = "
+        f"<tt>0b{context['pdi']:0{context['num_bits_pdi']}b}</tt> | "
+        f"<tt>0b{context['pti']:0{context['num_bits_pti']}b}</tt> | "
+        f"<tt>0b{context['offset']:0{context['num_bits_offset']}b}</tt>"
       ])
     )
 
     # Step 2: Look up PD Entry
     explanation.add_element(
       ca.Paragraph([
-        f"**Step 2: Look up Page Directory Entry**",
-        f"Using PDI = <tt>0b{self.pdi:0{self.num_bits_pdi}b}</tt>, we find PD Entry = <tt>0b{self.pd_entry:0{self.num_bits_pfn + 1}b}</tt>"
+        '**Step 2: Look up Page Directory Entry**',
+        f"Using PDI = <tt>0b{context['pdi']:0{context['num_bits_pdi']}b}</tt>, we find PD Entry = <tt>0b{context['pd_entry']:0{context['num_bits_pfn'] + 1}b}</tt>"
       ])
     )
 
     # Step 3: Check PD validity
-    pd_valid_bit = self.pd_entry // (2 ** self.num_bits_pfn)
+    pd_valid_bit = context['pd_entry'] // (2 ** context['num_bits_pfn'])
     explanation.add_element(
       ca.Paragraph([
-        f"**Step 3: Check Page Directory Entry validity**",
-        f"The MSB (valid bit) is **{pd_valid_bit}**, so this PD Entry is **{'VALID' if self.pd_valid else 'INVALID'}**."
+        '**Step 3: Check Page Directory Entry validity**',
+        f"The MSB (valid bit) is **{pd_valid_bit}**, so this PD Entry is **{'VALID' if context['pd_valid'] else 'INVALID'}**."
       ])
     )
 
-    if not self.pd_valid:
+    if not context['pd_valid']:
       explanation.add_element(
         ca.Paragraph([
-          "Since the Page Directory Entry is invalid, the translation fails here.",
-          "We write **INVALID** for all remaining fields.",
-          "If it were valid, we would continue with the steps below.",
-          "<hr>"
+          'Since the Page Directory Entry is invalid, the translation fails here.',
+          'We write **INVALID** for all remaining fields.',
+          'If it were valid, we would continue with the steps below.',
+          '<hr>'
         ])
       )
 
     # Step 4: Extract PT number (if PD valid)
     explanation.add_element(
       ca.Paragraph([
-        f"**Step 4: Extract Page Table Number**",
-        "We remove the valid bit from the PD Entry to get the Page Table Number:"
+        '**Step 4: Extract Page Table Number**',
+        'We remove the valid bit from the PD Entry to get the Page Table Number:'
       ])
     )
 
     explanation.add_element(
       ca.Equation(
-        f"\\texttt{{{self.page_table_number:0{self.num_bits_pfn}b}}} = "
-        f"\\texttt{{0b{self.pd_entry:0{self.num_bits_pfn + 1}b}}} \\& "
-        f"\\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
+        f"\\texttt{{{context['page_table_number']:0{context['num_bits_pfn']}b}}} = "
+        f"\\texttt{{0b{context['pd_entry']:0{context['num_bits_pfn'] + 1}b}}} \\& "
+        f"\\texttt{{0b{(2 ** context['num_bits_pfn']) - 1:0{context['num_bits_pfn'] + 1}b}}}"
       )
     )
 
-    if self.pd_valid:
+    if context['pd_valid']:
       explanation.add_element(
         ca.Paragraph([
-          f"This tells us to use **Page Table #{self.page_table_number}**."
+          f"This tells us to use **Page Table #{context['page_table_number']}**."
         ])
       )
 
       # Step 5: Look up PTE
       explanation.add_element(
         ca.Paragraph([
-          f"**Step 5: Look up Page Table Entry**",
-          f"Using PTI = <tt>0b{self.pti:0{self.num_bits_pti}b}</tt> in Page Table #{self.page_table_number}, "
-          f"we find PTE = <tt>0b{self.pte:0{self.num_bits_pfn + 1}b}</tt>"
+          '**Step 5: Look up Page Table Entry**',
+          f"Using PTI = <tt>0b{context['pti']:0{context['num_bits_pti']}b}</tt> in Page Table #{context['page_table_number']}, "
+          f"we find PTE = <tt>0b{context['pte']:0{context['num_bits_pfn'] + 1}b}</tt>"
         ])
       )
 
       # Step 6: Check PT validity
-      pt_valid_bit = self.pte // (2 ** self.num_bits_pfn)
+      pt_valid_bit = context['pte'] // (2 ** context['num_bits_pfn'])
       explanation.add_element(
         ca.Paragraph([
-          f"**Step 6: Check Page Table Entry validity**",
-          f"The MSB (valid bit) is **{pt_valid_bit}**, so this PTE is **{'VALID' if self.pt_valid else 'INVALID'}**."
+          '**Step 6: Check Page Table Entry validity**',
+          f"The MSB (valid bit) is **{pt_valid_bit}**, so this PTE is **{'VALID' if context['pt_valid'] else 'INVALID'}**."
         ])
       )
 
-      if not self.pt_valid:
+      if not context['pt_valid']:
         explanation.add_element(
           ca.Paragraph([
-            "Since the Page Table Entry is invalid, the translation fails.",
-            "We write **INVALID** for PFN and Physical Address.",
-            "If it were valid, we would continue with the steps below.",
-            "<hr>"
+            'Since the Page Table Entry is invalid, the translation fails.',
+            'We write **INVALID** for PFN and Physical Address.',
+            'If it were valid, we would continue with the steps below.',
+            '<hr>'
           ])
         )
 
       # Step 7: Extract PFN
       explanation.add_element(
         ca.Paragraph([
-          f"**Step 7: Extract PFN**",
-          "We remove the valid bit from the PTE to get the PFN:"
+          '**Step 7: Extract PFN**',
+          'We remove the valid bit from the PTE to get the PFN:'
         ])
       )
 
       explanation.add_element(
         ca.Equation(
-          f"\\texttt{{{self.pfn:0{self.num_bits_pfn}b}}} = "
-          f"\\texttt{{0b{self.pte:0{self.num_bits_pfn + 1}b}}} \\& "
-          f"\\texttt{{0b{(2 ** self.num_bits_pfn) - 1:0{self.num_bits_pfn + 1}b}}}"
+          f"\\texttt{{{context['pfn']:0{context['num_bits_pfn']}b}}} = "
+          f"\\texttt{{0b{context['pte']:0{context['num_bits_pfn'] + 1}b}}} \\& "
+          f"\\texttt{{0b{(2 ** context['num_bits_pfn']) - 1:0{context['num_bits_pfn'] + 1}b}}}"
         )
       )
 
       # Step 8: Construct physical address
       explanation.add_element(
         ca.Paragraph([
-          f"**Step 8: Construct Physical Address**",
-          "Physical Address = PFN | Offset"
+          '**Step 8: Construct Physical Address**',
+          'Physical Address = PFN | Offset'
         ])
       )
 
       explanation.add_element(
         ca.Equation(
-          fr"{r'\mathbf{' if self.is_valid else ''}\mathtt{{0b{self.physical_address:0{self.num_bits_pfn + self.num_bits_offset}b}}}{r'}' if self.is_valid else ''} = "
-          f"\\mathtt{{0b{self.pfn:0{self.num_bits_pfn}b}}} \\mid "
-          f"\\mathtt{{0b{self.offset:0{self.num_bits_offset}b}}}"
+          fr"{r'\mathbf{' if context['is_valid'] else ''}\mathtt{{0b{context['physical_address']:0{context['num_bits_pfn'] + context['num_bits_offset']}b}}}{r'}' if context['is_valid'] else ''} = "
+          f"\mathtt{{0b{context['pfn']:0{context['num_bits_pfn']}b}}} \mid "
+          f"\mathtt{{0b{context['offset']:0{context['num_bits_offset']}b}}}"
         )
       )
 
