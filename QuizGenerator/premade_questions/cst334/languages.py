@@ -383,7 +383,7 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       ])
     )
 
-    return body
+    return body, list(context["answer_options"])
 
   @classmethod
   def _build_explanation(cls, context):
