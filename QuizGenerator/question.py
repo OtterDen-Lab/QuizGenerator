@@ -683,8 +683,24 @@ class Question(abc.ABC):
       if isinstance(node, ca.Answer):
         answers.append(node)
         return
+      if isinstance(node, ca.Table):
+        if getattr(node, "headers", None):
+          for header in node.headers:
+            visit(header)
+        for row in node.data:
+          for cell in row:
+            visit(cell)
+        return
+      if isinstance(node, ca.TableGroup):
+        for _, table in node.tables:
+          visit(table)
+        return
       if isinstance(node, ca.Container):
         for child in node.elements:
+          visit(child)
+        return
+      if isinstance(node, (list, tuple)):
+        for child in node:
           visit(child)
 
     visit(element)
