@@ -2594,7 +2594,7 @@ class AnswerTypes:
 
     @classmethod
     def get_entry_warning(cls) -> str | None:
-      return AnswerTypes.Float.get_entry_warning()
+      return "For result matrices, enter `-` in any cell that does not exist."
   
     def __init__(self, value, *args, **kwargs):
       super().__init__(value=value, *args, **kwargs)

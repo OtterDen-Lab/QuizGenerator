@@ -352,7 +352,6 @@ class MatrixMultiplication(MatrixMathQuestion):
         answers.extend(table_answers)
         body.add_element(
             ca.OnlyHtml([
-                ca.Paragraph(["Result matrix (use '-' if cell doesn't exist):"]),
                 table
             ])
         )
