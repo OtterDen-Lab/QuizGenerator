@@ -867,7 +867,7 @@ class Paging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     body.add_element(cls.create_info_table(parameter_info))
 
-    # Use the page table generated in refresh() for deterministic output
+    # Use the page table generated in _build_context for deterministic output
     # Add in ellipses before and after page table entries, if appropriate
     value_matrix = []
 

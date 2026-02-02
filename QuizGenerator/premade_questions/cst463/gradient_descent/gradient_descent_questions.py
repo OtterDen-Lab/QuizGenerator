@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 
 # Note: This file does not use ca.Answer wrappers - it uses TableQuestionMixin
 # which handles answer display through create_answer_table(). The answers are created
-# with labels embedded at creation time in refresh().
+# with labels embedded at creation time in _build_context().
 
 
 class GradientDescentQuestion(Question, abc.ABC):
