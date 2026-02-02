@@ -89,7 +89,7 @@ class DerivativeQuestion(Question, abc.ABC):
     vector_str = format_vector(gradient_values)
     return ca.AnswerTypes.String(vector_str, pdf_only=True)
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -138,7 +138,7 @@ class DerivativeQuestion(Question, abc.ABC):
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -205,7 +205,7 @@ class DerivativeBasic(DerivativeQuestion):
     # Generate evaluation point
     self.evaluation_point = self._generate_evaluation_point()
 
-    # Create answers for evaluation point (used in _get_body)
+    # Create answers for evaluation point (used in _build_body)
     self._create_derivative_answers(self.evaluation_point)
 
     context = dict(kwargs)
@@ -288,7 +288,7 @@ class DerivativeChain(DerivativeQuestion):
     f = sp.Function('f')
     self.equation = sp.Eq(f(*self.variables), self.function)
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 

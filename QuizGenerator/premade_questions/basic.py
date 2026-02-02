@@ -20,7 +20,7 @@ class FromText(Question):
     self.text = text
     self.possible_variations = 1
   
-  def _get_body(self) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
     return ca.Section([ca.Text(self.text)]), []
 
 

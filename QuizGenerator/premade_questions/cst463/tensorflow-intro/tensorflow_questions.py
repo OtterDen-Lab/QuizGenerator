@@ -87,7 +87,7 @@ class ParameterCountingQuestion(Question):
     context["rng_seed"] = rng_seed
     return context
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -146,7 +146,7 @@ class ParameterCountingQuestion(Question):
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -320,7 +320,7 @@ class ActivationFunctionComputationQuestion(Question):
 
     return ""
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -380,7 +380,7 @@ class ActivationFunctionComputationQuestion(Question):
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -521,7 +521,7 @@ class RegularizationCalculationQuestion(Question):
     context["rng_seed"] = rng_seed
     return context
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -614,7 +614,7 @@ class RegularizationCalculationQuestion(Question):
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -783,7 +783,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     context["rng_seed"] = rng_seed
     return context
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -877,7 +877,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 

@@ -584,7 +584,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     context["rng_seed"] = rng_seed
     return context
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -621,7 +621,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -736,7 +736,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     context["rng_seed"] = rng_seed
     return context
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -785,7 +785,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -898,7 +898,7 @@ class EnsembleAveragingQuestion(Question):
     context["rng_seed"] = rng_seed
     return context
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -929,7 +929,7 @@ class EnsembleAveragingQuestion(Question):
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -1042,7 +1042,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       grad = self._compute_gradient_W1(0, j)
       self.new_W1[0, j] = self.W1[0, j] - self.learning_rate * grad
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -1111,7 +1111,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 

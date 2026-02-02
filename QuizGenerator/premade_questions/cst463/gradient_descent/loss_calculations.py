@@ -13,7 +13,7 @@ from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 log = logging.getLogger(__name__)
 
 
-# Note: This file migrates to the _get_body()/_get_explanation() pattern
+# Note: This file migrates to the _build_body()/_build_explanation() pattern
 
 
 class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
@@ -87,7 +87,7 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     overall = ca.AnswerTypes.Float(self.overall_loss, label="Overall loss")
     return answers, overall
 
-  def _get_body(self, **kwargs) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -117,7 +117,7 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     """Create the data table with answer fields."""
     pass
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_explanation(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
