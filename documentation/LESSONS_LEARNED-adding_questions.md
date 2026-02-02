@@ -16,7 +16,7 @@ Based on multiple question development cycles, these are the essential practices
 7. **Error handling**: Plan for numerical edge cases (complex numbers, evaluation failures) with graceful regeneration
 
 ### 🎯 **Core Implementation Patterns**
-- **Question structure**: Extend base class + `@QuestionRegistry.register()` + three methods (`refresh()`, `get_body()`, `get_explanation()`)
+- **Question structure**: Extend base class + `@QuestionRegistry.register()` + three methods (`_build_context()`, `_build_body()`, `_build_explanation()`)
 - **Testing workflow**: `scratch.yaml` → `python generate_quiz.py TEST` → Canvas + PDF verification
 - **Mathematical content**: SymPy for expressions, `ContentAST.Equation` for display, avoid fragmented math elements
 - **Canvas compatibility**: No LaTeX in table headers (`<th>`), use bold `<td>` instead
@@ -328,7 +328,7 @@ This document captures key insights and lessons learned from implementing matrix
 ### 1. **Systematic Question Structure**
 - Following the established pattern of extending `Question` class and using `@QuestionRegistry.register()` worked seamlessly
 - Creating a base `MatrixMathQuestion` class for common functionality was highly effective
-- The three-method structure (`refresh()`, `get_body()`, `get_explanation()`) provides clear separation of concerns
+- The three-method structure (`_build_context()`, `_build_body()`, `_build_explanation()`) provides clear separation of concerns
 
 ### 2. **Leveraging Existing Patterns**
 - **Constants file**: Found standard probability patterns in `QuizGenerator/constants.py` and `memory_questions.py` (`PROBABILITY_OF_VALID = 0.875`)

@@ -651,24 +651,24 @@ class Question(Container):
 
 class Section(Container):
   """
-  Primary container for question content - USE THIS for get_body() and get_explanation().
+  Primary container for question content - USE THIS for _build_body() and _build_explanation().
 
   This is the most important content AST class for question developers.
   It serves as the main container for organizing question content
-  and should be the return type for your get_body() and get_explanation() methods.
+  and should be the return type for your _build_body() and _build_explanation() methods.
 
   CRITICAL: Always use Section as the container for:
-  - Question body content (return from get_body())
-  - Question explanation/solution content (return from get_explanation())
+  - Question body content (return from _build_body())
+  - Question explanation/solution content (return from _build_explanation())
   - Any grouped content that needs to render together
 
   When to use:
-  - As the root container in get_body() and get_explanation() methods
+  - As the root container in _build_body() and _build_explanation() methods
   - Grouping related content elements
   - Organizing complex question content
 
   Example:
-      def _get_body(self):
+      def _build_body(self, context):
           body = Section()
           answers = []
           body.add_element(Paragraph(["Calculate the determinant:"]))

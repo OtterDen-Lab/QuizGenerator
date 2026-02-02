@@ -419,7 +419,7 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
       subparts.append((operand_a_latex, self.get_operator(), operand_b_latex))
     return subparts
   
-  def _get_body(self):
+  def _build_body(self, context):
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -453,7 +453,7 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
     # Default implementation - subclasses should override for specific answer formats
     return []
 
-  def _get_explanation(self):
+  def _build_explanation(self, context):
     """Default explanation structure. Subclasses should override for specific explanations."""
     explanation = ca.Section()
 

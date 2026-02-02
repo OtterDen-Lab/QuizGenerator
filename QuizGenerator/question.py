@@ -386,7 +386,7 @@ class Question(abc.ABC):
   Base class for all quiz questions with cross-format rendering support.
 
   CRITICAL: When implementing Question subclasses, ALWAYS use content AST elements
-  for all content in _get_body() and _get_explanation() methods.
+  for all content in _build_body() and _build_explanation() methods.
 
   NEVER create manual LaTeX, HTML, or Markdown strings. The content AST system
   ensures consistent rendering across PDF/LaTeX and Canvas/HTML formats.

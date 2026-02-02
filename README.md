@@ -104,6 +104,34 @@ questions:
 
 See [documentation/custom_questions.md](documentation/custom_questions.md) for complete guide.
 
+### Question Authoring Pattern (New)
+
+All questions follow the same three‑method flow:
+
+```python
+class MyQuestion(Question):
+    def _build_context(self, *, rng_seed=None, **kwargs):
+        context = super()._build_context(rng_seed=rng_seed, **kwargs)
+        rng = context["rng"]
+        context["value"] = rng.randint(1, 10)
+        return context
+
+    def _build_body(self, context):
+        body = ca.Section()
+        body.add_element(ca.Paragraph([f"Value: {context['value']}"]))
+        body.add_element(ca.AnswerTypes.Int(context["value"], label="Value"))
+        return body
+
+    def _build_explanation(self, context):
+        explanation = ca.Section()
+        explanation.add_element(ca.Paragraph([f"Answer: {context['value']}"]))
+        return explanation
+```
+
+Notes:
+- Always use `context["rng"]` for deterministic randomness.
+- Avoid `refresh()`; it is no longer part of the API.
+
 ## Built-in Question Types
 
 ### Operating Systems (CST334)
