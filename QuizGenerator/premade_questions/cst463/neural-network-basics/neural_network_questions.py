@@ -73,37 +73,60 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     self.da2_dz2 = None  # Gradient of activation w.r.t. pre-activation
     self.dL_dz2 = None  # Gradient of loss w.r.t. output pre-activation
 
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_inputs" in kwargs:
+      self.num_inputs = kwargs.get("num_inputs", self.num_inputs)
+    if "num_hidden" in kwargs:
+      self.num_hidden = kwargs.get("num_hidden", self.num_hidden)
+    if "num_outputs" in kwargs:
+      self.num_outputs = kwargs.get("num_outputs", self.num_outputs)
+    if "use_bias" in kwargs:
+      self.use_bias = kwargs.get("use_bias", self.use_bias)
+    if "param_digits" in kwargs:
+      self.param_digits = kwargs.get("param_digits", self.param_digits)
+
+    self.rng.seed(rng_seed)
+    self._np_rng = np.random.RandomState(rng_seed)
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
+
   def _generate_network(self, weight_range=(-2, 2), input_range=(-3, 3)):
     """Generate random network parameters and input."""
     # Generate weights using MatrixQuestion's rounded matrix method
     # Use param_digits to match display precision in tables and explanations
     self.W1 = self.get_rounded_matrix(
+      self._np_rng,
       (self.num_hidden, self.num_inputs),
-      low=weight_range[0],
-      high=weight_range[1],
-      digits_to_round=self.param_digits
+      weight_range[0],
+      weight_range[1],
+      self.param_digits
     )
 
     self.W2 = self.get_rounded_matrix(
+      self._np_rng,
       (self.num_outputs, self.num_hidden),
-      low=weight_range[0],
-      high=weight_range[1],
-      digits_to_round=self.param_digits
+      weight_range[0],
+      weight_range[1],
+      self.param_digits
     )
 
     # Generate biases
     if self.use_bias:
       self.b1 = self.get_rounded_matrix(
+        self._np_rng,
         (self.num_hidden,),
-        low=weight_range[0],
-        high=weight_range[1],
-        digits_to_round=self.param_digits
+        weight_range[0],
+        weight_range[1],
+        self.param_digits
       )
       self.b2 = self.get_rounded_matrix(
+        self._np_rng,
         (self.num_outputs,),
-        low=weight_range[0],
-        high=weight_range[1],
-        digits_to_round=self.param_digits
+        weight_range[0],
+        weight_range[1],
+        self.param_digits
       )
     else:
       self.b1 = np.zeros(self.num_hidden)
@@ -111,10 +134,11 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
 
     # Generate input values (keep as integers for simplicity)
     self.X = self.get_rounded_matrix(
+      self._np_rng,
       (self.num_inputs,),
-      low=input_range[0],
-      high=input_range[1],
-      digits_to_round=0  # Round to integers
+      input_range[0],
+      input_range[1],
+      0  # Round to integers
     )
 
   def _select_activation_function(self):
@@ -546,8 +570,8 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
   - Final output (ŷ)
   """
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Generate network
     self._generate_network()
@@ -555,6 +579,10 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     # Run forward pass to get correct answers
     self._forward_pass()
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -683,8 +711,8 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
   - Gradients for multiple specific weights (∂L/∂w)
   """
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Generate network
     self._generate_network()
@@ -703,6 +731,10 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Round loss to display precision (4 decimal places)
     self.loss = round(self.loss, 4)
     self._compute_output_gradient()
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -845,8 +877,11 @@ class EnsembleAveragingQuestion(Question):
     self.num_models = kwargs.get("num_models", 5)
     self.predictions = None
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_models" in kwargs:
+      self.num_models = kwargs.get("num_models", self.num_models)
+
+    self.rng.seed(rng_seed)
 
     # Generate predictions from multiple models
     # Use a range that makes sense for typical regression problems
@@ -858,6 +893,10 @@ class EnsembleAveragingQuestion(Question):
 
     # Round to make calculations easier
     self.predictions = [round(p, 1) for p in self.predictions]
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -958,8 +997,8 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     self.new_W1 = None
     self.new_W2 = None
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Generate network
     self._generate_network()
@@ -984,6 +1023,10 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     # Compute updated weights
     self._compute_weight_updates()
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _compute_weight_updates(self):
     """Compute new weights after gradient descent step."""

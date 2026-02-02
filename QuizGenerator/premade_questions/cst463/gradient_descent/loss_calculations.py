@@ -35,11 +35,24 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     self.individual_losses = []
     self.overall_loss = 0.0
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
+  def _build_context(self, *, rng_seed=None, **kwargs):
     """Generate new random data and calculate losses."""
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+    # Update configurable parameters if provided
+    if "num_samples" in kwargs:
+      self.num_samples = max(3, min(10, kwargs.get("num_samples", self.num_samples)))
+    if "num_input_features" in kwargs:
+      self.num_input_features = max(1, min(5, kwargs.get("num_input_features", self.num_input_features)))
+    if "vector_inputs" in kwargs:
+      self.vector_inputs = kwargs.get("vector_inputs", self.vector_inputs)
+
+    # Seed RNG and generate data
+    self.rng.seed(rng_seed)
     self._generate_data()
     self._calculate_losses()
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   @abc.abstractmethod
   def _generate_data(self):
@@ -150,6 +163,11 @@ class LossQuestion_Linear(LossQuestion):
     self.num_output_vars = kwargs.get("num_output_vars", 1)
     self.num_output_vars = max(1, min(5, self.num_output_vars))  # Constrain to 1-5 range
     super().__init__(*args, **kwargs)
+
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_output_vars" in kwargs:
+      self.num_output_vars = max(1, min(5, kwargs.get("num_output_vars", self.num_output_vars)))
+    return super()._build_context(rng_seed=rng_seed, **kwargs)
 
   def _generate_data(self):
     """Generate regression data with continuous target values."""
@@ -494,6 +512,11 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
     self.num_classes = kwargs.get("num_classes", 3)
     self.num_classes = max(3, min(5, self.num_classes))  # Constrain to 3-5 classes
     super().__init__(*args, **kwargs)
+
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_classes" in kwargs:
+      self.num_classes = max(3, min(5, kwargs.get("num_classes", self.num_classes)))
+    return super()._build_context(rng_seed=rng_seed, **kwargs)
 
   def _generate_data(self):
     """Generate multi-class classification data."""

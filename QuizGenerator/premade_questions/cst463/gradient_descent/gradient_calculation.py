@@ -21,6 +21,16 @@ class DerivativeQuestion(Question, abc.ABC):
     self.num_variables = kwargs.get("num_variables", 2)
     self.max_degree = kwargs.get("max_degree", 2)
 
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_variables" in kwargs:
+      self.num_variables = kwargs.get("num_variables", self.num_variables)
+    if "max_degree" in kwargs:
+      self.max_degree = kwargs.get("max_degree", self.max_degree)
+    self.rng.seed(rng_seed)
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
+
   def _generate_evaluation_point(self) -> List[float]:
     """Generate a random point for gradient evaluation."""
     return [self.rng.randint(-3, 3) for _ in range(self.num_variables)]
@@ -184,8 +194,8 @@ class DerivativeQuestion(Question, abc.ABC):
 class DerivativeBasic(DerivativeQuestion):
   """Basic derivative calculation using polynomial functions."""
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Generate a basic polynomial function
     self.variables, self.function, self.gradient_function, self.equation = generate_function(
@@ -198,13 +208,17 @@ class DerivativeBasic(DerivativeQuestion):
     # Create answers for evaluation point (used in _get_body)
     self._create_derivative_answers(self.evaluation_point)
 
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
+
 
 @QuestionRegistry.register("DerivativeChain")
 class DerivativeChain(DerivativeQuestion):
   """Chain rule derivative calculation using function composition."""
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Try to generate a valid function/point combination, regenerating if we hit complex numbers
     max_attempts = 10
@@ -230,6 +244,10 @@ class DerivativeChain(DerivativeQuestion):
         else:
           # If we've exhausted attempts or different error, re-raise
           raise
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _generate_composed_function(self) -> None:
     """Generate a composed function f(g(x)) for chain rule practice."""

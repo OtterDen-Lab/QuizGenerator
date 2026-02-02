@@ -44,29 +44,38 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     
     return h_states
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    self.rng = np.random.RandomState(kwargs.get("rng_seed", None))
-    
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = cls.get_rng(rng_seed)
+    digits = cls.get_digits_to_round(digits_to_round=kwargs.get("digits_to_round"))
+
     seq_len = kwargs.get("seq_len", 3)
-    input_dim =  kwargs.get("input_dim", 1)
+    input_dim = kwargs.get("input_dim", 1)
     hidden_dim = kwargs.get("hidden_dim", 1)
-    
-    # Small integer weights for hand calculation
-    self.x_seq = self.get_rounded_matrix((seq_len, input_dim)) # self.rng.randint(0, 3, size=(seq_len, input_dim))
-    self.W_xh = self.get_rounded_matrix((input_dim, hidden_dim), -1, 2)
-    self.W_hh = self.get_rounded_matrix((hidden_dim, hidden_dim), -1, 2)
-    self.b_h = self.get_rounded_matrix((hidden_dim,), -1, 2)
-    self.h_0 = np.zeros(hidden_dim)
-    
-    self.h_states = self.rnn_forward(self.x_seq, self.W_xh, self.W_hh, self.b_h, self.h_0) #.reshape((seq_len,-1))
-    
-    ## Answers:
-    # x_seq, W_xh, W_hh, b_h, h_0, h_states
-    
-    return True
-  
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+
+    x_seq = cls.get_rounded_matrix(rng, (seq_len, input_dim), digits_to_round=digits)
+    W_xh = cls.get_rounded_matrix(rng, (input_dim, hidden_dim), -1, 2, digits)
+    W_hh = cls.get_rounded_matrix(rng, (hidden_dim, hidden_dim), -1, 2, digits)
+    b_h = cls.get_rounded_matrix(rng, (hidden_dim,), -1, 2, digits)
+    h_0 = np.zeros(hidden_dim)
+
+    h_states = cls.rnn_forward(x_seq, W_xh, W_hh, b_h, h_0)
+
+    return {
+      "digits": digits,
+      "seq_len": seq_len,
+      "input_dim": input_dim,
+      "hidden_dim": hidden_dim,
+      "x_seq": x_seq,
+      "W_xh": W_xh,
+      "W_hh": W_hh,
+      "b_h": b_h,
+      "h_0": h_0,
+      "h_states": h_states,
+    }
+
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -78,26 +87,27 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
       ])
     )
     body.add_element(
-      self.create_info_table(
+      cls.create_info_table(
         {
-          ca.Container(["Input sequence, ", ca.Equation("x_{seq}", inline=True)]) : ca.Matrix(self.x_seq),
-          ca.Container(["Input weights, ",  ca.Equation("W_{xh}", inline=True)])  : ca.Matrix(self.W_xh),
-          ca.Container(["Hidden weights, ", ca.Equation("W_{hh}", inline=True)])  : ca.Matrix(self.W_hh),
-          ca.Container(["Bias, ",           ca.Equation("b_{h}", inline=True)])   : ca.Matrix(self.b_h),
-          ca.Container(["Hidden states, ",  ca.Equation("h_{0}", inline=True)])   : ca.Matrix(self.h_0),
+          ca.Container(["Input sequence, ", ca.Equation("x_{seq}", inline=True)]) : ca.Matrix(context["x_seq"]),
+          ca.Container(["Input weights, ",  ca.Equation("W_{xh}", inline=True)])  : ca.Matrix(context["W_xh"]),
+          ca.Container(["Hidden weights, ", ca.Equation("W_{hh}", inline=True)])  : ca.Matrix(context["W_hh"]),
+          ca.Container(["Bias, ",           ca.Equation("b_{h}", inline=True)])   : ca.Matrix(context["b_h"]),
+          ca.Container(["Hidden states, ",  ca.Equation("h_{0}", inline=True)])   : ca.Matrix(context["h_0"]),
         }
       )
     )
 
     body.add_element(ca.LineBreak())
 
-    output_answer = ca.AnswerTypes.Matrix(value=self.h_states, label="Hidden states")
+    output_answer = ca.AnswerTypes.Matrix(value=context["h_states"], label="Hidden states")
     answers.append(output_answer)
     body.add_element(output_answer)
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
     digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
@@ -128,7 +138,7 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
       return "[" + ", ".join([f"{fix_negative_zero(x):.{digits}f}" for x in arr.flatten()]) + "]"
 
     # Show detailed examples for first 2 timesteps (or just 1 if seq_len == 1)
-    seq_len = len(self.x_seq)
+    seq_len = len(context["x_seq"])
     num_examples = min(2, seq_len)
 
     explanation.add_element(ca.Paragraph([""]))
@@ -141,18 +151,18 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
       )
 
       # Compute step t
-      x_contribution = self.x_seq[t] @ self.W_xh
+      x_contribution = context["x_seq"][t] @ context["W_xh"]
       if t == 0:
-        h_prev = self.h_0
+        h_prev = context["h_0"]
         h_prev_label = 'h_{-1}'
         h_prev_desc = " (initial state)"
       else:
-        h_prev = self.h_states[t-1]
+        h_prev = context["h_states"][t-1]
         h_prev_label = f'h_{{{t-1}}}'
         h_prev_desc = ""
 
-      h_contribution = h_prev @ self.W_hh
-      pre_activation = x_contribution + h_contribution + self.b_h
+      h_contribution = h_prev @ context["W_hh"]
+      pre_activation = x_contribution + h_contribution + context["b_h"]
       h_result = np.tanh(pre_activation)
 
       explanation.add_element(
@@ -197,7 +207,7 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     )
 
     explanation.add_element(
-      ca.Matrix(np.round(self.h_states, digits))
+      ca.Matrix(np.round(context["h_states"], digits))
     )
 
     return explanation, []

@@ -1,6 +1,7 @@
 import abc
 import logging
 import math
+import random
 import keras
 import numpy as np
 from typing import List, Tuple
@@ -13,8 +14,9 @@ log = logging.getLogger(__name__)
 
 
 class WeightCounting(Question, abc.ABC):
+  @staticmethod
   @abc.abstractmethod
-  def get_model(self) -> keras.Model:
+  def get_model(rng: random.Random) -> keras.Model:
     pass
   
   @staticmethod
@@ -71,25 +73,30 @@ class WeightCounting(Question, abc.ABC):
     lines.append("])")
     return "\n".join(lines)
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    rng = random.Random(rng_seed)
+
     refresh_success = False
     while not refresh_success:
       try:
-        self.model, self.fields = self.get_model()
+        model, fields = cls.get_model(rng)
         refresh_success = True
       except ValueError as e:
         log.error(e)
-        log.info(f"Regenerating {self.__class__.__name__} due to improper configuration")
+        log.info(f"Regenerating {cls.__name__} due to improper configuration")
         continue
-    
-    self.num_parameters = self.model.count_params()
-    self.num_parameters_answer = ca.AnswerTypes.Int(self.num_parameters, label="Number of Parameters")
-    
-    return True
-  
-  def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+
+    num_parameters = model.count_params()
+
+    return {
+      "model": model,
+      "fields": fields,
+      "num_parameters": num_parameters,
+    }
+
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -104,21 +111,23 @@ class WeightCounting(Question, abc.ABC):
 
     body.add_element(
       ca.Code(
-        self.model_to_python(
-          self.model,
-          fields=self.fields
+        cls.model_to_python(
+          context["model"],
+          fields=context["fields"]
         )
       )
     )
 
     body.add_element(ca.LineBreak())
 
-    answers.append(self.num_parameters_answer)
-    body.add_element(self.num_parameters_answer)
+    num_parameters_answer = ca.AnswerTypes.Int(context["num_parameters"], label="Number of Parameters")
+    answers.append(num_parameters_answer)
+    body.add_element(num_parameters_answer)
 
     return body, answers
 
-  def _get_explanation(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -154,10 +163,10 @@ class WeightCounting(Question, abc.ABC):
 
 
     summary_lines = []
-    self.model.summary(print_fn=lambda x: summary_lines.append(x))
+    context["model"].summary(print_fn=lambda x: summary_lines.append(x))
     explanation.add_element(
       # ca.Text('\n'.join(summary_lines))
-      markdown_summary(self.model)
+      markdown_summary(context["model"])
     )
 
     return explanation, []
@@ -166,14 +175,15 @@ class WeightCounting(Question, abc.ABC):
 @QuestionRegistry.register("cst463.WeightCounting-CNN")
 class WeightCounting_CNN(WeightCounting):
   
-  def get_model(self) -> tuple[keras.Model, list[str]]:
-    input_size = self.rng.choice(np.arange(28, 32))
-    cnn_num_filters = self.rng.choice(2 ** np.arange(8))
-    cnn_kernel_size = self.rng.choice(1 + np.arange(10))
-    cnn_strides = self.rng.choice(1 + np.arange(10))
-    pool_size = self.rng.choice(1 + np.arange(10))
-    pool_strides = self.rng.choice(1 + np.arange(10))
-    num_output_size = self.rng.choice([1, 10, 32, 100])
+  @staticmethod
+  def get_model(rng: random.Random) -> tuple[keras.Model, list[str]]:
+    input_size = rng.choice(np.arange(28, 32))
+    cnn_num_filters = rng.choice(2 ** np.arange(8))
+    cnn_kernel_size = rng.choice(1 + np.arange(10))
+    cnn_strides = rng.choice(1 + np.arange(10))
+    pool_size = rng.choice(1 + np.arange(10))
+    pool_strides = rng.choice(1 + np.arange(10))
+    num_output_size = rng.choice([1, 10, 32, 100])
     
     # Let's just make a small model
     model = keras.models.Sequential(
@@ -199,15 +209,16 @@ class WeightCounting_CNN(WeightCounting):
 
 @QuestionRegistry.register("cst463.WeightCounting-RNN")
 class WeightCounting_RNN(WeightCounting):
-  def get_model(self) -> tuple[keras.Model, list[str]]:
-    timesteps = int(self.rng.choice(np.arange(20, 41)))
-    feature_size = int(self.rng.choice(np.arange(8, 65)))
+  @staticmethod
+  def get_model(rng: random.Random) -> tuple[keras.Model, list[str]]:
+    timesteps = int(rng.choice(np.arange(20, 41)))
+    feature_size = int(rng.choice(np.arange(8, 65)))
 
-    rnn_units = int(self.rng.choice(2 ** np.arange(4, 9)))
-    rnn_type = self.rng.choice(["SimpleRNN"])
-    return_sequences = bool(self.rng.choice([True, False]))
+    rnn_units = int(rng.choice(2 ** np.arange(4, 9)))
+    rnn_type = rng.choice(["SimpleRNN"])
+    return_sequences = bool(rng.choice([True, False]))
 
-    num_output_size = int(self.rng.choice([1, 10, 32, 100]))
+    num_output_size = int(rng.choice([1, 10, 32, 100]))
 
     RNNLayer = getattr(keras.layers, rnn_type)
 

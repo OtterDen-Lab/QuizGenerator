@@ -75,20 +75,33 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
     return results
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
-    
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_steps" in kwargs:
+      self.num_steps = kwargs.get("num_steps", self.num_steps)
+    if "num_variables" in kwargs:
+      self.num_variables = kwargs.get("num_variables", self.num_variables)
+    if "max_degree" in kwargs:
+      self.max_degree = kwargs.get("max_degree", self.max_degree)
+    if "single_variable" in kwargs:
+      self.single_variable = kwargs.get("single_variable", self.single_variable)
+      if self.single_variable:
+        self.num_variables = 1
+    if "minimize" in kwargs:
+      self.minimize = kwargs.get("minimize", self.minimize)
+
+    self.rng.seed(rng_seed)
+
     # Generate function and its properties
     self.variables, self.function, self.gradient_function, self.equation = generate_function(self.rng, self.num_variables, self.max_degree)
-    
+
     # Generate learning rate (expanded range)
     self.learning_rate = self.rng.choice([0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
-    
+
     self.starting_point = [self.rng.randint(-3, 3) for _ in range(self.num_variables)]
-    
+
     # Perform gradient descent
     self.gradient_descent_results = self._perform_gradient_descent()
-    
+
     # Build answers for each step
     self.step_answers = {}
     for i, result in enumerate(self.gradient_descent_results):
@@ -105,6 +118,10 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       # Update answer
       update_key = f"answer__update_{step}"
       self.step_answers[update_key] = ca.AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
   
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""

@@ -39,8 +39,13 @@ class ParameterCountingQuestion(Question):
     self.num_layers = kwargs.get("num_layers", None)
     self.include_biases = kwargs.get("include_biases", True)
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_layers" in kwargs:
+      self.num_layers = kwargs.get("num_layers", self.num_layers)
+    if "include_biases" in kwargs:
+      self.include_biases = kwargs.get("include_biases", self.include_biases)
+
+    self.rng.seed(rng_seed)
 
     # Generate random architecture
     if self.num_layers is None:
@@ -77,6 +82,10 @@ class ParameterCountingQuestion(Question):
       self.total_biases += biases
 
     self.total_params = self.total_weights + self.total_biases
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -228,8 +237,13 @@ class ActivationFunctionComputationQuestion(Question):
     self.vector_size = kwargs.get("vector_size", None)
     self.activation = kwargs.get("activation", None)
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "vector_size" in kwargs:
+      self.vector_size = kwargs.get("vector_size", self.vector_size)
+    if "activation" in kwargs:
+      self.activation = kwargs.get("activation", self.activation)
+
+    self.rng.seed(rng_seed)
 
     # Generate random input vector
     if self.vector_size is None:
@@ -255,6 +269,10 @@ class ActivationFunctionComputationQuestion(Question):
 
     # Compute outputs
     self.output_vector = self._compute_activation(self.input_vector)
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _compute_activation(self, inputs):
     """Compute activation function output."""
@@ -453,8 +471,11 @@ class RegularizationCalculationQuestion(Question):
 
     self.num_weights = kwargs.get("num_weights", None)
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_weights" in kwargs:
+      self.num_weights = kwargs.get("num_weights", self.num_weights)
+
+    self.rng.seed(rng_seed)
 
     # Generate small network (2-4 weights for simplicity)
     if self.num_weights is None:
@@ -495,6 +516,10 @@ class RegularizationCalculationQuestion(Question):
     self.grad_base_w0 = -(self.target - self.prediction) * 1  # derivative of w0*x^0
     self.grad_reg_w0 = self.lambda_reg * self.weights[0]
     self.grad_total_w0 = self.grad_base_w0 + self.grad_reg_w0
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
@@ -701,12 +726,16 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     self.num_variables = kwargs.get("num_variables", 2)
     self.show_vanilla_sgd = kwargs.get("show_vanilla_sgd", True)
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    super().refresh(rng_seed=rng_seed, *args, **kwargs)
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    if "num_variables" in kwargs:
+      self.num_variables = kwargs.get("num_variables", self.num_variables)
+    if "show_vanilla_sgd" in kwargs:
+      self.show_vanilla_sgd = kwargs.get("show_vanilla_sgd", self.show_vanilla_sgd)
+
+    self.rng.seed(rng_seed)
 
     # Generate well-conditioned quadratic function
-    self.variables, self.function, self.gradient_function, self.equation = \
-        generate_function(self.rng, self.num_variables, max_degree=2, use_quadratic=True)
+    self.variables, self.function, self.gradient_function, self.equation =         generate_function(self.rng, self.num_variables, max_degree=2, use_quadratic=True)
 
     # Generate current weights (small integers)
     self.current_weights = [
@@ -749,6 +778,10 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
         w - self.learning_rate * grad
         for w, grad in zip(self.current_weights, self.gradients)
       ]
+
+    context = dict(kwargs)
+    context["rng_seed"] = rng_seed
+    return context
 
   def _get_body(self, **kwargs) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
