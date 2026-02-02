@@ -745,7 +745,9 @@ class Question(abc.ABC):
   def _append_entry_warnings(cls, body: ca.Element, warnings: List[str]) -> ca.Element:
     if not warnings:
       return body
-    warning_elements = ca.OnlyHtml([ca.Paragraph([warning]) for warning in warnings])
+    notes_lines = ["**Notes for answer entry**"]
+    notes_lines.extend(f"- {warning}" for warning in warnings)
+    warning_elements = ca.OnlyHtml([ca.Paragraph(["\n".join(notes_lines)])])
     if isinstance(body, ca.Container):
       body.add_element(warning_elements)
       return body

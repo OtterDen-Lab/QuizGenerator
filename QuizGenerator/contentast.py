@@ -2441,7 +2441,7 @@ class AnswerTypes:
     def get_entry_warning(cls) -> str | None:
       digits = Answer.DEFAULT_ROUNDING_DIGITS
       return (
-        f"Round decimals to {digits} decimal places (fewer if exact, e.g., `1.25`). "
+        f"Round floats to {digits} decimal places (fewer if exact, e.g., `1.25`). "
         "No mixed numbers (use `5/4`, not `1 1/4`). "
         "Integers as integers (e.g., `2`, not `2/1`)."
       )
@@ -2501,6 +2501,10 @@ class AnswerTypes:
     pass
 
   class List(Answer):
+    @classmethod
+    def get_entry_warning(cls) -> str | None:
+      return "Enter lists as comma-separated values (e.g., `1, 2, 3`)."
+
     def __init__(self, order_matters=True, *args, **kwargs):
       super().__init__(*args, **kwargs)
       self.order_matters = order_matters
@@ -2541,7 +2545,7 @@ class AnswerTypes:
 
     @classmethod
     def get_entry_warning(cls) -> str | None:
-      return AnswerTypes.Float.get_entry_warning()
+      return "Enter vectors as comma-separated values, with optional parentheses (e.g., `1, 2` or `(1, 2)`)."
   
   # Canvas export methods (from misc.Answer)
     def get_for_canvas(self, single_answer=False) -> List[dict]:
