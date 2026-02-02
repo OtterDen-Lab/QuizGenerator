@@ -2263,6 +2263,10 @@ class Answer(Leaf):
     unit_part = f" {self.unit}" if self.unit else ""
 
     return f"{label_part} {blank}{unit_part}".strip()
+
+  @classmethod
+  def get_entry_warning(cls) -> str | None:
+    return None
   
   # Factory methods for common answer types
   @classmethod
@@ -2322,11 +2326,11 @@ class Answer(Leaf):
     - Integer form (if value is a whole number)
     - Fixed decimal with DEFAULT_ROUNDING_DIGITS (e.g., "1.0000")
     - Trimmed decimal without trailing zeros (e.g., "1.25")
-    - Simple fraction if exactly representable (e.g., "5/4")
+    - Simple fraction and mixed number if exactly representable (e.g., "5/4", "1 1/4")
 
     Examples:
       1 → ["1", "1.0000"]
-      1.25 → ["1.25", "1.2500", "5/4"]
+      1.25 → ["1.25", "1.2500", "5/4", "1 1/4"]
       0.123444... → ["0.1234"]
     """
     rounding_digits = Answer.DEFAULT_ROUNDING_DIGITS
@@ -2433,6 +2437,15 @@ class AnswerTypes:
 
   # Concrete type answers
   class Float(Answer):
+    @classmethod
+    def get_entry_warning(cls) -> str | None:
+      digits = Answer.DEFAULT_ROUNDING_DIGITS
+      return (
+        f"Round decimals to {digits} decimal places (fewer if exact, e.g., `1.25`). "
+        "No mixed numbers (use `5/4`, not `1 1/4`). "
+        "Integers as integers (e.g., `2`, not `2/1`)."
+      )
+
     def get_for_canvas(self, single_answer=False) -> List[dict]:
       if single_answer:
         canvas_answers = [
@@ -2525,6 +2538,10 @@ class AnswerTypes:
     """
     These are self-contained vectors that will go in a single answer block
     """
+
+    @classmethod
+    def get_entry_warning(cls) -> str | None:
+      return AnswerTypes.Float.get_entry_warning()
   
   # Canvas export methods (from misc.Answer)
     def get_for_canvas(self, single_answer=False) -> List[dict]:
@@ -2567,6 +2584,10 @@ class AnswerTypes:
     """
     Matrix answers generate multiple blank_ids (e.g., M_0_0, M_0_1, M_1_0, M_1_1).
     """
+
+    @classmethod
+    def get_entry_warning(cls) -> str | None:
+      return AnswerTypes.Float.get_entry_warning()
   
     def __init__(self, value, *args, **kwargs):
       super().__init__(value=value, *args, **kwargs)

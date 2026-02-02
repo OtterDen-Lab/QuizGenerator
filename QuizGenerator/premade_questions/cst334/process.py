@@ -433,13 +433,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       f"Break any ties using the job number."
     )
 
-    instructions = ca.OnlyHtml([ca.Paragraph([
-      f"Please format answer as fractions, mixed numbers, or numbers rounded to a maximum of {ca.Answer.DEFAULT_ROUNDING_DIGITS} digits after the decimal. "
-      "Examples of appropriately formatted answers would be `0`, `3/2`, `1 1/3`, `1.6667`, and `1.25`. "
-      "Note that answers that can be rounded to whole numbers should be, rather than being left in fractional form."
-    ])])
-
-    body = cls.create_fill_in_table_body(intro_text, instructions, scheduling_table)
+    body = cls.create_fill_in_table_body(intro_text, None, scheduling_table)
     body.add_element(average_block)
     return body
   

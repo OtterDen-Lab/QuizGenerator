@@ -382,6 +382,7 @@ class RegenerableChoiceMixin:
         del choice_info['_temp_fixed_value']
 
 class Question(abc.ABC):
+  AUTO_ENTRY_WARNINGS = True
   """
   Base class for all quiz questions with cross-format rendering support.
 
@@ -584,6 +585,10 @@ class Question(abc.ABC):
 
       can_be_numerical = self._can_be_numerical_from_answers(answers)
 
+      if self.AUTO_ENTRY_WARNINGS:
+        warnings = self._entry_warnings_from_answers(answers)
+        components.body = self._append_entry_warnings(components.body, warnings)
+
       config_params = dict(self.config_params)
       if isinstance(ctx, dict) and ctx.get("_config_params"):
         config_params.update(ctx.get("_config_params"))
@@ -722,6 +727,29 @@ class Question(abc.ABC):
         seen.add(key)
         merged.append(ans)
     return merged
+
+  @classmethod
+  def _entry_warnings_from_answers(cls, answers: List[ca.Answer]) -> List[str]:
+    warnings: List[str] = []
+    seen: set[str] = set()
+    for answer in answers:
+      warning = None
+      if hasattr(answer.__class__, "get_entry_warning"):
+        warning = answer.__class__.get_entry_warning()
+      if warning and warning not in seen:
+        warnings.append(warning)
+        seen.add(warning)
+    return warnings
+
+  @classmethod
+  def _append_entry_warnings(cls, body: ca.Element, warnings: List[str]) -> ca.Element:
+    if not warnings:
+      return body
+    warning_elements = ca.OnlyHtml([ca.Paragraph([warning]) for warning in warnings])
+    if isinstance(body, ca.Container):
+      body.add_element(warning_elements)
+      return body
+    return ca.Section([body, warning_elements])
 
   @classmethod
   def _can_be_numerical_from_answers(cls, answers: List[ca.Answer]) -> bool:
