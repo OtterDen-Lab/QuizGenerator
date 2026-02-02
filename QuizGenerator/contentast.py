@@ -2503,7 +2503,7 @@ class AnswerTypes:
   class List(Answer):
     @classmethod
     def get_entry_warning(cls) -> str | None:
-      return "Enter lists as comma-separated values (e.g., `1, 2, 3`)."
+      return "Enter lists as comma-separated values with a space after the comma (e.g., `1, 2, 3`)."
 
     def __init__(self, order_matters=True, *args, **kwargs):
       super().__init__(*args, **kwargs)
@@ -2545,7 +2545,10 @@ class AnswerTypes:
 
     @classmethod
     def get_entry_warning(cls) -> str | None:
-      return "Enter vectors as comma-separated values, with optional parentheses (e.g., `1, 2` or `(1, 2)`)."
+      return (
+        "Enter vectors as comma-separated values with a space after the comma, "
+        "with optional parentheses (e.g., `1, 2` or `(1, 2)`)."
+      )
   
   # Canvas export methods (from misc.Answer)
     def get_for_canvas(self, single_answer=False) -> List[dict]:
