@@ -17,7 +17,8 @@ class TableQuestionMixin:
   across question types, reducing repetitive ca.Table creation code.
   """
   
-  def create_info_table(self, info_dict: Dict[str, Any], transpose: bool = False) -> ca.Table:
+  @staticmethod
+  def create_info_table(info_dict: Dict[str, Any], transpose: bool = False) -> ca.Table:
     """
     Creates a vertical info table (key-value pairs).
 
@@ -45,8 +46,8 @@ class TableQuestionMixin:
       transpose=transpose
     )
   
+  @staticmethod
   def create_answer_table(
-      self,
       headers: List[str],
       data_rows: List[Dict[str, Any]],
       answer_columns: List[str] = None
@@ -89,8 +90,8 @@ class TableQuestionMixin:
       data=table_data
     )
   
+  @staticmethod
   def create_parameter_answer_table(
-      self,
       parameter_info: Dict[str, Any],
       answer_label: str,
       answer: ca.Answer,
@@ -122,8 +123,8 @@ class TableQuestionMixin:
       transpose=transpose
     )
   
+  @staticmethod
   def create_fill_in_table(
-      self,
       headers: List[str],
       template_rows: List[Dict[str, Any]]
   ) -> ca.Table:
@@ -169,8 +170,8 @@ class BodyTemplatesMixin:
   common question layout patterns.
   """
   
+  @staticmethod
   def create_calculation_with_info_body(
-      self,
       intro_text: str,
       info_table: ca.Table,
       answer_block: ca.AnswerBlock
@@ -186,8 +187,8 @@ class BodyTemplatesMixin:
     body.add_element(answer_block)
     return body
   
+  @staticmethod
   def create_fill_in_table_body(
-      self,
       intro_text: str,
       instructions: str,
       table: ca.Table
@@ -205,8 +206,8 @@ class BodyTemplatesMixin:
     body.add_element(table)
     return body
   
+  @staticmethod
   def create_parameter_calculation_body(
-      self,
       intro_text: str,
       parameter_table: ca.Table,
       answer_table: ca.Table = None,

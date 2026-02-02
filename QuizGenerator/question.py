@@ -585,6 +585,10 @@ class Question(abc.ABC):
 
       can_be_numerical = self._can_be_numerical_from_answers(answers)
 
+      config_params = dict(self.config_params)
+      if isinstance(ctx, dict) and ctx.get("_config_params"):
+        config_params.update(ctx.get("_config_params"))
+
       instance = QuestionInstance(
         body=components.body,
         explanation=components.explanation,
@@ -598,7 +602,7 @@ class Question(abc.ABC):
           question_class_name=self._get_registered_name(),
           generation_seed=actual_seed,
           question_version=self.VERSION,
-          config_params=dict(self.config_params)
+          config_params=config_params
         )
       )
       return instance
