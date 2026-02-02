@@ -2330,17 +2330,19 @@ class Answer(Leaf):
       0.123444... → ["0.1234"]
     """
     rounding_digits = Answer.DEFAULT_ROUNDING_DIGITS
-    decimal.getcontext().prec = max(34, rounding_digits + 10)
-
     outs = set()
 
     # Round to our standard precision first
+    decimal.getcontext().prec = max(34, rounding_digits + 10)
     q = decimal.Decimal(1).scaleb(-rounding_digits)
-    rounded_decimal = decimal.Decimal(str(value)).quantize(q, rounding=decimal.ROUND_HALF_UP)
-
-    # Normalize negative zero to positive zero
-    if rounded_decimal == 0:
-      rounded_decimal = abs(rounded_decimal)
+    if isinstance(value, str) and '/' in value:
+      f = Answer._to_fraction(value)
+      decimal_value = decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)
+    elif isinstance(value, fractions.Fraction):
+      decimal_value = decimal.Decimal(value.numerator) / decimal.Decimal(value.denominator)
+    else:
+      decimal_value = decimal.Decimal(str(value))
+    rounded_decimal = decimal_value.quantize(q, rounding=decimal.ROUND_HALF_UP)
 
     # Fixed decimal form (e.g., "1.2500")
     fixed_str = format(rounded_decimal, 'f')
@@ -2460,8 +2462,8 @@ class AnswerTypes:
       return canvas_answers
 
     def get_display_string(self) -> str:
-      rounded = round(self.value, Answer.DEFAULT_ROUNDING_DIGITS)
-      return f"{self.fix_negative_zero(rounded)}"
+      answer_strings = Answer.accepted_strings(self.value)
+      return answer_strings[0] if len(answer_strings) > 0 else f"{self.value}"
 
   class Int(Answer):
 
