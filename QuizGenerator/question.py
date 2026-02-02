@@ -169,7 +169,7 @@ class QuestionRegistry:
             raise ValueError(f"Unknown question type: {question_type}")
 
     new_question : Question = cls._registry[question_key](**kwargs)
-    # Note: Don't call refresh() here - it will be called by instantiate()
+    # Note: Don't build context here - instantiate() handles it
     # Calling it here would consume RNG calls and break QR code regeneration
     return new_question
     
@@ -234,21 +234,21 @@ class QuestionRegistry:
 class RegenerableChoiceMixin:
   """
   Mixin for questions that need to make random choices from enums/lists that are:
-  1. Different across multiple refreshes (when the same Question instance is reused for multiple PDFs)
+  1. Different across multiple builds (when the same Question instance is reused for multiple PDFs)
   2. Reproducible from QR code config_params
 
   The Problem:
   ------------
   When generating multiple PDFs, Quiz.from_yaml() creates Question instances ONCE.
-  These instances are then refresh()ed multiple times with different RNG seeds.
+  These instances are then built multiple times with different RNG seeds.
   If a question randomly selects an algorithm/policy in __init__(), all PDFs get the same choice
   because __init__() only runs once with an unseeded RNG.
 
   The Solution:
   -------------
   1. In __init__(): Register choices with fixed values (if provided) or None (for random)
-  2. In refresh(): Make random selections using the seeded RNG, store in config_params
-  3. Result: Each refresh gets a different random choice, and it's captured for QR codes
+  2. In _build_context(): Make random selections using the seeded RNG, store in config_params
+  3. Result: Each build gets a different random choice, and it's captured for QR codes
 
   Usage Example:
   --------------
@@ -262,11 +262,11 @@ class RegenerableChoiceMixin:
           self.register_choice('scheduler_kind', self.Kind, scheduler_kind, kwargs)
           super().__init__(**kwargs)
 
-      def refresh(self, **kwargs):
-          super().refresh(**kwargs)
+      def _build_context(self, rng_seed=None, **kwargs):
+          self.rng.seed(rng_seed)
           # Get the choice (randomly selected or from config_params)
           self.scheduler_algorithm = self.get_choice('scheduler_kind', self.Kind)
-          # ... rest of refresh logic
+          # ... rest of build logic
   """
 
   def __init__(self, *args, **kwargs):
@@ -303,7 +303,7 @@ class RegenerableChoiceMixin:
   def get_choice(self, param_name: str, enum_class: type[enum.Enum]) -> enum.Enum:
     """
     Get the choice for a registered parameter.
-    Should be called in refresh() AFTER super().refresh().
+    Should be called in _build_context() AFTER seeding the RNG.
 
     Args:
         param_name: The parameter name registered earlier
@@ -369,7 +369,7 @@ class RegenerableChoiceMixin:
       if choice_info['fixed_value'] is None:
         enum_class = choice_info['enum_class']
         random_choice = choice_rng.choice(list(enum_class))
-        # Temporarily set this as the fixed value so all refresh() calls use it
+        # Temporarily set this as the fixed value so all builds use it
         choice_info['_temp_fixed_value'] = random_choice.name
         # Store in config_params
         self.config_params[param_name] = random_choice.name
@@ -394,7 +394,7 @@ class Question(abc.ABC):
   Primary extension points:
     - build(...): Simple path. Override to generate body + explanation in one place.
     - _build_context/_build_body/_build_explanation: Context path.
-      Default _build_context uses refresh() for legacy questions.
+      Default _build_context is required for all questions.
 
   Required Class Attributes:
     - VERSION (str): Question version number (e.g., "1.0")
@@ -565,7 +565,6 @@ class Question(abc.ABC):
         current_seed = None if base_seed is None else base_seed + backoff_counter
         ctx = self._build_context(
           rng_seed=current_seed,
-          hard_refresh=(backoff_counter > 0),
           **self.config_params
         )
         is_interesting = self.is_interesting_ctx(ctx)
@@ -652,11 +651,13 @@ class Question(abc.ABC):
 
     Override to return a context dict and avoid persistent self.* state.
     """
-    # Legacy fallback: refresh() populates instance state.
-    self.refresh(rng_seed=rng_seed, **kwargs)
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
-    return context
+    rng = random.Random(rng_seed)
+    # Keep instance rng in sync for questions that still use self.rng.
+    self.rng = rng
+    return {
+      "rng_seed": rng_seed,
+      "rng": rng,
+    }
 
   @classmethod
   def is_interesting_ctx(cls, context) -> bool:
@@ -665,17 +666,11 @@ class Question(abc.ABC):
 
   def _build_body(self, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
     """Context-aware body builder."""
-    if hasattr(self, "_get_body"):
-      return self._get_body()
     raise NotImplementedError("Questions must implement _build_body().")
 
   def _build_explanation(self, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
     """Context-aware explanation builder."""
-    if hasattr(self, "_get_explanation"):
-      return self._get_explanation()
-    return ca.Section(
-      [ca.Text("[Please reach out to your professor for clarification]")]
-    )
+    raise NotImplementedError("Questions must implement _build_explanation().")
 
   @classmethod
   def _collect_answers_from_ast(cls, element: ca.Element) -> List[ca.Answer]:
@@ -767,19 +762,7 @@ class Question(abc.ABC):
     return question_ast
 
   def refresh(self, rng_seed=None, *args, **kwargs):
-    """If it is necessary to regenerate aspects between usages, this is the time to do it.
-    This base implementation simply resets everything.
-    :param rng_seed: random number generator seed to use when regenerating question
-    :param *args:
-    :param **kwargs:
-    :return: bool - True if the generated question is interesting, False otherwise
-    """
-    # Seed the RNG directly with the provided seed (no offset)
-    self.rng.seed(rng_seed)
-    # Note: We don't call is_interesting() here because child classes need to
-    # generate their workloads first. Child classes should call it at the end
-    # of their refresh() and return the result.
-    return self.is_interesting()  # Default: assume interesting if no override
+    raise NotImplementedError("refresh() has been removed; use _build_context().")
     
   def is_interesting(self) -> bool:
     return True

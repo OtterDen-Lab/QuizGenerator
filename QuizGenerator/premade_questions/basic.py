@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 from typing import Tuple, List
+import random
 
 import logging
 
 import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry, QuestionComponents
+from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin
 
 log = logging.getLogger(__name__)
@@ -20,8 +21,16 @@ class FromText(Question):
     self.text = text
     self.possible_variations = 1
   
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    context["text"] = self.text
+    return context
+  
   def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
-    return ca.Section([ca.Text(self.text)]), []
+    return ca.Section([ca.Text(context["text"])]), []
+
+  def _build_explanation(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+    return ca.Section(), []
 
 
 @QuestionRegistry.register()
@@ -61,8 +70,14 @@ class FromGenerator(FromText, TableQuestionMixin):
     self.generator_text = generator
     # Attach the function dynamically
     attach_function_to_object(self, generator, "generator")
-    
-  def build(self, *, rng_seed=None, context=None, **kwargs) -> QuestionComponents:
+
+  def _build_context(self, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    # Preserve prior behavior for generators that use the global random module.
+    random.seed(rng_seed)
+    return context
+
+  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
     try:
       generated_content = self.generator()
       if isinstance(generated_content, ca.Section):
@@ -76,17 +91,7 @@ class FromGenerator(FromText, TableQuestionMixin):
       log.debug(self.generator_text)
       exit(8)
 
-    explanation = self._build_explanation(context or {})
-    answers = self._merge_answers(
-      self._collect_answers_from_ast(body),
-      self._collect_answers_from_ast(explanation)
-    )
-    return QuestionComponents(
-      body=body,
-      answers=answers,
-      explanation=explanation
-    )
-
-
+    return body, []
+    
 class TrueFalse(FromText):
   pass

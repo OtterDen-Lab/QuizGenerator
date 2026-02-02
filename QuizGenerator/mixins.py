@@ -409,42 +409,6 @@ class MathOperationQuestion(MultiPartQuestionMixin, abc.ABC):
     """Create answers for single questions - just delegate to subquestion method."""
     return self.create_subquestion_answers(0, result)
   
-  def refresh(self, *args, **kwargs):
-    super().refresh(*args, **kwargs)
-    
-    # Clear any existing data
-    self._generated_answers = []
-    
-    if self.is_multipart():
-      # Generate multiple subquestions
-      self.subquestion_data = []
-      for i in range(self.num_subquestions):
-        # Generate unique operands for each subquestion
-        operand_a, operand_b = self.generate_operands()
-        result = self.calculate_single_result(operand_a, operand_b)
-        
-        self.subquestion_data.append(
-          {
-            'operand_a': operand_a,
-            'operand_b': operand_b,
-            'vector_a': operand_a,  # For vector compatibility
-            'vector_b': operand_b,  # For vector compatibility
-            'result': result
-          }
-        )
-        
-        # Create answers for this subpart
-        subpart_answers = self.create_subquestion_answers(i, result) or []
-        self._generated_answers.extend(subpart_answers)
-    else:
-      # Single question (original behavior)
-      self.operand_a, self.operand_b = self.generate_operands()
-      self.result = self.calculate_single_result(self.operand_a, self.operand_b)
-      
-      # Create answers
-      single_answers = self.create_single_answers(self.result) or []
-      self._generated_answers.extend(single_answers)
-  
   def generate_subquestion_data(self):
     """Generate LaTeX content for each subpart of the question."""
     subparts = []
