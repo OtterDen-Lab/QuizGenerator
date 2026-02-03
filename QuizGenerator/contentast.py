@@ -2265,7 +2265,7 @@ class Answer(Leaf):
     return f"{label_part} {blank}{unit_part}".strip()
 
   @classmethod
-  def get_entry_warning(cls) -> str | None:
+  def get_entry_warning(cls) -> List[str] | None:
     return None
   
   # Factory methods for common answer types
@@ -2326,11 +2326,11 @@ class Answer(Leaf):
     - Integer form (if value is a whole number)
     - Fixed decimal with DEFAULT_ROUNDING_DIGITS (e.g., "1.0000")
     - Trimmed decimal without trailing zeros (e.g., "1.25")
-    - Simple fraction and mixed number if exactly representable (e.g., "5/4", "1 1/4")
+    - Simple fraction if exactly representable (e.g., "5/4")
 
     Examples:
       1 → ["1", "1.0000"]
-      1.25 → ["1.25", "1.2500", "5/4", "1 1/4"]
+      1.25 → ["1.25", "1.2500", "5/4"]
       0.123444... → ["0.1234"]
     """
     rounding_digits = Answer.DEFAULT_ROUNDING_DIGITS
@@ -2438,13 +2438,13 @@ class AnswerTypes:
   # Concrete type answers
   class Float(Answer):
     @classmethod
-    def get_entry_warning(cls) -> str | None:
+    def get_entry_warning(cls) -> List[str] | None:
       digits = Answer.DEFAULT_ROUNDING_DIGITS
-      return (
+      return [
         f"Round floats to {digits} decimal places (fewer if exact, e.g., `1.25`). "
-        "No mixed numbers (use `5/4`, not `1 1/4`). "
+        "No mixed numbers (e.g. use `5/4`, not `1 1/4`). "
         "Integers as integers (e.g., `2`, not `2/1`)."
-      )
+      ]
 
     def get_for_canvas(self, single_answer=False) -> List[dict]:
       if single_answer:
@@ -2502,8 +2502,8 @@ class AnswerTypes:
 
   class List(Answer):
     @classmethod
-    def get_entry_warning(cls) -> str | None:
-      return "Enter lists as comma-separated values with a space after the comma (e.g., `1, 2, 3`)."
+    def get_entry_warning(cls) -> List[str] | None:
+      return ["Enter lists as comma-separated values with a space after the comma (e.g., `1, 2, 3`)."]
 
     def __init__(self, order_matters=True, *args, **kwargs):
       super().__init__(*args, **kwargs)
@@ -2544,11 +2544,11 @@ class AnswerTypes:
     """
 
     @classmethod
-    def get_entry_warning(cls) -> str | None:
-      return (
+    def get_entry_warning(cls) -> List[str] | None:
+      return [
         "Enter vectors as comma-separated values with a space after the comma, "
         "with optional parentheses (e.g., `1, 2` or `(1, 2)`)."
-      )
+      ]
   
   # Canvas export methods (from misc.Answer)
     def get_for_canvas(self, single_answer=False) -> List[dict]:
@@ -2593,8 +2593,11 @@ class AnswerTypes:
     """
 
     @classmethod
-    def get_entry_warning(cls) -> str | None:
-      return "For result matrices, enter `-` in any cell that does not exist."
+    def get_entry_warning(cls) -> List[str] | None:
+      return [
+        "For result matrices, enter `-` in any cell that does not exist.",
+        *AnswerTypes.Float.get_entry_warning()
+      ]
   
     def __init__(self, value, *args, **kwargs):
       super().__init__(value=value, *args, **kwargs)

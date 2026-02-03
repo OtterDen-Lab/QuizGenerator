@@ -736,9 +736,16 @@ class Question(abc.ABC):
       warning = None
       if hasattr(answer.__class__, "get_entry_warning"):
         warning = answer.__class__.get_entry_warning()
-      if warning and warning not in seen:
-        warnings.append(warning)
-        seen.add(warning)
+      if not warning:
+        continue
+      if isinstance(warning, str):
+        warning_list = [warning]
+      else:
+        warning_list = list(warning)
+      for item in warning_list:
+        if item and item not in seen:
+          warnings.append(item)
+          seen.add(item)
     return warnings
 
   @classmethod
