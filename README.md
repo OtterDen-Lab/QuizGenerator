@@ -112,7 +112,7 @@ All questions follow the same three‑method flow:
 class MyQuestion(Question):
     def _build_context(self, *, rng_seed=None, **kwargs):
         context = super()._build_context(rng_seed=rng_seed, **kwargs)
-        rng = context["rng"]
+        rng = context.rng
         context["value"] = rng.randint(1, 10)
         return context
 
@@ -129,7 +129,7 @@ class MyQuestion(Question):
 ```
 
 Notes:
-- Always use `context["rng"]` for deterministic randomness.
+- Always use `context.rng` (or `context["rng"]`) for deterministic randomness.
 - Avoid `refresh()`; it is no longer part of the API.
 
 ## Built-in Question Types

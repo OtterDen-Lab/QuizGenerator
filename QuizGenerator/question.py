@@ -8,6 +8,7 @@ import datetime
 import enum
 import importlib
 import itertools
+import inspect
 import os
 import pathlib
 import pkgutil
@@ -15,10 +16,11 @@ import pprint
 import random
 import re
 import uuid
+from types import MappingProxyType
 
 import pypandoc
 import yaml
-from typing import List, Dict, Any, Tuple, Optional
+from typing import List, Dict, Any, Tuple, Optional, Mapping, MutableMapping
 import canvasapi.course, canvasapi.quiz
 
 import QuizGenerator.contentast as ca
@@ -56,6 +58,69 @@ class QuestionInstance:
     spacing: float
     topic: "Question.Topic"
     flags: RegenerationFlags
+
+
+@dataclasses.dataclass
+class QuestionContext:
+    rng_seed: Optional[int]
+    rng: random.Random
+    data: MutableMapping[str, Any] | Mapping[str, Any] = dataclasses.field(default_factory=dict)
+    frozen: bool = False
+
+    def __getitem__(self, key: str) -> Any:
+        if key == "rng_seed":
+            return self.rng_seed
+        if key == "rng":
+            return self.rng
+        return self.data[key]
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        if self.frozen:
+            raise TypeError("QuestionContext is frozen.")
+        if key == "rng_seed":
+            self.rng_seed = value
+            return
+        if key == "rng":
+            self.rng = value
+            return
+        if isinstance(self.data, MappingProxyType):
+            raise TypeError("QuestionContext is frozen.")
+        self.data[key] = value
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key == "rng_seed":
+            return self.rng_seed
+        if key == "rng":
+            return self.rng
+        return self.data.get(key, default)
+
+    def __contains__(self, key: object) -> bool:
+        if key in ("rng_seed", "rng"):
+            return True
+        return key in self.data
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self.data:
+            return self.data[name]
+        raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
+
+    def keys(self):
+        return self.data.keys()
+
+    def items(self):
+        return self.data.items()
+
+    def values(self):
+        return self.data.values()
+
+    def freeze(self) -> "QuestionContext":
+        frozen_data = MappingProxyType(dict(self.data))
+        return QuestionContext(
+            rng_seed=self.rng_seed,
+            rng=self.rng,
+            data=frozen_data,
+            frozen=True,
+        )
 
 
 # Spacing presets for questions
@@ -439,6 +504,7 @@ class Question(abc.ABC):
 
   # Default version - subclasses should override this
   VERSION = "1.0"
+  FREEZE_CONTEXT = False
   
   class Topic(enum.Enum):
     # CST334 (Operating Systems) Topics
@@ -547,8 +613,10 @@ class Question(abc.ABC):
     """
     # Generate the question, retrying with incremented seeds until we get an interesting one
     base_seed = kwargs.get("rng_seed", None)
+    max_backoff_attempts = kwargs.get("max_backoff_attempts", None)
     build_kwargs = dict(kwargs)
     build_kwargs.pop("rng_seed", None)
+    build_kwargs.pop("max_backoff_attempts", None)
     # Include config params so build() implementations can access YAML-provided settings.
     build_kwargs = {**self.config_params, **build_kwargs}
 
@@ -562,6 +630,10 @@ class Question(abc.ABC):
       is_interesting = False
       ctx = None
       while not is_interesting:
+        if max_backoff_attempts is not None and backoff_counter >= max_backoff_attempts:
+          raise RuntimeError(
+            f"Exceeded max_backoff_attempts={max_backoff_attempts} for {self.__class__.__name__}"
+          )
         # Increment seed for each backoff attempt to maintain deterministic behavior
         current_seed = None if base_seed is None else base_seed + backoff_counter
         ctx = self._build_context(
@@ -574,7 +646,18 @@ class Question(abc.ABC):
       # Store the actual seed used and question metadata for QR code generation
       actual_seed = None if base_seed is None else base_seed + backoff_counter - 1
 
-      components = self.build(rng_seed=current_seed, context=ctx, **build_kwargs)
+      # Keep instance rng in sync for any legacy usage.
+      if isinstance(ctx, QuestionContext):
+        self.rng = ctx.rng
+      elif isinstance(ctx, dict) and "rng" in ctx:
+        self.rng = ctx["rng"]
+
+      components = self.__class__.build(
+        rng_seed=current_seed,
+        context=ctx,
+        instance=self,
+        **build_kwargs
+      )
 
       # Collect answers from explicit lists and inline AST
       inline_body_answers = self._collect_answers_from_ast(components.body)
@@ -619,19 +702,31 @@ class Question(abc.ABC):
   def post_instantiate(self, instance, **kwargs):
     pass
    
-  def build(self, *, rng_seed=None, context=None, **kwargs) -> QuestionComponents:
+  @classmethod
+  def build(cls, *, rng_seed=None, context=None, instance=None, **kwargs) -> QuestionComponents:
     """
     Build question content (body, answers, explanation) for a given seed.
 
     This should only generate content; metadata like points/spacing belong in instantiate().
     """
-    cls = self.__class__
     if context is None:
-      context = self._build_context(rng_seed=rng_seed, **kwargs)
+      context = cls._coerce_context(
+        cls._build_context(rng_seed=rng_seed, **kwargs),
+        rng_seed=rng_seed
+      )
+    else:
+      context = cls._coerce_context(context, rng_seed=rng_seed)
+
+    if cls.FREEZE_CONTEXT:
+      context = context.freeze()
 
     # Build body + explanation. Each may return just an Element or (Element, answers).
-    body, body_answers = cls._normalize_build_output(self._build_body(context))
-    explanation, explanation_answers = cls._normalize_build_output(self._build_explanation(context))
+    body, body_answers = cls._normalize_build_output(
+      cls._call_build_fn(cls._build_body, context, instance=instance)
+    )
+    explanation, explanation_answers = cls._normalize_build_output(
+      cls._call_build_fn(cls._build_explanation, context, instance=instance)
+    )
 
     # Collect inline answers from both body and explanation.
     inline_body_answers = cls._collect_answers_from_ast(body)
@@ -650,30 +745,58 @@ class Question(abc.ABC):
       explanation=explanation
     )
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
+  @classmethod
+  def _coerce_context(cls, context, *, rng_seed=None) -> QuestionContext:
+    if isinstance(context, QuestionContext):
+      return context
+    if isinstance(context, dict):
+      ctx_seed = context.get("rng_seed", rng_seed)
+      rng = context.get("rng") or random.Random(ctx_seed)
+      ctx = QuestionContext(rng_seed=ctx_seed, rng=rng)
+      for key, value in context.items():
+        if key in ("rng_seed", "rng"):
+          continue
+        ctx.data[key] = value
+      return ctx
+    raise TypeError(f"Unsupported context type: {type(context)}")
+
+  @classmethod
+  def _call_build_fn(cls, fn, context, *, instance=None):
+    if instance is None:
+      return fn(context)
+    try:
+      params = list(inspect.signature(fn).parameters.values())
+    except (TypeError, ValueError):
+      return fn(context)
+    if len(params) >= 2 or (params and params[0].name == "self"):
+      return fn(instance, context)
+    return fn(context)
+
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs) -> QuestionContext:
     """
     Build the deterministic context for a question instance.
 
-    Override to return a context dict and avoid persistent self.* state.
+    Override to return a QuestionContext and avoid persistent self.* state.
     """
     rng = random.Random(rng_seed)
-    # Keep instance rng in sync for questions that still use self.rng.
-    self.rng = rng
-    return {
-      "rng_seed": rng_seed,
-      "rng": rng,
-    }
+    return QuestionContext(
+      rng_seed=rng_seed,
+      rng=rng,
+    )
 
   @classmethod
   def is_interesting_ctx(cls, context) -> bool:
     """Context-aware hook; defaults to existing is_interesting()."""
     return True
 
-  def _build_body(self, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
     """Context-aware body builder."""
     raise NotImplementedError("Questions must implement _build_body().")
 
-  def _build_explanation(self, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
     """Context-aware explanation builder."""
     raise NotImplementedError("Questions must implement _build_explanation().")
 
