@@ -42,6 +42,18 @@ Technical guide for developers integrating QuizGeneration with web-based grading
 
 ### Developer Documentation
 
+#### [getting_started.md](getting_started.md)
+Quick-start guide for generating PDFs and uploading to Canvas.
+
+**Audience:** Instructors and new users
+
+---
+
+#### [yaml_config_guide.md](yaml_config_guide.md)
+Reference for the quiz YAML schema and configuration options.
+
+**Audience:** Instructors and question authors
+
 #### [PARAMETER_STANDARDS.md](PARAMETER_STANDARDS.md)
 Standards and conventions for question parameter naming and design.
 

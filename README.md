@@ -20,8 +20,9 @@ pip install QuizGenerator
 ### System Requirements
 
 - Python 3.12+
-- LaTeX distribution with `latexmk` (for PDF generation)
-- Optional: [Typst](https://typst.app/) (alternative to LaTeX)
+- [Typst](https://typst.app/) (default PDF renderer)
+- Optional: LaTeX distribution with `latexmk` (if using `--latex`)
+- Recommended: [Pandoc](https://pandoc.org/) (for markdown conversion)
 
 ### Optional Dependencies
 
@@ -154,10 +155,9 @@ Notes:
 
 ## Documentation
 
-- [Getting Started Guide](documentation/getting_started.md) (coming soon)
+- [Getting Started Guide](documentation/getting_started.md)
 - [Custom Questions Guide](documentation/custom_questions.md)
-- [YAML Configuration Reference](documentation/yaml_config_guide.md) (coming soon)
-- [PyPI Release Plan](documentation/pypi_release_plan.md)
+- [YAML Configuration Reference](documentation/yaml_config_guide.md)
 
 ## Canvas Setup
 

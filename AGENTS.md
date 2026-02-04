@@ -13,7 +13,7 @@
 
 - `pip install -e .` — install the package in editable mode for local development.
 - `quizgen --help` — show CLI options.
-- `quizgen --yaml example_files/sample.yaml --num_pdfs 3` — generate PDFs in `out/` (Typst is the default renderer).
+- `quizgen --yaml example_files/example_exam.yaml --num_pdfs 3` — generate PDFs in `out/` (Typst is the default renderer).
 - `quizgen --latex --num_pdfs 3` — force LaTeX rendering when needed.
 - `python scripts/vendor_lms_interface.py --dry-run` — preview LMSInterface vendoring changes.
 
@@ -35,7 +35,7 @@
 
 - No dedicated test suite is currently committed.
 - For changes, run a manual smoke check by generating a small quiz:
-  - `quizgen --yaml example_files/sample.yaml --num_pdfs 1`
+  - `quizgen --yaml example_files/example_exam.yaml --num_pdfs 1`
 - If adding tests, prefer `tests/` with filenames like `test_<area>.py` and document how to run them.
 
 ## Commit & Pull Request Guidelines

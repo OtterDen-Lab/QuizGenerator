@@ -23,6 +23,21 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
+_PANDOC_OK = None
+
+
+def _ensure_pandoc() -> bool:
+  global _PANDOC_OK
+  if _PANDOC_OK is not None:
+    return _PANDOC_OK
+  try:
+    pypandoc.get_pandoc_version()
+    _PANDOC_OK = True
+  except Exception as exc:
+    _PANDOC_OK = False
+    log.warning(f"Pandoc not found or unusable: {exc}")
+  return _PANDOC_OK
+
 
 """
 Content Abstract Syntax Tree - The core content system for quiz generation.
@@ -221,6 +236,9 @@ class Leaf(Element):
           return html_output.strip()
         
         case _:
+          if not _ensure_pandoc():
+            log.warning(f"Pandoc unavailable; returning raw markdown for {output_format} output.")
+            return str_to_convert
           output = pypandoc.convert_text(
             str_to_convert,
             output_format,
