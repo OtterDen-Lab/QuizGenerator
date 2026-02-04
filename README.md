@@ -54,7 +54,7 @@ questions:
 ### 2. Generate PDFs
 
 ```bash
-python -m generate_quiz --quiz_yaml my_quiz.yaml --num_pdfs 3
+quizgen --yaml my_quiz.yaml --num_pdfs 3
 ```
 
 PDFs will be created in the `out/` directory.
@@ -66,8 +66,8 @@ PDFs will be created in the `out/` directory.
 # CANVAS_API_URL=https://canvas.instructure.com
 # CANVAS_API_KEY=your_api_key_here
 
-python -m generate_quiz \
-  --quiz_yaml my_quiz.yaml \
+quizgen \
+  --yaml my_quiz.yaml \
   --num_canvas 5 \
   --course_id 12345
 ```
@@ -176,17 +176,17 @@ CANVAS_API_KEY_prod=your_prod_api_key
 2. Use `--prod` flag for production Canvas instance:
 
 ```bash
-python -m generate_quiz --prod --num_canvas 5 --course_id 12345
+quizgen --prod --num_canvas 5 --course_id 12345
 ```
 
 ## Advanced Features
 
 ### Typst Support
 
-Use Typst instead of LaTeX for faster compilation:
+Typst is the default for faster compilation. Use `--latex` to force LaTeX:
 
 ```bash
-python -m generate_quiz --typst --num_pdfs 3
+quizgen --latex --num_pdfs 3
 ```
 
 ### Deterministic Generation
@@ -194,7 +194,7 @@ python -m generate_quiz --typst --num_pdfs 3
 Use seeds for reproducible quizzes:
 
 ```bash
-python -m generate_quiz --seed 42 --num_pdfs 3
+quizgen --seed 42 --num_pdfs 3
 ```
 
 ### QR Code Regeneration
@@ -218,7 +218,7 @@ QuizGenerator/
 │   └── canvas/           # Canvas LMS integration
 ├── example_files/        # Example quiz configurations
 ├── documentation/        # User guides
-└── generate_quiz.py     # CLI entry point
+└── quizgen             # CLI entry point
 ```
 
 ## Contributing

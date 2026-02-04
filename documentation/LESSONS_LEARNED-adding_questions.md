@@ -17,7 +17,7 @@ Based on multiple question development cycles, these are the essential practices
 
 ### 🎯 **Core Implementation Patterns**
 - **Question structure**: Extend base class + `@QuestionRegistry.register()` + three methods (`_build_context()`, `_build_body()`, `_build_explanation()`)
-- **Testing workflow**: `scratch.yaml` → `python generate_quiz.py TEST` → Canvas + PDF verification
+- **Testing workflow**: `scratch.yaml` → `quizgen TEST` → Canvas + PDF verification
 - **Mathematical content**: SymPy for expressions, `ContentAST.Equation` for display, avoid fragmented math elements
 - **Canvas compatibility**: No LaTeX in table headers (`<th>`), use bold `<td>` instead
 - **Multi-platform answers**: Use `ContentAST.OnlyHtml/OnlyLatex` for platform-specific answer formats
@@ -308,7 +308,7 @@ QuizGenerator/premade_questions/cst463/gradient_descent/
 ├── __init__.py                     # Updated: Import new question classes
 └── gradient_descent_questions.py   # Updated: Use shared utilities
 
-generate_quiz.py                    # Updated: Enhanced test function with explanations
+QuizGenerator/generate.py           # Updated: Enhanced test function with explanations
 ```
 
 ---
@@ -350,7 +350,7 @@ This document captures key insights and lessons learned from implementing matrix
 
 **File**: `QuizGenerator/question.py:load_premade_questions()`
 
-**Key Learning**: Always test question loading with `python generate_quiz.py TEST` when adding new question directories.
+**Key Learning**: Always test question loading with `quizgen TEST` when adding new question directories.
 
 ### 2. **Canvas MathJax Rendering Problems**
 **Problem**: Matrices were being split across multiple equation blocks, causing broken rendering.
@@ -425,7 +425,7 @@ QuizGenerator/
 ## Development Workflow That Worked
 
 1. **Start with structure**: Create base class and basic question skeleton
-2. **Test early**: Add to scratch.yaml and test loading with `python generate_quiz.py TEST`
+2. **Test early**: Add to scratch.yaml and test loading with `quizgen TEST`
 3. **Implement incrementally**: One question type at a time, test each before moving on
 4. **Canvas testing**: Upload manually and verify MathJax rendering
 5. **PDF testing**: Generate PDFs to catch LaTeX issues
@@ -475,16 +475,16 @@ QuizGenerator/
 
 ```bash
 # Test question loading
-python generate_quiz.py TEST
+quizgen TEST
 
 # Generate Canvas quizzes for testing
-python generate_quiz.py --num_canvas 3 --course_id 12345
+quizgen --num_canvas 3 --course_id 12345
 
 # Generate PDFs for testing
-python generate_quiz.py --num_pdfs 2
+quizgen --num_pdfs 2
 
 # Custom configuration testing
-python generate_quiz.py --quiz_yaml example_files/scratch.yaml --num_pdfs 1
+quizgen --yaml example_files/scratch.yaml --num_pdfs 1
 ```
 
 ## Final Notes

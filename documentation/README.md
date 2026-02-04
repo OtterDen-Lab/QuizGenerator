@@ -141,7 +141,7 @@ QuizGeneration/
 │   ├── qrcode_generator.py # QR code generation/encryption
 │   ├── question.py         # Question classes and registry
 │   └── ...
-└── generate_quiz.py        # PDF generation entry point
+└── quizgen                # PDF generation entry point
 ```
 
 ---
