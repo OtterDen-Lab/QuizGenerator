@@ -4,6 +4,8 @@ import abc
 import logging
 import math
 from typing import List, Tuple, Callable, Union, Any
+
+import sympy
 import sympy as sp
 
 import QuizGenerator.contentast as ca
@@ -28,37 +30,52 @@ class GradientDescentQuestion(Question, abc.ABC):
 
 @QuestionRegistry.register("GradientDescentWalkthrough")
 class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, BodyTemplatesMixin):
-  
+  DEFAULT_NUM_STEPS = 4
+  DEFAULT_NUM_VARIABLES = 2
+  DEFAULT_MAX_DEGREE = 2
+  DEFAULT_SINGLE_VARIABLE = False
+  DEFAULT_MINIMIZE = True
+
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
-    self.num_steps = kwargs.get("num_steps", 4)
-    self.num_variables = kwargs.get("num_variables", 2)
-    self.max_degree = kwargs.get("max_degree", 2)
-    self.single_variable = kwargs.get("single_variable", False)
-    self.minimize = kwargs.get("minimize", True)  # Default to minimization
+    self.num_steps = kwargs.get("num_steps", self.DEFAULT_NUM_STEPS)
+    self.num_variables = kwargs.get("num_variables", self.DEFAULT_NUM_VARIABLES)
+    self.max_degree = kwargs.get("max_degree", self.DEFAULT_MAX_DEGREE)
+    self.single_variable = kwargs.get("single_variable", self.DEFAULT_SINGLE_VARIABLE)
+    self.minimize = kwargs.get("minimize", self.DEFAULT_MINIMIZE)  # Default to minimization
     
     if self.single_variable:
       self.num_variables = 1
-      
-  def _perform_gradient_descent(self) -> List[dict]:
+  
+  @classmethod
+  def _perform_gradient_descent(
+    cls,
+    function: sympy.Function,
+    gradient_function,
+    starting_point,
+    num_steps,
+    variables,
+    learning_rate,
+    minimize=True,
+  ) -> List[dict]:
     """
     Perform gradient descent and return step-by-step results.
     """
     results = []
     
-    x = list(map(float, self.starting_point))  # current location as floats
+    x = list(map(float, starting_point))  # current location as floats
     
-    for step in range(self.num_steps):
-      subs_map = dict(zip(self.variables, x))
+    for step in range(num_steps):
+      subs_map = dict(zip(variables, x))
       
       # gradient as floats
-      g_syms = self.gradient_function.subs(subs_map)
+      g_syms = gradient_function.subs(subs_map)
       g = [float(val) for val in g_syms]
       
       # function value
-      f_val = float(self.function.subs(subs_map))
+      f_val = float(function.subs(subs_map))
       
-      update = [self.learning_rate * gi for gi in g]
+      update = [learning_rate * gi for gi in g]
       
       results.append(
         {
@@ -70,61 +87,65 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         }
       )
       
-      x = [xi - ui for xi, ui in zip(x, update)] if self.minimize else \
+      x = [xi - ui for xi, ui in zip(x, update)] if minimize else \
         [xi + ui for xi, ui in zip(x, update)]
 
     return results
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_steps" in kwargs:
-      self.num_steps = kwargs.get("num_steps", self.num_steps)
-    if "num_variables" in kwargs:
-      self.num_variables = kwargs.get("num_variables", self.num_variables)
-    if "max_degree" in kwargs:
-      self.max_degree = kwargs.get("max_degree", self.max_degree)
-    if "single_variable" in kwargs:
-      self.single_variable = kwargs.get("single_variable", self.single_variable)
-      if self.single_variable:
-        self.num_variables = 1
-    if "minimize" in kwargs:
-      self.minimize = kwargs.get("minimize", self.minimize)
-
-    self.rng.seed(rng_seed)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    context.num_steps = kwargs.get("num_steps", cls.DEFAULT_NUM_STEPS)
+    context.num_variables = kwargs.get("num_variables", cls.DEFAULT_NUM_VARIABLES)
+    context.max_degree = kwargs.get("max_degree", cls.DEFAULT_MAX_DEGREE)
+    context.single_variable = kwargs.get("single_variable", cls.DEFAULT_SINGLE_VARIABLE)
+    if context.single_variable:
+      context.num_variables = 1
+    context.minimize = kwargs.get("minimize", cls.DEFAULT_MINIMIZE)
 
     # Generate function and its properties
-    self.variables, self.function, self.gradient_function, self.equation = generate_function(self.rng, self.num_variables, self.max_degree)
+    context.variables, context.function, context.gradient_function, context.equation = generate_function(
+      context.rng, context.num_variables, context.max_degree
+    )
 
     # Generate learning rate (expanded range)
-    self.learning_rate = self.rng.choice([0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
+    context.learning_rate = context.rng.choice([0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
 
-    self.starting_point = [self.rng.randint(-3, 3) for _ in range(self.num_variables)]
+    context.starting_point = [context.rng.randint(-3, 3) for _ in range(context.num_variables)]
 
     # Perform gradient descent
-    self.gradient_descent_results = self._perform_gradient_descent()
+    context.gradient_descent_results = cls._perform_gradient_descent(
+      context.function,
+      context.gradient_function,
+      context.starting_point,
+      context.num_steps,
+      context.variables,
+      context.learning_rate,
+      minimize=context.minimize,
+    )
 
     # Build answers for each step
-    self.step_answers = {}
-    for i, result in enumerate(self.gradient_descent_results):
+    context.step_answers = {}
+    for i, result in enumerate(context.gradient_descent_results):
       step = result['step']
 
       # Location answer
       location_key = f"answer__location_{step}"
-      self.step_answers[location_key] = ca.AnswerTypes.Vector(list(result['location']), label=f"Location at step {step}")
+      context.step_answers[location_key] = ca.AnswerTypes.Vector(list(result['location']), label=f"Location at step {step}")
 
       # Gradient answer
       gradient_key = f"answer__gradient_{step}"
-      self.step_answers[gradient_key] = ca.AnswerTypes.Vector(list(result['gradient']), label=f"Gradient at step {step}")
+      context.step_answers[gradient_key] = ca.AnswerTypes.Vector(list(result['gradient']), label=f"Gradient at step {step}")
 
       # Update answer
       update_key = f"answer__update_{step}"
-      self.step_answers[update_key] = ca.AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
+      context.step_answers[update_key] = ca.AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
     return context
   
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
+    self = context
     body = ca.Section()
     answers = []
 
@@ -179,7 +200,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       table_rows.append(row)
 
     # Create the table using mixin
-    gradient_table = self.create_answer_table(
+    gradient_table = cls.create_answer_table(
       headers=headers,
       data_rows=table_rows,
       answer_columns=["location", headers[2], headers[3]]  # Use actual header objects
@@ -189,8 +210,10 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
+    self = context
     explanation = ca.Section()
 
     explanation.add_element(

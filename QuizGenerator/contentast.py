@@ -668,7 +668,7 @@ class Section(Container):
   - Organizing complex question content
 
   Example:
-      def _build_body(self, context):
+      def _build_body(cls, context):
           body = Section()
           answers = []
           body.add_element(Paragraph(["Calculate the determinant:"]))

@@ -19,138 +19,155 @@ log = logging.getLogger(__name__)
 class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
   """Base class for loss function calculation questions."""
 
+  DEFAULT_NUM_SAMPLES = 5
+  DEFAULT_NUM_INPUT_FEATURES = 2
+  DEFAULT_VECTOR_INPUTS = False
+
   def __init__(self, *args, **kwargs):
     kwargs["topic"] = kwargs.get("topic", Question.Topic.ML_OPTIMIZATION)
     super().__init__(*args, **kwargs)
 
-    self.num_samples = kwargs.get("num_samples", 5)
+    self.num_samples = kwargs.get("num_samples", self.DEFAULT_NUM_SAMPLES)
     self.num_samples = max(3, min(10, self.num_samples))  # Constrain to 3-10 range
 
-    self.num_input_features = kwargs.get("num_input_features", 2)
+    self.num_input_features = kwargs.get("num_input_features", self.DEFAULT_NUM_INPUT_FEATURES)
     self.num_input_features = max(1, min(5, self.num_input_features))  # Constrain to 1-5 features
-    self.vector_inputs = kwargs.get("vector_inputs", False)  # Whether to show inputs as vectors
+    self.vector_inputs = kwargs.get("vector_inputs", self.DEFAULT_VECTOR_INPUTS)  # Whether to show inputs as vectors
 
     # Generate sample data
     self.data = []
     self.individual_losses = []
     self.overall_loss = 0.0
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
     """Generate new random data and calculate losses."""
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    cls._populate_context(context, **kwargs)
     # Update configurable parameters if provided
-    if "num_samples" in kwargs:
-      self.num_samples = max(3, min(10, kwargs.get("num_samples", self.num_samples)))
-    if "num_input_features" in kwargs:
-      self.num_input_features = max(1, min(5, kwargs.get("num_input_features", self.num_input_features)))
-    if "vector_inputs" in kwargs:
-      self.vector_inputs = kwargs.get("vector_inputs", self.vector_inputs)
+    context.num_samples = max(3, min(10, kwargs.get("num_samples", cls.DEFAULT_NUM_SAMPLES)))
+    context.num_input_features = max(1, min(5, kwargs.get("num_input_features", cls.DEFAULT_NUM_INPUT_FEATURES)))
+    context.vector_inputs = kwargs.get("vector_inputs", cls.DEFAULT_VECTOR_INPUTS)
 
-    # Seed RNG and generate data
-    self.rng.seed(rng_seed)
-    self._generate_data()
-    self._calculate_losses()
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
+    # Generate data + losses
+    cls._generate_data(context)
+    cls._calculate_losses(context)
     return context
 
+  @classmethod
+  def _populate_context(cls, context, **kwargs):
+    """Hook for subclasses to add required context before data generation."""
+    return context
+
+  @classmethod
   @abc.abstractmethod
-  def _generate_data(self):
+  def _generate_data(cls, context):
     """Generate sample data appropriate for this loss function type."""
     pass
 
+  @classmethod
   @abc.abstractmethod
-  def _calculate_losses(self):
+  def _calculate_losses(cls, context):
     """Calculate individual and overall losses."""
     pass
 
+  @classmethod
   @abc.abstractmethod
-  def _get_loss_function_name(self) -> str:
+  def _get_loss_function_name(cls, context) -> str:
     """Return the name of the loss function."""
     pass
 
+  @classmethod
   @abc.abstractmethod
-  def _get_loss_function_formula(self) -> str:
+  def _get_loss_function_formula(cls, context) -> str:
     """Return the LaTeX formula for the loss function."""
     pass
 
+  @classmethod
   @abc.abstractmethod
-  def _get_loss_function_short_name(self) -> str:
+  def _get_loss_function_short_name(cls, context) -> str:
     """Return the short name of the loss function (used in question body)."""
     pass
 
-  def _build_loss_answers(self) -> Tuple[List[ca.Answer], ca.Answer]:
+  @classmethod
+  def _build_loss_answers(cls, context) -> Tuple[List[ca.Answer], ca.Answer]:
     answers = [
-      ca.AnswerTypes.Float(self.individual_losses[i], label=f"Sample {i + 1} loss")
-      for i in range(self.num_samples)
+      ca.AnswerTypes.Float(context.individual_losses[i], label=f"Sample {i + 1} loss")
+      for i in range(context.num_samples)
     ]
-    overall = ca.AnswerTypes.Float(self.overall_loss, label="Overall loss")
+    overall = ca.AnswerTypes.Float(context.overall_loss, label="Overall loss")
     return answers, overall
 
-  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
 
     # Question description
     body.add_element(ca.Paragraph([
-      f"Given the dataset below, calculate the {self._get_loss_function_short_name()} for each sample "
-      f"and the overall {self._get_loss_function_short_name()}."
+      f"Given the dataset below, calculate the {cls._get_loss_function_short_name(context)} for each sample "
+      f"and the overall {cls._get_loss_function_short_name(context)}."
     ]))
 
     # Data table (contains individual loss answers)
-    loss_answers, overall_answer = self._build_loss_answers()
-    body.add_element(self._create_data_table(loss_answers))
+    loss_answers, overall_answer = cls._build_loss_answers(context)
+    body.add_element(cls._create_data_table(context, loss_answers))
     answers.extend(loss_answers)
 
     # Overall loss question
     body.add_element(ca.Paragraph([
-      f"Overall {self._get_loss_function_short_name()}: "
+      f"Overall {cls._get_loss_function_short_name(context)}: "
     ]))
     answers.append(overall_answer)
     body.add_element(overall_answer)
 
     return body, answers
 
+  @classmethod
   @abc.abstractmethod
-  def _create_data_table(self, loss_answers: List[ca.Answer]) -> ca.Element:
+  def _create_data_table(cls, context, loss_answers: List[ca.Answer]) -> ca.Element:
     """Create the data table with answer fields."""
     pass
 
-  def _build_explanation(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
     explanation.add_element(ca.Paragraph([
-      f"To calculate the {self._get_loss_function_name()}, we apply the formula to each sample:"
+      f"To calculate the {cls._get_loss_function_name(context)}, we apply the formula to each sample:"
     ]))
 
-    explanation.add_element(ca.Equation(self._get_loss_function_formula(), inline=False))
+    explanation.add_element(ca.Equation(cls._get_loss_function_formula(context), inline=False))
 
     # Step-by-step calculations
-    explanation.add_element(self._create_calculation_steps())
+    explanation.add_element(cls._create_calculation_steps(context))
 
     # Completed table
     explanation.add_element(ca.Paragraph(["Completed table:"]))
-    explanation.add_element(self._create_completed_table())
+    explanation.add_element(cls._create_completed_table(context))
 
     # Overall loss calculation
-    explanation.add_element(self._create_overall_loss_explanation())
+    explanation.add_element(cls._create_overall_loss_explanation(context))
 
     return explanation, []
 
+  @classmethod
   @abc.abstractmethod
-  def _create_calculation_steps(self) -> ca.Element:
+  def _create_calculation_steps(cls, context) -> ca.Element:
     """Create step-by-step calculation explanations."""
     pass
 
+  @classmethod
   @abc.abstractmethod
-  def _create_completed_table(self) -> ca.Element:
+  def _create_completed_table(cls, context) -> ca.Element:
     """Create the completed table with all values filled in."""
     pass
 
+  @classmethod
   @abc.abstractmethod
-  def _create_overall_loss_explanation(self) -> ca.Element:
+  def _create_overall_loss_explanation(cls, context) -> ca.Element:
     """Create explanation for overall loss calculation."""
     pass
 
@@ -159,47 +176,67 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 class LossQuestion_Linear(LossQuestion):
   """Linear regression with Mean Squared Error (MSE) loss."""
 
+  DEFAULT_NUM_OUTPUT_VARS = 1
+
   def __init__(self, *args, **kwargs):
-    self.num_output_vars = kwargs.get("num_output_vars", 1)
+    self.num_output_vars = kwargs.get("num_output_vars", self.DEFAULT_NUM_OUTPUT_VARS)
     self.num_output_vars = max(1, min(5, self.num_output_vars))  # Constrain to 1-5 range
     super().__init__(*args, **kwargs)
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_output_vars" in kwargs:
-      self.num_output_vars = max(1, min(5, kwargs.get("num_output_vars", self.num_output_vars)))
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
     return super()._build_context(rng_seed=rng_seed, **kwargs)
 
-  def _generate_data(self):
-    """Generate regression data with continuous target values."""
-    self.data = []
+  @classmethod
+  def _populate_context(cls, context, **kwargs):
+    context.num_output_vars = max(
+      1,
+      min(5, kwargs.get("num_output_vars", cls.DEFAULT_NUM_OUTPUT_VARS))
+    )
+    return context
 
-    for i in range(self.num_samples):
+  @classmethod
+  def _generate_data(cls, context):
+    """Generate regression data with continuous target values."""
+    context.data = []
+
+    for _ in range(context.num_samples):
       sample = {}
 
       # Generate input features (rounded to 2 decimal places)
-      sample['inputs'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_input_features)]
+      sample['inputs'] = [
+        round(context.rng.uniform(-100, 100), 2)
+        for _ in range(context.num_input_features)
+      ]
 
       # Generate true values (y) - multiple outputs if specified (rounded to 2 decimal places)
-      if self.num_output_vars == 1:
-        sample['true_values'] = round(self.rng.uniform(-100, 100), 2)
+      if context.num_output_vars == 1:
+        sample['true_values'] = round(context.rng.uniform(-100, 100), 2)
       else:
-        sample['true_values'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_output_vars)]
+        sample['true_values'] = [
+          round(context.rng.uniform(-100, 100), 2)
+          for _ in range(context.num_output_vars)
+        ]
 
       # Generate predictions (p) - multiple outputs if specified (rounded to 2 decimal places)
-      if self.num_output_vars == 1:
-        sample['predictions'] = round(self.rng.uniform(-100, 100), 2)
+      if context.num_output_vars == 1:
+        sample['predictions'] = round(context.rng.uniform(-100, 100), 2)
       else:
-        sample['predictions'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_output_vars)]
+        sample['predictions'] = [
+          round(context.rng.uniform(-100, 100), 2)
+          for _ in range(context.num_output_vars)
+        ]
 
-      self.data.append(sample)
+      context.data.append(sample)
 
-  def _calculate_losses(self):
+  @classmethod
+  def _calculate_losses(cls, context):
     """Calculate MSE for each sample and overall."""
-    self.individual_losses = []
+    context.individual_losses = []
     total_loss = 0.0
 
-    for sample in self.data:
-      if self.num_output_vars == 1:
+    for sample in context.data:
+      if context.num_output_vars == 1:
         # Single output MSE: (y - p)^2
         loss = (sample['true_values'] - sample['predictions']) ** 2
       else:
@@ -209,40 +246,43 @@ class LossQuestion_Linear(LossQuestion):
           for y, p in zip(sample['true_values'], sample['predictions'])
         )
 
-      self.individual_losses.append(loss)
+      context.individual_losses.append(loss)
       total_loss += loss
 
     # Overall MSE is average of individual losses
-    self.overall_loss = total_loss / self.num_samples
+    context.overall_loss = total_loss / context.num_samples
 
-  def _get_loss_function_name(self) -> str:
+  @classmethod
+  def _get_loss_function_name(cls, context) -> str:
     return "Mean Squared Error (MSE)"
 
-  def _get_loss_function_short_name(self) -> str:
+  @classmethod
+  def _get_loss_function_short_name(cls, context) -> str:
     return "MSE"
 
-  def _get_loss_function_formula(self) -> str:
-    if self.num_output_vars == 1:
+  @classmethod
+  def _get_loss_function_formula(cls, context) -> str:
+    if context.num_output_vars == 1:
       return r"L(y, p) = (y - p)^2"
-    else:
-      return r"L(\mathbf{y}, \mathbf{p}) = \sum_{i=1}^{k} (y_i - p_i)^2"
+    return r"L(\mathbf{y}, \mathbf{p}) = \sum_{i=1}^{k} (y_i - p_i)^2"
 
-  def _create_data_table(self, loss_answers: List[ca.Answer]) -> ca.Element:
+  @classmethod
+  def _create_data_table(cls, context, loss_answers: List[ca.Answer]) -> ca.Element:
     """Create table with input features, true values, predictions, and loss fields."""
     headers = ["x"]
 
-    if self.num_output_vars == 1:
+    if context.num_output_vars == 1:
       headers.extend(["y", "p", "loss"])
     else:
       # Multiple outputs
-      for i in range(self.num_output_vars):
+      for i in range(context.num_output_vars):
         headers.append(f"y_{i}")
-      for i in range(self.num_output_vars):
+      for i in range(context.num_output_vars):
         headers.append(f"p_{i}")
       headers.append("loss")
 
     rows = []
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       row = {}
 
       # Input features as vector
@@ -250,17 +290,17 @@ class LossQuestion_Linear(LossQuestion):
       row["x"] = x_vector
 
       # True values
-      if self.num_output_vars == 1:
+      if context.num_output_vars == 1:
         row["y"] = f"{sample['true_values']:.2f}"
       else:
-        for j in range(self.num_output_vars):
+        for j in range(context.num_output_vars):
           row[f"y_{j}"] = f"{sample['true_values'][j]:.2f}"
 
       # Predictions
-      if self.num_output_vars == 1:
+      if context.num_output_vars == 1:
         row["p"] = f"{sample['predictions']:.2f}"
       else:
-        for j in range(self.num_output_vars):
+        for j in range(context.num_output_vars):
           row[f"p_{j}"] = f"{sample['predictions'][j]:.2f}"
 
       # Loss answer field
@@ -268,19 +308,20 @@ class LossQuestion_Linear(LossQuestion):
 
       rows.append(row)
 
-    return self.create_answer_table(headers, rows, answer_columns=["loss"])
+    return cls.create_answer_table(headers, rows, answer_columns=["loss"])
 
-  def _create_calculation_steps(self) -> ca.Element:
+  @classmethod
+  def _create_calculation_steps(cls, context) -> ca.Element:
     """Show step-by-step MSE calculations."""
     steps = ca.Section()
 
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       steps.add_element(ca.Paragraph([f"Sample {i+1}:"]))
 
-      if self.num_output_vars == 1:
+      if context.num_output_vars == 1:
         y = sample['true_values']
         p = sample['predictions']
-        loss = self.individual_losses[i]
+        loss = context.individual_losses[i]
         diff = y - p
 
         # Format the subtraction nicely to avoid double negatives
@@ -293,10 +334,10 @@ class LossQuestion_Linear(LossQuestion):
         # Multi-output calculation
         y_vals = sample['true_values']
         p_vals = sample['predictions']
-        loss = self.individual_losses[i]
+        loss = context.individual_losses[i]
 
         terms = []
-        for j, (y, p) in enumerate(zip(y_vals, p_vals)):
+        for y, p in zip(y_vals, p_vals):
           # Format the subtraction nicely to avoid double negatives
           if p >= 0:
             terms.append(f"({y:.2f} - {p:.2f})^2")
@@ -308,21 +349,22 @@ class LossQuestion_Linear(LossQuestion):
 
     return steps
 
-  def _create_completed_table(self) -> ca.Element:
+  @classmethod
+  def _create_completed_table(cls, context) -> ca.Element:
     """Create table with all values including calculated losses."""
     headers = ["x_0", "x_1"]
 
-    if self.num_output_vars == 1:
+    if context.num_output_vars == 1:
       headers.extend(["y", "p", "loss"])
     else:
-      for i in range(self.num_output_vars):
+      for i in range(context.num_output_vars):
         headers.append(f"y_{i}")
-      for i in range(self.num_output_vars):
+      for i in range(context.num_output_vars):
         headers.append(f"p_{i}")
       headers.append("loss")
 
     rows = []
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       row = []
 
       # Input features
@@ -330,27 +372,28 @@ class LossQuestion_Linear(LossQuestion):
         row.append(f"{x:.2f}")
 
       # True values
-      if self.num_output_vars == 1:
+      if context.num_output_vars == 1:
         row.append(f"{sample['true_values']:.2f}")
       else:
         for y in sample['true_values']:
           row.append(f"{y:.2f}")
 
       # Predictions
-      if self.num_output_vars == 1:
+      if context.num_output_vars == 1:
         row.append(f"{sample['predictions']:.2f}")
       else:
         for p in sample['predictions']:
           row.append(f"{p:.2f}")
 
       # Calculated loss
-      row.append(f"{self.individual_losses[i]:.4f}")
+      row.append(f"{context.individual_losses[i]:.4f}")
 
       rows.append(row)
 
     return ca.Table(headers=headers, data=rows)
 
-  def _create_overall_loss_explanation(self) -> ca.Element:
+  @classmethod
+  def _create_overall_loss_explanation(cls, context) -> ca.Element:
     """Explain overall MSE calculation."""
     explanation = ca.Section()
 
@@ -358,8 +401,8 @@ class LossQuestion_Linear(LossQuestion):
       "The overall MSE is the average of individual losses:"
     ]))
 
-    losses_str = " + ".join([f"{loss:.4f}" for loss in self.individual_losses])
-    calculation = f"MSE = \\frac{{{losses_str}}}{{{self.num_samples}}} = {self.overall_loss:.4f}"
+    losses_str = " + ".join([f"{loss:.4f}" for loss in context.individual_losses])
+    calculation = f"MSE = \\frac{{{losses_str}}}{{{context.num_samples}}} = {context.overall_loss:.4f}"
 
     explanation.add_element(ca.Equation(calculation, inline=False))
 
@@ -370,30 +413,35 @@ class LossQuestion_Linear(LossQuestion):
 class LossQuestion_Logistic(LossQuestion):
   """Binary logistic regression with log-loss."""
 
-  def _generate_data(self):
+  @classmethod
+  def _generate_data(cls, context):
     """Generate binary classification data."""
-    self.data = []
+    context.data = []
 
-    for i in range(self.num_samples):
+    for _ in range(context.num_samples):
       sample = {}
 
       # Generate input features (rounded to 2 decimal places)
-      sample['inputs'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_input_features)]
+      sample['inputs'] = [
+        round(context.rng.uniform(-100, 100), 2)
+        for _ in range(context.num_input_features)
+      ]
 
       # Generate binary true values (0 or 1)
-      sample['true_values'] = self.rng.choice([0, 1])
+      sample['true_values'] = context.rng.choice([0, 1])
 
       # Generate predicted probabilities (between 0 and 1, rounded to 3 decimal places)
-      sample['predictions'] = round(self.rng.uniform(0.1, 0.9), 3)  # Avoid extreme values
+      sample['predictions'] = round(context.rng.uniform(0.1, 0.9), 3)  # Avoid extreme values
 
-      self.data.append(sample)
+      context.data.append(sample)
 
-  def _calculate_losses(self):
+  @classmethod
+  def _calculate_losses(cls, context):
     """Calculate log-loss for each sample and overall."""
-    self.individual_losses = []
+    context.individual_losses = []
     total_loss = 0.0
 
-    for sample in self.data:
+    for sample in context.data:
       y = sample['true_values']
       p = sample['predictions']
 
@@ -403,27 +451,31 @@ class LossQuestion_Logistic(LossQuestion):
       else:
         loss = -math.log(1 - p)
 
-      self.individual_losses.append(loss)
+      context.individual_losses.append(loss)
       total_loss += loss
 
     # Overall log-loss is average of individual losses
-    self.overall_loss = total_loss / self.num_samples
+    context.overall_loss = total_loss / context.num_samples
 
-  def _get_loss_function_name(self) -> str:
+  @classmethod
+  def _get_loss_function_name(cls, context) -> str:
     return "Log-Loss (Binary Cross-Entropy)"
 
-  def _get_loss_function_short_name(self) -> str:
+  @classmethod
+  def _get_loss_function_short_name(cls, context) -> str:
     return "log-loss"
 
-  def _get_loss_function_formula(self) -> str:
+  @classmethod
+  def _get_loss_function_formula(cls, context) -> str:
     return r"L(y, p) = -[y \ln(p) + (1-y) \ln(1-p)]"
 
-  def _create_data_table(self, loss_answers: List[ca.Answer]) -> ca.Element:
+  @classmethod
+  def _create_data_table(cls, context, loss_answers: List[ca.Answer]) -> ca.Element:
     """Create table with features, true labels, predicted probabilities, and loss fields."""
     headers = ["x", "y", "p", "loss"]
 
     rows = []
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       row = {}
 
       # Input features as vector
@@ -441,16 +493,17 @@ class LossQuestion_Logistic(LossQuestion):
 
       rows.append(row)
 
-    return self.create_answer_table(headers, rows, answer_columns=["loss"])
+    return cls.create_answer_table(headers, rows, answer_columns=["loss"])
 
-  def _create_calculation_steps(self) -> ca.Element:
+  @classmethod
+  def _create_calculation_steps(cls, context) -> ca.Element:
     """Show step-by-step log-loss calculations."""
     steps = ca.Section()
 
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       y = sample['true_values']
       p = sample['predictions']
-      loss = self.individual_losses[i]
+      loss = context.individual_losses[i]
 
       steps.add_element(ca.Paragraph([f"Sample {i+1}:"]))
 
@@ -463,12 +516,13 @@ class LossQuestion_Logistic(LossQuestion):
 
     return steps
 
-  def _create_completed_table(self) -> ca.Element:
+  @classmethod
+  def _create_completed_table(cls, context) -> ca.Element:
     """Create table with all values including calculated losses."""
     headers = ["x_0", "x_1", "y", "p", "loss"]
 
     rows = []
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       row = []
 
       # Input features
@@ -482,13 +536,14 @@ class LossQuestion_Logistic(LossQuestion):
       row.append(f"{sample['predictions']:.3f}")
 
       # Calculated loss
-      row.append(f"{self.individual_losses[i]:.4f}")
+      row.append(f"{context.individual_losses[i]:.4f}")
 
       rows.append(row)
 
     return ca.Table(headers=headers, data=rows)
 
-  def _create_overall_loss_explanation(self) -> ca.Element:
+  @classmethod
+  def _create_overall_loss_explanation(cls, context) -> ca.Element:
     """Explain overall log-loss calculation."""
     explanation = ca.Section()
 
@@ -496,8 +551,8 @@ class LossQuestion_Logistic(LossQuestion):
       "The overall log-loss is the average of individual losses:"
     ]))
 
-    losses_str = " + ".join([f"{loss:.4f}" for loss in self.individual_losses])
-    calculation = f"\\text{{Log-Loss}} = \\frac{{{losses_str}}}{{{self.num_samples}}} = {self.overall_loss:.4f}"
+    losses_str = " + ".join([f"{loss:.4f}" for loss in context.individual_losses])
+    calculation = f"\\text{{Log-Loss}} = \\frac{{{losses_str}}}{{{context.num_samples}}} = {context.overall_loss:.4f}"
 
     explanation.add_element(ca.Equation(calculation, inline=False))
 
@@ -508,71 +563,89 @@ class LossQuestion_Logistic(LossQuestion):
 class LossQuestion_MulticlassLogistic(LossQuestion):
   """Multi-class logistic regression with cross-entropy loss."""
 
+  DEFAULT_NUM_CLASSES = 3
+
   def __init__(self, *args, **kwargs):
-    self.num_classes = kwargs.get("num_classes", 3)
+    self.num_classes = kwargs.get("num_classes", self.DEFAULT_NUM_CLASSES)
     self.num_classes = max(3, min(5, self.num_classes))  # Constrain to 3-5 classes
     super().__init__(*args, **kwargs)
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_classes" in kwargs:
-      self.num_classes = max(3, min(5, kwargs.get("num_classes", self.num_classes)))
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
     return super()._build_context(rng_seed=rng_seed, **kwargs)
 
-  def _generate_data(self):
-    """Generate multi-class classification data."""
-    self.data = []
+  @classmethod
+  def _populate_context(cls, context, **kwargs):
+    context.num_classes = max(
+      3,
+      min(5, kwargs.get("num_classes", cls.DEFAULT_NUM_CLASSES))
+    )
+    return context
 
-    for i in range(self.num_samples):
+  @classmethod
+  def _generate_data(cls, context):
+    """Generate multi-class classification data."""
+    context.data = []
+
+    for _ in range(context.num_samples):
       sample = {}
 
       # Generate input features (rounded to 2 decimal places)
-      sample['inputs'] = [round(self.rng.uniform(-100, 100), 2) for _ in range(self.num_input_features)]
+      sample['inputs'] = [
+        round(context.rng.uniform(-100, 100), 2)
+        for _ in range(context.num_input_features)
+      ]
 
       # Generate true class (one-hot encoded) - ensure exactly one class is 1
-      true_class_idx = self.rng.randint(0, self.num_classes - 1)
-      sample['true_values'] = [0] * self.num_classes  # Start with all zeros
-      sample['true_values'][true_class_idx] = 1        # Set exactly one to 1
+      true_class_idx = context.rng.randint(0, context.num_classes - 1)
+      sample['true_values'] = [0] * context.num_classes  # Start with all zeros
+      sample['true_values'][true_class_idx] = 1          # Set exactly one to 1
 
       # Generate predicted probabilities (softmax-like, sum to 1, rounded to 3 decimal places)
-      raw_probs = [self.rng.uniform(0.1, 2.0) for _ in range(self.num_classes)]
+      raw_probs = [context.rng.uniform(0.1, 2.0) for _ in range(context.num_classes)]
       prob_sum = sum(raw_probs)
       sample['predictions'] = [round(p / prob_sum, 3) for p in raw_probs]
 
-      self.data.append(sample)
+      context.data.append(sample)
 
-  def _calculate_losses(self):
+  @classmethod
+  def _calculate_losses(cls, context):
     """Calculate cross-entropy loss for each sample and overall."""
-    self.individual_losses = []
+    context.individual_losses = []
     total_loss = 0.0
 
-    for sample in self.data:
+    for sample in context.data:
       y_vec = sample['true_values']
       p_vec = sample['predictions']
 
       # Cross-entropy: -sum(y_i * log(p_i))
       loss = -sum(y * math.log(max(p, 1e-15)) for y, p in zip(y_vec, p_vec) if y > 0)
 
-      self.individual_losses.append(loss)
+      context.individual_losses.append(loss)
       total_loss += loss
 
     # Overall cross-entropy is average of individual losses
-    self.overall_loss = total_loss / self.num_samples
+    context.overall_loss = total_loss / context.num_samples
 
-  def _get_loss_function_name(self) -> str:
+  @classmethod
+  def _get_loss_function_name(cls, context) -> str:
     return "Cross-Entropy Loss"
 
-  def _get_loss_function_short_name(self) -> str:
+  @classmethod
+  def _get_loss_function_short_name(cls, context) -> str:
     return "cross-entropy loss"
 
-  def _get_loss_function_formula(self) -> str:
+  @classmethod
+  def _get_loss_function_formula(cls, context) -> str:
     return r"L(\mathbf{y}, \mathbf{p}) = -\sum_{i=1}^{K} y_i \ln(p_i)"
 
-  def _create_data_table(self, loss_answers: List[ca.Answer]) -> ca.Element:
+  @classmethod
+  def _create_data_table(cls, context, loss_answers: List[ca.Answer]) -> ca.Element:
     """Create table with features, true class vectors, predicted probabilities, and loss fields."""
     headers = ["x", "y", "p", "loss"]
 
     rows = []
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       row = {}
 
       # Input features as vector
@@ -592,16 +665,17 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
 
       rows.append(row)
 
-    return self.create_answer_table(headers, rows, answer_columns=["loss"])
+    return cls.create_answer_table(headers, rows, answer_columns=["loss"])
 
-  def _create_calculation_steps(self) -> ca.Element:
+  @classmethod
+  def _create_calculation_steps(cls, context) -> ca.Element:
     """Show step-by-step cross-entropy calculations."""
     steps = ca.Section()
 
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       y_vec = sample['true_values']
       p_vec = sample['predictions']
-      loss = self.individual_losses[i]
+      loss = context.individual_losses[i]
 
       steps.add_element(ca.Paragraph([f"Sample {i+1}:"]))
 
@@ -618,11 +692,8 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
 
         # Show the vector multiplication more explicitly
         terms = []
-        for j, (y, p) in enumerate(zip(y_vec, p_vec)):
-          if y == 1:
-            terms.append(f"{y} \\cdot \\ln({p:.3f})")
-          else:
-            terms.append(f"{y} \\cdot \\ln({p:.3f})")
+        for y, p in zip(y_vec, p_vec):
+          terms.append(f"{y} \\cdot \\ln({p:.3f})")
 
         calculation = f"L = -\\mathbf{{y}} \\cdot \\ln(\\mathbf{{p}}) = -({' + '.join(terms)}) = -{y_vec[true_class_idx]} \\cdot \\ln({p_true:.3f}) = {loss:.4f}"
       except ValueError:
@@ -633,12 +704,13 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
 
     return steps
 
-  def _create_completed_table(self) -> ca.Element:
+  @classmethod
+  def _create_completed_table(cls, context) -> ca.Element:
     """Create table with all values including calculated losses."""
     headers = ["x_0", "x_1", "y", "p", "loss"]
 
     rows = []
-    for i, sample in enumerate(self.data):
+    for i, sample in enumerate(context.data):
       row = []
 
       # Input features
@@ -654,13 +726,14 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
       row.append(p_vector)
 
       # Calculated loss
-      row.append(f"{self.individual_losses[i]:.4f}")
+      row.append(f"{context.individual_losses[i]:.4f}")
 
       rows.append(row)
 
     return ca.Table(headers=headers, data=rows)
 
-  def _create_overall_loss_explanation(self) -> ca.Element:
+  @classmethod
+  def _create_overall_loss_explanation(cls, context) -> ca.Element:
     """Explain overall cross-entropy loss calculation."""
     explanation = ca.Section()
 
@@ -668,8 +741,8 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
       "The overall cross-entropy loss is the average of individual losses:"
     ]))
 
-    losses_str = " + ".join([f"{loss:.4f}" for loss in self.individual_losses])
-    calculation = f"\\text{{Cross-Entropy}} = \\frac{{{losses_str}}}{{{self.num_samples}}} = {self.overall_loss:.4f}"
+    losses_str = " + ".join([f"{loss:.4f}" for loss in context.individual_losses])
+    calculation = f"\\text{{Cross-Entropy}} = \\frac{{{losses_str}}}{{{context.num_samples}}} = {context.overall_loss:.4f}"
 
     explanation.add_element(ca.Equation(calculation, inline=False))
 

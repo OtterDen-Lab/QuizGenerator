@@ -73,23 +73,19 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     self.da2_dz2 = None  # Gradient of activation w.r.t. pre-activation
     self.dL_dz2 = None  # Gradient of loss w.r.t. output pre-activation
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_inputs" in kwargs:
-      self.num_inputs = kwargs.get("num_inputs", self.num_inputs)
-    if "num_hidden" in kwargs:
-      self.num_hidden = kwargs.get("num_hidden", self.num_hidden)
-    if "num_outputs" in kwargs:
-      self.num_outputs = kwargs.get("num_outputs", self.num_outputs)
-    if "use_bias" in kwargs:
-      self.use_bias = kwargs.get("use_bias", self.use_bias)
-    if "param_digits" in kwargs:
-      self.param_digits = kwargs.get("param_digits", self.param_digits)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    self = context
+
+    self.num_inputs = kwargs.get("num_inputs", getattr(self, "num_inputs", 2))
+    self.num_hidden = kwargs.get("num_hidden", getattr(self, "num_hidden", 2))
+    self.num_outputs = kwargs.get("num_outputs", getattr(self, "num_outputs", 1))
+    self.use_bias = kwargs.get("use_bias", getattr(self, "use_bias", True))
+    self.param_digits = kwargs.get("param_digits", getattr(self, "param_digits", 1))
 
     self.rng.seed(rng_seed)
     self._np_rng = np.random.RandomState(rng_seed)
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
     return context
 
   def _generate_network(self, weight_range=(-2, 2), input_range=(-3, 3)):
@@ -570,8 +566,10 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
   - Final output (ŷ)
   """
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    super()._build_context(rng_seed=rng_seed, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    self = context
 
     # Generate network
     self._generate_network()
@@ -579,13 +577,12 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     # Run forward pass to get correct answers
     self._forward_pass()
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
     return context
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
+    self = context
     body = ca.Section()
     answers = []
 
@@ -621,8 +618,10 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
+    self = context
     explanation = ca.Section()
 
     explanation.add_element(ca.Paragraph([
@@ -711,8 +710,10 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
   - Gradients for multiple specific weights (∂L/∂w)
   """
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    super()._build_context(rng_seed=rng_seed, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    self = context
 
     # Generate network
     self._generate_network()
@@ -731,13 +732,12 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Round loss to display precision (4 decimal places)
     self.loss = round(self.loss, 4)
     self._compute_output_gradient()
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
     return context
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
+    self = context
     body = ca.Section()
     answers = []
 
@@ -785,8 +785,10 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
+    self = context
     explanation = ca.Section()
 
     explanation.add_element(ca.Paragraph([
@@ -877,11 +879,11 @@ class EnsembleAveragingQuestion(Question):
     self.num_models = kwargs.get("num_models", 5)
     self.predictions = None
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_models" in kwargs:
-      self.num_models = kwargs.get("num_models", self.num_models)
-
-    self.rng.seed(rng_seed)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    self = context
+    self.num_models = kwargs.get("num_models", getattr(self, "num_models", 5))
 
     # Generate predictions from multiple models
     # Use a range that makes sense for typical regression problems
@@ -893,13 +895,12 @@ class EnsembleAveragingQuestion(Question):
 
     # Round to make calculations easier
     self.predictions = [round(p, 1) for p in self.predictions]
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
     return context
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
+    self = context
     body = ca.Section()
     answers = []
 
@@ -929,8 +930,10 @@ class EnsembleAveragingQuestion(Question):
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
+    self = context
     explanation = ca.Section()
 
     explanation.add_element(ca.Paragraph([
@@ -997,8 +1000,10 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     self.new_W1 = None
     self.new_W2 = None
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    super()._build_context(rng_seed=rng_seed, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    self = context
 
     # Generate network
     self._generate_network()
@@ -1023,9 +1028,6 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     # Compute updated weights
     self._compute_weight_updates()
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
     return context
 
   def _compute_weight_updates(self):
@@ -1042,8 +1044,10 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       grad = self._compute_gradient_W1(0, j)
       self.new_W1[0, j] = self.W1[0, j] - self.learning_rate * grad
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
+    self = context
     body = ca.Section()
     answers = []
 
@@ -1111,8 +1115,10 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
+    self = context
     explanation = ca.Section()
 
     explanation.add_element(ca.Paragraph([

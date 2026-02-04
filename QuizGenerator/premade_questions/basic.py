@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Tuple, List
+from types import SimpleNamespace
 import random
 
 import logging
@@ -17,19 +18,23 @@ log = logging.getLogger(__name__)
 class FromText(Question):
   
   def __init__(self, *args, text, **kwargs):
+    kwargs["text"] = text
     super().__init__(*args, **kwargs)
     self.text = text
     self.possible_variations = 1
   
-  def _build_context(self, *, rng_seed=None, **kwargs):
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
     context = super()._build_context(rng_seed=rng_seed, **kwargs)
-    context["text"] = self.text
+    context["text"] = kwargs.get("text", "")
     return context
   
-  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
     return ca.Section([ca.Text(context["text"])]), []
 
-  def _build_explanation(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
     return ca.Section(), []
 
 
@@ -43,6 +48,7 @@ class FromGenerator(FromText, TableQuestionMixin):
     if generator is None:
       generator = text
     
+    kwargs["generator"] = generator
     super().__init__(*args, text="", **kwargs)
     self.possible_variations = kwargs.get("possible_variations", float('inf'))
     
@@ -72,15 +78,51 @@ class FromGenerator(FromText, TableQuestionMixin):
     # Attach the function dynamically
     attach_function_to_object(self, generator, "generator")
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
+  @staticmethod
+  def _compile_generator(function_code, function_name="generator"):
+    # Provide a deterministic RNG handle for generator snippets.
+    function_code = "rng = self.rng\n" + function_code
+
+    local_namespace = {
+      'ca': ca,
+      'Section': ca.Section,
+      'Text': ca.Text,
+      'Table': ca.Table,
+      'Paragraph': ca.Paragraph
+    }
+
+    exec_globals = {**globals(), **local_namespace}
+    exec(
+      f"def {function_name}(self):\n" + "\n".join(f"    {line}" for line in function_code.splitlines()),
+      exec_globals,
+      local_namespace
+    )
+    return local_namespace[function_name]
+
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
     context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    for key, value in kwargs.items():
+      if key not in context:
+        context[key] = value
     # Preserve prior behavior for generators that use the global random module.
     random.seed(rng_seed)
+    generator_text = kwargs.get("generator")
+    if generator_text is not None:
+      context["generator_fn"] = cls._compile_generator(generator_text)
+      context["generator_scope"] = SimpleNamespace(
+        rng=context.rng,
+        **context.data
+      )
     return context
 
-  def _build_body(self, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
     try:
-      generated_content = self.generator()
+      generator_fn = context.get("generator_fn")
+      if generator_fn is None:
+        raise TypeError("No generator provided for FromGenerator.")
+      generated_content = generator_fn(context.get("generator_scope"))
       if isinstance(generated_content, ca.Section):
         body = generated_content
       elif isinstance(generated_content, str):

@@ -153,7 +153,7 @@ def test_all_questions(
         )
 
         # Generate the question (this calls refresh and builds the AST)
-        instance = question.instantiate(rng_seed=seed)
+        instance = question.instantiate(rng_seed=seed, max_backoff_attempts=200)
         question_ast = question._build_question_ast(instance)
 
         # Try rendering to both formats to catch format-specific issues
