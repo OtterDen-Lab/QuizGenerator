@@ -3,18 +3,13 @@ from __future__ import annotations
 import abc
 import io
 import logging
-import math
 import numpy as np
-import uuid
-import os
 from typing import List, Tuple
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 from ..models.matrices import MatrixQuestion
 
 log = logging.getLogger(__name__)

@@ -16,17 +16,16 @@ import canvasapi.submission
 import canvasapi.exceptions
 import dotenv, os
 import requests
-from canvasapi.util import combine_kwargs
 
 try:
-  from urllib3.util.retry import Retry  # urllib3 v2
+  pass  # urllib3 v2
 except Exception:
-  from urllib3.util import Retry        # urllib3 v1 fallback
+  pass        # urllib3 v1 fallback
 
 import os
 import dotenv
 
-from .classes import LMSWrapper, Student, Submission, Submission__Canvas, FileSubmission__Canvas, TextSubmission__Canvas, QuizSubmission
+from .classes import LMSWrapper, Student, Submission, FileSubmission__Canvas, TextSubmission__Canvas, QuizSubmission
 
 import logging
 

@@ -17,7 +17,6 @@ import os
 import tempfile
 import zlib
 from datetime import datetime
-from io import BytesIO
 from pathlib import Path
 from typing import Optional, Dict, Any
 

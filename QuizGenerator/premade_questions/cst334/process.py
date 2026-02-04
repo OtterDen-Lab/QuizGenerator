@@ -387,7 +387,6 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     Returns:
         Tuple of (body_ast, answers_list)
     """
-    from typing import List
     answers: List[ca.Answer] = []
 
     # Create table data for scheduling results

@@ -11,15 +11,12 @@ import itertools
 import os
 import pathlib
 import pkgutil
-import pprint
 import random
-import re
 import uuid
 import types
 import inspect
 from types import MappingProxyType
 
-import pypandoc
 import yaml
 from typing import List, Dict, Any, Tuple, Optional, Mapping, MutableMapping
 import canvasapi.course, canvasapi.quiz

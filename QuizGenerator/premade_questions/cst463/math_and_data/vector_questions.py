@@ -3,7 +3,6 @@ import abc
 import logging
 import math
 import random
-from typing import List
 
 from QuizGenerator.question import Question, QuestionRegistry
 import QuizGenerator.contentast as ca

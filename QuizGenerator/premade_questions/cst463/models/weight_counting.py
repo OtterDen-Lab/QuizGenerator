@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import logging
-import math
 import random
 try:
   import keras
@@ -16,7 +15,6 @@ from typing import List, Tuple
 
 from QuizGenerator.question import Question, QuestionRegistry
 import QuizGenerator.contentast as ca
-from QuizGenerator.constants import MathRanges
 
 log = logging.getLogger(__name__)
 

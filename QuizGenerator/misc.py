@@ -1,17 +1,9 @@
 #!env python
 from __future__ import annotations
 
-import decimal
-import enum
-import itertools
 import logging
-import math
-import numpy as np
-from typing import List, Dict, Tuple, Any
 
-import fractions
 
-import QuizGenerator.contentast as ca
 
 log = logging.getLogger(__name__)
 

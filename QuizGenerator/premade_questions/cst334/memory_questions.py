@@ -8,7 +8,7 @@ import enum
 import logging
 import random
 import math
-from typing import List, Optional
+from typing import List
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry, RegenerableChoiceMixin

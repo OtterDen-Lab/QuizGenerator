@@ -3,8 +3,7 @@ from __future__ import annotations
 import abc
 import logging
 import math
-import numpy as np
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry

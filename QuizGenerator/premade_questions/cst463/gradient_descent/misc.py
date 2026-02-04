@@ -1,5 +1,5 @@
 
-from typing import List, Tuple, Callable, Union, Any
+from typing import List, Any
 import sympy as sp
 
 import QuizGenerator.contentast as ca

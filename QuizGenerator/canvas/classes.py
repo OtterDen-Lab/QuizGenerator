@@ -6,7 +6,6 @@ import logging
 import dataclasses
 import functools
 import io
-import os
 import urllib.request
 from typing import Optional, List, Dict
 

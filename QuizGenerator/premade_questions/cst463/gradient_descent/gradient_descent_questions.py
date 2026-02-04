@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import abc
 import logging
-import math
-from typing import List, Tuple, Callable, Union, Any
+from typing import List, Tuple
 
 import sympy
 import sympy as sp

@@ -1,13 +1,10 @@
-import abc
 import logging
-import math
 import numpy as np
 from typing import List, Tuple
 
 from .matrices import MatrixQuestion
-from QuizGenerator.question import Question, QuestionRegistry
+from QuizGenerator.question import QuestionRegistry
 import QuizGenerator.contentast as ca
-from QuizGenerator.constants import MathRanges
 from QuizGenerator.mixins import TableQuestionMixin
 
 log = logging.getLogger(__name__)
