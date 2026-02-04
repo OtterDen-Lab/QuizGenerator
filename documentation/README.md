@@ -74,6 +74,12 @@ Project todo list and task tracking.
 
 ---
 
+## Agent Notes Policy
+
+AI/agent-generated markdown notes should be stored in `agent_notes/` at the repo root.
+
+---
+
 ## Quick Start
 
 ### For Graders (Using CLI)
