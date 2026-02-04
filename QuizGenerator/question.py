@@ -8,7 +8,6 @@ import datetime
 import enum
 import importlib
 import itertools
-import inspect
 import os
 import pathlib
 import pkgutil
@@ -16,6 +15,8 @@ import pprint
 import random
 import re
 import uuid
+import types
+import inspect
 from types import MappingProxyType
 
 import pypandoc
@@ -62,65 +63,77 @@ class QuestionInstance:
 
 @dataclasses.dataclass
 class QuestionContext:
-    rng_seed: Optional[int]
-    rng: random.Random
-    data: MutableMapping[str, Any] | Mapping[str, Any] = dataclasses.field(default_factory=dict)
-    frozen: bool = False
+  rng_seed: Optional[int]
+  rng: random.Random
+  data: MutableMapping[str, Any] | Mapping[str, Any] = dataclasses.field(default_factory=dict)
+  frozen: bool = False
+  question_cls: type | None = None
 
-    def __getitem__(self, key: str) -> Any:
-        if key == "rng_seed":
-            return self.rng_seed
-        if key == "rng":
-            return self.rng
-        return self.data[key]
+  def __getitem__(self, key: str) -> Any:
+    if key == "rng_seed":
+      return self.rng_seed
+    if key == "rng":
+      return self.rng
+    return self.data[key]
 
-    def __setitem__(self, key: str, value: Any) -> None:
-        if self.frozen:
-            raise TypeError("QuestionContext is frozen.")
-        if key == "rng_seed":
-            self.rng_seed = value
-            return
-        if key == "rng":
-            self.rng = value
-            return
-        if isinstance(self.data, MappingProxyType):
-            raise TypeError("QuestionContext is frozen.")
-        self.data[key] = value
+  def __setitem__(self, key: str, value: Any) -> None:
+    if self.frozen:
+      raise TypeError("QuestionContext is frozen.")
+    if key == "rng_seed":
+      self.rng_seed = value
+      return
+    if key == "rng":
+      self.rng = value
+      return
+    if isinstance(self.data, MappingProxyType):
+      raise TypeError("QuestionContext is frozen.")
+    self.data[key] = value
 
-    def get(self, key: str, default: Any = None) -> Any:
-        if key == "rng_seed":
-            return self.rng_seed
-        if key == "rng":
-            return self.rng
-        return self.data.get(key, default)
+  def get(self, key: str, default: Any = None) -> Any:
+    if key == "rng_seed":
+      return self.rng_seed
+    if key == "rng":
+      return self.rng
+    return self.data.get(key, default)
 
-    def __contains__(self, key: object) -> bool:
-        if key in ("rng_seed", "rng"):
-            return True
-        return key in self.data
+  def __contains__(self, key: object) -> bool:
+    if key in ("rng_seed", "rng"):
+      return True
+    return key in self.data
 
-    def __getattr__(self, name: str) -> Any:
-        if name in self.data:
-            return self.data[name]
-        raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
+  def __getattr__(self, name: str) -> Any:
+    if name in self.data:
+      return self.data[name]
+    if self.question_cls is not None and hasattr(self.question_cls, name):
+      raw_attr = inspect.getattr_static(self.question_cls, name)
+      if isinstance(raw_attr, staticmethod):
+        return raw_attr.__func__
+      if isinstance(raw_attr, classmethod):
+        return raw_attr.__func__.__get__(self.question_cls, self.question_cls)
+      attr = getattr(self.question_cls, name)
+      if callable(attr):
+        return types.MethodType(attr, self)
+      return attr
+    raise AttributeError(f"{type(self).__name__} has no attribute {name!r}")
 
-    def keys(self):
-        return self.data.keys()
+  def keys(self):
+    return self.data.keys()
 
-    def items(self):
-        return self.data.items()
+  def items(self):
+    return self.data.items()
 
-    def values(self):
-        return self.data.values()
+  def values(self):
+    return self.data.values()
 
-    def freeze(self) -> "QuestionContext":
-        frozen_data = MappingProxyType(dict(self.data))
-        return QuestionContext(
-            rng_seed=self.rng_seed,
-            rng=self.rng,
-            data=frozen_data,
-            frozen=True,
-        )
+  def freeze(self) -> "QuestionContext":
+    frozen_data = MappingProxyType(dict(self.data))
+    return QuestionContext(
+      rng_seed=self.rng_seed,
+      rng=self.rng,
+      data=frozen_data,
+      frozen=True,
+      question_cls=self.question_cls,
+    )
 
 
 # Spacing presets for questions
@@ -655,7 +668,6 @@ class Question(abc.ABC):
       components = self.__class__.build(
         rng_seed=current_seed,
         context=ctx,
-        instance=self,
         **build_kwargs
       )
 
@@ -703,7 +715,7 @@ class Question(abc.ABC):
     pass
    
   @classmethod
-  def build(cls, *, rng_seed=None, context=None, instance=None, **kwargs) -> QuestionComponents:
+  def build(cls, *, rng_seed=None, context=None, **kwargs) -> QuestionComponents:
     """
     Build question content (body, answers, explanation) for a given seed.
 
@@ -721,12 +733,8 @@ class Question(abc.ABC):
       context = context.freeze()
 
     # Build body + explanation. Each may return just an Element or (Element, answers).
-    body, body_answers = cls._normalize_build_output(
-      cls._call_build_fn(cls._build_body, context, instance=instance)
-    )
-    explanation, explanation_answers = cls._normalize_build_output(
-      cls._call_build_fn(cls._build_explanation, context, instance=instance)
-    )
+    body, body_answers = cls._normalize_build_output(cls._build_body(context))
+    explanation, explanation_answers = cls._normalize_build_output(cls._build_explanation(context))
 
     # Collect inline answers from both body and explanation.
     inline_body_answers = cls._collect_answers_from_ast(body)
@@ -760,17 +768,6 @@ class Question(abc.ABC):
       return ctx
     raise TypeError(f"Unsupported context type: {type(context)}")
 
-  @classmethod
-  def _call_build_fn(cls, fn, context, *, instance=None):
-    if instance is None:
-      return fn(context)
-    try:
-      params = list(inspect.signature(fn).parameters.values())
-    except (TypeError, ValueError):
-      return fn(context)
-    if len(params) >= 2 or (params and params[0].name == "self"):
-      return fn(instance, context)
-    return fn(context)
 
   @classmethod
   def _build_context(cls, *, rng_seed=None, **kwargs) -> QuestionContext:
@@ -783,6 +780,7 @@ class Question(abc.ABC):
     return QuestionContext(
       rng_seed=rng_seed,
       rng=rng,
+      question_cls=cls,
     )
 
   @classmethod

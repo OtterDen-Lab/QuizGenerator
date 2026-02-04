@@ -39,55 +39,51 @@ class ParameterCountingQuestion(Question):
     self.num_layers = kwargs.get("num_layers", None)
     self.include_biases = kwargs.get("include_biases", True)
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_layers" in kwargs:
-      self.num_layers = kwargs.get("num_layers", self.num_layers)
-    if "include_biases" in kwargs:
-      self.include_biases = kwargs.get("include_biases", self.include_biases)
-
-    self.rng.seed(rng_seed)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    context.num_layers = kwargs.get("num_layers")
+    context.include_biases = kwargs.get("include_biases", True)
 
     # Generate random architecture
-    if self.num_layers is None:
-      self.num_layers = self.rng.choice([3, 4])
+    if context.num_layers is None:
+      context.num_layers = context.rng.choice([3, 4])
 
     # Generate layer sizes
     # Input layer: common sizes for typical problems
     input_sizes = [28*28, 32*32, 784, 1024, 64, 128]
-    self.layer_sizes = [self.rng.choice(input_sizes)]
+    context.layer_sizes = [context.rng.choice(input_sizes)]
 
     # Hidden layers: reasonable sizes
-    for i in range(self.num_layers - 2):
-      hidden_size = self.rng.choice([32, 64, 128, 256, 512])
-      self.layer_sizes.append(hidden_size)
+    for _ in range(context.num_layers - 2):
+      hidden_size = context.rng.choice([32, 64, 128, 256, 512])
+      context.layer_sizes.append(hidden_size)
 
     # Output layer: typical classification sizes
-    output_size = self.rng.choice([2, 10, 100, 1000])
-    self.layer_sizes.append(output_size)
+    output_size = context.rng.choice([2, 10, 100, 1000])
+    context.layer_sizes.append(output_size)
 
     # Calculate correct answers
-    self.total_weights = 0
-    self.total_biases = 0
-    self.weights_per_layer = []
-    self.biases_per_layer = []
+    context.total_weights = 0
+    context.total_biases = 0
+    context.weights_per_layer = []
+    context.biases_per_layer = []
 
-    for i in range(len(self.layer_sizes) - 1):
-      weights = self.layer_sizes[i] * self.layer_sizes[i+1]
-      biases = self.layer_sizes[i+1] if self.include_biases else 0
+    for i in range(len(context.layer_sizes) - 1):
+      weights = context.layer_sizes[i] * context.layer_sizes[i+1]
+      biases = context.layer_sizes[i+1] if context.include_biases else 0
 
-      self.weights_per_layer.append(weights)
-      self.biases_per_layer.append(biases)
+      context.weights_per_layer.append(weights)
+      context.biases_per_layer.append(biases)
 
-      self.total_weights += weights
-      self.total_biases += biases
+      context.total_weights += weights
+      context.total_biases += biases
 
-    self.total_params = self.total_weights + self.total_biases
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
+    context.total_params = context.total_weights + context.total_biases
     return context
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -99,7 +95,7 @@ class ParameterCountingQuestion(Question):
 
     # Display architecture
     arch_parts = []
-    for i, size in enumerate(self.layer_sizes):
+    for i, size in enumerate(context.layer_sizes):
       if i > 0:
         arch_parts.append(" → ")
       arch_parts.append(str(size))
@@ -108,7 +104,7 @@ class ParameterCountingQuestion(Question):
       "Architecture: " + "".join(arch_parts)
     ]))
 
-    if self.include_biases:
+    if context.include_biases:
       body.add_element(ca.Paragraph([
         "Each layer includes bias terms."
       ]))
@@ -118,9 +114,9 @@ class ParameterCountingQuestion(Question):
     table_data = []
     table_data.append(["Parameter Type", "Count"])
 
-    total_weights_answer = ca.AnswerTypes.Int(self.total_weights, label="Total weights")
+    total_weights_answer = ca.AnswerTypes.Int(context.total_weights, label="Total weights")
     total_biases_answer = None
-    total_params_answer = ca.AnswerTypes.Int(self.total_params, label="Total trainable parameters")
+    total_params_answer = ca.AnswerTypes.Int(context.total_params, label="Total trainable parameters")
 
     answers.append(total_weights_answer)
     table_data.append([
@@ -128,8 +124,8 @@ class ParameterCountingQuestion(Question):
       total_weights_answer
     ])
 
-    if self.include_biases:
-      total_biases_answer = ca.AnswerTypes.Int(self.total_biases, label="Total biases")
+    if context.include_biases:
+      total_biases_answer = ca.AnswerTypes.Int(context.total_biases, label="Total biases")
       answers.append(total_biases_answer)
       table_data.append([
         "Total biases",
@@ -146,7 +142,8 @@ class ParameterCountingQuestion(Question):
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -158,10 +155,10 @@ class ParameterCountingQuestion(Question):
       ca.Text("Weights calculation:", emphasis=True)
     ]))
 
-    for i in range(len(self.layer_sizes) - 1):
-      input_size = self.layer_sizes[i]
-      output_size = self.layer_sizes[i+1]
-      weights = self.weights_per_layer[i]
+    for i in range(len(context.layer_sizes) - 1):
+      input_size = context.layer_sizes[i]
+      output_size = context.layer_sizes[i+1]
+      weights = context.weights_per_layer[i]
 
       explanation.add_element(ca.Paragraph([
         f"Layer {i+1} → {i+2}: ",
@@ -172,19 +169,19 @@ class ParameterCountingQuestion(Question):
     explanation.add_element(ca.Paragraph([
       "Total weights: ",
       ca.Equation(
-        f"{' + '.join([f'{w:,}' for w in self.weights_per_layer])} = {self.total_weights:,}",
+        f"{' + '.join([f'{w:,}' for w in context.weights_per_layer])} = {context.total_weights:,}",
         inline=True
       )
     ]))
 
-    if self.include_biases:
+    if context.include_biases:
       explanation.add_element(ca.Paragraph([
         ca.Text("Biases calculation:", emphasis=True)
       ]))
 
-      for i in range(len(self.layer_sizes) - 1):
-        output_size = self.layer_sizes[i+1]
-        biases = self.biases_per_layer[i]
+      for i in range(len(context.layer_sizes) - 1):
+        output_size = context.layer_sizes[i+1]
+        biases = context.biases_per_layer[i]
 
         explanation.add_element(ca.Paragraph([
           f"Layer {i+2}: {biases:,} biases (one per neuron)"
@@ -193,7 +190,7 @@ class ParameterCountingQuestion(Question):
       explanation.add_element(ca.Paragraph([
         "Total biases: ",
         ca.Equation(
-          f"{' + '.join([f'{b:,}' for b in self.biases_per_layer])} = {self.total_biases:,}",
+          f"{' + '.join([f'{b:,}' for b in context.biases_per_layer])} = {context.total_biases:,}",
           inline=True
         )
       ]))
@@ -202,14 +199,14 @@ class ParameterCountingQuestion(Question):
       ca.Text("Total trainable parameters:", emphasis=True)
     ]))
 
-    if self.include_biases:
+    if context.include_biases:
       explanation.add_element(ca.Equation(
-        f"\\text{{Total}} = {self.total_weights:,} + {self.total_biases:,} = {self.total_params:,}",
+        f"\\text{{Total}} = {context.total_weights:,} + {context.total_biases:,} = {context.total_params:,}",
         inline=False
       ))
     else:
       explanation.add_element(ca.Equation(
-        f"\\text{{Total}} = {self.total_weights:,}",
+        f"\\text{{Total}} = {context.total_weights:,}",
         inline=False
       ))
 
@@ -237,119 +234,118 @@ class ActivationFunctionComputationQuestion(Question):
     self.vector_size = kwargs.get("vector_size", None)
     self.activation = kwargs.get("activation", None)
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "vector_size" in kwargs:
-      self.vector_size = kwargs.get("vector_size", self.vector_size)
-    if "activation" in kwargs:
-      self.activation = kwargs.get("activation", self.activation)
-
-    self.rng.seed(rng_seed)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    context.vector_size = kwargs.get("vector_size")
+    context.activation = kwargs.get("activation")
 
     # Generate random input vector
-    if self.vector_size is None:
-      self.vector_size = self.rng.choice([3, 4, 5])
+    if context.vector_size is None:
+      context.vector_size = context.rng.choice([3, 4, 5])
 
-    self.input_vector = [
-      round(self.rng.uniform(-3, 3), 1)
-      for _ in range(self.vector_size)
+    context.input_vector = [
+      round(context.rng.uniform(-3, 3), 1)
+      for _ in range(context.vector_size)
     ]
 
     # Select activation function
-    if self.activation is None:
+    if context.activation is None:
       activations = [
-        self.ACTIVATION_RELU,
-        self.ACTIVATION_SIGMOID,
-        self.ACTIVATION_TANH,
-        self.ACTIVATION_SOFTMAX,
+        cls.ACTIVATION_RELU,
+        cls.ACTIVATION_SIGMOID,
+        cls.ACTIVATION_TANH,
+        cls.ACTIVATION_SOFTMAX,
       ]
-      self.activation = self.rng.choice(activations)
+      context.activation = context.rng.choice(activations)
 
     # For leaky ReLU, set alpha
-    self.leaky_alpha = 0.01
+    context.leaky_alpha = 0.01
 
     # Compute outputs
-    self.output_vector = self._compute_activation(self.input_vector)
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
+    context.output_vector = cls._compute_activation(context.activation, context.input_vector)
     return context
 
-  def _compute_activation(self, inputs):
+  @staticmethod
+  def _compute_activation(activation, inputs):
     """Compute activation function output."""
-    if self.activation == self.ACTIVATION_RELU:
+    if activation == ActivationFunctionComputationQuestion.ACTIVATION_RELU:
       return [max(0, x) for x in inputs]
 
-    elif self.activation == self.ACTIVATION_SIGMOID:
+    elif activation == ActivationFunctionComputationQuestion.ACTIVATION_SIGMOID:
       return [1 / (1 + np.exp(-x)) for x in inputs]
 
-    elif self.activation == self.ACTIVATION_TANH:
+    elif activation == ActivationFunctionComputationQuestion.ACTIVATION_TANH:
       return [np.tanh(x) for x in inputs]
 
-    elif self.activation == self.ACTIVATION_SOFTMAX:
+    elif activation == ActivationFunctionComputationQuestion.ACTIVATION_SOFTMAX:
       # Subtract max for numerical stability
       exp_vals = [np.exp(x - max(inputs)) for x in inputs]
       sum_exp = sum(exp_vals)
       return [e / sum_exp for e in exp_vals]
 
     else:
-      raise ValueError(f"Unknown activation: {self.activation}")
+      raise ValueError(f"Unknown activation: {activation}")
 
-  def _get_activation_name(self):
+  @staticmethod
+  def _get_activation_name(activation):
     """Get human-readable activation name."""
     names = {
-      self.ACTIVATION_RELU: "ReLU",
-      self.ACTIVATION_SIGMOID: "Sigmoid",
-      self.ACTIVATION_TANH: "Tanh",
-      self.ACTIVATION_SOFTMAX: "Softmax",
+      ActivationFunctionComputationQuestion.ACTIVATION_RELU: "ReLU",
+      ActivationFunctionComputationQuestion.ACTIVATION_SIGMOID: "Sigmoid",
+      ActivationFunctionComputationQuestion.ACTIVATION_TANH: "Tanh",
+      ActivationFunctionComputationQuestion.ACTIVATION_SOFTMAX: "Softmax",
     }
-    return names.get(self.activation, "Unknown")
+    return names.get(activation, "Unknown")
 
-  def _get_activation_formula(self):
+  @staticmethod
+  def _get_activation_formula(activation):
     """Get LaTeX formula for activation function."""
-    if self.activation == self.ACTIVATION_RELU:
+    if activation == ActivationFunctionComputationQuestion.ACTIVATION_RELU:
       return r"\text{ReLU}(x) = \max(0, x)"
 
-    elif self.activation == self.ACTIVATION_SIGMOID:
+    elif activation == ActivationFunctionComputationQuestion.ACTIVATION_SIGMOID:
       return r"\sigma(x) = \frac{1}{1 + e^{-x}}"
 
-    elif self.activation == self.ACTIVATION_TANH:
+    elif activation == ActivationFunctionComputationQuestion.ACTIVATION_TANH:
       return r"\tanh(x) = \frac{e^x - e^{-x}}{e^x + e^{-x}}"
 
-    elif self.activation == self.ACTIVATION_SOFTMAX:
+    elif activation == ActivationFunctionComputationQuestion.ACTIVATION_SOFTMAX:
       return r"\text{softmax}(x_i) = \frac{e^{x_i}}{\sum_j e^{x_j}}"
 
     return ""
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
 
     # Question description
     body.add_element(ca.Paragraph([
-      f"Given the input vector below, compute the output after applying the {self._get_activation_name()} activation function."
+      f"Given the input vector below, compute the output after applying the {cls._get_activation_name(context.activation)} activation function."
     ]))
 
     # Display formula
     body.add_element(ca.Paragraph([
       "Activation function: ",
-      ca.Equation(self._get_activation_formula(), inline=True)
+      ca.Equation(cls._get_activation_formula(context.activation), inline=True)
     ]))
 
     # Input vector
-    input_str = ", ".join([f"{x:.1f}" for x in self.input_vector])
+    input_str = ", ".join([f"{x:.1f}" for x in context.input_vector])
     body.add_element(ca.Paragraph([
       "Input: ",
       ca.Equation(f"[{input_str}]", inline=True)
     ]))
 
     # Answer table
-    if self.activation == self.ACTIVATION_SOFTMAX:
+    if context.activation == cls.ACTIVATION_SOFTMAX:
       body.add_element(ca.Paragraph([
         "Compute the output vector:"
       ]))
 
-      output_answer = ca.AnswerTypes.Vector(self.output_vector, label="Output vector")
+      output_answer = ca.AnswerTypes.Vector(context.output_vector, label="Output vector")
       answers.append(output_answer)
       table_data = []
       table_data.append(["Output Vector"])
@@ -365,10 +361,10 @@ class ActivationFunctionComputationQuestion(Question):
       table_data = []
       table_data.append(["Input", "Output"])
 
-      for i, x in enumerate(self.input_vector):
+      for i, x in enumerate(context.input_vector):
         answer = ca.AnswerTypes.Float(
-          float(self.output_vector[i]),
-          label=f"Output for input {self.input_vector[i]:.1f}"
+          float(context.output_vector[i]),
+          label=f"Output for input {context.input_vector[i]:.1f}"
         )
         answers.append(answer)
         table_data.append([
@@ -380,28 +376,29 @@ class ActivationFunctionComputationQuestion(Question):
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
     explanation.add_element(ca.Paragraph([
-      f"To compute the {self._get_activation_name()} activation, we apply the formula to each input."
+      f"To compute the {cls._get_activation_name(context.activation)} activation, we apply the formula to each input."
     ]))
 
-    if self.activation == self.ACTIVATION_SOFTMAX:
+    if context.activation == cls.ACTIVATION_SOFTMAX:
       explanation.add_element(ca.Paragraph([
         ca.Text("Softmax computation:", emphasis=True)
       ]))
 
       # Show exponentials
-      exp_strs = [f"e^{{{x:.1f}}}" for x in self.input_vector]
+      exp_strs = [f"e^{{{x:.1f}}}" for x in context.input_vector]
       explanation.add_element(ca.Paragraph([
         "First, compute exponentials: ",
         ca.Equation(", ".join(exp_strs), inline=True)
       ]))
 
       # Numerical values
-      exp_vals = [np.exp(x) for x in self.input_vector]
+      exp_vals = [np.exp(x) for x in context.input_vector]
       exp_vals_str = ", ".join([f"{e:.4f}" for e in exp_vals])
       explanation.add_element(ca.Paragraph([
         ca.Equation(f"\\approx [{exp_vals_str}]", inline=True)
@@ -419,9 +416,9 @@ class ActivationFunctionComputationQuestion(Question):
         "Divide each by the sum:"
       ]))
 
-      for i, (exp_val, output) in enumerate(zip(exp_vals, self.output_vector)):
+      for i, (exp_val, output) in enumerate(zip(exp_vals, context.output_vector)):
         explanation.add_element(ca.Equation(
-          f"\\text{{softmax}}({self.input_vector[i]:.1f}) = \\frac{{{exp_val:.4f}}}{{{sum_exp:.4f}}} = {output:.4f}",
+          f"\\text{{softmax}}({context.input_vector[i]:.1f}) = \\frac{{{exp_val:.4f}}}{{{sum_exp:.4f}}} = {output:.4f}",
           inline=False
         ))
 
@@ -430,20 +427,20 @@ class ActivationFunctionComputationQuestion(Question):
         ca.Text("Element-wise computation:", emphasis=True)
       ]))
 
-      for i, (x, y) in enumerate(zip(self.input_vector, self.output_vector)):
-        if self.activation == self.ACTIVATION_RELU:
+      for i, (x, y) in enumerate(zip(context.input_vector, context.output_vector)):
+        if context.activation == cls.ACTIVATION_RELU:
           explanation.add_element(ca.Equation(
             f"\\text{{ReLU}}({x:.1f}) = \\max(0, {x:.1f}) = {y:.4f}",
             inline=False
           ))
 
-        elif self.activation == self.ACTIVATION_SIGMOID:
+        elif context.activation == cls.ACTIVATION_SIGMOID:
           explanation.add_element(ca.Equation(
             f"\\sigma({x:.1f}) = \\frac{{1}}{{1 + e^{{-{x:.1f}}}}} = {y:.4f}",
             inline=False
           ))
 
-        elif self.activation == self.ACTIVATION_TANH:
+        elif context.activation == cls.ACTIVATION_TANH:
           explanation.add_element(ca.Equation(
             f"\\tanh({x:.1f}) = {y:.4f}",
             inline=False
@@ -471,41 +468,40 @@ class RegularizationCalculationQuestion(Question):
 
     self.num_weights = kwargs.get("num_weights", None)
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_weights" in kwargs:
-      self.num_weights = kwargs.get("num_weights", self.num_weights)
-
-    self.rng.seed(rng_seed)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    context.num_weights = kwargs.get("num_weights")
 
     # Generate small network (2-4 weights for simplicity)
-    if self.num_weights is None:
-      self.num_weights = self.rng.choice([2, 3, 4])
+    if context.num_weights is None:
+      context.num_weights = context.rng.choice([2, 3, 4])
 
     # Generate weights (small values)
-    self.weights = [
-      round(self.rng.uniform(-2, 2), 1)
-      for _ in range(self.num_weights)
+    context.weights = [
+      round(context.rng.uniform(-2, 2), 1)
+      for _ in range(context.num_weights)
     ]
 
     # Generate input and target
-    self.input_val = round(self.rng.uniform(-3, 3), 1)
-    self.target = round(self.rng.uniform(-5, 5), 1)
+    context.input_val = round(context.rng.uniform(-3, 3), 1)
+    context.target = round(context.rng.uniform(-5, 5), 1)
 
     # Regularization coefficient
-    self.lambda_reg = self.rng.choice([0.01, 0.05, 0.1, 0.5])
+    context.lambda_reg = context.rng.choice([0.01, 0.05, 0.1, 0.5])
 
     # Forward pass (simple linear combination for simplicity)
     # prediction = sum(w_i * input^i) for i in 0..n
     # This gives us a polynomial: w0 + w1*x + w2*x^2 + ...
-    self.prediction = sum(
-      w * (self.input_val ** i)
-      for i, w in enumerate(self.weights)
+    context.prediction = sum(
+      w * (context.input_val ** i)
+      for i, w in enumerate(context.weights)
     )
 
     # Calculate losses
-    self.base_loss = 0.5 * (self.target - self.prediction) ** 2
-    self.l2_penalty = (self.lambda_reg / 2) * sum(w**2 for w in self.weights)
-    self.total_loss = self.base_loss + self.l2_penalty
+    context.base_loss = 0.5 * (context.target - context.prediction) ** 2
+    context.l2_penalty = (context.lambda_reg / 2) * sum(w**2 for w in context.weights)
+    context.total_loss = context.base_loss + context.l2_penalty
 
     # Calculate gradient for first weight (w0, the bias term)
     # dL_base/dw0 = -(target - prediction) * dPrediction/dw0
@@ -513,15 +509,13 @@ class RegularizationCalculationQuestion(Question):
     # dL_reg/dw0 = lambda * w0
     # dL_total/dw0 = dL_base/dw0 + dL_reg/dw0
 
-    self.grad_base_w0 = -(self.target - self.prediction) * 1  # derivative of w0*x^0
-    self.grad_reg_w0 = self.lambda_reg * self.weights[0]
-    self.grad_total_w0 = self.grad_base_w0 + self.grad_reg_w0
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
+    context.grad_base_w0 = -(context.target - context.prediction) * 1  # derivative of w0*x^0
+    context.grad_reg_w0 = context.lambda_reg * context.weights[0]
+    context.grad_total_w0 = context.grad_base_w0 + context.grad_reg_w0
     return context
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -532,7 +526,7 @@ class RegularizationCalculationQuestion(Question):
     ]))
 
     # Display weights
-    weight_strs = [f"w_{i} = {w:.1f}" for i, w in enumerate(self.weights)]
+    weight_strs = [f"w_{i} = {w:.1f}" for i, w in enumerate(context.weights)]
     body.add_element(ca.Paragraph([
       "Weights: ",
       ca.Equation(", ".join(weight_strs), inline=True)
@@ -540,7 +534,7 @@ class RegularizationCalculationQuestion(Question):
 
     # Model equation
     terms = []
-    for i, w in enumerate(self.weights):
+    for i, w in enumerate(context.weights):
       if i == 0:
         terms.append(f"w_0")
       elif i == 1:
@@ -557,13 +551,13 @@ class RegularizationCalculationQuestion(Question):
     # Data point
     body.add_element(ca.Paragraph([
       "Data point: ",
-      ca.Equation(f"x = {self.input_val:.1f}, y = {self.target:.1f}", inline=True)
+      ca.Equation(f"x = {context.input_val:.1f}, y = {context.target:.1f}", inline=True)
     ]))
 
     # Regularization
     body.add_element(ca.Paragraph([
       "L2 regularization coefficient: ",
-      ca.Equation(f"\\lambda = {self.lambda_reg}", inline=True)
+      ca.Equation(f"\\lambda = {context.lambda_reg}", inline=True)
     ]))
 
     body.add_element(ca.Paragraph([
@@ -574,11 +568,11 @@ class RegularizationCalculationQuestion(Question):
     table_data = []
     table_data.append(["Calculation", "Value"])
 
-    prediction_answer = ca.AnswerTypes.Float(float(self.prediction), label="Prediction ŷ")
-    base_loss_answer = ca.AnswerTypes.Float(float(self.base_loss), label="Base MSE loss")
-    l2_penalty_answer = ca.AnswerTypes.Float(float(self.l2_penalty), label="L2 penalty")
-    total_loss_answer = ca.AnswerTypes.Float(float(self.total_loss), label="Total loss")
-    grad_total_w0_answer = ca.AnswerTypes.Float(float(self.grad_total_w0), label="Gradient ∂L/∂w₀")
+    prediction_answer = ca.AnswerTypes.Float(float(context.prediction), label="Prediction ŷ")
+    base_loss_answer = ca.AnswerTypes.Float(float(context.base_loss), label="Base MSE loss")
+    l2_penalty_answer = ca.AnswerTypes.Float(float(context.l2_penalty), label="L2 penalty")
+    total_loss_answer = ca.AnswerTypes.Float(float(context.total_loss), label="Total loss")
+    grad_total_w0_answer = ca.AnswerTypes.Float(float(context.grad_total_w0), label="Gradient ∂L/∂w₀")
 
     answers.append(prediction_answer)
     table_data.append([
@@ -614,7 +608,8 @@ class RegularizationCalculationQuestion(Question):
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -628,15 +623,15 @@ class RegularizationCalculationQuestion(Question):
     ]))
 
     terms = []
-    for i, w in enumerate(self.weights):
+    for i, w in enumerate(context.weights):
       if i == 0:
         terms.append(f"{w:.1f}")
       else:
-        x_term = f"{self.input_val:.1f}^{i}" if i > 1 else f"{self.input_val:.1f}"
+        x_term = f"{context.input_val:.1f}^{i}" if i > 1 else f"{context.input_val:.1f}"
         terms.append(f"{w:.1f} \\times {x_term}")
 
     explanation.add_element(ca.Equation(
-      f"\\hat{{y}} = {' + '.join(terms)} = {self.prediction:.4f}",
+      f"\\hat{{y}} = {' + '.join(terms)} = {context.prediction:.4f}",
       inline=False
     ))
 
@@ -646,7 +641,7 @@ class RegularizationCalculationQuestion(Question):
     ]))
 
     explanation.add_element(ca.Equation(
-      f"L_{{base}} = \\frac{{1}}{{2}}(y - \\hat{{y}})^2 = \\frac{{1}}{{2}}({self.target:.1f} - {self.prediction:.4f})^2 = {self.base_loss:.4f}",
+      f"L_{{base}} = \\frac{{1}}{{2}}(y - \\hat{{y}})^2 = \\frac{{1}}{{2}}({context.target:.1f} - {context.prediction:.4f})^2 = {context.base_loss:.4f}",
       inline=False
     ))
 
@@ -655,11 +650,11 @@ class RegularizationCalculationQuestion(Question):
       ca.Text("Step 3: Compute L2 penalty", emphasis=True)
     ]))
 
-    weight_squares = [f"{w:.1f}^2" for w in self.weights]
-    sum_squares = sum(w**2 for w in self.weights)
+    weight_squares = [f"{w:.1f}^2" for w in context.weights]
+    sum_squares = sum(w**2 for w in context.weights)
 
     explanation.add_element(ca.Equation(
-      f"L_{{reg}} = \\frac{{\\lambda}}{{2}} \\sum w_i^2 = \\frac{{{self.lambda_reg}}}{{2}}({' + '.join(weight_squares)}) = \\frac{{{self.lambda_reg}}}{{2}} \\times {sum_squares:.4f} = {self.l2_penalty:.4f}",
+      f"L_{{reg}} = \\frac{{\\lambda}}{{2}} \\sum w_i^2 = \\frac{{{context.lambda_reg}}}{{2}}({' + '.join(weight_squares)}) = \\frac{{{context.lambda_reg}}}{{2}} \\times {sum_squares:.4f} = {context.l2_penalty:.4f}",
       inline=False
     ))
 
@@ -669,7 +664,7 @@ class RegularizationCalculationQuestion(Question):
     ]))
 
     explanation.add_element(ca.Equation(
-      f"L_{{total}} = L_{{base}} + L_{{reg}} = {self.base_loss:.4f} + {self.l2_penalty:.4f} = {self.total_loss:.4f}",
+      f"L_{{total}} = L_{{base}} + L_{{reg}} = {context.base_loss:.4f} + {context.l2_penalty:.4f} = {context.total_loss:.4f}",
       inline=False
     ))
 
@@ -684,23 +679,23 @@ class RegularizationCalculationQuestion(Question):
     ]))
 
     explanation.add_element(ca.Equation(
-      f"\\frac{{\\partial L_{{base}}}}{{\\partial w_0}} = -(y - \\hat{{y}}) \\times 1 = -({self.target:.1f} - {self.prediction:.4f}) = {self.grad_base_w0:.4f}",
+      f"\\frac{{\\partial L_{{base}}}}{{\\partial w_0}} = -(y - \\hat{{y}}) \\times 1 = -({context.target:.1f} - {context.prediction:.4f}) = {context.grad_base_w0:.4f}",
       inline=False
     ))
 
     explanation.add_element(ca.Equation(
-      f"\\frac{{\\partial L_{{reg}}}}{{\\partial w_0}} = \\lambda w_0 = {self.lambda_reg} \\times {self.weights[0]:.1f} = {self.grad_reg_w0:.4f}",
+      f"\\frac{{\\partial L_{{reg}}}}{{\\partial w_0}} = \\lambda w_0 = {context.lambda_reg} \\times {context.weights[0]:.1f} = {context.grad_reg_w0:.4f}",
       inline=False
     ))
 
     explanation.add_element(ca.Equation(
-      f"\\frac{{\\partial L_{{total}}}}{{\\partial w_0}} = {self.grad_base_w0:.4f} + {self.grad_reg_w0:.4f} = {self.grad_total_w0:.4f}",
+      f"\\frac{{\\partial L_{{total}}}}{{\\partial w_0}} = {context.grad_base_w0:.4f} + {context.grad_reg_w0:.4f} = {context.grad_total_w0:.4f}",
       inline=False
     ))
 
     explanation.add_element(ca.Paragraph([
       "The regularization term adds ",
-      ca.Equation(f"\\lambda w_0 = {self.grad_reg_w0:.4f}", inline=True),
+      ca.Equation(f"\\lambda w_0 = {context.grad_reg_w0:.4f}", inline=True),
       " to the gradient, pushing the weight toward zero."
     ]))
 
@@ -726,64 +721,65 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     self.num_variables = kwargs.get("num_variables", 2)
     self.show_vanilla_sgd = kwargs.get("show_vanilla_sgd", True)
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_variables" in kwargs:
-      self.num_variables = kwargs.get("num_variables", self.num_variables)
-    if "show_vanilla_sgd" in kwargs:
-      self.show_vanilla_sgd = kwargs.get("show_vanilla_sgd", self.show_vanilla_sgd)
-
-    self.rng.seed(rng_seed)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    context.num_variables = kwargs.get("num_variables", 2)
+    context.show_vanilla_sgd = kwargs.get("show_vanilla_sgd", True)
 
     # Generate well-conditioned quadratic function
-    self.variables, self.function, self.gradient_function, self.equation =         generate_function(self.rng, self.num_variables, max_degree=2, use_quadratic=True)
+    context.variables, context.function, context.gradient_function, context.equation = generate_function(
+      context.rng,
+      context.num_variables,
+      max_degree=2,
+      use_quadratic=True
+    )
 
     # Generate current weights (small integers)
-    self.current_weights = [
-      self.rng.choice([-2, -1, 0, 1, 2])
-      for _ in range(self.num_variables)
+    context.current_weights = [
+      context.rng.choice([-2, -1, 0, 1, 2])
+      for _ in range(context.num_variables)
     ]
 
     # Calculate gradient at current position
-    subs_map = dict(zip(self.variables, self.current_weights))
-    g_syms = self.gradient_function.subs(subs_map)
-    self.gradients = [float(val) for val in g_syms]
+    subs_map = dict(zip(context.variables, context.current_weights))
+    g_syms = context.gradient_function.subs(subs_map)
+    context.gradients = [float(val) for val in g_syms]
 
     # Generate previous velocity (for momentum)
     # Start with small or zero velocity
-    self.prev_velocity = [
-      round(self.rng.uniform(-0.5, 0.5), 2)
-      for _ in range(self.num_variables)
+    context.prev_velocity = [
+      round(context.rng.uniform(-0.5, 0.5), 2)
+      for _ in range(context.num_variables)
     ]
 
     # Hyperparameters
-    self.learning_rate = self.rng.choice([0.01, 0.05, 0.1])
-    self.momentum_beta = self.rng.choice([0.8, 0.9])
+    context.learning_rate = context.rng.choice([0.01, 0.05, 0.1])
+    context.momentum_beta = context.rng.choice([0.8, 0.9])
 
     # Calculate momentum updates
     # v_new = beta * v_old + (1 - beta) * gradient
-    self.new_velocity = [
-      self.momentum_beta * v_old + (1 - self.momentum_beta) * grad
-      for v_old, grad in zip(self.prev_velocity, self.gradients)
+    context.new_velocity = [
+      context.momentum_beta * v_old + (1 - context.momentum_beta) * grad
+      for v_old, grad in zip(context.prev_velocity, context.gradients)
     ]
 
     # w_new = w_old - alpha * v_new
-    self.new_weights = [
-      w - self.learning_rate * v
-      for w, v in zip(self.current_weights, self.new_velocity)
+    context.new_weights = [
+      w - context.learning_rate * v
+      for w, v in zip(context.current_weights, context.new_velocity)
     ]
 
     # Calculate vanilla SGD for comparison
-    if self.show_vanilla_sgd:
-      self.sgd_weights = [
-        w - self.learning_rate * grad
-        for w, grad in zip(self.current_weights, self.gradients)
+    if context.show_vanilla_sgd:
+      context.sgd_weights = [
+        w - context.learning_rate * grad
+        for w, grad in zip(context.current_weights, context.gradients)
       ]
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
     return context
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -794,7 +790,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     ]))
 
     body.add_element(ca.Equation(
-      sp.latex(self.function),
+      sp.latex(context.function),
       inline=False
     ))
 
@@ -803,7 +799,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     ]))
 
     body.add_element(ca.Equation(
-      f"\\nabla f = {sp.latex(self.gradient_function)}",
+      f"\\nabla f = {sp.latex(context.gradient_function)}",
       inline=False
     ))
 
@@ -814,12 +810,12 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     body.add_element(ca.Paragraph([
       "Current weights: ",
-      ca.Equation(f"{format_vector(self.current_weights)}", inline=True)
+      ca.Equation(f"{format_vector(context.current_weights)}", inline=True)
     ]))
 
     body.add_element(ca.Paragraph([
       "Previous velocity: ",
-      ca.Equation(f"{format_vector(self.prev_velocity)}", inline=True)
+      ca.Equation(f"{format_vector(context.prev_velocity)}", inline=True)
     ]))
 
     # Hyperparameters
@@ -829,12 +825,12 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     body.add_element(ca.Paragraph([
       "Learning rate: ",
-      ca.Equation(f"\\alpha = {self.learning_rate}", inline=True)
+      ca.Equation(f"\\alpha = {context.learning_rate}", inline=True)
     ]))
 
     body.add_element(ca.Paragraph([
       "Momentum coefficient: ",
-      ca.Equation(f"\\beta = {self.momentum_beta}", inline=True)
+      ca.Equation(f"\\beta = {context.momentum_beta}", inline=True)
     ]))
 
     # Questions
@@ -846,8 +842,8 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     table_data = []
     table_data.append(["Update Type", "Formula", "Result"])
 
-    velocity_answer = ca.AnswerTypes.Vector(self.new_velocity, label="New velocity")
-    weights_momentum_answer = ca.AnswerTypes.Vector(self.new_weights, label="Weights (momentum)")
+    velocity_answer = ca.AnswerTypes.Vector(context.new_velocity, label="New velocity")
+    weights_momentum_answer = ca.AnswerTypes.Vector(context.new_weights, label="Weights (momentum)")
     weights_sgd_answer = None
 
     answers.append(velocity_answer)
@@ -864,8 +860,8 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       weights_momentum_answer
     ])
 
-    if self.show_vanilla_sgd:
-      weights_sgd_answer = ca.AnswerTypes.Vector(self.sgd_weights, label="Weights (vanilla SGD)")
+    if context.show_vanilla_sgd:
+      weights_sgd_answer = ca.AnswerTypes.Vector(context.sgd_weights, label="Weights (vanilla SGD)")
       answers.append(weights_sgd_answer)
       table_data.append([
         "Weights (vanilla SGD)",
@@ -877,7 +873,8 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -902,17 +899,17 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     # Show calculation for each component
     digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
-    for i in range(self.num_variables):
+    for i in range(context.num_variables):
       var_name = f"x_{i}"
       # Round all intermediate values to avoid floating point precision issues
-      beta_times_v = round(self.momentum_beta * self.prev_velocity[i], digits)
-      one_minus_beta = round(1 - self.momentum_beta, digits)
-      one_minus_beta_times_grad = round((1 - self.momentum_beta) * self.gradients[i], digits)
+      beta_times_v = round(context.momentum_beta * context.prev_velocity[i], digits)
+      one_minus_beta = round(1 - context.momentum_beta, digits)
+      one_minus_beta_times_grad = round((1 - context.momentum_beta) * context.gradients[i], digits)
 
       explanation.add_element(ca.Equation(
-        f"v'[{i}] = {self.momentum_beta} \\times {self.prev_velocity[i]:.{digits}f} + "
-        f"{one_minus_beta:.{digits}f} \\times {self.gradients[i]:.{digits}f} = "
-        f"{beta_times_v:.{digits}f} + {one_minus_beta_times_grad:.{digits}f} = {self.new_velocity[i]:.{digits}f}",
+        f"v'[{i}] = {context.momentum_beta} \\times {context.prev_velocity[i]:.{digits}f} + "
+        f"{one_minus_beta:.{digits}f} \\times {context.gradients[i]:.{digits}f} = "
+        f"{beta_times_v:.{digits}f} + {one_minus_beta_times_grad:.{digits}f} = {context.new_velocity[i]:.{digits}f}",
         inline=False
       ))
 
@@ -926,14 +923,14 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       inline=False
     ))
 
-    for i in range(self.num_variables):
+    for i in range(context.num_variables):
       explanation.add_element(ca.Equation(
-        f"w[{i}] = {self.current_weights[i]} - {self.learning_rate} \\times {self.new_velocity[i]:.4f} = {self.new_weights[i]:.4f}",
+        f"w[{i}] = {context.current_weights[i]} - {context.learning_rate} \\times {context.new_velocity[i]:.4f} = {context.new_weights[i]:.4f}",
         inline=False
       ))
 
     # Comparison with vanilla SGD
-    if self.show_vanilla_sgd:
+    if context.show_vanilla_sgd:
       explanation.add_element(ca.Paragraph([
         ca.Text("Comparison with vanilla SGD:", emphasis=True)
       ]))
@@ -947,9 +944,9 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
         inline=False
       ))
 
-      for i in range(self.num_variables):
+      for i in range(context.num_variables):
         explanation.add_element(ca.Equation(
-          f"w[{i}] = {self.current_weights[i]} - {self.learning_rate} \\times {self.gradients[i]:.4f} = {self.sgd_weights[i]:.4f}",
+          f"w[{i}] = {context.current_weights[i]} - {context.learning_rate} \\times {context.gradients[i]:.4f} = {context.sgd_weights[i]:.4f}",
           inline=False
         ))
 

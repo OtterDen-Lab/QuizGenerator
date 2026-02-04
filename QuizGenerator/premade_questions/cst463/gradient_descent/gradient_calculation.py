@@ -15,48 +15,52 @@ log = logging.getLogger(__name__)
 class DerivativeQuestion(Question, abc.ABC):
   """Base class for derivative calculation questions."""
 
+  DEFAULT_NUM_VARIABLES = 2
+  DEFAULT_MAX_DEGREE = 2
+
   def __init__(self, *args, **kwargs):
     kwargs["topic"] = kwargs.get("topic", Question.Topic.ML_OPTIMIZATION)
     super().__init__(*args, **kwargs)
-    self.num_variables = kwargs.get("num_variables", 2)
-    self.max_degree = kwargs.get("max_degree", 2)
+    self.num_variables = kwargs.get("num_variables", self.DEFAULT_NUM_VARIABLES)
+    self.max_degree = kwargs.get("max_degree", self.DEFAULT_MAX_DEGREE)
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    if "num_variables" in kwargs:
-      self.num_variables = kwargs.get("num_variables", self.num_variables)
-    if "max_degree" in kwargs:
-      self.max_degree = kwargs.get("max_degree", self.max_degree)
-    self.rng.seed(rng_seed)
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    context["num_variables"] = kwargs.get("num_variables", cls.DEFAULT_NUM_VARIABLES)
+    context["max_degree"] = kwargs.get("max_degree", cls.DEFAULT_MAX_DEGREE)
     return context
 
-  def _generate_evaluation_point(self) -> List[float]:
+  @classmethod
+  def _generate_evaluation_point(cls, context) -> List[float]:
     """Generate a random point for gradient evaluation."""
-    return [self.rng.randint(-3, 3) for _ in range(self.num_variables)]
+    return [context.rng.randint(-3, 3) for _ in range(context.num_variables)]
 
-  def _format_partial_derivative(self, var_index: int) -> str:
+  @staticmethod
+  def _format_partial_derivative(var_index: int, num_variables: int) -> str:
     """Format partial derivative symbol for display."""
-    if self.num_variables == 1:
+    if num_variables == 1:
       return "\\frac{df}{dx_0}"
-    else:
-      return f"\\frac{{\\partial f}}{{\\partial x_{var_index}}}"
+    return f"\\frac{{\\partial f}}{{\\partial x_{var_index}}}"
 
-  def _create_derivative_answers(self, evaluation_point: List[float]) -> List[ca.Answer]:
+  @staticmethod
+  def _create_derivative_answers(context) -> List[ca.Answer]:
     """Create answer fields for each partial derivative at the evaluation point."""
     answers: List[ca.Answer] = []
 
     # Evaluate gradient at the specified point
-    subs_map = dict(zip(self.variables, evaluation_point))
+    subs_map = dict(zip(context.variables, context.evaluation_point))
 
     # Format evaluation point for label
-    eval_point_str = ", ".join([f"x_{i} = {evaluation_point[i]}" for i in range(self.num_variables)])
+    eval_point_str = ", ".join(
+      [f"x_{i} = {context.evaluation_point[i]}" for i in range(context.num_variables)]
+    )
 
     # Create answer for each partial derivative
-    for i in range(self.num_variables):
+    for i in range(context.num_variables):
       answer_key = f"partial_derivative_{i}"
       # Evaluate the partial derivative and convert to float
-      partial_value = self.gradient_function[i].subs(subs_map)
+      partial_value = context.gradient_function[i].subs(subs_map)
       try:
         gradient_value = float(partial_value)
       except (TypeError, ValueError):
@@ -71,14 +75,15 @@ class DerivativeQuestion(Question, abc.ABC):
 
     return answers
 
-  def _create_gradient_vector_answer(self) -> ca.Answer:
+  @staticmethod
+  def _create_gradient_vector_answer(context) -> ca.Answer:
     """Create a single gradient vector answer for PDF format."""
     # Format gradient as vector notation
-    subs_map = dict(zip(self.variables, self.evaluation_point))
+    subs_map = dict(zip(context.variables, context.evaluation_point))
     gradient_values = []
 
-    for i in range(self.num_variables):
-      partial_value = self.gradient_function[i].subs(subs_map)
+    for i in range(context.num_variables):
+      partial_value = context.gradient_function[i].subs(subs_map)
       try:
         gradient_value = float(partial_value)
       except TypeError:
@@ -89,7 +94,8 @@ class DerivativeQuestion(Question, abc.ABC):
     vector_str = format_vector(gradient_values)
     return ca.AnswerTypes.String(vector_str, pdf_only=True)
 
-  def _build_body(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -98,15 +104,17 @@ class DerivativeQuestion(Question, abc.ABC):
     body.add_element(
       ca.Paragraph([
         "Given the function ",
-        ca.Equation(sp.latex(self.equation), inline=True),
+        ca.Equation(sp.latex(context.equation), inline=True),
         ", calculate the gradient at the point ",
-        ca.Equation(format_vector(self.evaluation_point), inline=True),
+        ca.Equation(format_vector(context.evaluation_point), inline=True),
         "."
       ])
     )
 
     # Format evaluation point for LaTeX
-    eval_point_str = ", ".join([f"x_{i} = {self.evaluation_point[i]}" for i in range(self.num_variables)])
+    eval_point_str = ", ".join(
+      [f"x_{i} = {context.evaluation_point[i]}" for i in range(context.num_variables)]
+    )
 
     # For PDF: Use OnlyLatex to show gradient vector format (no answer blank)
     body.add_element(
@@ -121,14 +129,14 @@ class DerivativeQuestion(Question, abc.ABC):
     )
 
     # For Canvas: Use OnlyHtml to show individual partial derivatives
-    derivative_answers = self._create_derivative_answers(self.evaluation_point)
+    derivative_answers = cls._create_derivative_answers(context)
     for i, answer in enumerate(derivative_answers):
       answers.append(answer)
       body.add_element(
         ca.OnlyHtml([
           ca.Paragraph([
             ca.Equation(
-              f"\\left. {self._format_partial_derivative(i)} \\right|_{{{eval_point_str}}} = ",
+              f"\\left. {cls._format_partial_derivative(i, context.num_variables)} \\right|_{{{eval_point_str}}} = ",
               inline=True
             ),
             answer
@@ -138,7 +146,8 @@ class DerivativeQuestion(Question, abc.ABC):
 
     return body, answers
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -146,27 +155,27 @@ class DerivativeQuestion(Question, abc.ABC):
     explanation.add_element(
       ca.Paragraph([
         "To find the gradient, we calculate the partial derivatives of ",
-        ca.Equation(sp.latex(self.equation), inline=True),
+        ca.Equation(sp.latex(context.equation), inline=True),
         ":"
       ])
     )
 
     # Show analytical gradient
     explanation.add_element(
-      ca.Equation(f"\\nabla f = {sp.latex(self.gradient_function)}", inline=False)
+      ca.Equation(f"\\nabla f = {sp.latex(context.gradient_function)}", inline=False)
     )
 
     # Show evaluation at the specific point
     explanation.add_element(
       ca.Paragraph([
-        f"Evaluating at the point {format_vector(self.evaluation_point)}:"
+        f"Evaluating at the point {format_vector(context.evaluation_point)}:"
       ])
     )
 
     # Show each partial derivative calculation
-    subs_map = dict(zip(self.variables, self.evaluation_point))
-    for i in range(self.num_variables):
-      partial_expr = self.gradient_function[i]
+    subs_map = dict(zip(context.variables, context.evaluation_point))
+    for i in range(context.num_variables):
+      partial_expr = context.gradient_function[i]
       partial_value = partial_expr.subs(subs_map)
 
       # Use ca.Answer.accepted_strings for clean numerical formatting
@@ -181,7 +190,7 @@ class DerivativeQuestion(Question, abc.ABC):
       explanation.add_element(
         ca.Paragraph([
           ca.Equation(
-            f"{self._format_partial_derivative(i)} = {sp.latex(partial_expr)} = {clean_value}",
+            f"{cls._format_partial_derivative(i, context.num_variables)} = {sp.latex(partial_expr)} = {clean_value}",
             inline=False
           )
         ])
@@ -194,22 +203,21 @@ class DerivativeQuestion(Question, abc.ABC):
 class DerivativeBasic(DerivativeQuestion):
   """Basic derivative calculation using polynomial functions."""
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    super()._build_context(rng_seed=rng_seed, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Generate a basic polynomial function
-    self.variables, self.function, self.gradient_function, self.equation = generate_function(
-      self.rng, self.num_variables, self.max_degree
+    context.variables, context.function, context.gradient_function, context.equation = generate_function(
+      context.rng, context.num_variables, context.max_degree
     )
 
     # Generate evaluation point
-    self.evaluation_point = self._generate_evaluation_point()
+    context.evaluation_point = cls._generate_evaluation_point(context)
 
     # Create answers for evaluation point (used in _build_body)
-    self._create_derivative_answers(self.evaluation_point)
+    cls._create_derivative_answers(context)
 
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
     return context
 
 
@@ -217,21 +225,22 @@ class DerivativeBasic(DerivativeQuestion):
 class DerivativeChain(DerivativeQuestion):
   """Chain rule derivative calculation using function composition."""
 
-  def _build_context(self, *, rng_seed=None, **kwargs):
-    super()._build_context(rng_seed=rng_seed, **kwargs)
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
 
     # Try to generate a valid function/point combination, regenerating if we hit complex numbers
     max_attempts = 10
     for attempt in range(max_attempts):
       try:
         # Generate inner and outer functions for composition
-        self._generate_composed_function()
+        cls._generate_composed_function(context)
 
         # Generate evaluation point
-        self.evaluation_point = self._generate_evaluation_point()
+        context.evaluation_point = cls._generate_evaluation_point(context)
 
         # Create answers - this will raise ValueError if we get complex numbers
-        self._create_derivative_answers(self.evaluation_point)
+        cls._create_derivative_answers(context)
 
         # If we get here, everything worked
         break
@@ -239,30 +248,28 @@ class DerivativeChain(DerivativeQuestion):
       except ValueError as e:
         if "Complex number encountered" in str(e) and attempt < max_attempts - 1:
           # Advance RNG state by making a dummy call
-          _ = self.rng.random()
+          _ = context.rng.random()
           continue
         else:
           # If we've exhausted attempts or different error, re-raise
           raise
-
-    context = dict(kwargs)
-    context["rng_seed"] = rng_seed
     return context
 
-  def _generate_composed_function(self) -> None:
+  @staticmethod
+  def _generate_composed_function(context) -> None:
     """Generate a composed function f(g(x)) for chain rule practice."""
     # Create variable symbols
-    var_names = [f'x_{i}' for i in range(self.num_variables)]
-    self.variables = sp.symbols(var_names)
+    var_names = [f'x_{i}' for i in range(context.num_variables)]
+    context.variables = sp.symbols(var_names)
 
     # Generate inner function g(x) - simpler polynomial
-    inner_terms = [m for m in sp.polys.itermonomials(self.variables, max(1, self.max_degree-1)) if m != 1]
+    inner_terms = [m for m in sp.polys.itermonomials(context.variables, max(1, context.max_degree-1)) if m != 1]
     coeff_pool = [*range(-5, 0), *range(1, 6)]  # Smaller coefficients for inner function
 
     if inner_terms:
-      inner_poly = sp.Add(*(self.rng.choice(coeff_pool) * t for t in inner_terms))
+      inner_poly = sp.Add(*(context.rng.choice(coeff_pool) * t for t in inner_terms))
     else:
-      inner_poly = sp.Add(*[self.rng.choice(coeff_pool) * v for v in self.variables])
+      inner_poly = sp.Add(*[context.rng.choice(coeff_pool) * v for v in context.variables])
 
     # Generate outer function - use polynomials, exp, and ln for reliable evaluation
     u = sp.Symbol('u')  # Intermediate variable
@@ -274,21 +281,24 @@ class DerivativeChain(DerivativeQuestion):
       sp.log(u + 2)  # Add 2 to ensure positive argument for evaluation points
     ]
 
-    outer_func = self.rng.choice(outer_functions)
+    outer_func = context.rng.choice(outer_functions)
 
     # Compose the functions: f(g(x))
-    self.inner_function = inner_poly
-    self.outer_function = outer_func
-    self.function = outer_func.subs(u, inner_poly)
+    context.inner_function = inner_poly
+    context.outer_function = outer_func
+    context.function = outer_func.subs(u, inner_poly)
 
     # Calculate gradient using chain rule
-    self.gradient_function = sp.Matrix([self.function.diff(v) for v in self.variables])
+    context.gradient_function = sp.Matrix([context.function.diff(v) for v in context.variables])
 
     # Create equation for display
     f = sp.Function('f')
-    self.equation = sp.Eq(f(*self.variables), self.function)
+    context.equation = sp.Eq(f(*context.variables), context.function)
+    
+    return context
 
-  def _build_explanation(self, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  @classmethod
+  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -296,9 +306,9 @@ class DerivativeChain(DerivativeQuestion):
     explanation.add_element(
       ca.Paragraph([
         "This is a composition of functions requiring the chain rule. The function ",
-        ca.Equation(sp.latex(self.equation), inline=True),
+        ca.Equation(sp.latex(context.equation), inline=True),
         " can be written as ",
-        ca.Equation(f"f(g(x)) \\text{{ where }} g(x) = {sp.latex(self.inner_function)}", inline=True),
+        ca.Equation(f"f(g(x)) \\text{{ where }} g(x) = {sp.latex(context.inner_function)}", inline=True),
         "."
       ])
     )
@@ -313,7 +323,7 @@ class DerivativeChain(DerivativeQuestion):
     )
 
     # Show chain rule formula for each variable
-    for i in range(self.num_variables):
+    for i in range(context.num_variables):
       var_name = f"x_{i}"
       explanation.add_element(
         ca.Equation(
@@ -329,12 +339,12 @@ class DerivativeChain(DerivativeQuestion):
     )
 
     # Show the specific derivatives step by step
-    for i in range(self.num_variables):
+    for i in range(context.num_variables):
       var_name = f"x_{i}"
 
       # Get outer function derivative with respect to inner function
-      outer_deriv = self.outer_function.diff(sp.Symbol('u'))
-      inner_deriv = self.inner_function.diff(self.variables[i])
+      outer_deriv = context.outer_function.diff(sp.Symbol('u'))
+      inner_deriv = context.inner_function.diff(context.variables[i])
 
       explanation.add_element(
         ca.Paragraph([
@@ -357,20 +367,20 @@ class DerivativeChain(DerivativeQuestion):
     )
 
     explanation.add_element(
-      ca.Equation(f"\\nabla f = {sp.latex(self.gradient_function)}", inline=False)
+      ca.Equation(f"\\nabla f = {sp.latex(context.gradient_function)}", inline=False)
     )
 
     # Show evaluation at the specific point
     explanation.add_element(
       ca.Paragraph([
-        f"Evaluating at the point {format_vector(self.evaluation_point)}:"
+        f"Evaluating at the point {format_vector(context.evaluation_point)}:"
       ])
     )
 
     # Show each partial derivative calculation
-    subs_map = dict(zip(self.variables, self.evaluation_point))
-    for i in range(self.num_variables):
-      partial_expr = self.gradient_function[i]
+    subs_map = dict(zip(context.variables, context.evaluation_point))
+    for i in range(context.num_variables):
+      partial_expr = context.gradient_function[i]
       partial_value = partial_expr.subs(subs_map)
 
       # Use ca.Answer.accepted_strings for clean numerical formatting
@@ -385,7 +395,7 @@ class DerivativeChain(DerivativeQuestion):
       explanation.add_element(
         ca.Paragraph([
           ca.Equation(
-            f"{self._format_partial_derivative(i)} = {sp.latex(partial_expr)} = {clean_value}",
+            f"{cls._format_partial_derivative(i, context.num_variables)} = {sp.latex(partial_expr)} = {clean_value}",
             inline=False
           )
         ])
