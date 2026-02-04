@@ -45,6 +45,7 @@ class RegenerationFlags:
     generation_seed: Optional[int]
     question_version: str
     config_params: Dict[str, Any]
+    context_extras: Dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -94,7 +95,9 @@ class QuestionContext:
       return self.rng_seed
     if key == "rng":
       return self.rng
-    return self.data.get(key, default)
+    if hasattr(self.data, "get"):
+      return self.data.get(key, default)
+    return default
 
   def __contains__(self, key: object) -> bool:
     if key in ("rng_seed", "rng"):
@@ -261,7 +264,12 @@ class QuestionRegistry:
       # Load modules from the current directory
       for _, module_name, _ in pkgutil.iter_modules([str(path)]):
         # Import the module
-        module = importlib.import_module(f"{package_prefix}.{module_name}")
+        try:
+          importlib.import_module(f"{package_prefix}.{module_name}")
+        except ImportError as e:
+          log.warning(
+            f"Skipping module '{package_prefix}.{module_name}' due to import error: {e}"
+          )
 
       # Recursively load modules from subdirectories
       for subdir in path.iterdir():
@@ -688,6 +696,20 @@ class Question(abc.ABC):
       if isinstance(ctx, dict) and ctx.get("_config_params"):
         config_params.update(ctx.get("_config_params"))
 
+      context_extras: Dict[str, Any] = {}
+      if isinstance(ctx, QuestionContext):
+        include_list = ctx.get("qr_include_list", None)
+        if isinstance(include_list, (list, tuple)):
+          for key in include_list:
+            if key in ctx:
+              context_extras[key] = ctx[key]
+      elif isinstance(ctx, dict):
+        include_list = ctx.get("qr_include_list", None)
+        if isinstance(include_list, (list, tuple)):
+          for key in include_list:
+            if key in ctx:
+              context_extras[key] = ctx[key]
+
       instance = QuestionInstance(
         body=components.body,
         explanation=components.explanation,
@@ -701,7 +723,8 @@ class Question(abc.ABC):
           question_class_name=self._get_registered_name(),
           generation_seed=actual_seed,
           question_version=self.VERSION,
-          config_params=config_params
+          config_params=config_params,
+          context_extras=context_extras
         )
       )
       return instance
@@ -932,6 +955,7 @@ class Question(abc.ABC):
     question_ast.generation_seed = instance.flags.generation_seed
     question_ast.question_version = instance.flags.question_version
     question_ast.config_params = dict(instance.flags.config_params)
+    question_ast.qr_context_extras = dict(instance.flags.context_extras)
 
     return question_ast
 
@@ -1014,11 +1038,11 @@ class QuestionGroup():
     
   def instantiate(self, *args, **kwargs):
     
-    # todo: Make work with rng_seed (or at least verify)
-    random.seed(kwargs.get("rng_seed", None))
+    # Use a local RNG to avoid global side effects.
+    rng = random.Random(kwargs.get("rng_seed", None))
     
     if not self.pick_once or self._current_question is None:
-      self._current_question = random.choice(self.questions)
+      self._current_question = rng.choice(self.questions)
     
   def __getattr__(self, name):
     if self._current_question is None or name == "generate":

@@ -11,5 +11,4 @@ debug.*
 .claude
 *.log
 dist/
-*.md
-*.yaml
+agent_notes/

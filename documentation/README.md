@@ -42,6 +42,25 @@ Technical guide for developers integrating QuizGeneration with web-based grading
 
 ### Developer Documentation
 
+#### [getting_started.md](getting_started.md)
+Quick-start guide for generating PDFs and uploading to Canvas.
+
+**Audience:** Instructors and new users
+
+---
+
+#### [quickstart.md](quickstart.md)
+One-page quick start for installation, PDF generation, and Canvas upload.
+
+**Audience:** Instructors and new users
+
+---
+
+#### [yaml_config_guide.md](yaml_config_guide.md)
+Reference for the quiz YAML schema and configuration options.
+
+**Audience:** Instructors and question authors
+
 #### [PARAMETER_STANDARDS.md](PARAMETER_STANDARDS.md)
 Standards and conventions for question parameter naming and design.
 
@@ -71,6 +90,12 @@ Accumulated knowledge and gotchas from developing new question types.
 Project todo list and task tracking.
 
 **Audience:** Project maintainers
+
+---
+
+## Agent Notes Policy
+
+AI/agent-generated markdown notes should be stored in `agent_notes/` at the repo root.
 
 ---
 
@@ -141,7 +166,7 @@ QuizGeneration/
 │   ├── qrcode_generator.py # QR code generation/encryption
 │   ├── question.py         # Question classes and registry
 │   └── ...
-└── generate_quiz.py        # PDF generation entry point
+└── quizgen                # PDF generation entry point
 ```
 
 ---

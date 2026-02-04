@@ -198,7 +198,8 @@ class LossQuestion_Linear(LossQuestion):
   @classmethod
   def _generate_data(cls, context):
     """Generate regression data with continuous target values."""
-    context.data = []
+    context.data = {}
+    context["data"] = []
 
     for _ in range(context.num_samples):
       sample = {}
@@ -227,7 +228,7 @@ class LossQuestion_Linear(LossQuestion):
           for _ in range(context.num_output_vars)
         ]
 
-      context.data.append(sample)
+      context["data"].append(sample)
 
   @classmethod
   def _calculate_losses(cls, context):
@@ -235,7 +236,7 @@ class LossQuestion_Linear(LossQuestion):
     context.individual_losses = []
     total_loss = 0.0
 
-    for sample in context.data:
+    for sample in context["data"]:
       if context.num_output_vars == 1:
         # Single output MSE: (y - p)^2
         loss = (sample['true_values'] - sample['predictions']) ** 2
@@ -282,7 +283,7 @@ class LossQuestion_Linear(LossQuestion):
       headers.append("loss")
 
     rows = []
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       row = {}
 
       # Input features as vector
@@ -315,7 +316,7 @@ class LossQuestion_Linear(LossQuestion):
     """Show step-by-step MSE calculations."""
     steps = ca.Section()
 
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       steps.add_element(ca.Paragraph([f"Sample {i+1}:"]))
 
       if context.num_output_vars == 1:
@@ -364,7 +365,7 @@ class LossQuestion_Linear(LossQuestion):
       headers.append("loss")
 
     rows = []
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       row = []
 
       # Input features
@@ -416,7 +417,8 @@ class LossQuestion_Logistic(LossQuestion):
   @classmethod
   def _generate_data(cls, context):
     """Generate binary classification data."""
-    context.data = []
+    context.data = {}
+    context["data"] = []
 
     for _ in range(context.num_samples):
       sample = {}
@@ -433,7 +435,7 @@ class LossQuestion_Logistic(LossQuestion):
       # Generate predicted probabilities (between 0 and 1, rounded to 3 decimal places)
       sample['predictions'] = round(context.rng.uniform(0.1, 0.9), 3)  # Avoid extreme values
 
-      context.data.append(sample)
+      context["data"].append(sample)
 
   @classmethod
   def _calculate_losses(cls, context):
@@ -441,7 +443,7 @@ class LossQuestion_Logistic(LossQuestion):
     context.individual_losses = []
     total_loss = 0.0
 
-    for sample in context.data:
+    for sample in context["data"]:
       y = sample['true_values']
       p = sample['predictions']
 
@@ -475,7 +477,7 @@ class LossQuestion_Logistic(LossQuestion):
     headers = ["x", "y", "p", "loss"]
 
     rows = []
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       row = {}
 
       # Input features as vector
@@ -500,7 +502,7 @@ class LossQuestion_Logistic(LossQuestion):
     """Show step-by-step log-loss calculations."""
     steps = ca.Section()
 
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       y = sample['true_values']
       p = sample['predictions']
       loss = context.individual_losses[i]
@@ -522,7 +524,7 @@ class LossQuestion_Logistic(LossQuestion):
     headers = ["x_0", "x_1", "y", "p", "loss"]
 
     rows = []
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       row = []
 
       # Input features
@@ -585,7 +587,8 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
   @classmethod
   def _generate_data(cls, context):
     """Generate multi-class classification data."""
-    context.data = []
+    context.data = {}
+    context["data"] = []
 
     for _ in range(context.num_samples):
       sample = {}
@@ -606,7 +609,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
       prob_sum = sum(raw_probs)
       sample['predictions'] = [round(p / prob_sum, 3) for p in raw_probs]
 
-      context.data.append(sample)
+      context["data"].append(sample)
 
   @classmethod
   def _calculate_losses(cls, context):
@@ -614,7 +617,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
     context.individual_losses = []
     total_loss = 0.0
 
-    for sample in context.data:
+    for sample in context["data"]:
       y_vec = sample['true_values']
       p_vec = sample['predictions']
 
@@ -645,7 +648,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
     headers = ["x", "y", "p", "loss"]
 
     rows = []
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       row = {}
 
       # Input features as vector
@@ -672,7 +675,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
     """Show step-by-step cross-entropy calculations."""
     steps = ca.Section()
 
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       y_vec = sample['true_values']
       p_vec = sample['predictions']
       loss = context.individual_losses[i]
@@ -710,7 +713,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
     headers = ["x_0", "x_1", "y", "p", "loss"]
 
     rows = []
-    for i, sample in enumerate(context.data):
+    for i, sample in enumerate(context["data"]):
       row = []
 
       # Input features

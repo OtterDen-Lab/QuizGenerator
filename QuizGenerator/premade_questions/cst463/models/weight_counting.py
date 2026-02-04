@@ -1,8 +1,16 @@
+from __future__ import annotations
+
 import abc
 import logging
 import math
 import random
-import keras
+try:
+  import keras
+except ImportError as exc:
+  keras = None
+  _KERAS_IMPORT_ERROR = exc
+else:
+  _KERAS_IMPORT_ERROR = None
 import numpy as np
 from typing import List, Tuple
 
@@ -15,12 +23,21 @@ log = logging.getLogger(__name__)
 
 class WeightCounting(Question, abc.ABC):
   @staticmethod
+  def _ensure_keras():
+    if keras is None:
+      raise ImportError(
+        "Keras is required for CST463 model questions. "
+        "Install with: pip install 'QuizGenerator[cst463]'"
+      ) from _KERAS_IMPORT_ERROR
+
+  @staticmethod
   @abc.abstractmethod
   def get_model(rng: random.Random) -> keras.Model:
     pass
   
   @staticmethod
   def model_to_python(model: keras.Model, fields=None, include_input=True):
+    WeightCounting._ensure_keras()
     if fields is None:
       fields = []
     
@@ -177,6 +194,7 @@ class WeightCounting_CNN(WeightCounting):
   
   @staticmethod
   def get_model(rng: random.Random) -> tuple[keras.Model, list[str]]:
+    WeightCounting._ensure_keras()
     input_size = rng.choice(np.arange(28, 32))
     cnn_num_filters = rng.choice(2 ** np.arange(8))
     cnn_kernel_size = rng.choice(1 + np.arange(10))
@@ -211,6 +229,7 @@ class WeightCounting_CNN(WeightCounting):
 class WeightCounting_RNN(WeightCounting):
   @staticmethod
   def get_model(rng: random.Random) -> tuple[keras.Model, list[str]]:
+    WeightCounting._ensure_keras()
     timesteps = int(rng.choice(np.arange(20, 41)))
     feature_size = int(rng.choice(np.arange(8, 65)))
 

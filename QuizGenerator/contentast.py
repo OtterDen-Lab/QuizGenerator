@@ -23,6 +23,21 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
+_PANDOC_OK = None
+
+
+def _ensure_pandoc() -> bool:
+  global _PANDOC_OK
+  if _PANDOC_OK is not None:
+    return _PANDOC_OK
+  try:
+    pypandoc.get_pandoc_version()
+    _PANDOC_OK = True
+  except Exception as exc:
+    _PANDOC_OK = False
+    log.warning(f"Pandoc not found or unusable: {exc}")
+  return _PANDOC_OK
+
 
 """
 Content Abstract Syntax Tree - The core content system for quiz generation.
@@ -221,6 +236,9 @@ class Leaf(Element):
           return html_output.strip()
         
         case _:
+          if not _ensure_pandoc():
+            log.warning(f"Pandoc unavailable; returning raw markdown for {output_format} output.")
+            return str_to_convert
           output = pypandoc.convert_text(
             str_to_convert,
             output_format,
@@ -549,16 +567,18 @@ class Question(Container):
           
           # Build extra_data dict with regeneration metadata if available
           extra_data = {}
-          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(
-              self, 'question_version'
-          ):
-            if self.question_class_name and self.generation_seed is not None and self.question_version:
+          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed'):
+            if self.question_class_name and self.generation_seed is not None:
               extra_data['question_type'] = self.question_class_name
               extra_data['seed'] = self.generation_seed
-              extra_data['version'] = self.question_version
+              if hasattr(self, 'question_version') and self.question_version:
+                extra_data['version'] = self.question_version
               # Include question-specific configuration parameters if available
               if hasattr(self, 'config_params') and self.config_params:
                 extra_data['config'] = self.config_params
+              # Include context-derived extras if available
+              if hasattr(self, 'qr_context_extras') and self.qr_context_extras:
+                extra_data['context'] = self.qr_context_extras
           
           qr_path = QuestionQRCode.generate_qr_pdf(
             self.question_number,
@@ -615,16 +635,18 @@ class Question(Container):
         
         # Build extra_data dict with regeneration metadata if available
         extra_data = {}
-        if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(
-            self, 'question_version'
-        ):
-          if self.question_class_name and self.generation_seed is not None and self.question_version:
+        if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed'):
+          if self.question_class_name and self.generation_seed is not None:
             extra_data['question_type'] = self.question_class_name
             extra_data['seed'] = self.generation_seed
-            extra_data['version'] = self.question_version
+            if hasattr(self, 'question_version') and self.question_version:
+              extra_data['version'] = self.question_version
             # Include question-specific configuration parameters if available
             if hasattr(self, 'config_params') and self.config_params:
               extra_data['config'] = self.config_params
+            # Include context-derived extras if available
+            if hasattr(self, 'qr_context_extras') and self.qr_context_extras:
+              extra_data['context'] = self.qr_context_extras
         
         # Generate QR code PNG
         qr_path = QuestionQRCode.generate_qr_pdf(

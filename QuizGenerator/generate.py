@@ -32,7 +32,18 @@ def parse_args():
   
   parser.add_argument("--debug", action="store_true", help="Set logging level to debug")
 
-  parser.add_argument("--quiz_yaml", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "example_files/exam_generation.yaml"))
+  parser.add_argument(
+    "--yaml",
+    dest="quiz_yaml",
+    default=None,
+    help="Path to quiz YAML configuration"
+  )
+  parser.add_argument(
+    "--quiz_yaml",
+    dest="quiz_yaml",
+    default=None,
+    help=argparse.SUPPRESS  # Backwards-compatible alias for --yaml
+  )
   parser.add_argument("--seed", type=int, default=None,
                      help="Random seed for quiz generation (default: None for random)")
 
@@ -45,7 +56,10 @@ def parse_args():
   
   # PDF Flags
   parser.add_argument("--num_pdfs", default=0, type=int, help="How many PDF quizzes to create")
-  parser.add_argument("--latex", action="store_false", dest="typst", help="Use Typst instead of LaTeX for PDF generation")
+  parser.add_argument("--latex", action="store_false", dest="typst", help="Use LaTeX instead of Typst for PDF generation")
+  parser.set_defaults(typst=True)
+  parser.add_argument("--typst_measurement", action="store_true",
+                     help="Use Typst measurement for layout optimization (experimental)")
 
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",
@@ -54,6 +68,8 @@ def parse_args():
                      help="Only test specific question types by name (use with --test_all)")
   parser.add_argument("--strict", action="store_true",
                      help="With --test_all, skip PDF/Canvas generation if any questions fail")
+  parser.add_argument("--skip_missing_extras", action="store_true",
+                     help="With --test_all, skip questions that fail due to missing optional dependencies")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
@@ -63,6 +79,10 @@ def parse_args():
 
   if args.num_canvas > 0 and args.course_id is None:
     log.error("Must provide course_id when pushing to canvas")
+    exit(8)
+
+  if args.test_all <= 0 and not args.quiz_yaml:
+    log.error("Must provide --yaml unless using --test_all")
     exit(8)
 
   return args
@@ -82,7 +102,8 @@ def test_all_questions(
     use_typst: bool = True,
     canvas_course=None,
     strict: bool = False,
-    question_filter: list = None
+    question_filter: list = None,
+    skip_missing_extras: bool = False
 ):
   """
   Test all registered questions by generating N variations of each.
@@ -129,6 +150,7 @@ def test_all_questions(
   print("=" * 70)
 
   failed_questions = []
+  skipped_questions = []
   successful_questions = []
   # Collect question instances for PDF/Canvas generation
   test_question_instances = []
@@ -174,6 +196,14 @@ def test_all_questions(
         # If we got here, the question works - save the instance
         test_question_instances.append(question)
 
+      except ImportError as e:
+        if skip_missing_extras:
+          skipped_questions.append(question_name)
+          log.warning(f"Skipping {question_name} due to missing optional dependency: {e}")
+          question_failures = []
+          break
+        tb = traceback.format_exc()
+        question_failures.append(f"  Variation {variation+1}: Generation failed - {e}\n{tb}")
       except Exception as e:
         tb = traceback.format_exc()
         question_failures.append(f"  Variation {variation+1}: Generation failed - {e}\n{tb}")
@@ -183,6 +213,8 @@ def test_all_questions(
       for failure in question_failures:
         print(failure)
       failed_questions.append((question_name, question_failures))
+    elif question_name in skipped_questions:
+      print("  SKIPPED (missing optional dependency)")
     else:
       print(f"  OK ({num_variations}/{num_variations} variations)")
       successful_questions.append(question_name)
@@ -194,11 +226,17 @@ def test_all_questions(
   print(f"Total question types: {total_questions}")
   print(f"Successful: {len(successful_questions)}")
   print(f"Failed: {len(failed_questions)}")
+  if skipped_questions:
+    print(f"Skipped (missing extras): {len(set(skipped_questions))}")
 
   if failed_questions:
     print("\nFailed questions:")
     for name, failures in failed_questions:
       print(f"  - {name}: {len(failures)} failures")
+  if skipped_questions:
+    print("\nSkipped questions (missing extras):")
+    for name in sorted(set(skipped_questions)):
+      print(f"  - {name}")
 
   print("=" * 70)
 
@@ -367,14 +405,15 @@ def generate_quiz(
     delete_assignment_group=False,
     use_typst=False,
     use_typst_measurement=False,
-    base_seed=None
+    base_seed=None,
+    env_path=None
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
 
   # Handle Canvas uploads with shared assignment group
   if num_canvas > 0:
-    canvas_interface = CanvasInterface(prod=use_prod)
+    canvas_interface = CanvasInterface(prod=use_prod, env_path=env_path)
     canvas_course = canvas_interface.get_course(course_id=course_id)
 
     # Create assignment group once, with delete flag if specified
@@ -448,7 +487,7 @@ def main():
     # Set up Canvas course if course_id provided
     canvas_course = None
     if args.course_id:
-      canvas_interface = CanvasInterface(prod=args.prod)
+      canvas_interface = CanvasInterface(prod=args.prod, env_path=args.env)
       canvas_course = canvas_interface.get_course(course_id=args.course_id)
 
     success = test_all_questions(
@@ -457,7 +496,8 @@ def main():
       use_typst=getattr(args, 'typst', True),
       canvas_course=canvas_course,
       strict=args.strict,
-      question_filter=args.test_questions
+      question_filter=args.test_questions,
+      skip_missing_extras=args.skip_missing_extras
     )
     exit(0 if success else 1)
 
@@ -471,9 +511,10 @@ def main():
     use_prod=args.prod,
     course_id=args.course_id,
     delete_assignment_group=getattr(args, 'delete_assignment_group', False),
-    use_typst=getattr(args, 'typst', False),
+    use_typst=getattr(args, 'typst', True),
     use_typst_measurement=getattr(args, 'typst_measurement', False),
-    base_seed=getattr(args, 'seed', None)
+    base_seed=getattr(args, 'seed', None),
+    env_path=args.env
   )
 
 
