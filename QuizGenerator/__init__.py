@@ -5,6 +5,7 @@ import os
 import re
 
 def setup_logging() -> None:
+  os.makedirs(os.path.join("out", "logs"), exist_ok=True)
   config_path = os.path.join(os.path.dirname(__file__), 'logging.yaml')
   if os.path.exists(config_path):
     with open(config_path, 'r') as f:

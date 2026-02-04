@@ -6,6 +6,7 @@ import random
 import shutil
 import subprocess
 import tempfile
+from datetime import datetime
 import traceback
 import re
 from pathlib import Path
@@ -296,7 +297,9 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   tmp_tex.write(latex_text)
 
   tmp_tex.flush()
-  shutil.copy(f"{tmp_tex.name}", "debug.tex")
+  os.makedirs(os.path.join("out", "debug"), exist_ok=True)
+  debug_name = f"debug-{datetime.now().strftime('%Y%m%d-%H%M%S')}.tex"
+  shutil.copy(f"{tmp_tex.name}", os.path.join("out", "debug", debug_name))
   p = subprocess.Popen(
     f"latexmk -pdf -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
     shell=True,
@@ -369,7 +372,9 @@ def generate_typst(typst_text, remove_previous=False, name_prefix=None):
     tmp_typ.close()
 
     # Save debug copy
-    shutil.copy(tmp_typ.name, "debug.typ")
+    os.makedirs(os.path.join("out", "debug"), exist_ok=True)
+    debug_name = f"debug-{datetime.now().strftime('%Y%m%d-%H%M%S')}.typ"
+    shutil.copy(tmp_typ.name, os.path.join("out", "debug", debug_name))
 
     # Compile with typst
     output_pdf = os.path.join(os.getcwd(), 'out', os.path.basename(tmp_typ.name).replace('.typ', '.pdf'))
