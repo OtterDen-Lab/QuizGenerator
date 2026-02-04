@@ -9,11 +9,13 @@ The QR codes include encrypted data that allows regenerating question answers
 without storing separate files, enabling efficient grading of randomized exams.
 """
 
+import base64
+import hashlib
 import json
-import tempfile
 import logging
 import os
-import base64
+import tempfile
+import zlib
 from datetime import datetime
 from io import BytesIO
 from pathlib import Path
@@ -21,6 +23,7 @@ from typing import Optional, Dict, Any
 
 import segno
 from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 log = logging.getLogger(__name__)
 
@@ -40,6 +43,7 @@ class QuestionQRCode:
     # Error correction level: M = 15% recovery (balanced for compact encoded data)
     ERROR_CORRECTION = 'M'
     _generated_key: Optional[bytes] = None
+    V2_PREFIX = "v2."
 
     @classmethod
     def _persist_generated_key(cls, key: bytes) -> None:
@@ -87,60 +91,85 @@ class QuestionQRCode:
         return key_str.encode()
 
     @classmethod
-    def encrypt_question_data(cls, question_type: str, seed: int, version: str,
+    def _derive_aead_key(cls, key: bytes) -> bytes:
+        return hashlib.sha256(key).digest()
+
+    @classmethod
+    def _encrypt_v2(cls, payload: Dict[str, Any], *, key: Optional[bytes] = None) -> str:
+        if key is None:
+            key = cls.get_encryption_key()
+        aead_key = cls._derive_aead_key(key)
+        aesgcm = AESGCM(aead_key)
+        nonce = os.urandom(12)
+        json_bytes = json.dumps(payload, separators=(',', ':'), ensure_ascii=False).encode("utf-8")
+        compressed = zlib.compress(json_bytes)
+        ciphertext = aesgcm.encrypt(nonce, compressed, None)
+        token = base64.urlsafe_b64encode(nonce + ciphertext).decode("ascii")
+        return f"{cls.V2_PREFIX}{token}"
+
+    @classmethod
+    def _decrypt_v2(cls, encrypted_data: str, *, key: Optional[bytes] = None) -> Dict[str, Any]:
+        if not encrypted_data.startswith(cls.V2_PREFIX):
+            raise ValueError("Not a v2 payload")
+        if key is None:
+            key = cls.get_encryption_key()
+        aead_key = cls._derive_aead_key(key)
+        token = encrypted_data[len(cls.V2_PREFIX):]
+        raw = base64.urlsafe_b64decode(token.encode("ascii"))
+        nonce, ciphertext = raw[:12], raw[12:]
+        aesgcm = AESGCM(aead_key)
+        compressed = aesgcm.decrypt(nonce, ciphertext, None)
+        json_bytes = zlib.decompress(compressed)
+        return json.loads(json_bytes.decode("utf-8"))
+
+    @classmethod
+    def encrypt_question_data(cls, question_type: str, seed: int, version: Optional[str] = None,
                               config: Optional[Dict[str, Any]] = None,
+                              context: Optional[Dict[str, Any]] = None,
+                              points_value: Optional[float] = None,
                               key: Optional[bytes] = None) -> str:
         """
-        Encode question regeneration data with optional simple obfuscation.
+        Encode question regeneration data for QR embedding.
 
         Args:
             question_type: Class name of the question (e.g., "VectorDotProduct")
             seed: Random seed used to generate this specific question
-            version: Question class version (e.g., "1.0")
+            version: Optional question version string
             config: Optional dictionary of configuration parameters
+            context: Optional dictionary of context extras
+            points_value: Optional points value (for redundancy)
             key: Encryption key (uses environment key if None)
 
         Returns:
-            str: Base64-encoded (optionally XOR-obfuscated) data
+            str: Base64-encoded encrypted payload with v2 prefix
 
         Example:
             >>> encrypted = QuestionQRCode.encrypt_question_data("VectorDot", 12345, "1.0")
             >>> print(encrypted)
             'VmVjdG9yRG90OjEyMzQ1OjEuMA=='
         """
-        # Create compact data string, including config if provided
+        payload: Dict[str, Any] = {
+            "t": question_type,
+            "s": seed,
+        }
+        if points_value is not None:
+            payload["p"] = points_value
         if config:
-            # Serialize config as JSON and append to data string
-            config_json = json.dumps(config, separators=(',', ':'))
-            data_str = f"{question_type}:{seed}:{version}:{config_json}"
-        else:
-            data_str = f"{question_type}:{seed}:{version}"
-        data_bytes = data_str.encode('utf-8')
+            payload["c"] = config
+        if context:
+            payload["x"] = context
+        if version:
+            payload["v"] = version
 
-        # Simple XOR obfuscation if key is provided (optional, for basic protection)
-        if key is None:
-            key = cls.get_encryption_key()
-
-        if key:
-            # Use first 16 bytes of key for simple XOR obfuscation
-            key_bytes = key[:16] if isinstance(key, bytes) else key.encode()[:16]
-            # XOR each byte with repeating key pattern
-            obfuscated = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(data_bytes))
-        else:
-            obfuscated = data_bytes
-
-        # Base64 encode for compact representation
-        encoded = base64.urlsafe_b64encode(obfuscated).decode('utf-8')
-
-        log.debug(f"Encoded question data: {question_type} seed={seed} version={version} ({len(encoded)} chars)")
-
+        encoded = cls._encrypt_v2(payload, key=key)
+        log.debug(f"Encoded question data v2: {question_type} seed={seed} ({len(encoded)} chars)")
         return encoded
 
     @classmethod
     def decrypt_question_data(cls, encrypted_data: str,
                              key: Optional[bytes] = None) -> Dict[str, Any]:
         """
-        Decode question regeneration data from QR code.
+        Decode question regeneration data from QR code (v2 preferred, v1 fallback).
 
         Args:
             encrypted_data: Base64-encoded (optionally XOR-obfuscated) string from QR code
@@ -161,10 +190,24 @@ class QuestionQRCode:
             key = cls.get_encryption_key()
 
         try:
-            # Decode from base64
-            obfuscated = base64.urlsafe_b64decode(encrypted_data.encode())
+            if encrypted_data.startswith(cls.V2_PREFIX):
+                payload = cls._decrypt_v2(encrypted_data, key=key)
+                result = {
+                    "question_type": payload.get("t"),
+                    "seed": int(payload.get("s")),
+                }
+                if "v" in payload:
+                    result["version"] = payload.get("v")
+                if "c" in payload:
+                    result["config"] = payload.get("c")
+                if "x" in payload:
+                    result["context"] = payload.get("x")
+                if "p" in payload:
+                    result["points"] = payload.get("p")
+                return result
 
-            # Reverse XOR obfuscation if key is provided
+            # V1 fallback (XOR obfuscation)
+            obfuscated = base64.urlsafe_b64decode(encrypted_data.encode())
             if key:
                 key_bytes = key[:16] if isinstance(key, bytes) else key.encode()[:16]
                 data_bytes = bytes(b ^ key_bytes[i % len(key_bytes)] for i, b in enumerate(obfuscated))
@@ -172,29 +215,26 @@ class QuestionQRCode:
                 data_bytes = obfuscated
 
             data_str = data_bytes.decode('utf-8')
-
-            # Parse data string - can be 3 or 4 parts (4th is optional config)
-            parts = data_str.split(':', 3)  # Split into max 4 parts
-            if len(parts) < 3:
-                raise ValueError(f"Invalid encoded data format: expected at least 3 parts, got {len(parts)}")
+            parts = data_str.split(':', 3)
+            if len(parts) < 2:
+                raise ValueError(f"Invalid encoded data format: expected at least 2 parts, got {len(parts)}")
 
             question_type = parts[0]
             seed_str = parts[1]
-            version = parts[2]
+            version = parts[2] if len(parts) >= 3 else None
 
             result = {
                 "question_type": question_type,
                 "seed": int(seed_str),
-                "version": version
             }
+            if version:
+                result["version"] = version
 
-            # Parse config JSON if present
             if len(parts) == 4:
                 try:
                     result["config"] = json.loads(parts[3])
                 except json.JSONDecodeError as e:
                     log.warning(f"Failed to parse config JSON: {e}")
-                    # Continue without config rather than failing
 
             return result
 
@@ -234,24 +274,27 @@ class QuestionQRCode:
         """
         data = {
             "q": question_number,
-            "pts": points_value
+            "p": points_value
         }
 
         # If question regeneration data provided, encrypt it
-        if all(k in extra_data for k in ['question_type', 'seed', 'version']):
-            # Include config in encrypted data if present
+        if all(k in extra_data for k in ['question_type', 'seed']):
             config = extra_data.get('config', {})
+            context = extra_data.get('context', {})
             encrypted = cls.encrypt_question_data(
                 extra_data['question_type'],
                 extra_data['seed'],
-                extra_data['version'],
-                config=config
+                extra_data.get('version'),
+                config=config,
+                context=context,
+                points_value=points_value
             )
             data['s'] = encrypted
 
-            # Remove the unencrypted data
-            extra_data = {k: v for k, v in extra_data.items()
-                         if k not in ['question_type', 'seed', 'version', 'config']}
+            extra_data = {
+                k: v for k, v in extra_data.items()
+                if k not in ['question_type', 'seed', 'version', 'config', 'context']
+            }
 
         # Add any remaining extra metadata
         data.update(extra_data)

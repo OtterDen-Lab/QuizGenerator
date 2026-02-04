@@ -567,16 +567,18 @@ class Question(Container):
           
           # Build extra_data dict with regeneration metadata if available
           extra_data = {}
-          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(
-              self, 'question_version'
-          ):
-            if self.question_class_name and self.generation_seed is not None and self.question_version:
+          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed'):
+            if self.question_class_name and self.generation_seed is not None:
               extra_data['question_type'] = self.question_class_name
               extra_data['seed'] = self.generation_seed
-              extra_data['version'] = self.question_version
+              if hasattr(self, 'question_version') and self.question_version:
+                extra_data['version'] = self.question_version
               # Include question-specific configuration parameters if available
               if hasattr(self, 'config_params') and self.config_params:
                 extra_data['config'] = self.config_params
+              # Include context-derived extras if available
+              if hasattr(self, 'qr_context_extras') and self.qr_context_extras:
+                extra_data['context'] = self.qr_context_extras
           
           qr_path = QuestionQRCode.generate_qr_pdf(
             self.question_number,
@@ -633,16 +635,18 @@ class Question(Container):
         
         # Build extra_data dict with regeneration metadata if available
         extra_data = {}
-        if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed') and hasattr(
-            self, 'question_version'
-        ):
-          if self.question_class_name and self.generation_seed is not None and self.question_version:
+        if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed'):
+          if self.question_class_name and self.generation_seed is not None:
             extra_data['question_type'] = self.question_class_name
             extra_data['seed'] = self.generation_seed
-            extra_data['version'] = self.question_version
+            if hasattr(self, 'question_version') and self.question_version:
+              extra_data['version'] = self.question_version
             # Include question-specific configuration parameters if available
             if hasattr(self, 'config_params') and self.config_params:
               extra_data['config'] = self.config_params
+            # Include context-derived extras if available
+            if hasattr(self, 'qr_context_extras') and self.qr_context_extras:
+              extra_data['context'] = self.qr_context_extras
         
         # Generate QR code PNG
         qr_path = QuestionQRCode.generate_qr_pdf(

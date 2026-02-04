@@ -194,7 +194,9 @@ def regenerate_question_answer(
   }
   """
   question_num = qr_data.get('q')
-  points = qr_data.get('pts')
+  points = qr_data.get('p')
+  if points is None:
+    points = qr_data.get('pts')
   
   if question_num is None or points is None:
     log.error("QR code missing required fields 'q' or 'pts'")
@@ -219,8 +221,9 @@ def regenerate_question_answer(
     
     question_type = regen_data['question_type']
     seed = regen_data['seed']
-    version = regen_data['version']
+    version = regen_data.get('version')
     config = regen_data.get('config', {})
+    context_extras = regen_data.get('context', {})
     
     result['question_type'] = question_type
     result['seed'] = seed
@@ -228,7 +231,10 @@ def regenerate_question_answer(
     if config:
       result['config'] = config
     
-    log.info(f"Question {question_num}: {question_type} (seed={seed}, version={version})")
+    if version:
+      log.info(f"Question {question_num}: {question_type} (seed={seed}, version={version})")
+    else:
+      log.info(f"Question {question_num}: {question_type} (seed={seed})")
     if config:
       log.debug(f"  Config params: {config}")
     
@@ -241,7 +247,7 @@ def regenerate_question_answer(
     )
     
     # Generate question with the specific seed
-    instance = question.instantiate(rng_seed=seed)
+    instance = question.instantiate(rng_seed=seed, **context_extras)
     question_ast = question._build_question_ast(instance)
     
     # Extract answers
@@ -477,14 +483,22 @@ def display_answer_summary(question_data: Dict[str, Any]) -> None:
   if 'question_type' in question_data:
     print(f"Type: {question_data['question_type']}")
     print(f"Seed: {question_data['seed']}")
-    print(f"Version: {question_data['version']}")
+    if question_data.get('version') is not None:
+      print(f"Version: {question_data['version']}")
   
   if 'answer_objects' in question_data:
     print("\nANSWERS:")
-    for key, answer_obj in question_data['answer_objects'].items():
-      print(f"  {key}: {answer_obj.value}")
-      if hasattr(answer_obj, 'tolerance') and answer_obj.tolerance:
-        print(f"    (tolerance: ±{answer_obj.tolerance})")
+    answer_objects = question_data['answer_objects']
+    if isinstance(answer_objects, dict):
+      for key, answer_obj in answer_objects.items():
+        print(f"  {key}: {answer_obj.value}")
+        if hasattr(answer_obj, 'tolerance') and answer_obj.tolerance:
+          print(f"    (tolerance: ±{answer_obj.tolerance})")
+    else:
+      for i, answer_obj in enumerate(answer_objects, start=1):
+        print(f"  {i}: {answer_obj.value}")
+        if hasattr(answer_obj, 'tolerance') and answer_obj.tolerance:
+          print(f"    (tolerance: ±{answer_obj.tolerance})")
   elif 'answers' in question_data:
     print("\nANSWERS (raw Canvas format):")
     print(f"  Type: {question_data['answers']['kind']}")
