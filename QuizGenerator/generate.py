@@ -58,6 +58,8 @@ def parse_args():
   parser.add_argument("--num_pdfs", default=0, type=int, help="How many PDF quizzes to create")
   parser.add_argument("--latex", action="store_false", dest="typst", help="Use LaTeX instead of Typst for PDF generation")
   parser.set_defaults(typst=True)
+  parser.add_argument("--typst_measurement", action="store_true",
+                     help="Use Typst measurement for layout optimization (experimental)")
 
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",

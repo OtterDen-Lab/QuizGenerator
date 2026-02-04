@@ -1038,11 +1038,11 @@ class QuestionGroup():
     
   def instantiate(self, *args, **kwargs):
     
-    # todo: Make work with rng_seed (or at least verify)
-    random.seed(kwargs.get("rng_seed", None))
+    # Use a local RNG to avoid global side effects.
+    rng = random.Random(kwargs.get("rng_seed", None))
     
     if not self.pick_once or self._current_question is None:
-      self._current_question = random.choice(self.questions)
+      self._current_question = rng.choice(self.questions)
     
   def __getattr__(self, name):
     if self._current_question is None or name == "generate":

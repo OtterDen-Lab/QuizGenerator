@@ -36,6 +36,8 @@ pip install QuizGenerator[cst463]
 
 ## Quick Start
 
+Need a 2‑minute setup? See `documentation/quickstart.md`.
+
 ### 1. Create a quiz configuration (YAML)
 
 ```yaml
@@ -191,6 +193,9 @@ Typst is the default for faster compilation. Use `--latex` to force LaTeX:
 ```bash
 quizgen --latex --num_pdfs 3
 ```
+
+Experimental: `--typst_measurement` uses Typst to measure question height for tighter layout.
+It can change pagination and ordering, so use with care on finalized exams.
 
 ### Deterministic Generation
 
