@@ -264,7 +264,12 @@ class QuestionRegistry:
       # Load modules from the current directory
       for _, module_name, _ in pkgutil.iter_modules([str(path)]):
         # Import the module
-        module = importlib.import_module(f"{package_prefix}.{module_name}")
+        try:
+          importlib.import_module(f"{package_prefix}.{module_name}")
+        except ImportError as e:
+          log.warning(
+            f"Skipping module '{package_prefix}.{module_name}' due to import error: {e}"
+          )
 
       # Recursively load modules from subdirectories
       for subdir in path.iterdir():

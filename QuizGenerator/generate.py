@@ -66,6 +66,8 @@ def parse_args():
                      help="Only test specific question types by name (use with --test_all)")
   parser.add_argument("--strict", action="store_true",
                      help="With --test_all, skip PDF/Canvas generation if any questions fail")
+  parser.add_argument("--skip_missing_extras", action="store_true",
+                     help="With --test_all, skip questions that fail due to missing optional dependencies")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
@@ -98,7 +100,8 @@ def test_all_questions(
     use_typst: bool = True,
     canvas_course=None,
     strict: bool = False,
-    question_filter: list = None
+    question_filter: list = None,
+    skip_missing_extras: bool = False
 ):
   """
   Test all registered questions by generating N variations of each.
@@ -145,6 +148,7 @@ def test_all_questions(
   print("=" * 70)
 
   failed_questions = []
+  skipped_questions = []
   successful_questions = []
   # Collect question instances for PDF/Canvas generation
   test_question_instances = []
@@ -190,6 +194,14 @@ def test_all_questions(
         # If we got here, the question works - save the instance
         test_question_instances.append(question)
 
+      except ImportError as e:
+        if skip_missing_extras:
+          skipped_questions.append(question_name)
+          log.warning(f"Skipping {question_name} due to missing optional dependency: {e}")
+          question_failures = []
+          break
+        tb = traceback.format_exc()
+        question_failures.append(f"  Variation {variation+1}: Generation failed - {e}\n{tb}")
       except Exception as e:
         tb = traceback.format_exc()
         question_failures.append(f"  Variation {variation+1}: Generation failed - {e}\n{tb}")
@@ -199,6 +211,8 @@ def test_all_questions(
       for failure in question_failures:
         print(failure)
       failed_questions.append((question_name, question_failures))
+    elif question_name in skipped_questions:
+      print("  SKIPPED (missing optional dependency)")
     else:
       print(f"  OK ({num_variations}/{num_variations} variations)")
       successful_questions.append(question_name)
@@ -210,11 +224,17 @@ def test_all_questions(
   print(f"Total question types: {total_questions}")
   print(f"Successful: {len(successful_questions)}")
   print(f"Failed: {len(failed_questions)}")
+  if skipped_questions:
+    print(f"Skipped (missing extras): {len(set(skipped_questions))}")
 
   if failed_questions:
     print("\nFailed questions:")
     for name, failures in failed_questions:
       print(f"  - {name}: {len(failures)} failures")
+  if skipped_questions:
+    print("\nSkipped questions (missing extras):")
+    for name in sorted(set(skipped_questions)):
+      print(f"  - {name}")
 
   print("=" * 70)
 
@@ -474,7 +494,8 @@ def main():
       use_typst=getattr(args, 'typst', True),
       canvas_course=canvas_course,
       strict=args.strict,
-      question_filter=args.test_questions
+      question_filter=args.test_questions,
+      skip_missing_extras=args.skip_missing_extras
     )
     exit(0 if success else 1)
 

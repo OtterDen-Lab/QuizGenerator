@@ -1,7 +1,6 @@
 import abc
 import logging
 import math
-import keras
 import numpy as np
 from typing import List, Tuple
 

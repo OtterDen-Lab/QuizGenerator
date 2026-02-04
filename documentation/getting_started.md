@@ -21,6 +21,16 @@ pip install -e .
 - LaTeX (optional; use `--latex`)
 - Pandoc (recommended for markdown conversion in ContentAST)
 
+## Optional Extras
+
+```bash
+# QR code grading (image scanning)
+pip install QuizGenerator[grading]
+
+# CST463 machine learning question set
+pip install QuizGenerator[cst463]
+```
+
 ## Quick Start (PDF)
 
 ```bash
@@ -48,6 +58,12 @@ quizgen --yaml example_files/example_exam.yaml --num_canvas 5 --course_id 12345
 
 ```bash
 quizgen --test_all 5
+```
+
+Skip questions that require optional extras:
+
+```bash
+quizgen --test_all 5 --skip_missing_extras
 ```
 
 ## Troubleshooting
