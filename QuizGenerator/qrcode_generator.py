@@ -14,6 +14,7 @@ import tempfile
 import logging
 import os
 import base64
+from datetime import datetime
 from io import BytesIO
 from pathlib import Path
 from typing import Optional, Dict, Any
@@ -38,6 +39,21 @@ class QuestionQRCode:
 
     # Error correction level: M = 15% recovery (balanced for compact encoded data)
     ERROR_CORRECTION = 'M'
+    _generated_key: Optional[bytes] = None
+
+    @classmethod
+    def _persist_generated_key(cls, key: bytes) -> None:
+        try:
+            os.makedirs("out/keys", exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            path = os.path.join("out", "keys", f"quiz_encryption_key-{timestamp}.log")
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write("QUIZ_ENCRYPTION_KEY=")
+                handle.write(key.decode("ascii"))
+                handle.write("\n")
+            log.warning(f"Wrote generated QUIZ_ENCRYPTION_KEY to {path}")
+        except Exception as exc:
+            log.warning(f"Failed to persist generated QUIZ_ENCRYPTION_KEY: {exc}")
 
     @classmethod
     def get_encryption_key(cls) -> bytes:
@@ -61,8 +77,11 @@ class QuestionQRCode:
                 "QUIZ_ENCRYPTION_KEY not set! Generating temporary key. "
                 "Set this environment variable for production use!"
             )
-            # Generate temporary key for development
-            return Fernet.generate_key()
+            if cls._generated_key is None:
+                cls._generated_key = Fernet.generate_key()
+                os.environ["QUIZ_ENCRYPTION_KEY"] = cls._generated_key.decode("ascii")
+                cls._persist_generated_key(cls._generated_key)
+            return cls._generated_key
 
         # Key should be stored as base64 string in env
         return key_str.encode()

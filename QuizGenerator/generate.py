@@ -32,7 +32,18 @@ def parse_args():
   
   parser.add_argument("--debug", action="store_true", help="Set logging level to debug")
 
-  parser.add_argument("--quiz_yaml", default=os.path.join(os.path.dirname(os.path.abspath(__file__)), "example_files/exam_generation.yaml"))
+  parser.add_argument(
+    "--yaml",
+    dest="quiz_yaml",
+    default=None,
+    help="Path to quiz YAML configuration"
+  )
+  parser.add_argument(
+    "--quiz_yaml",
+    dest="quiz_yaml",
+    default=None,
+    help=argparse.SUPPRESS  # Backwards-compatible alias for --yaml
+  )
   parser.add_argument("--seed", type=int, default=None,
                      help="Random seed for quiz generation (default: None for random)")
 
@@ -45,7 +56,8 @@ def parse_args():
   
   # PDF Flags
   parser.add_argument("--num_pdfs", default=0, type=int, help="How many PDF quizzes to create")
-  parser.add_argument("--latex", action="store_false", dest="typst", help="Use Typst instead of LaTeX for PDF generation")
+  parser.add_argument("--latex", action="store_false", dest="typst", help="Use LaTeX instead of Typst for PDF generation")
+  parser.set_defaults(typst=True)
 
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",
@@ -63,6 +75,10 @@ def parse_args():
 
   if args.num_canvas > 0 and args.course_id is None:
     log.error("Must provide course_id when pushing to canvas")
+    exit(8)
+
+  if args.test_all <= 0 and not args.quiz_yaml:
+    log.error("Must provide --yaml unless using --test_all")
     exit(8)
 
   return args
@@ -367,14 +383,15 @@ def generate_quiz(
     delete_assignment_group=False,
     use_typst=False,
     use_typst_measurement=False,
-    base_seed=None
+    base_seed=None,
+    env_path=None
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
 
   # Handle Canvas uploads with shared assignment group
   if num_canvas > 0:
-    canvas_interface = CanvasInterface(prod=use_prod)
+    canvas_interface = CanvasInterface(prod=use_prod, env_path=env_path)
     canvas_course = canvas_interface.get_course(course_id=course_id)
 
     # Create assignment group once, with delete flag if specified
@@ -448,7 +465,7 @@ def main():
     # Set up Canvas course if course_id provided
     canvas_course = None
     if args.course_id:
-      canvas_interface = CanvasInterface(prod=args.prod)
+      canvas_interface = CanvasInterface(prod=args.prod, env_path=args.env)
       canvas_course = canvas_interface.get_course(course_id=args.course_id)
 
     success = test_all_questions(
@@ -471,9 +488,10 @@ def main():
     use_prod=args.prod,
     course_id=args.course_id,
     delete_assignment_group=getattr(args, 'delete_assignment_group', False),
-    use_typst=getattr(args, 'typst', False),
+    use_typst=getattr(args, 'typst', True),
     use_typst_measurement=getattr(args, 'typst_measurement', False),
-    base_seed=getattr(args, 'seed', None)
+    base_seed=getattr(args, 'seed', None),
+    env_path=args.env
   )
 
 

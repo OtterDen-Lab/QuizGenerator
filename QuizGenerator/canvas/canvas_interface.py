@@ -37,8 +37,12 @@ NUM_WORKERS = 4
 
 
 class CanvasInterface:
-  def __init__(self, *, prod=False):
-    dotenv.load_dotenv(os.path.join(os.path.expanduser("~"), ".env"))
+  def __init__(self, *, prod=False, env_path: str | None = None):
+    default_env = os.path.join(os.path.expanduser("~"), ".env")
+    if env_path and os.path.exists(env_path):
+      dotenv.load_dotenv(env_path)
+    elif os.path.exists(default_env):
+      dotenv.load_dotenv(default_env)
 
     self.prod = prod
     if self.prod:
