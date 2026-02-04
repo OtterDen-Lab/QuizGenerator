@@ -340,7 +340,7 @@ class RegenerableChoiceMixin:
           self.register_choice('scheduler_kind', self.Kind, scheduler_kind, kwargs)
           super().__init__(**kwargs)
 
-      def _build_context(self, rng_seed=None, **kwargs):
+      def _build_context(cls, rng_seed=None, **kwargs):
           self.rng.seed(rng_seed)
           # Get the choice (randomly selected or from config_params)
           self.scheduler_algorithm = self.get_choice('scheduler_kind', self.Kind)
