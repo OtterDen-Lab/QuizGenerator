@@ -24,14 +24,14 @@ handlers:
     class: logging.FileHandler
     level: INFO
     formatter: detailed
-    filename: ${LOG_FILE:-teachingtools.log}
+    filename: ${LOG_FILE:-out/logs/teachingtools.log}
     mode: a
 
   error_file:
     class: logging.FileHandler
     level: ERROR
     formatter: detailed
-    filename: ${ERROR_LOG_FILE:-teachingtools_errors.log}
+    filename: ${ERROR_LOG_FILE:-out/logs/teachingtools_errors.log}
     mode: a
 
 loggers:

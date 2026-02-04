@@ -1214,14 +1214,12 @@ wheels = [
 
 [[package]]
 name = "quizgenerator"
-version = "0.9.0"
+version = "0.10.0"
 source = { editable = "." }
 dependencies = [
     { name = "canvasapi" },
     { name = "cryptography" },
-    { name = "graphviz" },
     { name = "jinja2" },
-    { name = "keras" },
     { name = "markdown" },
     { name = "matplotlib" },
     { name = "pylatex" },
@@ -1232,10 +1230,14 @@ dependencies = [
     { name = "requests" },
     { name = "segno" },
     { name = "sympy" },
-    { name = "tensorflow" },
 ]
 
 [package.optional-dependencies]
+cst463 = [
+    { name = "graphviz" },
+    { name = "keras" },
+    { name = "tensorflow" },
+]
 grading = [
     { name = "pillow" },
     { name = "pyzbar" },
@@ -1245,9 +1247,9 @@ grading = [
 requires-dist = [
     { name = "canvasapi", specifier = "==3.2.0" },
     { name = "cryptography", specifier = ">=41.0.0" },
-    { name = "graphviz", specifier = ">=0.21" },
+    { name = "graphviz", marker = "extra == 'cst463'", specifier = ">=0.21" },
     { name = "jinja2", specifier = "==3.1.3" },
-    { name = "keras", specifier = ">=3.12.0" },
+    { name = "keras", marker = "extra == 'cst463'", specifier = ">=3.12.0" },
     { name = "markdown", specifier = ">=3.9" },
     { name = "matplotlib" },
     { name = "pillow", marker = "extra == 'grading'", specifier = ">=10.0.0" },
@@ -1260,9 +1262,9 @@ requires-dist = [
     { name = "requests", specifier = "==2.32.2" },
     { name = "segno", specifier = ">=1.6.0" },
     { name = "sympy", specifier = ">=1.14.0" },
-    { name = "tensorflow", specifier = ">=2.20.0" },
+    { name = "tensorflow", marker = "extra == 'cst463'", specifier = ">=2.20.0" },
 ]
-provides-extras = ["grading"]
+provides-extras = ["grading", "cst463"]
 
 [[package]]
 name = "requests"
