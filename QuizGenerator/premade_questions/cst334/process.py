@@ -456,8 +456,8 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       ca.Paragraph([
         "We do this by subtracting arrival time from either the completion time or the start time.  That is:"
         ]),
-      ca.Equation("Job_{TAT} = Job_{completion} - Job_{arrival\_time}"),
-      ca.Equation("Job_{response} = Job_{start} - Job_{arrival\_time}"),
+      ca.Equation(r"Job_{TAT} = Job_{completion} - Job_{arrival\_time}"),
+      ca.Equation(r"Job_{response} = Job_{start} - Job_{arrival\_time}"),
     ])
 
     explanation.add_element(

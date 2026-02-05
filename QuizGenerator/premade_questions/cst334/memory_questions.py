@@ -1488,8 +1488,8 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       explanation.add_element(
         ca.Equation(
           fr"{r'\mathbf{' if context['is_valid'] else ''}\mathtt{{0b{context['physical_address']:0{context['num_bits_pfn'] + context['num_bits_offset']}b}}}{r'}' if context['is_valid'] else ''} = "
-          f"\mathtt{{0b{context['pfn']:0{context['num_bits_pfn']}b}}} \mid "
-          f"\mathtt{{0b{context['offset']:0{context['num_bits_offset']}b}}}"
+        rf"\mathtt{{0b{context['pfn']:0{context['num_bits_pfn']}b}}} \mid "
+        rf"\mathtt{{0b{context['offset']:0{context['num_bits_offset']}b}}}"
         )
       )
 

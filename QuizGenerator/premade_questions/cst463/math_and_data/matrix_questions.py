@@ -321,7 +321,7 @@ class MatrixMultiplication(MatrixMathQuestion):
 
         matrix_a_elem = ca.Matrix(data=context["matrix_a"], bracket_type="b")
         matrix_b_elem = ca.Matrix(data=context["matrix_b"], bracket_type="b")
-        body.add_element(ca.MathExpression([matrix_a_elem, " \cdot ", matrix_b_elem, " = "]))
+        body.add_element(ca.MathExpression([matrix_a_elem, r" \cdot ", matrix_b_elem, " = "]))
 
         if context["result"] is not None:
             rows_ans = ca.AnswerTypes.Int(context["result_rows"], label="Number of rows in result")
@@ -365,7 +365,7 @@ class MatrixMultiplication(MatrixMathQuestion):
             explanation.add_element(ca.Paragraph(["Given matrices:"]))
             matrix_a_latex = ca.Matrix.to_latex(context["matrix_a"], "b")
             matrix_b_latex = ca.Matrix.to_latex(context["matrix_b"], "b")
-            explanation.add_element(ca.Equation(f"A = {matrix_a_latex}, \quad B = {matrix_b_latex}"))
+            explanation.add_element(ca.Equation(fr"A = {matrix_a_latex}, \quad B = {matrix_b_latex}"))
 
             explanation.add_element(
                 ca.Paragraph([
@@ -385,16 +385,16 @@ class MatrixMultiplication(MatrixMathQuestion):
                     row_a = [str(context["matrix_a"][i][k]) for k in range(context["cols_a"])]
                     col_b = [str(context["matrix_b"][k][j]) for k in range(context["cols_a"])]
 
-                    row_latex = f"\begin{{bmatrix}} {' & '.join(row_a)} \end{{bmatrix}}"
-                    col_latex = f"\begin{{bmatrix}} {' \\ '.join(col_b)} \end{{bmatrix}}"
+                    row_latex = rf"\begin{{bmatrix}} {' & '.join(row_a)} \end{{bmatrix}}"
+                    col_latex = rf"\begin{{bmatrix}} {' \\ '.join(col_b)} \end{{bmatrix}}"
                     element_calc = " + ".join([
-                        f"{context['matrix_a'][i][k]} \cdot {context['matrix_b'][k][j]}"
+                        rf"{context['matrix_a'][i][k]} \cdot {context['matrix_b'][k][j]}"
                         for k in range(context["cols_a"])
                     ])
 
                     explanation.add_element(
                         ca.Equation(
-                            f"({i+1},{j+1}): {row_latex} \cdot {col_latex} = {element_calc} = {context['result'][i][j]}"
+                            rf"({i+1},{j+1}): {row_latex} \cdot {col_latex} = {element_calc} = {context['result'][i][j]}"
                         )
                     )
 
