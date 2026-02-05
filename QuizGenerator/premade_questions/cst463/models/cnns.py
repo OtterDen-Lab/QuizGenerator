@@ -1,9 +1,11 @@
 import logging
-import numpy as np
 from typing import List, Tuple
 
-from QuizGenerator.question import QuestionRegistry
+import numpy as np
+
 import QuizGenerator.contentast as ca
+from QuizGenerator.question import QuestionRegistry
+
 from .matrices import MatrixQuestion
 
 log = logging.getLogger(__name__)

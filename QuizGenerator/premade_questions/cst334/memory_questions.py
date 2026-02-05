@@ -6,13 +6,13 @@ import collections
 import copy
 import enum
 import logging
-import random
 import math
+import random
 from typing import List
 
 import QuizGenerator.contentast as ca
+from QuizGenerator.mixins import BodyTemplatesMixin, TableQuestionMixin
 from QuizGenerator.question import Question, QuestionRegistry, RegenerableChoiceMixin
-from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
 

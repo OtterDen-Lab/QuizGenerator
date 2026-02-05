@@ -3,14 +3,13 @@ from __future__ import annotations
 
 import abc
 import enum
+import logging
 import random
-from typing import List, Dict, Optional
-
-from QuizGenerator.question import QuestionRegistry, Question
+from typing import Dict, List, Optional
 
 import QuizGenerator.contentast as ca
+from QuizGenerator.question import Question, QuestionRegistry
 
-import logging
 log = logging.getLogger(__name__)
 
 

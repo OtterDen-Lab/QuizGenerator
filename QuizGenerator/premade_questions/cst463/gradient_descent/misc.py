@@ -1,8 +1,10 @@
 
-from typing import List, Any
+from typing import Any, List
+
 import sympy as sp
 
 import QuizGenerator.contentast as ca
+
 
 def generate_function(rng, num_variables: int, max_degree: int, use_quadratic: bool = True) -> tuple[Any, sp.Expr, sp.MutableDenseMatrix, sp.Equality]:
   """

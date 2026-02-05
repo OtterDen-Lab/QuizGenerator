@@ -1,25 +1,24 @@
 from __future__ import annotations
 
 import abc
+import decimal
 import enum
+import fractions
+import itertools
+import logging
+import math
+import os
+import re
 import textwrap
+import uuid
 from io import BytesIO
-from typing import List, Callable
+from typing import Callable, List
 
-import pypandoc
 import markdown
+import numpy as np
+import pypandoc
 
 from QuizGenerator.qrcode_generator import QuestionQRCode
-import re
-
-import logging
-import os
-import uuid
-import itertools
-import math
-import decimal
-import fractions
-import numpy as np
 
 log = logging.getLogger(__name__)
 

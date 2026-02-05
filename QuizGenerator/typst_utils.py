@@ -7,14 +7,15 @@ enabling accurate bin-packing for PDF generation.
 """
 
 import json
+import logging
 import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
 from typing import Optional
+
 import QuizGenerator.contentast as ca
 
-import logging
 log = logging.getLogger(__name__)
 
 

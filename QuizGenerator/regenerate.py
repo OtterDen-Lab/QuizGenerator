@@ -41,11 +41,11 @@ the exact question and answer without needing the original exam file.
 import argparse
 import base64
 import json
-import sys
 import logging
 import os
+import sys
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Callable
+from typing import Any, Callable, Dict, List, Optional
 
 # Load environment variables from .env file
 try:
@@ -66,8 +66,8 @@ from QuizGenerator.question import QuestionRegistry
 # QR code reading (optional - only needed for CLI usage with --image)
 # Your web UI should use its own QR decoding library
 try:
-  from pyzbar import pyzbar
   from PIL import Image
+  from pyzbar import pyzbar
   
   HAS_IMAGE_SUPPORT = True
 except ImportError:

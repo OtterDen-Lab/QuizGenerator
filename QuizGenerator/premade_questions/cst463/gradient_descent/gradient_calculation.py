@@ -3,11 +3,13 @@ from __future__ import annotations
 import abc
 import logging
 from typing import List, Tuple
+
 import sympy as sp
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
-from .misc import generate_function, format_vector
+
+from .misc import format_vector, generate_function
 
 log = logging.getLogger(__name__)
 

@@ -1,25 +1,25 @@
 #!env python
 import argparse
-from datetime import datetime
+import logging
 import os
 import random
+import re
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime
 import traceback
-import re
+from datetime import datetime
 from pathlib import Path
+
 from dotenv import load_dotenv
+
 from QuizGenerator.canvas.canvas_interface import CanvasInterface
-
-from QuizGenerator.quiz import Quiz
+from QuizGenerator.performance import PerformanceTracker
 from QuizGenerator.question import QuestionRegistry
+from QuizGenerator.quiz import Quiz
 
-import logging
 log = logging.getLogger(__name__)
 
-from QuizGenerator.performance import PerformanceTracker
 
 
 def parse_args():

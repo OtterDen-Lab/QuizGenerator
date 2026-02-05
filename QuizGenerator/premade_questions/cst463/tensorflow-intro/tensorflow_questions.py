@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import logging
-import numpy as np
-import sympy as sp
-from typing import List, Tuple
-
-import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
+import os
 
 # Import gradient descent utilities
 import sys
-import os
+from typing import List, Tuple
+
+import numpy as np
+import sympy as sp
+
+import QuizGenerator.contentast as ca
+from QuizGenerator.mixins import BodyTemplatesMixin, TableQuestionMixin
+from QuizGenerator.question import Question, QuestionRegistry
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'gradient_descent'))
-from misc import generate_function, format_vector
+from misc import format_vector, generate_function
 
 log = logging.getLogger(__name__)
 

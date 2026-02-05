@@ -1,8 +1,8 @@
 from .neural_network_questions import (
-  ForwardPassQuestion,
   BackpropGradientQuestion,
+  EndToEndTrainingQuestion,
   EnsembleAveragingQuestion,
-  EndToEndTrainingQuestion
+  ForwardPassQuestion,
 )
 
 __all__ = [

@@ -3,13 +3,14 @@ from __future__ import annotations
 import abc
 import io
 import logging
-import numpy as np
 from typing import List, Tuple
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
+
 from ..models.matrices import MatrixQuestion
 
 log = logging.getLogger(__name__)

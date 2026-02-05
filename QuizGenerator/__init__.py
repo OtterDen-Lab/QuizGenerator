@@ -1,8 +1,10 @@
 
 import logging.config
-import yaml
 import os
 import re
+
+import yaml
+
 
 def setup_logging() -> None:
   os.makedirs(os.path.join("out", "logs"), exist_ok=True)

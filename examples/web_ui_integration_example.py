@@ -7,7 +7,9 @@ to regenerate answers from QR code data.
 """
 
 import os
+
 from grade_from_qr import regenerate_from_metadata
+
 from QuizGenerator.qrcode_generator import QuestionQRCode
 
 # ============================================================================
@@ -40,6 +42,7 @@ def handle_qr_scan(qr_image_data):
     # Step 1: Your web UI decodes the QR image to get the JSON string
     # (You'll use your own QR decoding library - pyzbar, zxing, etc.)
     import json
+
     from PIL import Image
     from pyzbar import pyzbar
 

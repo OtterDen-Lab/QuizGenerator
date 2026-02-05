@@ -1,11 +1,12 @@
 import logging
-import numpy as np
 from typing import List, Tuple
 
-from QuizGenerator.premade_questions.cst463.models.matrices import MatrixQuestion
-from QuizGenerator.question import QuestionRegistry
+import numpy as np
+
 import QuizGenerator.contentast as ca
 from QuizGenerator.mixins import TableQuestionMixin
+from QuizGenerator.premade_questions.cst463.models.matrices import MatrixQuestion
+from QuizGenerator.question import QuestionRegistry
 
 log = logging.getLogger(__name__)
 

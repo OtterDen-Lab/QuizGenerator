@@ -16,8 +16,8 @@ import argparse
 import re
 import shutil
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 
 def get_lms_version(lms_path: Path) -> str:

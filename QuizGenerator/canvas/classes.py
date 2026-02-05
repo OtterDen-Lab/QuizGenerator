@@ -1,13 +1,13 @@
 #!env python
 from __future__ import annotations
 
-import enum
-import logging
 import dataclasses
+import enum
 import functools
 import io
+import logging
 import urllib.request
-from typing import Optional, List, Dict
+from typing import Dict, List, Optional
 
 import canvasapi.canvas
 

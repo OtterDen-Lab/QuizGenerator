@@ -18,7 +18,7 @@ import tempfile
 import zlib
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 import segno
 from cryptography.fernet import Fernet

@@ -1,15 +1,14 @@
 #!env python
 from __future__ import annotations
 
-from typing import Tuple, List
-from types import SimpleNamespace
-import random
-
 import logging
+import random
+from types import SimpleNamespace
+from typing import List, Tuple
 
 import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry
 from QuizGenerator.mixins import TableQuestionMixin
+from QuizGenerator.question import Question, QuestionRegistry
 
 log = logging.getLogger(__name__)
 

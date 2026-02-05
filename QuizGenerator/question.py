@@ -2,27 +2,28 @@
 from __future__ import annotations
 
 import abc
-import io
 import dataclasses
 import datetime
 import enum
 import importlib
+import inspect
+import io
 import itertools
+import logging
 import os
 import pathlib
 import pkgutil
 import random
-import uuid
 import types
-import inspect
+import uuid
 from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Tuple
 
-from typing import List, Dict, Any, Tuple, Optional, Mapping, MutableMapping
-import canvasapi.course, canvasapi.quiz
+import canvasapi.course
+import canvasapi.quiz
 
 import QuizGenerator.contentast as ca
 
-import logging
 log = logging.getLogger(__name__)
 
 

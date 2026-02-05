@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import logging
 import random
+
 try:
   import keras
 except ImportError as exc:
@@ -10,11 +11,12 @@ except ImportError as exc:
   _KERAS_IMPORT_ERROR = exc
 else:
   _KERAS_IMPORT_ERROR = None
-import numpy as np
 from typing import List, Tuple
 
-from QuizGenerator.question import Question, QuestionRegistry
+import numpy as np
+
 import QuizGenerator.contentast as ca
+from QuizGenerator.question import Question, QuestionRegistry
 
 log = logging.getLogger(__name__)
 

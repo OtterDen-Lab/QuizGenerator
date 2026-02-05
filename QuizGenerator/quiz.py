@@ -4,14 +4,14 @@ from __future__ import annotations
 import collections
 import logging
 import random
+import re
 from datetime import datetime
 from typing import List
-import re
 
 import yaml
 
 import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry, QuestionGroup
+from QuizGenerator.question import Question, QuestionGroup, QuestionRegistry
 
 log = logging.getLogger(__name__)
 
@@ -196,7 +196,7 @@ class Quiz:
     """
     # Try Typst measurement if requested and available
     if use_typst_measurement:
-      from QuizGenerator.typst_utils import measure_typst_content, check_typst_available
+      from QuizGenerator.typst_utils import check_typst_available, measure_typst_content
 
       if check_typst_available():
         try:

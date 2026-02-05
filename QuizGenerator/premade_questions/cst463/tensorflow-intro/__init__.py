@@ -1,8 +1,8 @@
 from .tensorflow_questions import (
-  ParameterCountingQuestion,
   ActivationFunctionComputationQuestion,
+  MomentumOptimizerQuestion,
+  ParameterCountingQuestion,
   RegularizationCalculationQuestion,
-  MomentumOptimizerQuestion
 )
 
 __all__ = [

@@ -5,7 +5,8 @@ These mixins provide reusable patterns for common question structures.
 """
 
 import abc
-from typing import Dict, List, Any, Union
+from typing import Any, Dict, List, Union
+
 import QuizGenerator.contentast as ca
 
 

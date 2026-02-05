@@ -1,6 +1,7 @@
 #!env python
 from __future__ import annotations
 
+import os
 import queue
 import tempfile
 import time
@@ -9,12 +10,12 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 import canvasapi
-import canvasapi.course
-import canvasapi.quiz
 import canvasapi.assignment
-import canvasapi.submission
+import canvasapi.course
 import canvasapi.exceptions
-import dotenv, os
+import canvasapi.quiz
+import canvasapi.submission
+import dotenv
 import requests
 
 try:
@@ -22,12 +23,19 @@ try:
 except Exception:
   pass        # urllib3 v1 fallback
 
+import logging
 import os
+
 import dotenv
 
-from .classes import LMSWrapper, Student, Submission, FileSubmission__Canvas, TextSubmission__Canvas, QuizSubmission
-
-import logging
+from .classes import (
+  FileSubmission__Canvas,
+  LMSWrapper,
+  QuizSubmission,
+  Student,
+  Submission,
+  TextSubmission__Canvas,
+)
 
 log = logging.getLogger(__name__)
 

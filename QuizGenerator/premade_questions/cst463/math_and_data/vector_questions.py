@@ -4,8 +4,8 @@ import logging
 import math
 import random
 
-from QuizGenerator.question import Question, QuestionRegistry
 import QuizGenerator.contentast as ca
+from QuizGenerator.question import Question, QuestionRegistry
 
 log = logging.getLogger(__name__)
 

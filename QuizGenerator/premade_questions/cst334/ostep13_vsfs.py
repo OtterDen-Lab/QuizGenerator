@@ -2,8 +2,8 @@
 import io
 import random
 import sys
-from optparse import OptionParser
 from functools import wraps
+from optparse import OptionParser
 
 DEBUG = False
 

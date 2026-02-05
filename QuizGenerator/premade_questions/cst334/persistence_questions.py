@@ -6,9 +6,9 @@ import difflib
 import logging
 import random
 
-from QuizGenerator.question import Question, QuestionRegistry
 import QuizGenerator.contentast as ca
-from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
+from QuizGenerator.mixins import BodyTemplatesMixin, TableQuestionMixin
+from QuizGenerator.question import Question, QuestionRegistry
 
 log = logging.getLogger(__name__)
 

@@ -6,8 +6,8 @@ import math
 from typing import List, Tuple
 
 import QuizGenerator.contentast as ca
+from QuizGenerator.mixins import BodyTemplatesMixin, TableQuestionMixin
 from QuizGenerator.question import Question, QuestionRegistry
-from QuizGenerator.mixins import TableQuestionMixin, BodyTemplatesMixin
 
 log = logging.getLogger(__name__)
 
