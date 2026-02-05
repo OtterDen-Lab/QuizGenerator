@@ -316,10 +316,12 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     )
 
     instructions = ca.OnlyHtml([
-      "For the cache state, please enter the cache contents in the order suggested in class, "
-      "which means separated by commas with spaces (e.g. \"1, 2, 3\") "
-      "and with the left-most being the next to be evicted. "
-      "In the case where there is a tie, order by increasing number."
+      ca.Text(
+        "For the cache state, please enter the cache contents in the order suggested in class, "
+        "which means separated by commas with spaces (e.g. \"1, 2, 3\") "
+        "and with the left-most being the next to be evicted. "
+        "In the case where there is a tie, order by increasing number."
+      )
     ])
 
     body = cls.create_fill_in_table_body(intro_text, instructions, cache_table)

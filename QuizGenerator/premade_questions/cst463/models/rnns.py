@@ -87,11 +87,11 @@ class RNNForwardPass(MatrixQuestion, TableQuestionMixin):
     body.add_element(
       cls.create_info_table(
         {
-          ca.Container(["Input sequence, ", ca.Equation("x_{seq}", inline=True)]) : ca.Matrix(context["x_seq"]),
-          ca.Container(["Input weights, ",  ca.Equation("W_{xh}", inline=True)])  : ca.Matrix(context["W_xh"]),
-          ca.Container(["Hidden weights, ", ca.Equation("W_{hh}", inline=True)])  : ca.Matrix(context["W_hh"]),
-          ca.Container(["Bias, ",           ca.Equation("b_{h}", inline=True)])   : ca.Matrix(context["b_h"]),
-          ca.Container(["Hidden states, ",  ca.Equation("h_{0}", inline=True)])   : ca.Matrix(context["h_0"]),
+          ca.Container([ca.Text("Input sequence, "), ca.Equation("x_{seq}", inline=True)]) : ca.Matrix(context["x_seq"]),
+          ca.Container([ca.Text("Input weights, "),  ca.Equation("W_{xh}", inline=True)])  : ca.Matrix(context["W_xh"]),
+          ca.Container([ca.Text("Hidden weights, "), ca.Equation("W_{hh}", inline=True)])  : ca.Matrix(context["W_hh"]),
+          ca.Container([ca.Text("Bias, "),           ca.Equation("b_{h}", inline=True)])   : ca.Matrix(context["b_h"]),
+          ca.Container([ca.Text("Hidden states, "),  ca.Equation("h_{0}", inline=True)])   : ca.Matrix(context["h_0"]),
         }
       )
     )
