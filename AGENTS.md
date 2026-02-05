@@ -15,6 +15,7 @@
 - `quizgen --help` — show CLI options.
 - `quizgen --yaml example_files/example_exam.yaml --num_pdfs 3` — generate PDFs in `out/` (Typst is the default renderer).
 - `quizgen --latex --num_pdfs 3` — force LaTeX rendering when needed.
+- `ruff check --fix` — enforce import placement/sorting and remove unused imports.
 - `python scripts/vendor_lms_interface.py --dry-run` — preview LMSInterface vendoring changes.
 
 ## Coding Style & Naming Conventions
