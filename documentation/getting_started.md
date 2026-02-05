@@ -66,6 +66,13 @@ Skip questions that require optional extras:
 quizgen --test_all 5 --skip_missing_extras
 ```
 
+## Running Tests
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
 ## Troubleshooting
 
 - **Pandoc missing**: ContentAST will fall back to raw markdown for LaTeX/Typst.

@@ -9,8 +9,8 @@ pip install QuizGenerator
 Optional extras:
 
 ```bash
-pip install QuizGenerator[grading]
-pip install QuizGenerator[cst463]
+pip install "QuizGenerator[grading]"
+pip install "QuizGenerator[cst463]"
 ```
 
 ## Generate a PDF

@@ -28,10 +28,10 @@ pip install QuizGenerator
 
 ```bash
 # For QR code grading support
-pip install QuizGenerator[grading]
+pip install "QuizGenerator[grading]"
 
 # For CST463 machine learning questions
-pip install QuizGenerator[cst463]
+pip install "QuizGenerator[cst463]"
 ```
 
 ## Quick Start
