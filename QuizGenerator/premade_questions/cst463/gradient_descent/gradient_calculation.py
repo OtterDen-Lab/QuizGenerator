@@ -58,7 +58,6 @@ class DerivativeQuestion(Question, abc.ABC):
 
     # Create answer for each partial derivative
     for i in range(context.num_variables):
-      answer_key = f"partial_derivative_{i}"
       # Evaluate the partial derivative and convert to float
       partial_value = context.gradient_function[i].subs(subs_map)
       try:

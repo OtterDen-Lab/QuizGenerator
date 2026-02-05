@@ -4,3 +4,10 @@ from .neural_network_questions import (
   EnsembleAveragingQuestion,
   EndToEndTrainingQuestion
 )
+
+__all__ = [
+  "ForwardPassQuestion",
+  "BackpropGradientQuestion",
+  "EnsembleAveragingQuestion",
+  "EndToEndTrainingQuestion",
+]

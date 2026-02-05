@@ -150,8 +150,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
     # Introduction
     objective = "minimize" if self.minimize else "maximize"
-    sign = "-" if self.minimize else "+"
-
+    
     body.add_element(
       ca.Paragraph(
         [

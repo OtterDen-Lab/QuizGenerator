@@ -897,7 +897,6 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     # Show calculation for each component
     digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
     for i in range(context.num_variables):
-      var_name = f"x_{i}"
       # Round all intermediate values to avoid floating point precision issues
       beta_times_v = round(context.momentum_beta * context.prev_velocity[i], digits)
       one_minus_beta = round(1 - context.momentum_beta, digits)

@@ -4,3 +4,10 @@ from .tensorflow_questions import (
   RegularizationCalculationQuestion,
   MomentumOptimizerQuestion
 )
+
+__all__ = [
+  "ParameterCountingQuestion",
+  "ActivationFunctionComputationQuestion",
+  "RegularizationCalculationQuestion",
+  "MomentumOptimizerQuestion",
+]

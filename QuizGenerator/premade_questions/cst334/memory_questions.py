@@ -57,8 +57,7 @@ class VirtualAddressParts(MemoryQuestion, TableQuestionMixin):
   @classmethod
   def _build_body(cls, context):
     """Build question body and collect answers."""
-    answer = context["possible_answers"][context["blank_kind"]]
-
+    
     # Create table data with one blank cell
     table_data = [{}]
     for target in list(cls.Target):

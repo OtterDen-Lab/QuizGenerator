@@ -17,7 +17,6 @@ import types
 import inspect
 from types import MappingProxyType
 
-import yaml
 from typing import List, Dict, Any, Tuple, Optional, Mapping, MutableMapping
 import canvasapi.course, canvasapi.quiz
 
@@ -619,12 +618,6 @@ class Question(abc.ABC):
     }
     self.config_params = {k: v for k, v in kwargs.items() if k not in framework_params}
   
-  @classmethod
-  def from_yaml(cls, path_to_yaml):
-    with open(path_to_yaml) as fid:
-      question_dicts = yaml.safe_load_all(fid)
-  
-
   def instantiate(self, **kwargs) -> QuestionInstance:
     """
     Instantiate a question once, returning content, answers, and regeneration metadata.

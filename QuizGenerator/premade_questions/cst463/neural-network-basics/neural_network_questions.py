@@ -838,8 +838,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       # Compute intermediate values
       dz2_da1 = self.W2[0, 0]
       da1_dz1 = self._activation_derivative(self.z1[0])
-      dL_dz1 = self.dL_dz2 * dz2_da1 * da1_dz1
-
+      
       grad = self._compute_gradient_W1(0, j)
 
       if self.activation_function == self.ACTIVATION_SIGMOID:
@@ -1126,7 +1125,6 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ]))
 
     # Hidden layer
-    z1_0 = self.W1[0, 0] * self.X[0] + self.W1[0, 1] * self.X[1] + self.b1[0]
     explanation.add_element(ca.Equation(
       f"z_1 = w_{{11}} x_1 + w_{{12}} x_2 + b_1 = {self.W1[0,0]:.{self.param_digits}f} \\cdot {self.X[0]:.1f} + {self.W1[0,1]:.{self.param_digits}f} \\cdot {self.X[1]:.1f} + {self.b1[0]:.{self.param_digits}f} = {self.z1[0]:.4f}",
       inline=False
@@ -1144,7 +1142,6 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ))
 
     # Output (pre-activation)
-    z2 = self.W2[0, 0] * self.a1[0] + self.W2[0, 1] * self.a1[1] + self.b2[0]
     explanation.add_element(ca.Equation(
       f"z_{{out}} = w_3 h_1 + w_4 h_2 + b_2 = {self.W2[0,0]:.{self.param_digits}f} \\cdot {self.a1[0]:.4f} + {self.W2[0,1]:.{self.param_digits}f} \\cdot {self.a1[1]:.4f} + {self.b2[0]:.{self.param_digits}f} = {self.z2[0]:.4f}",
       inline=False
