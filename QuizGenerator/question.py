@@ -160,8 +160,8 @@ def parse_spacing(spacing_value) -> float:
         Spacing in cm as a float
 
     Examples:
-        parse_spacing("SHORT") -> 5.0
-        parse_spacing("NONE") -> 1.0
+        parse_spacing("SHORT") -> 4.0
+        parse_spacing("NONE") -> 0.0
         parse_spacing(3.5) -> 3.5
         parse_spacing("3.5") -> 3.5
     """

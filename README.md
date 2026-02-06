@@ -17,6 +17,14 @@ Generate randomized quiz questions for Canvas LMS and PDF exams with support for
 pip install QuizGenerator
 ```
 
+### Reproducible installs (recommended)
+
+If you want a fully pinned environment for a semester, use the lockfile:
+
+```bash
+uv sync --locked
+```
+
 ### System Requirements
 
 - Python 3.12+
