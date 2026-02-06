@@ -156,7 +156,7 @@ Notes:
 
 ### General
 - `FromText` - Custom text questions
-- `FromGenerator` - Programmatically generated questions
+- `FromGenerator` - Programmatically generated questions (requires `--allow_generator` or `QUIZGEN_ALLOW_GENERATOR=1`)
 
 ## Documentation
 

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import random
 from types import SimpleNamespace
 from typing import List, Tuple
@@ -11,6 +12,24 @@ from QuizGenerator.mixins import TableQuestionMixin
 from QuizGenerator.question import Question, QuestionRegistry
 
 log = logging.getLogger(__name__)
+
+ALLOW_GENERATOR = False
+_GENERATOR_WARNING_EMITTED = False
+
+
+def _generator_allowed() -> bool:
+  if os.environ.get("QUIZGEN_ALLOW_GENERATOR", "").lower() in {"1", "true", "yes"}:
+    return True
+  return ALLOW_GENERATOR
+
+
+def _warn_generator_enabled() -> None:
+  global _GENERATOR_WARNING_EMITTED
+  if not _GENERATOR_WARNING_EMITTED:
+    log.warning(
+      "FromGenerator is enabled. Generator code is executed with full Python permissions."
+    )
+    _GENERATOR_WARNING_EMITTED = True
 
 
 @QuestionRegistry.register()
@@ -41,6 +60,12 @@ class FromText(Question):
 class FromGenerator(FromText, TableQuestionMixin):
   
   def __init__(self, *args, generator=None, text=None, **kwargs):
+    if not _generator_allowed():
+      raise ValueError(
+        "FromGenerator is disabled by default. "
+        "Use --allow_generator or set QUIZGEN_ALLOW_GENERATOR=1 to enable."
+      )
+    _warn_generator_enabled()
     if generator is None and text is None:
       raise TypeError(f"Must supply either generator or text kwarg for {self.__class__.__name__}")
     
@@ -108,6 +133,7 @@ class FromGenerator(FromText, TableQuestionMixin):
     random.seed(rng_seed)
     generator_text = kwargs.get("generator")
     if generator_text is not None:
+      context["generator_text"] = generator_text
       context["generator_fn"] = cls._compile_generator(generator_text)
       context["generator_scope"] = SimpleNamespace(
         rng=context.rng,
@@ -130,7 +156,7 @@ class FromGenerator(FromText, TableQuestionMixin):
         body = ca.Section([ca.Text(str(generated_content))])
     except TypeError as e:
       log.error(f"Error generating from text: {e}")
-      log.debug(self.generator_text)
+      log.debug(context.get("generator_text"))
       exit(8)
 
     return body, []

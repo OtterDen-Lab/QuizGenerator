@@ -388,6 +388,16 @@ questions:
 
 ## Troubleshooting
 
+### "FromGenerator is disabled by default"
+
+**Problem:** You see an error stating FromGenerator is disabled.
+
+**Solution:** Enable it explicitly:
+```bash
+quizgen --allow_generator --yaml my_quiz.yaml --num_pdfs 1
+```
+Or set `QUIZGEN_ALLOW_GENERATOR=1` in your environment.
+
 ### "Unknown question type" Error
 
 **Problem:** QuizGenerator can't find your custom question.

@@ -1020,34 +1020,55 @@ class Question(abc.ABC):
     return registered_name
 
 class QuestionGroup():
-  
-  def __init__(self, questions_in_group: List[Question], pick_once : bool):
+
+  def __init__(self, questions_in_group: List[Question], pick_once: bool, name: Optional[str] = None):
     self.questions = questions_in_group
     self.pick_once = pick_once
-  
-    self._current_question : Optional[Question] = None
-    
+    self.name = name or "QuestionGroup"
+
+    # Deterministic metadata without selecting a specific question.
+    first_question = questions_in_group[0] if questions_in_group else None
+    self.points_value = getattr(first_question, "points_value", 0)
+    self.topic = getattr(first_question, "topic", Question.Topic.MISC)
+    self.spacing = max((q.spacing for q in questions_in_group), default=0)
+    self.possible_variations = float("inf")
+
+    self._current_question: Optional[Question] = None
+
   def instantiate(self, *args, **kwargs):
-    
     # Use a local RNG to avoid global side effects.
     rng = random.Random(kwargs.get("rng_seed", None))
-    
+
     if not self.pick_once or self._current_question is None:
       self._current_question = rng.choice(self.questions)
-    
+
   def __getattr__(self, name):
-    if self._current_question is None or name == "generate":
-      self.instantiate()
-    try:
-      attr = getattr(self._current_question, name)
-    except AttributeError:
-      raise AttributeError(
-        f"Neither QuestionGroup nor Question has attribute '{name}'"
-      )
-    
+    # Avoid instantiating without a seed when accessing metadata.
+    if name in {"points_value", "topic", "spacing", "name", "possible_variations"}:
+      return getattr(self, name)
+
+    if self._current_question is None:
+      representative = self.questions[0] if self.questions else None
+      if representative is None:
+        raise AttributeError(
+          f"Neither QuestionGroup nor Question has attribute '{name}'"
+        )
+      rep_attr = getattr(representative, name, None)
+      if callable(rep_attr):
+        def wrapped_method(*args, **kwargs):
+          if self._current_question is None or not self.pick_once:
+            self.instantiate(*args, **kwargs)
+          return getattr(self._current_question, name)(*args, **kwargs)
+        return wrapped_method
+      if rep_attr is not None:
+        return rep_attr
+
+    attr = getattr(self._current_question, name)
     if callable(attr):
       def wrapped_method(*args, **kwargs):
+        if self._current_question is None or not self.pick_once:
+          self.instantiate(*args, **kwargs)
         return attr(*args, **kwargs)
       return wrapped_method
-    
+
     return attr

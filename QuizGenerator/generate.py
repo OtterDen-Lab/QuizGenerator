@@ -71,6 +71,8 @@ def parse_args():
                      help="With --test_all, skip PDF/Canvas generation if any questions fail")
   parser.add_argument("--skip_missing_extras", action="store_true",
                      help="With --test_all, skip questions that fail due to missing optional dependencies")
+  parser.add_argument("--allow_generator", action="store_true",
+                     help="Enable FromGenerator questions (executes Python from YAML)")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
@@ -120,6 +122,8 @@ def test_all_questions(
     strict: If True, skip PDF/Canvas generation if any questions fail
     question_filter: If provided, only test questions whose names contain one of these strings (case-insensitive)
   """
+  # Allow FromGenerator during test_all runs so coverage includes generator-based questions.
+  os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
   # Ensure all premade questions are loaded
   QuestionRegistry.load_premade_questions()
 
@@ -300,25 +304,26 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   os.makedirs(os.path.join("out", "debug"), exist_ok=True)
   debug_name = f"debug-{datetime.now().strftime('%Y%m%d-%H%M%S')}.tex"
   shutil.copy(f"{tmp_tex.name}", os.path.join("out", "debug", debug_name))
-  p = subprocess.Popen(
-    f"latexmk -pdf -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
-    shell=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE)
   try:
-    p.wait(30)
+    subprocess.run(
+      f"latexmk -pdf -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
+      shell=True,
+      capture_output=True,
+      timeout=30,
+      check=False
+    )
   except subprocess.TimeoutExpired:
     logging.error("Latex Compile timed out")
-    p.kill()
     tmp_tex.close()
     return
-  proc = subprocess.Popen(
+
+  subprocess.run(
     f"latexmk -c {tmp_tex.name} -output-directory={os.path.join(os.getcwd(), 'out')}",
     shell=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE
+    capture_output=True,
+    timeout=30,
+    check=False
   )
-  proc.wait(timeout=30)
   tmp_tex.close()
 
 
@@ -487,6 +492,9 @@ def main():
   if args.command == "TEST":
     test()
     return
+
+  if args.allow_generator:
+    os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
 
   if args.test_all > 0:
     # Set up Canvas course if course_id provided
