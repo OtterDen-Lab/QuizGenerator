@@ -61,6 +61,12 @@ def parse_args():
   parser.set_defaults(typst=True)
   parser.add_argument("--typst_measurement", action="store_true",
                      help="Use Typst measurement for layout optimization (experimental)")
+  parser.add_argument("--consistent_pages", action="store_true",
+                     help="Reserve question heights to keep pagination consistent across versions (auto-enabled when --num_pdfs > 1)")
+  parser.add_argument("--layout_samples", type=int, default=10,
+                     help="Number of deterministic samples per question to estimate height")
+  parser.add_argument("--layout_safety_factor", type=float, default=1.1,
+                     help="Multiplier applied to max sampled height for safety")
 
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",
@@ -416,7 +422,10 @@ def generate_quiz(
     use_typst=False,
     use_typst_measurement=False,
     base_seed=None,
-    env_path=None
+    env_path=None,
+    consistent_pages=False,
+    layout_samples=10,
+    layout_safety_factor=1.1
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -449,11 +458,23 @@ def generate_quiz(
 
       if use_typst:
         # Generate using Typst
-        typst_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render("typst")
+        typst_text = quiz.get_quiz(
+          rng_seed=pdf_seed,
+          use_typst_measurement=use_typst_measurement,
+          consistent_pages=consistent_pages,
+          layout_samples=layout_samples,
+          layout_safety_factor=layout_safety_factor
+        ).render("typst")
         generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name)
       else:
         # Generate using LaTeX (default)
-        latex_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render_latex()
+        latex_text = quiz.get_quiz(
+          rng_seed=pdf_seed,
+          use_typst_measurement=use_typst_measurement,
+          consistent_pages=consistent_pages,
+          layout_samples=layout_samples,
+          layout_safety_factor=layout_safety_factor
+        ).render_latex()
         generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name)
 
     if num_canvas > 0:
@@ -496,6 +517,9 @@ def main():
   if args.allow_generator:
     os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
 
+  if args.num_pdfs and args.num_pdfs > 1:
+    args.consistent_pages = True
+
   if args.test_all > 0:
     # Set up Canvas course if course_id provided
     canvas_course = None
@@ -527,7 +551,10 @@ def main():
     use_typst=getattr(args, 'typst', True),
     use_typst_measurement=getattr(args, 'typst_measurement', False),
     base_seed=getattr(args, 'seed', None),
-    env_path=args.env
+    env_path=args.env,
+    consistent_pages=getattr(args, 'consistent_pages', False),
+    layout_samples=getattr(args, 'layout_samples', 10),
+    layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1)
   )
 
 

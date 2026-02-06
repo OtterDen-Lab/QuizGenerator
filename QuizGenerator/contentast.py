@@ -375,8 +375,8 @@ class Document(Container):
   // Question counter and command
   #let question_num = counter("question")
 
-  #let question(points, content, spacing: 3cm, qr_code: none) = {
-    block(breakable: false)[
+  #let question(points, content, spacing: 3cm, qr_code: none, reserve_height: none) = {
+    let body = block(breakable: false)[
       #line(length: 100%, stroke: 1pt)
       #v(0cm)
       #question_num.step()
@@ -413,6 +413,13 @@ class Document(Container):
       }
 
     ]
+    body
+    if reserve_height != none {
+      let pad = reserve_height - measure(body).height
+      if pad > 0pt {
+        v(pad)
+      }
+    }
       // Check if spacing >= 199cm (EXTRA_PAGE preset)
       // If so, add both spacing and a pagebreak for a full blank page
       if spacing >= 199cm {
@@ -629,6 +636,7 @@ class Question(Container):
     
     # Generate QR code if question number is available
     qr_param = ""
+    reserve_param = ""
     if self.question_number is not None:
       try:
         
@@ -660,13 +668,16 @@ class Question(Container):
       
       except Exception as e:
         log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
+    if hasattr(self, "reserve_height_cm") and self.reserve_height_cm is not None:
+      reserve_param = f"reserve_height: {self.reserve_height_cm}cm"
     
     # Use the question function which handles all formatting including non-breaking
     return textwrap.dedent(f"""
     #question(
         {int(self.value)},
         spacing: {self.spacing}cm{'' if not qr_param else ", "}
-        {qr_param}
+        {qr_param}{'' if not reserve_param else ", "}
+        {reserve_param}
       )[
     """) + content + "\n]\n\n"
 

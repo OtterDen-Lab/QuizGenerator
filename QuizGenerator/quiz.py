@@ -199,7 +199,7 @@ class Quiz:
     sample_count = int(kwargs.pop("layout_samples", 10))
     if sample_count < 1:
       sample_count = 1
-    safety_cm = float(kwargs.pop("layout_safety_cm", 0.5))
+    safety_factor = float(kwargs.pop("layout_safety_factor", 1.1))
 
     def deterministic_seeds(count: int) -> List[int]:
       seed_input = f"{question.__class__.__name__}:{question.name}:{question.points_value}"
@@ -256,7 +256,7 @@ class Quiz:
       return base_height + spacing_height + content_height
 
     heights = [estimate_for_seed(seed) for seed in deterministic_seeds(sample_count)]
-    return max(heights) + safety_cm
+    return max(heights) * safety_factor
 
   def _optimize_question_order(self, questions, **kwargs) -> List[Question]:
     """
@@ -321,7 +321,12 @@ class Quiz:
         continue
 
       # Estimate height for each question, preserving original index for stable sorting
-      question_heights = [(i, q, self._estimate_question_height(q, **kwargs)) for i, q in enumerate(group)]
+      question_heights = []
+      for i, q in enumerate(group):
+        height = getattr(q, "layout_reserved_height", None)
+        if height is None:
+          height = self._estimate_question_height(q, **kwargs)
+        question_heights.append((i, q, height))
 
       # Sort by:
       # 1. Spacing priority (LONG, MEDIUM, SHORT, NONE, then PAGE, EXTRA_PAGE)
@@ -415,8 +420,19 @@ class Quiz:
   def get_quiz(self, **kwargs) -> ca.Document:
     quiz = ca.Document(title=self.name)
 
+    if self.question_sort_order is None:
+      self.question_sort_order = list(Question.Topic)
+
     # Extract master RNG seed (if provided) and remove from kwargs
     master_seed = kwargs.pop('rng_seed', None)
+
+    consistent_pages = kwargs.pop("consistent_pages", False)
+
+    # Precompute reserved heights for consistent pagination (Typst only).
+    if consistent_pages:
+      for question in self.questions:
+        if getattr(question, "layout_reserved_height", None) is None:
+          question.layout_reserved_height = self._estimate_question_height(question, **dict(kwargs))
 
     # Check if optimization is requested (default: True)
     optimize_layout = kwargs.pop('optimize_layout', True)

@@ -947,6 +947,8 @@ class Question(abc.ABC):
     question_ast.question_version = instance.flags.question_version
     question_ast.config_params = dict(instance.flags.config_params)
     question_ast.qr_context_extras = dict(instance.flags.context_extras)
+    if hasattr(self, "layout_reserved_height"):
+      question_ast.reserve_height_cm = self.layout_reserved_height
 
     return question_ast
 
