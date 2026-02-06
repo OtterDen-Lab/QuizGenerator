@@ -10,6 +10,7 @@ import math
 import os
 import re
 import textwrap
+import tempfile
 import uuid
 from io import BytesIO
 from typing import Callable, List
@@ -1425,8 +1426,8 @@ class Picture(Leaf):
     """Save image data to file if not already saved."""
     if self.path is None:
 
-      # Create imgs directory if it doesn't exist (use absolute path)
-      img_dir = os.path.abspath("imgs")
+      # Create temp image directory if it doesn't exist
+      img_dir = os.path.join(tempfile.gettempdir(), "quiz_images")
       if not os.path.exists(img_dir):
         os.makedirs(img_dir)
 

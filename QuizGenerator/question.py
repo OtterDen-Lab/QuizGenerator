@@ -14,6 +14,7 @@ import os
 import pathlib
 import pkgutil
 import random
+import tempfile
 import types
 import uuid
 from types import MappingProxyType
@@ -973,17 +974,29 @@ class Question(abc.ABC):
     def image_upload(img_data) -> str:
 
       course.create_folder(f"{quiz.id}", parent_folder_path="Quiz Files")
-      file_name = f"{uuid.uuid4()}.png"
 
-      with io.FileIO(file_name, 'w+') as ffid:
-        ffid.write(img_data.getbuffer())
-        ffid.flush()
-        ffid.seek(0)
-        upload_success, f = course.upload(ffid, parent_folder_path=f"Quiz Files/{quiz.id}")
-      os.remove(file_name)
+      temp_dir = os.path.join(tempfile.gettempdir(), "quiz_canvas_uploads")
+      os.makedirs(temp_dir, exist_ok=True)
+      temp_file = tempfile.NamedTemporaryFile(
+        mode="w+b",
+        suffix=".png",
+        delete=False,
+        dir=temp_dir
+      )
+
+      try:
+        temp_file.write(img_data.getbuffer())
+        temp_file.flush()
+        temp_file.seek(0)
+        upload_success, f = course.upload(temp_file, parent_folder_path=f"Quiz Files/{quiz.id}")
+      finally:
+        temp_file.close()
+        try:
+          os.remove(temp_file.name)
+        except OSError:
+          log.warning(f"Failed to remove temp image {temp_file.name}")
 
       img_data.name = "img.png"
-      # upload_success, f = course.upload(img_data, parent_folder_path=f"Quiz Files/{quiz.id}")
       log.debug("path: " + f"/courses/{course.id}/files/{f['id']}/preview")
       return f"/courses/{course.id}/files/{f['id']}/preview"
 

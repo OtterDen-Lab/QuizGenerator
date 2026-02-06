@@ -9,6 +9,7 @@ import io
 import logging
 import os
 import random
+import tempfile
 import uuid
 from typing import List
 
@@ -609,12 +610,15 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     return buffer
     
   @classmethod
-  def make_image_file(cls, context, image_dir="imgs"):
+  def make_image_file(cls, context, image_dir=None):
     
     image_buffer = cls.make_image(context)
     
     # Original file-saving logic
-    if not os.path.exists(image_dir): os.mkdir(image_dir)
+    if image_dir is None:
+      image_dir = os.path.join(tempfile.gettempdir(), "quiz_images")
+    if not os.path.exists(image_dir):
+      os.makedirs(image_dir)
     image_path = os.path.join(
       image_dir,
       f"{str(context['scheduler_algorithm']).replace(' ', '_')}-{uuid.uuid4()}.png"
