@@ -328,7 +328,7 @@ class QuestionQRCode:
         temp_dir = Path(tempfile.gettempdir()) / "quiz_qrcodes"
         temp_dir.mkdir(exist_ok=True)
 
-        qr_path = temp_dir / f"qr_q{question_number}.pdf"
+        qr_path = temp_dir / f"qr_q{question_number}.png"
 
         # Save as PNG with appropriate scale
         qr.save(str(qr_path), scale=scale, border=0)
