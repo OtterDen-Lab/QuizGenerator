@@ -458,23 +458,27 @@ def generate_quiz(
 
       if use_typst:
         # Generate using Typst
-        typst_text = quiz.get_quiz(
-          rng_seed=pdf_seed,
-          use_typst_measurement=use_typst_measurement,
-          consistent_pages=consistent_pages,
-          layout_samples=layout_samples,
-          layout_safety_factor=layout_safety_factor
-        ).render("typst")
+        quiz_kwargs = {
+          "rng_seed": pdf_seed,
+          "use_typst_measurement": use_typst_measurement,
+          "consistent_pages": consistent_pages,
+        }
+        if consistent_pages:
+          quiz_kwargs["layout_samples"] = layout_samples
+          quiz_kwargs["layout_safety_factor"] = layout_safety_factor
+        typst_text = quiz.get_quiz(**quiz_kwargs).render("typst")
         generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name)
       else:
         # Generate using LaTeX (default)
-        latex_text = quiz.get_quiz(
-          rng_seed=pdf_seed,
-          use_typst_measurement=use_typst_measurement,
-          consistent_pages=consistent_pages,
-          layout_samples=layout_samples,
-          layout_safety_factor=layout_safety_factor
-        ).render_latex()
+        quiz_kwargs = {
+          "rng_seed": pdf_seed,
+          "use_typst_measurement": use_typst_measurement,
+          "consistent_pages": consistent_pages,
+        }
+        if consistent_pages:
+          quiz_kwargs["layout_samples"] = layout_samples
+          quiz_kwargs["layout_safety_factor"] = layout_safety_factor
+        latex_text = quiz.get_quiz(**quiz_kwargs).render_latex()
         generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name)
 
     if num_canvas > 0:

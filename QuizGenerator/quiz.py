@@ -196,7 +196,7 @@ class Quiz:
     Returns:
         Height in centimeters
     """
-    sample_count = int(kwargs.pop("layout_samples", 10))
+    sample_count = int(kwargs.pop("layout_samples", 1))
     if sample_count < 1:
       sample_count = 1
     safety_factor = float(kwargs.pop("layout_safety_factor", 1.1))

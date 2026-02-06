@@ -1427,7 +1427,7 @@ class Picture(Leaf):
     if self.path is None:
 
       # Create temp image directory if it doesn't exist
-      img_dir = os.path.join(tempfile.gettempdir(), "quiz_images")
+      img_dir = os.environ.get("QUIZGEN_IMAGE_DIR") or os.path.join(tempfile.gettempdir(), "quiz_images")
       if not os.path.exists(img_dir):
         os.makedirs(img_dir)
 
