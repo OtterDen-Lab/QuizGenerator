@@ -12,6 +12,7 @@ import re
 import textwrap
 import tempfile
 import uuid
+import base64
 from io import BytesIO
 from typing import Callable, List
 
@@ -403,10 +404,12 @@ class Document(Container):
         gutter: 1em,
         align: top,
       )[
-        #content
-        #v(spacing)
+        content
+        v(spacing)
       ][
-        #image(qr_code, width: 2cm)
+        if qr_code != none {
+          image(qr_code, width: 2cm, format: "png")
+        }
       ]
       #if spacing >= 199cm {
       
@@ -486,6 +489,10 @@ class Document(Container):
   def render_typst(self, **kwargs):
     """Render complete Typst document with header and title"""
     typst = self.TYPST_HEADER
+    embed_images = kwargs.get("embed_images_typst") or os.environ.get("QUIZGEN_EMBED_IMAGES_TYPST", "").lower() in {"1", "true", "yes"}
+    log.debug(f"Typst QR embed_images={embed_images}")
+    if embed_images:
+      typst += '\n#import "@preview/based:0.2.0": base64\n'
 
     # Add title and name line using grid for proper alignment
     typst += f"\n#grid(\n"
@@ -636,6 +643,7 @@ class Question(Container):
     content = self.body.render(OutputFormat.TYPST, **kwargs)
     
     # Generate QR code if question number is available
+    embed_images = kwargs.get("embed_images_typst") or os.environ.get("QUIZGEN_EMBED_IMAGES_TYPST", "").lower() in {"1", "true", "yes"}
     qr_param = ""
     reserve_param = ""
     if self.question_number is not None:
@@ -665,7 +673,12 @@ class Question(Container):
         )
         
         # Add QR code parameter to question function call
-        qr_param = f'qr_code: "{qr_path}"'
+        if embed_images:
+          with open(qr_path, "rb") as handle:
+            b64 = base64.b64encode(handle.read()).decode("ascii")
+          qr_param = f'qr_code: base64.decode("{b64}")'
+        else:
+          qr_param = f'qr_code: "{qr_path}"'
       
       except Exception as e:
         log.warning(f"Failed to generate QR code for question {self.question_number}: {e}")
@@ -1479,7 +1492,7 @@ class Picture(Leaf):
     return "\n".join(result)
 
   def render_typst(self, **kwargs):
-    self._ensure_image_saved()
+    embed_images = kwargs.get("embed_images_typst") or os.environ.get("QUIZGEN_EMBED_IMAGES_TYPST", "").lower() in {"1", "true", "yes"}
 
     # Build the image function call
     img_params = []
@@ -1488,10 +1501,19 @@ class Picture(Leaf):
 
     params_str = ', '.join(img_params) if img_params else ''
 
+    if embed_images:
+      self.img_data.seek(0)
+      b64 = base64.b64encode(self.img_data.read()).decode("ascii")
+      source = f'base64.decode("{b64}")'
+      img_call = f'image({source}, format: "png"{", " + params_str if params_str else ""})'
+    else:
+      self._ensure_image_saved()
+      img_call = f'image("{self.path}"{", " + params_str if params_str else ""})'
+
     # Use Typst's figure and image functions
     result = []
     result.append("#figure(")
-    result.append(f'  image("{self.path}"{", " + params_str if params_str else ""}),')
+    result.append(f"  {img_call},")
 
     if self.caption:
       result.append(f'  caption: [{self.caption}]')

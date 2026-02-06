@@ -67,6 +67,8 @@ def parse_args():
                      help="Number of deterministic samples per question to estimate height")
   parser.add_argument("--layout_safety_factor", type=float, default=1.1,
                      help="Multiplier applied to max sampled height for safety")
+  parser.add_argument("--embed_images_typst", action="store_true",
+                     help="Embed images directly in Typst output (no external files)")
 
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",
@@ -112,7 +114,8 @@ def test_all_questions(
     canvas_course=None,
     strict: bool = False,
     question_filter: list = None,
-    skip_missing_extras: bool = False
+    skip_missing_extras: bool = False,
+    embed_images_typst: bool = False
 ):
   """
   Test all registered questions by generating N variations of each.
@@ -268,7 +271,10 @@ def test_all_questions(
       print("Generating PDF...")
       pdf_seed = 12345  # Fixed seed for reproducibility
       if use_typst:
-        typst_text = test_quiz.get_quiz(rng_seed=pdf_seed).render("typst")
+        typst_text = test_quiz.get_quiz(rng_seed=pdf_seed).render(
+          "typst",
+          embed_images_typst=embed_images_typst
+        )
         generate_typst(typst_text, remove_previous=True, name_prefix="test_all_questions")
       else:
         latex_text = test_quiz.get_quiz(rng_seed=pdf_seed).render_latex()
@@ -466,7 +472,10 @@ def generate_quiz(
         if consistent_pages:
           quiz_kwargs["layout_samples"] = layout_samples
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
-        typst_text = quiz.get_quiz(**quiz_kwargs).render("typst")
+        typst_text = quiz.get_quiz(**quiz_kwargs).render(
+          "typst",
+          embed_images_typst=getattr(args, "embed_images_typst", False)
+        )
         generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name)
       else:
         # Generate using LaTeX (default)
@@ -538,7 +547,8 @@ def main():
       canvas_course=canvas_course,
       strict=args.strict,
       question_filter=args.test_questions,
-      skip_missing_extras=args.skip_missing_extras
+      skip_missing_extras=args.skip_missing_extras,
+      embed_images_typst=getattr(args, "embed_images_typst", False)
     )
     exit(0 if success else 1)
 
