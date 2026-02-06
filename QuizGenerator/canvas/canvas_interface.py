@@ -140,6 +140,7 @@ class CanvasCourse(LMSWrapper):
     
     total_questions = len(quiz.questions)
     total_variations_created = 0
+    underfilled_questions = []
     log.info(f"Starting to push quiz '{title or canvas_quiz.title}' with {total_questions} questions to Canvas")
     log.info(f"Target: {num_variations} variations per question")
     
@@ -202,7 +203,16 @@ class CanvasCourse(LMSWrapper):
         if variation_count >= question.possible_variations:
           break
       
-      log.info(f"Completed question '{question.name}': {variation_count} variations created")
+      if variation_count < num_variations:
+        log.warning(
+          f"Completed question '{question.name}': {variation_count}/{num_variations} variations created "
+          f"after {attempt_number + 1} attempts (unique de-dup collisions or limited variation space)."
+        )
+        underfilled_questions.append(
+          (question.name, variation_count, num_variations, attempt_number + 1)
+        )
+      else:
+        log.info(f"Completed question '{question.name}': {variation_count} variations created")
 
     # Upload questions
     num_questions_to_upload = questions_to_upload.qsize()
@@ -220,6 +230,10 @@ class CanvasCourse(LMSWrapper):
         continue
     
     log.info(f"Quiz upload completed! Total variations created: {total_variations_created}")
+    if underfilled_questions:
+      log.warning("Some questions did not reach the requested variation count:")
+      for q_name, actual, target, attempts in underfilled_questions:
+        log.warning(f"  - {q_name}: {actual}/{target} after {attempts} attempts")
     log.info(f"Canvas quiz URL: {canvas_quiz.html_url}")
   
   def get_assignment(self, assignment_id : int) -> Optional[CanvasAssignment]:
