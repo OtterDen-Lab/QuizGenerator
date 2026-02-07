@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 """
 Mixin classes to reduce boilerplate in question generation.
 These mixins provide reusable patterns for common question structures.

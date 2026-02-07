@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 import logging
 import random
 from typing import List, Tuple

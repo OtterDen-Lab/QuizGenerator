@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 import abc
 import logging
 import math

@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import abc
@@ -955,9 +955,6 @@ class Question(abc.ABC):
 
     return question_ast
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    raise NotImplementedError("refresh() has been removed; use _build_context().")
-    
   def is_interesting(self) -> bool:
     return True
   
@@ -1122,5 +1119,3 @@ class QuestionGroup():
 
     # Delegate to the selected question
     return getattr(self._current_question, name)
-
-    return attr
