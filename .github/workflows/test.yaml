@@ -85,6 +85,7 @@ jobs:
 
       - name: Generate a test PDF
         run: |
-          uv run quizgen --yaml example_files/example_exam.yaml --num_pdfs 1
+          export QUIZGEN_ALLOW_GENERATOR=1
+          uv run quizgen --allow_generator --yaml example_files/example_exam.yaml --num_pdfs 1
           ls -la out/
           ls out/*.pdf && echo "PDF generated successfully!"

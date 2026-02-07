@@ -61,6 +61,7 @@ cst463 = [
 
 dev = [
     "pytest~=8.0.0",
+    "ruff~=0.7.0",
 ]
 
 [tool.pytest.ini_options]
