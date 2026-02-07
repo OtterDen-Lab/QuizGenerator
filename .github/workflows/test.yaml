@@ -1,0 +1,68 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:  # allows manual triggering
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Install Typst (for PDF generation tests)
+        run: |
+          curl -fsSL https://typst.community/typst-install/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Run tests
+        run: uv run pytest tests/ lms_interface/tests/ -v --tb=short
+
+      - name: Run linter (ruff)
+        run: uv run ruff check --output-format=github .
+        continue-on-error: true  # Don't fail the build on lint warnings for now
+
+  # Quick smoke test that quiz generation actually works
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Install Typst
+        run: |
+          curl -fsSL https://typst.community/typst-install/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Generate a test PDF
+        run: |
+          uv run quizgen --yaml example_files/example_exam.yaml --num_pdfs 1
+          ls -la out/
+          test -f out/*.pdf && echo "PDF generated successfully!"

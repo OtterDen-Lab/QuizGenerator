@@ -143,6 +143,10 @@ questions:
 
 **No import needed!** QuizGenerator automatically discovers and loads all registered entry points.
 
+## Ordering Note
+
+If you want to preserve the exact question order you wrote in YAML, prefer the list-style `questions` format and set `question_order: yaml`. You can also enable `--optimize_space` to reorder questions for tighter PDF layout (this affects Canvas order too).
+
 ---
 
 ## Approach 2: Direct Module Import (Quick & Dirty)
