@@ -218,6 +218,10 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         try:
           cache_policy = cls.Kind[str(policy)]
         except KeyError:
+          log.warning(
+            f"Invalid cache policy '{policy}'. "
+            f"Valid options: {[k.name for k in cls.Kind]}. Defaulting to FIFO."
+          )
           cache_policy = cls.Kind.FIFO
       config_params = {"policy": cache_policy.name}
 

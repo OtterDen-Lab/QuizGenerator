@@ -85,6 +85,9 @@ class Quiz:
             raise
 
 
+      # Ensure premade questions are loaded before validation/creation.
+      QuestionRegistry.load_premade_questions()
+
       # Get general quiz information from the dictionary
       name = exam_dict.get("name", f"Unnamed Exam ({datetime.now().strftime('%a %b %d %I:%M %p')})")
       if isinstance(name, str):
@@ -113,6 +116,13 @@ class Quiz:
           log.warning(f"Unknown question_order '{question_order_setting}'. Using defaults.")
 
       questions_block = exam_dict["questions"]
+
+      def _format_available_questions(limit: int = 20) -> str:
+        available = sorted(QuestionRegistry._registry.keys())
+        if len(available) <= limit:
+          return ", ".join(available)
+        shown = ", ".join(available[:limit])
+        return f"{shown}, ... (+{len(available) - limit} more)"
       if isinstance(questions_block, list):
         # List format preserves YAML order by default.
         if question_order_setting is None:
@@ -147,7 +157,14 @@ class Quiz:
             if "topic" in q_data:
               kwargs["topic"] = Question.Topic.from_string(q_data.get("topic", "Misc"))
             question_class = q_data.get("class", "FromText")
-            return QuestionRegistry.create(question_class, **kwargs)
+            try:
+              return QuestionRegistry.create(question_class, **kwargs)
+            except ValueError as e:
+              available = _format_available_questions()
+              raise ValueError(
+                f"Unknown question type '{question_class}' for '{q_name}'. "
+                f"Available question types: {available}"
+              ) from e
 
           questions_for_exam.extend([
             make_question_from_entry(
@@ -186,11 +203,18 @@ class Quiz:
           # Add in a default, where if it isn't specified we're going to simply assume it is a text
           question_class = q_data.get("class", "FromText")
           
-          new_question = QuestionRegistry.create(
-            question_class,
-            **kwargs
-          )
-          return new_question
+          try:
+            new_question = QuestionRegistry.create(
+              question_class,
+              **kwargs
+            )
+            return new_question
+          except ValueError as e:
+            available = _format_available_questions()
+            raise ValueError(
+              f"Unknown question type '{question_class}' for '{q_name}'. "
+              f"Available question types: {available}"
+            ) from e
         
         for q_name, q_data in question_definitions.items():
           # Set defaults for config

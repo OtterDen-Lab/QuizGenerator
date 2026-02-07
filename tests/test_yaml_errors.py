@@ -41,3 +41,17 @@ questions:
     path.write_text(yaml_text)
     with pytest.raises(ValueError, match="include 'points'"):
         Quiz.from_yaml(str(path))
+
+
+def test_yaml_unknown_question_class(tmp_path):
+    yaml_text = """
+name: "Bad Quiz"
+questions:
+  5:
+    "Oops":
+      class: NotAQuestion
+"""
+    path = tmp_path / "bad.yaml"
+    path.write_text(yaml_text)
+    with pytest.raises(ValueError, match="Unknown question type"):
+        Quiz.from_yaml(str(path))

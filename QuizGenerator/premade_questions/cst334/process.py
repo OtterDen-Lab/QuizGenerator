@@ -50,6 +50,10 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     try:
       return SchedulingQuestion.Kind[kind_str]
     except KeyError:
+      log.warning(
+        f"Invalid scheduler_kind '{kind_str}'. "
+        f"Valid options: {[k.name for k in SchedulingQuestion.Kind]}. Defaulting to FIFO."
+      )
       return SchedulingQuestion.Kind.FIFO
 
   MAX_JOBS = 4
