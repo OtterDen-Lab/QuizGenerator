@@ -120,7 +120,7 @@ questions:
 """
         path = temp_yaml_file(yaml_content)
 
-        with pytest.raises((TypeError, AttributeError)):
+        with pytest.raises((TypeError, AttributeError, ValueError)):
             Quiz.from_yaml(path)
 
 

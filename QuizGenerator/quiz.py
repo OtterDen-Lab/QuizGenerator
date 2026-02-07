@@ -67,7 +67,72 @@ class Quiz:
     with open(path_to_yaml) as fid:
       list_of_exam_dicts = list(yaml.safe_load_all(fid))
 
+    def _require_type(value, expected, label: str):
+      if not isinstance(value, expected):
+        raise ValueError(f"Invalid type for {label}: expected {expected}, got {type(value)}")
+
+    def _validate_exam_dict(exam_dict: dict):
+      if not isinstance(exam_dict, dict):
+        raise ValueError("Each YAML document must be a mapping.")
+
+      if "questions" not in exam_dict:
+        raise KeyError("Missing required top-level key: questions")
+
+      if "custom_modules" in exam_dict:
+        _require_type(exam_dict["custom_modules"], list, "custom_modules")
+        for module in exam_dict["custom_modules"]:
+          _require_type(module, str, "custom_modules entry")
+
+      if "sort order" in exam_dict:
+        _require_type(exam_dict["sort order"], list, "sort order")
+        for item in exam_dict["sort order"]:
+          _require_type(item, str, "sort order entry")
+
+      if "question_order" in exam_dict:
+        _require_type(exam_dict["question_order"], str, "question_order")
+
+      questions = exam_dict["questions"]
+      if not isinstance(questions, (dict, list)):
+        raise ValueError("questions must be a mapping (point values) or a list (ordered questions).")
+
+      if isinstance(questions, list):
+        for entry in questions:
+          _require_type(entry, dict, "questions entry")
+          if "name" not in entry:
+            raise ValueError("Each question entry must include a 'name'.")
+          if "points" not in entry:
+            raise ValueError(f"Question '{entry.get('name', '<unknown>')}' must include 'points'.")
+          if "class" in entry:
+            _require_type(entry["class"], str, "class")
+          if "_config" in entry:
+            _require_type(entry["_config"], dict, "_config")
+          if "kwargs" in entry:
+            _require_type(entry["kwargs"], dict, "kwargs")
+        return
+
+      # Mapping format
+      for points_value, question_definitions in questions.items():
+        if not isinstance(points_value, (int, float)):
+          raise ValueError(f"Point values must be numeric; got {points_value!r}.")
+        _require_type(question_definitions, dict, f"questions[{points_value}]")
+
+        point_config = question_definitions.get("_config", {})
+        if point_config is not None:
+          _require_type(point_config, dict, f"questions[{points_value}]._config")
+
+        for q_name, q_data in question_definitions.items():
+          if q_name == "_config":
+            continue
+          _require_type(q_data, dict, f"questions[{points_value}]['{q_name}']")
+          if "class" in q_data:
+            _require_type(q_data["class"], str, f"questions[{points_value}]['{q_name}'].class")
+          if "_config" in q_data:
+            _require_type(q_data["_config"], dict, f"questions[{points_value}]['{q_name}']._config")
+          if "kwargs" in q_data:
+            _require_type(q_data["kwargs"], dict, f"questions[{points_value}]['{q_name}'].kwargs")
+
     for exam_dict in list_of_exam_dicts:
+      _validate_exam_dict(exam_dict)
       # Load custom question modules if specified (Option 3: Quick-and-dirty approach)
       # Users can add custom question types by importing Python modules in their YAML:
       # custom_modules:
