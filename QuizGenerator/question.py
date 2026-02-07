@@ -1001,8 +1001,14 @@ class Question(abc.ABC):
       return f"/courses/{course.id}/files/{f['id']}/preview"
 
     # Render AST to HTML for Canvas
-    question_html = questionAST.render("html", upload_func=image_upload)
-    explanation_html = questionAST.explanation.render("html", upload_func=image_upload)
+    question_html = questionAST.render(
+      "html",
+      upload_func=image_upload
+    )
+    explanation_html = questionAST.explanation.render(
+      "html",
+      upload_func=image_upload
+    )
 
     # Build appropriate dictionary to send to canvas
     return {

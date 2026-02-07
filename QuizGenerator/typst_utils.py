@@ -8,7 +8,6 @@ enabling accurate bin-packing for PDF generation.
 
 import json
 import logging
-import os
 import subprocess
 import tempfile
 import textwrap
@@ -34,8 +33,6 @@ def measure_typst_content(typst_content: str, page_width_cm: float = 18.0) -> Op
 
     # Get the Typst header which includes fillline and other helper functions
     typst_header = ca.Document.TYPST_HEADER
-    if os.environ.get("QUIZGEN_EMBED_IMAGES_TYPST", "").lower() in {"1", "true", "yes"}:
-        typst_header += '\n#import "@preview/based:0.2.0": base64\n'
 
     # Create temporary Typst file with measurement wrapper
     typst_code = textwrap.dedent(f"""

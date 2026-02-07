@@ -616,7 +616,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     
     # Original file-saving logic
     if image_dir is None:
-      image_dir = os.environ.get("QUIZGEN_IMAGE_DIR") or os.path.join(tempfile.gettempdir(), "quiz_images")
+      image_dir = os.path.join(tempfile.gettempdir(), "quiz_images")
     if not os.path.exists(image_dir):
       os.makedirs(image_dir)
     image_path = os.path.join(

@@ -168,7 +168,11 @@ class CanvasCourse(LMSWrapper):
         # Each variation gets seeds: base_seed, base_seed+1, base_seed+2, ... for backoffs
         # Include question_i in the seed so different questions get different seed spaces
         base_seed = (question_i * 100_000) + (attempt_number * 1000)
-        question_for_canvas = question.get__canvas(self.course, canvas_quiz, rng_seed=base_seed)
+        question_for_canvas = question.get__canvas(
+          self.course,
+          canvas_quiz,
+          rng_seed=base_seed
+        )
 
         question_fingerprint = question_for_canvas["question_text"]
         try:

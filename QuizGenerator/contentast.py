@@ -404,10 +404,10 @@ class Document(Container):
         gutter: 1em,
         align: top,
       )[
-        content
-        v(spacing)
+        #content
+        #v(spacing)
       ][
-        if qr_code != none {
+        #if qr_code != none {
           image(qr_code, width: 2cm, format: "png")
         }
       ]
@@ -489,8 +489,7 @@ class Document(Container):
   def render_typst(self, **kwargs):
     """Render complete Typst document with header and title"""
     typst = self.TYPST_HEADER
-    embed_images = kwargs.get("embed_images_typst") or os.environ.get("QUIZGEN_EMBED_IMAGES_TYPST", "").lower() in {"1", "true", "yes"}
-    log.debug(f"Typst QR embed_images={embed_images}")
+    embed_images = kwargs.get("embed_images_typst")
     if embed_images:
       typst += '\n#import "@preview/based:0.2.0": base64\n'
 
@@ -643,7 +642,7 @@ class Question(Container):
     content = self.body.render(OutputFormat.TYPST, **kwargs)
     
     # Generate QR code if question number is available
-    embed_images = kwargs.get("embed_images_typst") or os.environ.get("QUIZGEN_EMBED_IMAGES_TYPST", "").lower() in {"1", "true", "yes"}
+    embed_images = kwargs.get("embed_images_typst")
     qr_param = ""
     reserve_param = ""
     if self.question_number is not None:
@@ -1440,7 +1439,7 @@ class Picture(Leaf):
     if self.path is None:
 
       # Create temp image directory if it doesn't exist
-      img_dir = os.environ.get("QUIZGEN_IMAGE_DIR") or os.path.join(tempfile.gettempdir(), "quiz_images")
+      img_dir = os.path.join(tempfile.gettempdir(), "quiz_images")
       if not os.path.exists(img_dir):
         os.makedirs(img_dir)
 
@@ -1467,8 +1466,10 @@ class Picture(Leaf):
     attrs = []
     if self.width:
       attrs.append(f'width="{self.width}"')
-    
-    img = f'<img src="{upload_func(self.img_data)}" {" ".join(attrs)} alt="{self.caption or ""}">'
+
+    src = upload_func(self.img_data)
+
+    img = f'<img src="{src}" {" ".join(attrs)} alt="{self.caption or ""}">'
     
     if self.caption:
       return f'<figure>\n  {img}\n  <figcaption>{self.caption}</figcaption>\n</figure>'
@@ -1492,7 +1493,7 @@ class Picture(Leaf):
     return "\n".join(result)
 
   def render_typst(self, **kwargs):
-    embed_images = kwargs.get("embed_images_typst") or os.environ.get("QUIZGEN_EMBED_IMAGES_TYPST", "").lower() in {"1", "true", "yes"}
+    embed_images = kwargs.get("embed_images_typst")
 
     # Build the image function call
     img_params = []
