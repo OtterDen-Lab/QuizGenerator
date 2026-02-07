@@ -187,6 +187,7 @@ Notes:
 ## Documentation
 
 - [Getting Started Guide](documentation/getting_started.md)
+- [First 5 Minutes](documentation/first_5_minutes.md)
 - [Custom Questions Guide](documentation/custom_questions.md)
 - [YAML Configuration Reference](documentation/yaml_config_guide.md)
 
@@ -273,9 +274,10 @@ QuizGenerator/
 │   ├── quiz.py            # Quiz generation logic
 │   ├── contentast.py      # Content AST for cross-format rendering
 │   ├── premade_questions/ # Built-in question library
-│   └── canvas/           # Canvas LMS integration
+│   └── ...               # Question types and rendering utilities
 ├── example_files/        # Example quiz configurations
 ├── documentation/        # User guides
+├── lms_interface/        # Canvas LMS integration
 └── quizgen             # CLI entry point
 ```
 

@@ -39,7 +39,8 @@ class SchedulingQuestion(Question):
         super().__init__(*args, topic=Question.Topic.SYSTEM_PROCESSES, **kwargs)
         self.possible_variations = float('inf')
 
-    def _build_context(self, *, rng_seed=None, **kwargs):
+    @classmethod
+    def _build_context(cls, *, rng_seed=None, **kwargs):
         context = super()._build_context(rng_seed=rng_seed, **kwargs)
         rng = context.rng
 
@@ -51,12 +52,10 @@ class SchedulingQuestion(Question):
         # Calculate FIFO schedule
         schedule = self._calculate_fifo(arrival_times, burst_times)
 
-        context.update({
-            "num_processes": num_processes,
-            "arrival_times": arrival_times,
-            "burst_times": burst_times,
-            "schedule": schedule,
-        })
+        context["num_processes"] = num_processes
+        context["arrival_times"] = arrival_times
+        context["burst_times"] = burst_times
+        context["schedule"] = schedule
         return context
 
     def _calculate_fifo(self, arrival_times, burst_times):
@@ -172,7 +171,8 @@ class QuickMemoryQuestion(Question):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, topic=Question.Topic.SYSTEM_MEMORY, **kwargs)
 
-    def _build_context(self, *, rng_seed=None, **kwargs):
+    @classmethod
+    def _build_context(cls, *, rng_seed=None, **kwargs):
         context = super()._build_context(rng_seed=rng_seed, **kwargs)
         rng = context.rng
         page_size = rng.choice([4, 8, 16])  # KB
@@ -181,12 +181,10 @@ class QuickMemoryQuestion(Question):
         page_number = virtual_addr // (page_size * 1024)
         offset = virtual_addr % (page_size * 1024)
 
-        context.update({
-            "page_size": page_size,
-            "virtual_addr": virtual_addr,
-            "page_number": page_number,
-            "offset": offset,
-        })
+        context["page_size"] = page_size
+        context["virtual_addr"] = virtual_addr
+        context["page_number"] = page_number
+        context["offset"] = offset
         return context
 
     def _build_body(self, context) -> ca.Section:

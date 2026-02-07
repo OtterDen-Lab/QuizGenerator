@@ -49,6 +49,13 @@ Quick-start guide for generating PDFs and uploading to Canvas.
 
 ---
 
+#### [first_5_minutes.md](first_5_minutes.md)
+Copy-pasteable walkthrough: install → create YAML → generate PDF → preview output.
+
+**Audience:** Instructors who want the fastest on-ramp
+
+---
+
 #### [quickstart.md](quickstart.md)
 One-page quick start for installation, PDF generation, and Canvas upload.
 
