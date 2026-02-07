@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import logging
-from typing import List, Tuple
 
 import sympy
 import sympy as sp
@@ -56,7 +55,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     variables,
     learning_rate,
     minimize=True,
-  ) -> List[dict]:
+  ) -> list[dict]:
     """
     Perform gradient descent and return step-by-step results.
     """
@@ -142,7 +141,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     return context
   
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     self = context
     body = ca.Section()
@@ -209,7 +208,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     return body, answers
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     self = context
     explanation = ca.Section()

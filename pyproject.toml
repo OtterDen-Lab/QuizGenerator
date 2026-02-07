@@ -29,13 +29,14 @@ dependencies = [
     "PyYAML~=6.0.1",
     "requests~=2.32.2",
     "pypandoc~=1.6.3",
-    "matplotlib~=3.0",
+    "matplotlib>=3.8,<4",
     "numpy>=1.26,<3",
     "sympy~=1.14.0",
     "markdown~=3.9",
     "segno~=1.6.0",
     "cryptography~=41.0.0",
     "canvasapi~=3.2.0",
+    "ruff~=0.7.4",
 ]
 
 [project.urls]
@@ -61,6 +62,7 @@ cst463 = [
 
 dev = [
     "pytest~=8.0.0",
+    "ruff~=0.7.0",
 ]
 
 [tool.pytest.ini_options]
@@ -75,6 +77,9 @@ include = ["QuizGenerator/**", "lms_interface/**", "pyproject.toml", "README.md"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.uv]
+default-groups = "all"
 
 # Entry point group for custom question types (for plugin developers)
 # Users can register custom question types in their own packages using:

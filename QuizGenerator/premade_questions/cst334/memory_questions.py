@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import abc
@@ -8,7 +8,6 @@ import enum
 import logging
 import math
 import random
-from typing import List
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.mixins import BodyTemplatesMixin, TableQuestionMixin
@@ -126,7 +125,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       return self.name
   
   class Cache:
-    def __init__(self, kind: CachingQuestion.Kind, cache_size: int, all_requests: List[int] = None):
+    def __init__(self, kind: CachingQuestion.Kind, cache_size: int, all_requests: list[int] | None = None):
       self.kind = kind
       self.cache_size = cache_size
       self.all_requests = all_requests
@@ -218,6 +217,10 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         try:
           cache_policy = cls.Kind[str(policy)]
         except KeyError:
+          log.warning(
+            f"Invalid cache policy '{policy}'. "
+            f"Valid options: {[k.name for k in cls.Kind]}. Defaulting to FIFO."
+          )
           cache_policy = cls.Kind.FIFO
       config_params = {"policy": cache_policy.name}
 

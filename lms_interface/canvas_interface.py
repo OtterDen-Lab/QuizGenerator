@@ -1,26 +1,31 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import itertools
+import logging
+import os
 import tempfile
 import time
 from collections import deque
-from datetime import datetime, timezone
-from typing import List, Optional
+from datetime import datetime
 
 import canvasapi
-import canvasapi.course
-import canvasapi.quiz
 import canvasapi.assignment
-import canvasapi.submission
+import canvasapi.course
 import canvasapi.exceptions
-import os
+import canvasapi.quiz
+import canvasapi.submission
 import dotenv
 import requests
 
-from .classes import LMSWrapper, Student, Submission, Submission__Canvas, FileSubmission__Canvas, TextSubmission__Canvas, QuizSubmission
-
-import logging
+from .classes import (
+  FileSubmission__Canvas,
+  LMSWrapper,
+  QuizSubmission,
+  Student,
+  Submission,
+  TextSubmission__Canvas,
+)
 
 log = logging.getLogger(__name__)
 
@@ -29,7 +34,7 @@ RETRY_BACKOFF_BASE = 1.0
 RETRY_BACKOFF_MAX = 10.0
 
 
-def _canvas_exception_status(exc: Exception) -> Optional[int]:
+def _canvas_exception_status(exc: Exception) -> int | None:
   status = getattr(exc, "status_code", None)
   if status is not None:
     return status
@@ -49,7 +54,7 @@ def _is_retryable_canvas_exception(exc: Exception) -> bool:
 
 
 class CanvasInterface:
-  def __init__(self, *, prod=False, env_path: Optional[str] = None):
+  def __init__(self, *, prod=False, env_path: str | None = None):
     if env_path:
       dotenv.load_dotenv(env_path)
     else:
@@ -78,9 +83,17 @@ class CanvasInterface:
     self.canvas = canvasapi.Canvas(self.canvas_url, self.canvas_key)
     
   def get_course(self, course_id: int) -> CanvasCourse:
+    if course_id is None:
+      raise ValueError("course_id is required to fetch a Canvas course.")
+    canvasapi_course = self.canvas.get_course(course_id)
+    if not hasattr(canvasapi_course, "id"):
+      raise ValueError(
+        f"Canvas course lookup failed for course_id={course_id}. "
+        "Ensure the course exists and your API key has access."
+      )
     return CanvasCourse(
       canvas_interface = self,
-      canvasapi_course = self.canvas.get_course(course_id)
+      canvasapi_course = canvasapi_course
     )
 
 
@@ -91,6 +104,14 @@ class CanvasCourse(LMSWrapper):
     super().__init__(_inner=self.course)
   
   def create_assignment_group(self, name="dev", delete_existing=False) -> canvasapi.course.AssignmentGroup:
+    env_name = os.environ.get("QUIZGEN_ASSIGNMENT_GROUP")
+    if env_name:
+      name = env_name
+    if not hasattr(self.course, "id"):
+      raise ValueError(
+        "Canvas course object is missing an id. "
+        "Check that the course exists and your API key has access."
+      )
     for assignment_group in self.course.get_assignment_groups():
       if assignment_group.name == name:
         if delete_existing:
@@ -142,13 +163,13 @@ class CanvasCourse(LMSWrapper):
       canvas_quiz: canvasapi.quiz.Quiz,
       question_payloads,
       *,
-      group_name: Optional[str] = None,
-      question_points: Optional[float] = None,
+      group_name: str | None = None,
+      question_points: float | None = None,
       pick_count: int = 1,
       max_upload_retries: int = MAX_UPLOAD_RETRIES,
       retry_backoff_base: float = RETRY_BACKOFF_BASE,
       retry_backoff_max: float = RETRY_BACKOFF_MAX
-  ) -> Optional[canvasapi.quiz.QuizGroup]:
+  ) -> canvasapi.quiz.QuizGroup | None:
     """
     Upload one question or a group of questions to Canvas.
 
@@ -273,11 +294,15 @@ class CanvasCourse(LMSWrapper):
           continue
         retry_counts[index] = retry_count
         sleep_s = min(retry_backoff_base * (2 ** (retry_count - 1)), retry_backoff_max)
-        log.warning(f"Retrying in {sleep_s:.1f}s (attempt {retry_count}/{max_upload_retries})")
+        remaining = len(queue) + 1  # include current payload
+        log.warning(
+          f"Retrying {label} in {sleep_s:.1f}s "
+          f"(attempt {retry_count}/{max_upload_retries}, {remaining} pending)"
+        )
         time.sleep(sleep_s)
         queue.append((index, payload))
   
-  def get_assignment(self, assignment_id : int) -> Optional[CanvasAssignment]:
+  def get_assignment(self, assignment_id : int) -> CanvasAssignment | None:
     try:
       return CanvasAssignment(
         canvasapi_interface=self.canvas_interface,
@@ -288,8 +313,8 @@ class CanvasCourse(LMSWrapper):
       log.error(f"Assignment {assignment_id} not found in course \"{self.name}\"")
       return None
     
-  def get_assignments(self, **kwargs) -> List[CanvasAssignment]:
-    assignments : List[CanvasAssignment] = []
+  def get_assignments(self, **kwargs) -> list[CanvasAssignment]:
+    assignments : list[CanvasAssignment] = []
     for canvasapi_assignment in self.course.get_assignments(**kwargs):
       assignments.append(
         CanvasAssignment(
@@ -303,10 +328,10 @@ class CanvasCourse(LMSWrapper):
   def get_username(self, user_id: int):
     return self.course.get_user(user_id).name
   
-  def get_students(self) -> List[Student]:
+  def get_students(self) -> list[Student]:
     return [Student(s.name, s.id, s) for s in self.course.get_users(enrollment_type=["student"])]
 
-  def get_quiz(self, quiz_id: int) -> Optional[CanvasQuiz]:
+  def get_quiz(self, quiz_id: int) -> CanvasQuiz | None:
     """Get a specific quiz by ID"""
     try:
       return CanvasQuiz(
@@ -318,9 +343,9 @@ class CanvasCourse(LMSWrapper):
       log.error(f"Quiz {quiz_id} not found in course \"{self.name}\"")
       return None
 
-  def get_quizzes(self, **kwargs) -> List[CanvasQuiz]:
+  def get_quizzes(self, **kwargs) -> list[CanvasQuiz]:
     """Get all quizzes in the course"""
-    quizzes: List[CanvasQuiz] = []
+    quizzes: list[CanvasQuiz] = []
     for canvasapi_quiz in self.course.get_quizzes(**kwargs):
       quizzes.append(
         CanvasQuiz(
@@ -411,7 +436,7 @@ class CanvasAssignment(LMSWrapper):
     for i, attachment_buffer in enumerate(attachments):
       upload_buffer_as_file(attachment_buffer.read(), attachment_buffer.name)
   
-  def get_submissions(self, only_include_most_recent: bool = True, **kwargs) -> List[Submission]:
+  def get_submissions(self, only_include_most_recent: bool = True, **kwargs) -> list[Submission]:
     """
     Gets submission objects (in this case Submission__Canvas objects) that have students and potentially attachments
     :param only_include_most_recent: Include only the most recent submission
@@ -426,7 +451,7 @@ class CanvasAssignment(LMSWrapper):
     
     test_only = kwargs.get("test", False)
     
-    submissions: List[Submission] = []
+    submissions: list[Submission] = []
     
     # Get all submissions and their history (which is necessary for attachments when students can resubmit)
     for student_index, canvaspai_submission in enumerate(self.assignment.get_submissions(include='submission_history', **kwargs)):
@@ -509,7 +534,7 @@ class CanvasQuiz(LMSWrapper):
     self.quiz = canvasapi_quiz
     super().__init__(_inner=canvasapi_quiz)
 
-  def get_quiz_submissions(self, **kwargs) -> List[QuizSubmission]:
+  def get_quiz_submissions(self, **kwargs) -> list[QuizSubmission]:
     """
     Get all quiz submissions with student responses
     :param kwargs: Additional parameters for filtering
@@ -518,7 +543,7 @@ class CanvasQuiz(LMSWrapper):
     test_only = kwargs.get("test", False)
     limit = kwargs.get("limit", 1_000_000)
 
-    quiz_submissions: List[QuizSubmission] = []
+    quiz_submissions: list[QuizSubmission] = []
 
     # Get all quiz submissions
     for student_index, canvasapi_quiz_submission in enumerate(self.quiz.get_submissions(**kwargs)):

@@ -48,7 +48,7 @@ pip install "QuizGenerator[cst463]"
 
 ## Quick Start
 
-Need a 2‑minute setup? See `documentation/quickstart.md`.
+Need a 2‑minute setup? See `documentation/getting_started.md`.
 
 ### 1. Create a quiz configuration (YAML)
 
@@ -67,6 +67,20 @@ questions:
 
     "Vector Math":
       class: VectorAddition
+```
+
+You can also provide an ordered list of questions:
+
+```yaml
+name: "Midterm Exam"
+question_order: yaml
+questions:
+  - name: "Process Scheduling"
+    points: 10
+    class: FIFOScheduling
+  - name: "Memory Paging"
+    points: 5
+    class: PagingQuestion
 ```
 
 ### 2. Generate PDFs
@@ -173,6 +187,7 @@ Notes:
 ## Documentation
 
 - [Getting Started Guide](documentation/getting_started.md)
+- [First 5 Minutes](documentation/first_5_minutes.md)
 - [Custom Questions Guide](documentation/custom_questions.md)
 - [YAML Configuration Reference](documentation/yaml_config_guide.md)
 
@@ -208,6 +223,11 @@ quizgen --latex --num_pdfs 3
 
 Experimental: `--typst_measurement` uses Typst to measure question height for tighter layout.
 It can change pagination and ordering, so use with care on finalized exams.
+
+### Layout Optimization
+
+By default, questions keep their YAML order (or point-value ordering for mapping format).
+Use `--optimize_space` to reorder questions to reduce PDF page count. This also affects Canvas order.
 
 ### Deterministic Generation
 
@@ -245,6 +265,15 @@ QUIZGEN_ALLOW_GENERATOR=1 quizgen --yaml my_quiz.yaml
 
 If you need dynamic question generation with untrusted inputs, consider writing a proper `Question` subclass instead, which provides better control and validation.
 
+### LaTeX `-shell-escape` Warning
+
+When using `--latex`, QuizGenerator invokes `latexmk -shell-escape` to compile PDFs. This allows LaTeX to execute external commands (for example, via `\write18`). If your question content includes raw LaTeX (e.g., from custom question types or untrusted YAML sources), this can be a command‑execution vector.
+
+Guidance:
+- Only use `--latex` with trusted question sources.
+- Prefer Typst (default) when possible.
+- If you need LaTeX but want to reduce risk, avoid raw LaTeX content and keep custom questions constrained to ContentAST elements.
+
 ## Project Structure
 
 ```
@@ -254,9 +283,10 @@ QuizGenerator/
 │   ├── quiz.py            # Quiz generation logic
 │   ├── contentast.py      # Content AST for cross-format rendering
 │   ├── premade_questions/ # Built-in question library
-│   └── canvas/           # Canvas LMS integration
+│   └── ...               # Question types and rendering utilities
 ├── example_files/        # Example quiz configurations
 ├── documentation/        # User guides
+├── lms_interface/        # Canvas LMS integration
 └── quizgen             # CLI entry point
 ```
 

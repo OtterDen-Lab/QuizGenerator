@@ -45,7 +45,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable
 
 # Load environment variables from .env file
 try:
@@ -81,7 +81,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def scan_qr_from_image(image_path: str) -> List[str]:
+def scan_qr_from_image(image_path: str) -> list[str]:
   """
   Scan all QR codes from an image file.
 
@@ -117,7 +117,7 @@ def scan_qr_from_image(image_path: str) -> List[str]:
     return []
 
 
-def parse_qr_data(qr_string: str) -> Dict[str, Any]:
+def parse_qr_data(qr_string: str) -> dict[str, Any]:
   """
   Parse QR code JSON data.
 
@@ -149,8 +149,8 @@ def _inline_image_upload(img_data) -> str:
 
 def _resolve_upload_func(
   image_mode: str,
-  upload_func: Optional[Callable]
-) -> Optional[Callable]:
+  upload_func: Callable | None
+) -> Callable | None:
   if image_mode == "inline":
     return _inline_image_upload
   if image_mode == "upload":
@@ -169,11 +169,11 @@ def _render_html(element, upload_func=None, **kwargs) -> str:
 
 
 def regenerate_question_answer(
-  qr_data: Dict[str, Any],
+  qr_data: dict[str, Any],
   *,
   image_mode: str = "inline",
-  upload_func: Optional[Callable] = None
-) -> Optional[Dict[str, Any]]:
+  upload_func: Callable | None = None
+) -> dict[str, Any]:
   """
   Regenerate question and extract answer using QR code metadata.
 
@@ -308,8 +308,8 @@ def regenerate_from_encrypted(
   points: float = 1.0,
   *,
   image_mode: str = "inline",
-  upload_func: Optional[Callable] = None
-) -> Dict[str, Any]:
+  upload_func: Callable | None = None
+) -> dict[str, Any]:
   """
   Regenerate question answers from encrypted QR code data (RECOMMENDED API).
 
@@ -369,9 +369,9 @@ def regenerate_from_encrypted(
 
 def regenerate_from_metadata(
     question_type: str, seed: int, version: str,
-    points: float = 1.0, kwargs: Optional[Dict[str, Any]] = None,
-    *, image_mode: str = "inline", upload_func: Optional[Callable] = None
-) -> Dict[str, Any]:
+    points: float = 1.0, kwargs: dict[str, Any] | None = None,
+    *, image_mode: str = "inline", upload_func: Callable | None = None
+) -> dict[str, Any]:
   """
   Regenerate question answers from explicit metadata fields.
 
@@ -470,7 +470,7 @@ def regenerate_from_metadata(
     raise ValueError(f"Failed to regenerate question {question_type}: {e}")
 
 
-def display_answer_summary(question_data: Dict[str, Any]) -> None:
+def display_answer_summary(question_data: dict[str, Any]) -> None:
   """
   Display a formatted summary of the question and its answer(s).
 

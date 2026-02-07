@@ -1,11 +1,10 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import abc
 import enum
 import logging
 import random
-from typing import Dict, List, Optional
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
@@ -26,8 +25,8 @@ class BNF:
       self.symbols = symbols
   
     def generate(self, include_spaces=False, early_exit=False, early_exit_min_iterations=5):
-      curr_symbols : List[BNF.Symbol] = [self.start_symbol]
-      prev_symbols: List[BNF.Symbol] = curr_symbols
+      curr_symbols : list[BNF.Symbol] = [self.start_symbol]
+      prev_symbols: list[BNF.Symbol] = curr_symbols
       
       iteration_count = 0
       # Check to see if we have any non-terminals left
@@ -36,7 +35,7 @@ class BNF:
         prev_symbols = curr_symbols
         
         # Walk through the current symbols and build a new list of symbols from it
-        next_symbols : List[BNF.Symbol] = []
+        next_symbols : list[BNF.Symbol] = []
         for symbol in curr_symbols:
           next_symbols.extend(symbol.expand())
         curr_symbols = next_symbols
@@ -73,7 +72,7 @@ class BNF:
     def __init__(self, symbol : str, kind : Kind, rng):
       self.symbol = symbol
       self.kind = kind
-      self.productions : List[BNF.Production] = [] # productions
+      self.productions : list[BNF.Production] = [] # productions
       self.rng = rng
     
     def __str__(self):
@@ -89,13 +88,13 @@ class BNF:
     def add_production(self, production: BNF.Production):
       self.productions.append(production)
     
-    def expand(self) -> List[BNF.Symbol]:
+    def expand(self) -> list[BNF.Symbol]:
       if self.kind == BNF.Symbol.Kind.Terminal:
         return [self]
       return self.rng.choice(self.productions).production
   
   class Production:
-    def __init__(self, production_line, nonterminal_symbols: Dict[str, BNF.Symbol], rng):
+    def __init__(self, production_line, nonterminal_symbols: dict[str, BNF.Symbol], rng):
       if len(production_line.strip()) == 0:
         self.production = []
       else:
@@ -145,7 +144,7 @@ class BNF:
 class ValidStringsInLanguageQuestion(LanguageQuestion):
   MAX_TRIES = 1000
   
-  def __init__(self, grammar_str_good: Optional[str] = None, grammar_str_bad: Optional[str] = None, *args, **kwargs):
+  def __init__(self, grammar_str_good: str | None = None, grammar_str_bad: str | None = None, *args, **kwargs):
     # Preserve question-specific params for QR code config
     if grammar_str_good is not None:
       kwargs['grammar_str_good'] = grammar_str_good

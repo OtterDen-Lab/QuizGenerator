@@ -9,11 +9,14 @@ This guide documents the minimal YAML schema used by `quizgen`.
 - `practice` (bool, optional): Marks Canvas quizzes as practice.
 - `sort order` (list of strings, optional): Topic ordering for PDF/Canvas.
 - `custom_modules` (list of strings, optional): Python modules to import.
-- `questions` (mapping): Required. Point values mapped to question blocks.
+- `questions` (mapping or list): Required. Point values mapped to question blocks, or an ordered list of questions.
+- `question_order` (string, optional): Ordering mode. `yaml` preserves YAML order, `points` groups by point value.
 
 ## Questions Block
 
-Each key is a point value (number). Each value is a mapping of question names to configs.
+Mapping format: each key is a point value (number). Each value is a mapping of question names to configs.
+
+List format: each item is a question entry with `name` and `points`. This preserves YAML order by default.
 
 ### Question Config Keys
 
@@ -75,4 +78,21 @@ questions:
         class: PagingQuestion
       "TLB":
         class: TLBQuestion
+```
+
+## List Format Example (Preserves Order)
+
+```yaml
+name: "CST 334 Exam"
+question_order: yaml
+questions:
+  - name: "Scheduling"
+    points: 10
+    class: SchedulingQuestion
+
+  - name: "Text Question"
+    points: 5
+    class: FromText
+    kwargs:
+      text: "Explain paging and segmentation."
 ```

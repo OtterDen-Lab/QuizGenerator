@@ -49,15 +49,15 @@ Quick-start guide for generating PDFs and uploading to Canvas.
 
 ---
 
-#### [quickstart.md](quickstart.md)
-One-page quick start for installation, PDF generation, and Canvas upload.
+#### [first_5_minutes.md](first_5_minutes.md)
+Copy-pasteable walkthrough: install → create YAML → generate PDF → preview output.
 
-**Audience:** Instructors and new users
+**Audience:** Instructors who want the fastest on-ramp
 
 ---
 
 #### [yaml_config_guide.md](yaml_config_guide.md)
-Reference for the quiz YAML schema and configuration options.
+Reference for the quiz YAML schema and configuration options, including list format ordering.
 
 **Audience:** Instructors and question authors
 
@@ -180,4 +180,4 @@ For issues or questions:
 
 ---
 
-*Last updated: 2025-10-09*
+*Last updated: 2026-02-07*

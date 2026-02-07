@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import abc
@@ -7,7 +7,6 @@ import datetime
 import enum
 import importlib
 import inspect
-import io
 import itertools
 import logging
 import os
@@ -16,9 +15,8 @@ import pkgutil
 import random
 import tempfile
 import types
-import uuid
 from types import MappingProxyType
-from typing import Any, Callable, Dict, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Callable, Mapping, MutableMapping
 
 import canvasapi.course
 import canvasapi.quiz
@@ -32,7 +30,7 @@ log = logging.getLogger(__name__)
 class QuestionComponents:
     """Bundle of question parts generated during construction."""
     body: ca.Element
-    answers: List[ca.Answer]
+    answers: list[ca.Answer]
     explanation: ca.Element
 
 
@@ -40,10 +38,10 @@ class QuestionComponents:
 class RegenerationFlags:
     """Minimal metadata needed to regenerate a question instance."""
     question_class_name: str
-    generation_seed: Optional[int]
+    generation_seed: int | None
     question_version: str
-    config_params: Dict[str, Any]
-    context_extras: Dict[str, Any] = dataclasses.field(default_factory=dict)
+    config_params: dict[str, Any]
+    context_extras: dict[str, Any] = dataclasses.field(default_factory=dict)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -51,7 +49,7 @@ class QuestionInstance:
     """Fully-instantiated question with content, answers, and regeneration metadata."""
     body: ca.Element
     explanation: ca.Element
-    answers: List[ca.Answer]
+    answers: list[ca.Answer]
     answer_kind: ca.Answer.CanvasAnswerKind
     can_be_numerical: bool
     value: float
@@ -62,7 +60,7 @@ class QuestionInstance:
 
 @dataclasses.dataclass
 class QuestionContext:
-  rng_seed: Optional[int]
+  rng_seed: int | None
   rng: random.Random
   data: MutableMapping[str, Any] | Mapping[str, Any] = dataclasses.field(default_factory=dict)
   frozen: bool = False
@@ -185,12 +183,12 @@ def parse_spacing(spacing_value) -> float:
 
 
 class QuestionRegistry:
-  _registry: Dict[str, type["Question"]] = {}
-  _class_name_to_registered_name: Dict[str, str] = {}  # Reverse mapping: ClassName -> registered_name
+  _registry: dict[str, type["Question"]] = {}
+  _class_name_to_registered_name: dict[str, str] = {}  # Reverse mapping: ClassName -> registered_name
   _scanned: bool = False
 
   @classmethod
-  def register(cls, question_type: Optional[str] = None) -> Callable[[type["Question"]], type["Question"]]:
+  def register(cls, question_type: str | None = None) -> Callable[[type["Question"]], type["Question"]]:
     def decorator(subclass: type["Question"]) -> type["Question"]:
       # Use the provided name or fall back to the class name
       name = question_type.lower() if question_type else subclass.__name__.lower()
@@ -690,7 +688,7 @@ class Question(abc.ABC):
       if isinstance(ctx, dict) and ctx.get("_config_params"):
         config_params.update(ctx.get("_config_params"))
 
-      context_extras: Dict[str, Any] = {}
+      context_extras: dict[str, Any] = {}
       if isinstance(ctx, QuestionContext):
         include_list = ctx.get("qr_include_list", None)
         if isinstance(include_list, (list, tuple)):
@@ -806,19 +804,19 @@ class Question(abc.ABC):
     return True
 
   @classmethod
-  def _build_body(cls, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
+  def _build_body(cls, context) -> ca.Element | tuple[ca.Element, list[ca.Answer]]:
     """Context-aware body builder."""
     raise NotImplementedError("Questions must implement _build_body().")
 
   @classmethod
-  def _build_explanation(cls, context) -> ca.Element | Tuple[ca.Element, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> ca.Element | tuple[ca.Element, list[ca.Answer]]:
     """Context-aware explanation builder."""
     raise NotImplementedError("Questions must implement _build_explanation().")
 
   @classmethod
-  def _collect_answers_from_ast(cls, element: ca.Element) -> List[ca.Answer]:
+  def _collect_answers_from_ast(cls, element: ca.Element) -> list[ca.Answer]:
     """Traverse AST and collect embedded Answer elements."""
-    answers: List[ca.Answer] = []
+    answers: list[ca.Answer] = []
 
     def visit(node):
       if node is None:
@@ -850,9 +848,9 @@ class Question(abc.ABC):
     return answers
 
   @classmethod
-  def _merge_answers(cls, *answer_lists: List[ca.Answer]) -> List[ca.Answer]:
+  def _merge_answers(cls, *answer_lists: list[ca.Answer]) -> list[ca.Answer]:
     """Merge answers while preserving order and removing duplicates by key/id."""
-    merged: List[ca.Answer] = []
+    merged: list[ca.Answer] = []
     seen: set[str] = set()
 
     for answers in answer_lists:
@@ -867,8 +865,8 @@ class Question(abc.ABC):
     return merged
 
   @classmethod
-  def _entry_warnings_from_answers(cls, answers: List[ca.Answer]) -> List[str]:
-    warnings: List[str] = []
+  def _entry_warnings_from_answers(cls, answers: list[ca.Answer]) -> list[str]:
+    warnings: list[str] = []
     seen: set[str] = set()
     for answer in answers:
       warning = None
@@ -887,7 +885,7 @@ class Question(abc.ABC):
     return warnings
 
   @classmethod
-  def _append_entry_warnings(cls, body: ca.Element, warnings: List[str]) -> ca.Element:
+  def _append_entry_warnings(cls, body: ca.Element, warnings: list[str]) -> ca.Element:
     if not warnings:
       return body
     notes_lines = ["**Notes for answer entry**", ""]
@@ -899,7 +897,7 @@ class Question(abc.ABC):
     return ca.Section([body, warning_elements])
 
   @classmethod
-  def _can_be_numerical_from_answers(cls, answers: List[ca.Answer]) -> bool:
+  def _can_be_numerical_from_answers(cls, answers: list[ca.Answer]) -> bool:
     return (
       len(answers) == 1
       and isinstance(answers[0], ca.AnswerTypes.Float)
@@ -908,8 +906,8 @@ class Question(abc.ABC):
   @classmethod
   def _normalize_build_output(
     cls,
-    result: ca.Element | Tuple[ca.Element, List[ca.Answer]]
-  ) -> Tuple[ca.Element, List[ca.Answer]]:
+    result: ca.Element | tuple[ca.Element, list[ca.Answer]]
+  ) -> tuple[ca.Element, list[ca.Answer]]:
     if isinstance(result, tuple):
       body, answers = result
       return body, list(answers or [])
@@ -917,9 +915,9 @@ class Question(abc.ABC):
 
   def _answers_for_canvas(
       self,
-      answers: List[ca.Answer],
+      answers: list[ca.Answer],
       can_be_numerical: bool
-  ) -> Tuple[ca.Answer.CanvasAnswerKind, List[Dict[str, Any]]]:
+  ) -> tuple[ca.Answer.CanvasAnswerKind, list[dict[str, Any]]]:
     if len(answers) == 0:
       return (ca.Answer.CanvasAnswerKind.ESSAY, [])
 
@@ -955,9 +953,6 @@ class Question(abc.ABC):
 
     return question_ast
 
-  def refresh(self, rng_seed=None, *args, **kwargs):
-    raise NotImplementedError("refresh() has been removed; use _build_context().")
-    
   def is_interesting(self) -> bool:
     return True
   
@@ -1044,10 +1039,19 @@ class Question(abc.ABC):
 
 class QuestionGroup():
 
-  def __init__(self, questions_in_group: List[Question], pick_once: bool, name: Optional[str] = None):
+  def __init__(
+      self,
+      questions_in_group: list[Question],
+      pick_once: bool,
+      name: str | None = None,
+      num_to_pick: int = 1,
+      random_per_student: bool = False,
+  ):
     self.questions = questions_in_group
     self.pick_once = pick_once
     self.name = name or "QuestionGroup"
+    self.num_to_pick = max(1, int(num_to_pick))
+    self.random_per_student = random_per_student
 
     # Deterministic metadata without selecting a specific question.
     first_question = questions_in_group[0] if questions_in_group else None
@@ -1056,20 +1060,39 @@ class QuestionGroup():
     self.spacing = max((q.spacing for q in questions_in_group), default=0)
     self.possible_variations = float("inf")
 
-    self._current_question: Optional[Question] = None
+    self._current_question: Question | None = None
+    self._current_questions: list[Question] | None = None
+
+  def _select_questions(self, rng_seed: int | None) -> list[Question]:
+    if not self.questions:
+      return []
+    if self.num_to_pick >= len(self.questions):
+      return list(self.questions)
+    pick_rng = random.Random(rng_seed)
+    return list(pick_rng.sample(self.questions, self.num_to_pick))
 
   def instantiate(self, *args, **kwargs):
     # Use a local RNG seeded deterministically for question selection.
     rng_seed = kwargs.get("rng_seed", None)
-    pick_rng = random.Random(rng_seed)
 
-    if not self.pick_once or self._current_question is None:
-      self._current_question = pick_rng.choice(self.questions)
+    if self.num_to_pick <= 1:
+      if not self.pick_once or self._current_question is None:
+        selected = self._select_questions(rng_seed)
+        self._current_question = selected[0] if selected else None
 
-    # Instantiate the selected question and return the result.
-    # The underlying question creates its own RNG from the seed,
-    # so pick and content generation are independent.
-    return self._current_question.instantiate(*args, **kwargs)
+      # Instantiate the selected question and return the result.
+      # The underlying question creates its own RNG from the seed,
+      # so pick and content generation are independent.
+      if self._current_question is None:
+        raise AttributeError("QuestionGroup has no questions to instantiate.")
+      return self._current_question.instantiate(*args, **kwargs)
+
+    if not self.pick_once or self._current_questions is None:
+      self._current_questions = self._select_questions(rng_seed)
+
+    if not self._current_questions:
+      raise AttributeError("QuestionGroup has no questions to instantiate.")
+    return [q.instantiate(*args, **kwargs) for q in self._current_questions]
 
   def __getattr__(self, name):
     # Metadata attributes are set in __init__, so this branch handles
@@ -1094,5 +1117,3 @@ class QuestionGroup():
 
     # Delegate to the selected question
     return getattr(self._current_question, name)
-
-    return attr

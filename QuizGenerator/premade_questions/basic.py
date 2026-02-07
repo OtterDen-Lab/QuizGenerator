@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import logging
@@ -6,7 +6,6 @@ import os
 import random
 import sys
 from types import SimpleNamespace
-from typing import List, Tuple
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.mixins import TableQuestionMixin
@@ -54,11 +53,11 @@ class FromText(Question):
     return context
   
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     return ca.Section([ca.Text(context["text"])]), []
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     return ca.Section(), []
 
 
@@ -95,9 +94,10 @@ class FromGenerator(FromText, TableQuestionMixin):
         'Paragraph': ca.Paragraph
       }
 
+      random_proxy = _LocalRandomProxy(obj.rng)
       # Define the function dynamically using exec
       # Merge current globals with our local namespace for the exec
-      exec_globals = {**globals(), **local_namespace}
+      exec_globals = {**globals(), **local_namespace, "random": random_proxy}
       exec(f"def {function_name}(self):\n" + "\n".join(f"    {line}" for line in function_code.splitlines()), exec_globals, local_namespace)
 
       # Get the function and bind it to the object
@@ -109,7 +109,10 @@ class FromGenerator(FromText, TableQuestionMixin):
     attach_function_to_object(self, generator, "generator")
 
   @staticmethod
-  def _compile_generator(function_code, function_name="generator"):
+  def _compile_generator(function_code, function_name="generator", rng_seed=None):
+    rng = random.Random(rng_seed)
+    random_proxy = _LocalRandomProxy(rng)
+
     # Provide a deterministic RNG handle for generator snippets.
     function_code = "rng = self.rng\n" + function_code
 
@@ -121,7 +124,7 @@ class FromGenerator(FromText, TableQuestionMixin):
       'Paragraph': ca.Paragraph
     }
 
-    exec_globals = {**globals(), **local_namespace}
+    exec_globals = {**globals(), **local_namespace, "random": random_proxy}
     exec(
       f"def {function_name}(self):\n" + "\n".join(f"    {line}" for line in function_code.splitlines()),
       exec_globals,
@@ -135,20 +138,31 @@ class FromGenerator(FromText, TableQuestionMixin):
     for key, value in kwargs.items():
       if key not in context:
         context[key] = value
-    # Preserve prior behavior for generators that use the global random module.
-    random.seed(rng_seed)
+    # Provide a local RNG for generator snippets without touching global state.
     generator_text = kwargs.get("generator")
     if generator_text is not None:
       context["generator_text"] = generator_text
-      context["generator_fn"] = cls._compile_generator(generator_text)
+      context["generator_fn"] = cls._compile_generator(generator_text, rng_seed=rng_seed)
       context["generator_scope"] = SimpleNamespace(
         rng=context.rng,
         **context.data
       )
     return context
 
+
+class _LocalRandomProxy:
+  """Proxy random-like functions to a local RNG while preserving module attributes."""
+
+  def __init__(self, rng: random.Random):
+    self._rng = rng
+
+  def __getattr__(self, name):
+    if hasattr(self._rng, name):
+      return getattr(self._rng, name)
+    return getattr(random, name)
+
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     generator_fn = context.get("generator_fn")
     if generator_fn is None:
       raise ValueError("No generator provided for FromGenerator.")

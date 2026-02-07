@@ -3,7 +3,6 @@ from __future__ import annotations
 import abc
 import logging
 import math
-from typing import List, Tuple
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.mixins import BodyTemplatesMixin, TableQuestionMixin
@@ -89,7 +88,7 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     pass
 
   @classmethod
-  def _build_loss_answers(cls, context) -> Tuple[List[ca.Answer], ca.Answer]:
+  def _build_loss_answers(cls, context) -> tuple[list[ca.Answer], ca.Answer]:
     answers = [
       ca.AnswerTypes.Float(context.individual_losses[i], label=f"Sample {i + 1} loss")
       for i in range(context.num_samples)
@@ -98,7 +97,7 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
     return answers, overall
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -125,12 +124,12 @@ class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
 
   @classmethod
   @abc.abstractmethod
-  def _create_data_table(cls, context, loss_answers: List[ca.Answer]) -> ca.Element:
+  def _create_data_table(cls, context, loss_answers: list[ca.Answer]) -> ca.Element:
     """Create the data table with answer fields."""
     pass
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -267,7 +266,7 @@ class LossQuestion_Linear(LossQuestion):
     return r"L(\mathbf{y}, \mathbf{p}) = \sum_{i=1}^{k} (y_i - p_i)^2"
 
   @classmethod
-  def _create_data_table(cls, context, loss_answers: List[ca.Answer]) -> ca.Element:
+  def _create_data_table(cls, context, loss_answers: list[ca.Answer]) -> ca.Element:
     """Create table with input features, true values, predictions, and loss fields."""
     headers = ["x"]
 
@@ -471,7 +470,7 @@ class LossQuestion_Logistic(LossQuestion):
     return r"L(y, p) = -[y \ln(p) + (1-y) \ln(1-p)]"
 
   @classmethod
-  def _create_data_table(cls, context, loss_answers: List[ca.Answer]) -> ca.Element:
+  def _create_data_table(cls, context, loss_answers: list[ca.Answer]) -> ca.Element:
     """Create table with features, true labels, predicted probabilities, and loss fields."""
     headers = ["x", "y", "p", "loss"]
 
@@ -642,7 +641,7 @@ class LossQuestion_MulticlassLogistic(LossQuestion):
     return r"L(\mathbf{y}, \mathbf{p}) = -\sum_{i=1}^{K} y_i \ln(p_i)"
 
   @classmethod
-  def _create_data_table(cls, context, loss_answers: List[ca.Answer]) -> ca.Element:
+  def _create_data_table(cls, context, loss_answers: list[ca.Answer]) -> ca.Element:
     """Create table with features, true class vectors, predicted probabilities, and loss fields."""
     headers = ["x", "y", "p", "loss"]
 

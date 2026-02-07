@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 import abc
 
 import numpy as np

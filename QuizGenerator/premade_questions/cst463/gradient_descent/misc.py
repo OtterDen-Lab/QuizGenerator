@@ -1,5 +1,5 @@
 
-from typing import Any, List
+from typing import Any
 
 import sympy as sp
 
@@ -59,7 +59,7 @@ def generate_function(rng, num_variables: int, max_degree: int, use_quadratic: b
   return variables, function, gradient_function, equation
   
   
-def format_vector(vec: List[float]) -> str:
+def format_vector(vec: list[float]) -> str:
   
   vector_string = ', '.join(
     [

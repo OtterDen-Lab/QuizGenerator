@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 """
 Common constants used across question types.
 Centralizing these values makes it easier to maintain consistency 

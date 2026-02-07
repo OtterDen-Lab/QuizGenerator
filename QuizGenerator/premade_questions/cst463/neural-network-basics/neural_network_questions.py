@@ -3,7 +3,6 @@ from __future__ import annotations
 import abc
 import io
 import logging
-from typing import List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -576,7 +575,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     return context
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     self = context
     body = ca.Section()
@@ -615,7 +614,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     return body, answers
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     self = context
     explanation = ca.Section()
@@ -731,7 +730,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     return context
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     self = context
     body = ca.Section()
@@ -782,7 +781,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     return body, answers
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     self = context
     explanation = ca.Section()
@@ -893,7 +892,7 @@ class EnsembleAveragingQuestion(Question):
     return context
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     self = context
     body = ca.Section()
@@ -926,7 +925,7 @@ class EnsembleAveragingQuestion(Question):
     return body, answers
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     self = context
     explanation = ca.Section()
@@ -1040,7 +1039,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       self.new_W1[0, j] = self.W1[0, j] - self.learning_rate * grad
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     self = context
     body = ca.Section()
@@ -1111,7 +1110,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     return body, answers
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     self = context
     explanation = ca.Section()

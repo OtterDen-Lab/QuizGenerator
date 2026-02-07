@@ -24,7 +24,7 @@ import time
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 log = logging.getLogger(__name__)
 
@@ -33,16 +33,16 @@ class TimingMetric:
     """Container for timing measurements"""
     operation: str
     duration: float
-    question_name: Optional[str] = None
-    question_type: Optional[str] = None
-    variation_number: Optional[int] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    question_name: str | None = None
+    question_type: str | None = None
+    variation_number: int | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 class PerformanceTracker:
     """Global performance tracking system"""
 
-    _metrics: List[TimingMetric] = []
-    _active_timers: Dict[str, float] = {}
+    _metrics: list[TimingMetric] = []
+    _active_timers: dict[str, float] = {}
 
     @classmethod
     def start_timer(cls, operation: str, **metadata) -> str:
@@ -82,12 +82,12 @@ class PerformanceTracker:
         cls._metrics.append(metric)
 
     @classmethod
-    def get_metrics(cls) -> List[TimingMetric]:
+    def get_metrics(cls) -> list[TimingMetric]:
         """Get all recorded metrics"""
         return cls._metrics.copy()
 
     @classmethod
-    def get_metrics_by_operation(cls, operation: str) -> List[TimingMetric]:
+    def get_metrics_by_operation(cls, operation: str) -> list[TimingMetric]:
         """Get metrics filtered by operation name"""
         return [m for m in cls._metrics if m.operation == operation]
 
@@ -98,7 +98,7 @@ class PerformanceTracker:
         cls._active_timers.clear()
 
     @classmethod
-    def get_summary_stats(cls, operation: str) -> Dict[str, float]:
+    def get_summary_stats(cls, operation: str) -> dict[str, float]:
         """Get summary statistics for an operation"""
         metrics = cls.get_metrics_by_operation(operation)
         if not metrics:
@@ -143,7 +143,7 @@ class PerformanceTracker:
         return report
 
     @classmethod
-    def report_detailed(cls, operation: Optional[str] = None) -> str:
+    def report_detailed(cls, operation: str | None = None) -> str:
         """Generate detailed report showing individual measurements"""
         metrics = cls.get_metrics_by_operation(operation) if operation else cls._metrics
 
@@ -183,7 +183,7 @@ def timer(operation: str, **metadata):
     finally:
         PerformanceTracker.end_timer(timer_id, operation, **metadata)
 
-def timed_method(operation_name: Optional[str] = None):
+def timed_method(operation_name: str | None = None):
     """Decorator for timing method calls"""
     def decorator(func):
         def wrapper(*args, **kwargs):

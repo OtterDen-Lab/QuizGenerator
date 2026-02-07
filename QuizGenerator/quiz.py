@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import collections
@@ -7,7 +7,6 @@ import logging
 import random
 import re
 from datetime import datetime
-from typing import List, Optional
 
 import yaml
 
@@ -26,14 +25,15 @@ class Quiz:
   INTEREST_THRESHOLD = 1.0
   
   name: str
-  questions: List[Question | QuestionGroup]
+  questions: list[Question | QuestionGroup]
   instructions: str
-  description: Optional[str]
-  question_sort_order: Optional[List[Question.Topic]]
+  description: str | None
+  question_sort_order: list[Question.Topic] | None
   practice: bool
   preserve_order_point_values: set[float]
+  preserve_yaml_order: bool
 
-  def __init__(self, name: str, questions: List[Question | QuestionGroup], practice: bool, *args, **kwargs):
+  def __init__(self, name: str, questions: list[Question | QuestionGroup], practice: bool, *args, **kwargs):
     self.name = name
     self.questions = questions
     self.instructions = kwargs.get("instructions", "")
@@ -51,28 +51,87 @@ class Quiz:
     self.question_sort_order = None
     self.practice = practice
     self.preserve_order_point_values = set()  # Point values that should preserve question order
+    self.preserve_yaml_order = kwargs.get("preserve_yaml_order", False)
 
     # Plan: right now we just take in questions and then assume they have a score and a "generate" button
   
   def __iter__(self):
-    def sort_func(q):
-      if self.question_sort_order is not None:
-        try:
-          return (-q.points_value, self.question_sort_order.index(q.topic))
-        except ValueError:
-          return (-q.points_value, float('inf'))
-      return -q.points_value
-    return iter(sorted(self.questions, key=sort_func))
+    return iter(self.get_ordered_questions())
   
   @classmethod
-  def from_yaml(cls, path_to_yaml) -> List[Quiz]:
+  def from_yaml(cls, path_to_yaml) -> list[Quiz]:
 
-    quizes_loaded : List[Quiz] = []
+    quizes_loaded : list[Quiz] = []
 
     with open(path_to_yaml) as fid:
       list_of_exam_dicts = list(yaml.safe_load_all(fid))
 
+    def _require_type(value, expected, label: str):
+      if not isinstance(value, expected):
+        raise ValueError(f"Invalid type for {label}: expected {expected}, got {type(value)}")
+
+    def _validate_exam_dict(exam_dict: dict):
+      if not isinstance(exam_dict, dict):
+        raise ValueError("Each YAML document must be a mapping.")
+
+      if "questions" not in exam_dict:
+        raise KeyError("Missing required top-level key: questions")
+
+      if "custom_modules" in exam_dict:
+        _require_type(exam_dict["custom_modules"], list, "custom_modules")
+        for module in exam_dict["custom_modules"]:
+          _require_type(module, str, "custom_modules entry")
+
+      if "sort order" in exam_dict:
+        _require_type(exam_dict["sort order"], list, "sort order")
+        for item in exam_dict["sort order"]:
+          _require_type(item, str, "sort order entry")
+
+      if "question_order" in exam_dict:
+        _require_type(exam_dict["question_order"], str, "question_order")
+
+      questions = exam_dict["questions"]
+      if not isinstance(questions, (dict, list)):
+        raise ValueError("questions must be a mapping (point values) or a list (ordered questions).")
+
+      if isinstance(questions, list):
+        for entry in questions:
+          _require_type(entry, dict, "questions entry")
+          if "name" not in entry:
+            raise ValueError("Each question entry must include a 'name'.")
+          if "points" not in entry:
+            raise ValueError(f"Question '{entry.get('name', '<unknown>')}' must include 'points'.")
+          if "class" in entry:
+            _require_type(entry["class"], str, "class")
+          if "_config" in entry:
+            _require_type(entry["_config"], dict, "_config")
+          if "kwargs" in entry:
+            _require_type(entry["kwargs"], dict, "kwargs")
+        return
+
+      # Mapping format
+      for points_value, question_definitions in questions.items():
+        if not isinstance(points_value, (int, float)):
+          raise ValueError(f"Point values must be numeric; got {points_value!r}.")
+        _require_type(question_definitions, dict, f"questions[{points_value}]")
+
+        point_config = question_definitions.get("_config", {})
+        if point_config is not None:
+          _require_type(point_config, dict, f"questions[{points_value}]._config")
+
+        for q_name, q_data in question_definitions.items():
+          if q_name == "_config":
+            continue
+          _require_type(q_data, dict, f"questions[{points_value}]['{q_name}']")
+          if "class" in q_data:
+            _require_type(q_data["class"], str, f"questions[{points_value}]['{q_name}'].class")
+          if "_config" in q_data:
+            _require_type(q_data["_config"], dict, f"questions[{points_value}]['{q_name}']._config")
+          if "kwargs" in q_data:
+            _require_type(q_data["kwargs"], dict, f"questions[{points_value}]['{q_name}'].kwargs")
+
     for exam_dict in list_of_exam_dicts:
+      _validate_exam_dict(exam_dict)
       # Load custom question modules if specified (Option 3: Quick-and-dirty approach)
       # Users can add custom question types by importing Python modules in their YAML:
       # custom_modules:
@@ -90,6 +149,9 @@ class Quiz:
             raise
 
 
+      # Ensure premade questions are loaded before validation/creation.
+      QuestionRegistry.load_premade_questions()
+
       # Get general quiz information from the dictionary
       name = exam_dict.get("name", f"Unnamed Exam ({datetime.now().strftime('%a %b %d %I:%M %p')})")
       if isinstance(name, str):
@@ -106,10 +168,80 @@ class Quiz:
       questions_for_exam = []
       # Track point values where order should be preserved (for layout optimization)
       preserve_order_point_values = set()
+      preserve_yaml_order = False
 
-      for question_value, question_definitions in exam_dict["questions"].items():
-        # todo: I can also add in "extra credit" and "mix-ins" as other keys to indicate extra credit or questions that can go anywhere
-        log.info(f"Parsing {question_value} point questions")
+      question_order_setting = exam_dict.get("question_order", None)
+      if isinstance(question_order_setting, str):
+        if question_order_setting.lower() in {"yaml", "given", "preserve"}:
+          preserve_yaml_order = True
+        elif question_order_setting.lower() in {"points", "value", "score"}:
+          preserve_yaml_order = False
+        else:
+          log.warning(f"Unknown question_order '{question_order_setting}'. Using defaults.")
+
+      questions_block = exam_dict["questions"]
+
+      def _format_available_questions(limit: int = 20) -> str:
+        available = sorted(QuestionRegistry._registry.keys())
+        if len(available) <= limit:
+          return ", ".join(available)
+        shown = ", ".join(available[:limit])
+        return f"{shown}, ... (+{len(available) - limit} more)"
+      if isinstance(questions_block, list):
+        # List format preserves YAML order by default.
+        if question_order_setting is None:
+          preserve_yaml_order = True
+        for entry in questions_block:
+          if not isinstance(entry, dict):
+            raise ValueError("Each entry in questions list must be a mapping.")
+          q_name = entry.get("name")
+          if q_name is None:
+            raise ValueError("Each question entry must include a 'name'.")
+          question_value = entry.get("points")
+          if question_value is None:
+            raise ValueError(f"Question '{q_name}' must include 'points'.")
+          q_data = dict(entry)
+          q_data.pop("name", None)
+          q_data.pop("points", None)
+          question_config = {
+            "repeat": 1,
+            "topic": "MISC"
+          }
+          question_config.update(q_data.get("_config", {}))
+          q_data.pop("_config", None)
+
+          def make_question_from_entry(q_name, q_data, **kwargs):
+            kwargs = {
+              "name": q_name,
+              "points_value": question_value,
+              **q_data.get("kwargs", {}),
+              **q_data,
+              **kwargs,
+            }
+            if "topic" in q_data:
+              kwargs["topic"] = Question.Topic.from_string(q_data.get("topic", "Misc"))
+            question_class = q_data.get("class", "FromText")
+            try:
+              return QuestionRegistry.create(question_class, **kwargs)
+            except ValueError as e:
+              available = _format_available_questions()
+              raise ValueError(
+                f"Unknown question type '{question_class}' for '{q_name}'. "
+                f"Available question types: {available}"
+              ) from e
+
+          questions_for_exam.extend([
+            make_question_from_entry(
+              q_name,
+              q_data,
+              rng_seed_offset=repeat_number
+            )
+            for repeat_number in range(question_config["repeat"])
+          ])
+      else:
+        for question_value, question_definitions in questions_block.items():
+          # todo: I can also add in "extra credit" and "mix-ins" as other keys to indicate extra credit or questions that can go anywhere
+          log.info(f"Parsing {question_value} point questions")
 
         # Check for point-value-level config
         point_config = question_definitions.pop("_config", {})
@@ -135,11 +267,18 @@ class Quiz:
           # Add in a default, where if it isn't specified we're going to simply assume it is a text
           question_class = q_data.get("class", "FromText")
           
-          new_question = QuestionRegistry.create(
-            question_class,
-            **kwargs
-          )
-          return new_question
+          try:
+            new_question = QuestionRegistry.create(
+              question_class,
+              **kwargs
+            )
+            return new_question
+          except ValueError as e:
+            available = _format_available_questions()
+            raise ValueError(
+              f"Unknown question type '{question_class}' for '{q_name}'. "
+              f"Available question types: {available}"
+            ) from e
         
         for q_name, q_data in question_definitions.items():
           # Set defaults for config
@@ -179,7 +318,9 @@ class Quiz:
                   make_question(name, data | {"topic" : question_config["topic"]}) for name, data in q_data.items()
                 ],
                 pick_once=(not question_config["random_per_student"]),
-                name=q_name
+                name=q_name,
+                num_to_pick=question_config.get("num_to_pick", 1),
+                random_per_student=question_config.get("random_per_student", False)
               )
             )
           
@@ -193,7 +334,13 @@ class Quiz:
               for repeat_number in range(question_config["repeat"])
             ])
       log.debug(f"len(questions_for_exam): {len(questions_for_exam)}")
-      quiz_from_yaml = cls(name, questions_for_exam, practice, description=description)
+      quiz_from_yaml = cls(
+        name,
+        questions_for_exam,
+        practice,
+        description=description,
+        preserve_yaml_order=preserve_yaml_order
+      )
       quiz_from_yaml.set_sort_order(sort_order)
       quiz_from_yaml.preserve_order_point_values = preserve_order_point_values
       quizes_loaded.append(quiz_from_yaml)
@@ -217,7 +364,7 @@ class Quiz:
       sample_count = 1
     safety_factor = float(kwargs.pop("layout_safety_factor", 1.1))
 
-    def deterministic_seeds(count: int) -> List[int]:
+    def deterministic_seeds(count: int) -> list[int]:
       seed_input = f"{question.__class__.__name__}:{question.name}:{question.points_value}"
       digest = hashlib.sha256(seed_input.encode("utf-8")).digest()
       base_seed = int.from_bytes(digest[:4], "big")
@@ -274,7 +421,7 @@ class Quiz:
     heights = [estimate_for_seed(seed) for seed in deterministic_seeds(sample_count)]
     return max(heights) * safety_factor
 
-  def _optimize_question_order(self, questions, **kwargs) -> List[Question]:
+  def _optimize_question_order(self, questions, **kwargs) -> list[Question]:
     """
     Optimize question ordering to minimize PDF length while respecting point-value tiers.
     Uses bin-packing heuristics to reorder questions within each point-value group.
@@ -433,11 +580,36 @@ class Quiz:
 
     return optimized_questions
 
-  def get_quiz(self, **kwargs) -> ca.Document:
-    quiz = ca.Document(title=self.name)
-
+  def get_ordered_questions(self, **kwargs) -> list[Question]:
     if self.question_sort_order is None:
       self.question_sort_order = list(Question.Topic)
+
+    preserve_yaml_order = kwargs.pop("preserve_yaml_order", self.preserve_yaml_order)
+    optimize_layout = kwargs.pop("optimize_layout", False)
+
+    if preserve_yaml_order:
+      return list(self.questions)
+
+    if optimize_layout:
+      return self._optimize_question_order(
+        self.questions,
+        preserve_order_for=self.preserve_order_point_values,
+        **kwargs
+      )
+
+    # Default: order by point value, then topic
+    def sort_func(q):
+      if self.question_sort_order is not None:
+        try:
+          return (-q.points_value, self.question_sort_order.index(q.topic))
+        except ValueError:
+          return (-q.points_value, float('inf'))
+      return -q.points_value
+
+    return sorted(self.questions, key=sort_func)
+
+  def get_quiz(self, **kwargs) -> ca.Document:
+    quiz = ca.Document(title=self.name)
 
     # Extract master RNG seed (if provided) and remove from kwargs
     master_seed = kwargs.pop('rng_seed', None)
@@ -450,22 +622,12 @@ class Quiz:
         if getattr(question, "layout_reserved_height", None) is None:
           question.layout_reserved_height = self._estimate_question_height(question, **dict(kwargs))
 
-    # Check if optimization is requested (default: True)
-    optimize_layout = kwargs.pop('optimize_layout', True)
-
-    if optimize_layout:
-      # Use optimized ordering, passing preserve_order config
-      ordered_questions = self._optimize_question_order(
-        self.questions,
-        preserve_order_for=self.preserve_order_point_values,
-        **kwargs
-      )
-    else:
-      # Use simple ordering by point value and topic
-      ordered_questions = sorted(
-        self.questions,
-        key=lambda q: (-q.points_value, self.question_sort_order.index(q.topic))
-      )
+    # Check if optimization is requested (default: False)
+    optimize_layout = kwargs.pop('optimize_layout', False)
+    ordered_questions = self.get_ordered_questions(
+      optimize_layout=optimize_layout,
+      **kwargs
+    )
 
     # Generate questions with sequential numbering for QR codes
     # Use master seed to generate unique per-question seeds
@@ -473,19 +635,23 @@ class Quiz:
       # Create RNG from master seed to generate per-question seeds
       master_rng = random.Random(master_seed)
 
-    for question_number, question in enumerate(ordered_questions, start=1):
+    question_number = 1
+    for question in ordered_questions:
       # Generate a unique seed for this question from the master seed
       if master_seed is not None:
         question_seed = master_rng.randint(0, 2**31 - 1)
         instance = question.instantiate(rng_seed=question_seed, **kwargs)
-        question_ast = question._build_question_ast(instance)
+        instances = instance if isinstance(instance, list) else [instance]
       else:
         instance = question.instantiate(**kwargs)
-        question_ast = question._build_question_ast(instance)
+        instances = instance if isinstance(instance, list) else [instance]
 
       # Add question number to the AST for QR code generation
-      question_ast.question_number = question_number
-      quiz.add_element(question_ast)
+      for item in instances:
+        question_ast = question._build_question_ast(item)
+        question_ast.question_number = question_number
+        quiz.add_element(question_ast)
+        question_number += 1
 
     return quiz
   

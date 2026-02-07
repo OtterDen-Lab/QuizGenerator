@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 import argparse
 import logging
 import os
@@ -15,10 +15,14 @@ from dotenv import load_dotenv
 
 from lms_interface.canvas_interface import CanvasInterface
 from QuizGenerator.performance import PerformanceTracker
-from QuizGenerator.question import QuestionRegistry
+from QuizGenerator.question import QuestionGroup, QuestionRegistry
 from QuizGenerator.quiz import Quiz
 
 log = logging.getLogger(__name__)
+
+
+class QuizGenError(Exception):
+  """User-facing error for CLI operations."""
 
 
 
@@ -67,6 +71,8 @@ def parse_args():
                      help="Number of deterministic samples per question to estimate height")
   parser.add_argument("--layout_safety_factor", type=float, default=1.1,
                      help="Multiplier applied to max sampled height for safety")
+  parser.add_argument("--optimize_space", action="store_true",
+                     help="Optimize question order to reduce PDF page count (affects Canvas order too)")
   parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
                      help="Disable embedding images in Typst output")
   parser.set_defaults(embed_images_typst=True)
@@ -82,6 +88,8 @@ def parse_args():
                      help="With --test_all, skip questions that fail due to missing optional dependencies")
   parser.add_argument("--allow_generator", action="store_true",
                      help="Enable FromGenerator questions (executes Python from YAML)")
+  parser.add_argument("--check-deps", action="store_true",
+                     help="Check external dependencies (Typst/LaTeX/Pandoc) and exit")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
@@ -90,14 +98,28 @@ def parse_args():
   args = parser.parse_args()
 
   if args.num_canvas > 0 and args.course_id is None:
-    log.error("Must provide course_id when pushing to canvas")
-    exit(8)
+    parser.error("Missing --course_id for Canvas upload. Example: --course_id 12345")
 
   if args.test_all <= 0 and not args.quiz_yaml:
-    log.error("Must provide --yaml unless using --test_all")
-    exit(8)
+    parser.error("Missing --yaml. Example: quizgen --yaml example_files/example_exam.yaml --num_pdfs 1")
 
   return args
+
+
+def _check_dependencies(*, require_typst: bool, require_latex: bool) -> tuple[bool, list[str]]:
+  missing = []
+
+  if require_typst and shutil.which("typst") is None:
+    missing.append("Typst not found. Install from https://typst.app/ or ensure `typst` is in PATH.")
+
+  if require_latex and shutil.which("latexmk") is None:
+    missing.append("latexmk not found. Install a LaTeX distribution that provides latexmk.")
+
+  # Pandoc is optional but improves markdown rendering.
+  if shutil.which("pandoc") is None:
+    log.warning("Pandoc not found. Markdown rendering may be lower quality.")
+
+  return (len(missing) == 0), missing
 
 
 def test():
@@ -276,10 +298,14 @@ def test_all_questions(
           "typst",
           embed_images_typst=embed_images_typst
         )
-        generate_typst(typst_text, remove_previous=True, name_prefix="test_all_questions")
+        if not generate_typst(typst_text, remove_previous=True, name_prefix="test_all_questions"):
+          log.error("Test PDF generation failed (Typst).")
+          return False
       else:
         latex_text = test_quiz.get_quiz(rng_seed=pdf_seed).render_latex()
-        generate_latex(latex_text, remove_previous=True, name_prefix="test_all_questions")
+        if not generate_latex(latex_text, remove_previous=True, name_prefix="test_all_questions"):
+          log.error("Test PDF generation failed (LaTeX).")
+          return False
       print("PDF generated in out/ directory")
 
     if canvas_course:
@@ -297,7 +323,7 @@ def test_all_questions(
   return len(failed_questions) == 0
 
 
-def generate_latex(latex_text, remove_previous=False, name_prefix=None):
+def generate_latex(latex_text, remove_previous=False, name_prefix=None) -> bool:
   """
   Generate PDF from LaTeX source code.
 
@@ -319,7 +345,7 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   debug_name = f"debug-{datetime.now().strftime('%Y%m%d-%H%M%S')}.tex"
   shutil.copy(f"{tmp_tex.name}", os.path.join("out", "debug", debug_name))
   try:
-    subprocess.run(
+    result = subprocess.run(
       f"latexmk -pdf -shell-escape -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
       shell=True,
       capture_output=True,
@@ -329,9 +355,9 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   except subprocess.TimeoutExpired:
     logging.error("Latex Compile timed out")
     tmp_tex.close()
-    return
+    return False
 
-  subprocess.run(
+  cleanup_result = subprocess.run(
     f"latexmk -c {tmp_tex.name} -output-directory={os.path.join(os.getcwd(), 'out')}",
     shell=True,
     capture_output=True,
@@ -339,6 +365,14 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
     check=False
   )
   tmp_tex.close()
+  if result.returncode != 0:
+    stderr_text = result.stderr.decode("utf-8", errors="ignore")
+    log.error(f"Latex compilation failed: {stderr_text}")
+    return False
+  if cleanup_result.returncode != 0:
+    stderr_text = cleanup_result.stderr.decode("utf-8", errors="ignore")
+    log.warning(f"Latex cleanup failed: {stderr_text}")
+  return True
 
 
 def sanitize_filename(name):
@@ -420,7 +454,8 @@ def upload_quiz_to_canvas(
     *,
     title=None,
     is_practice=False,
-    assignment_group=None
+    assignment_group=None,
+    optimize_layout=False
 ):
   if assignment_group is None:
     assignment_group = canvas_course.create_assignment_group()
@@ -432,13 +467,41 @@ def upload_quiz_to_canvas(
     description=quiz.description
   )
 
-  total_questions = len(quiz.questions)
+  ordered_questions = quiz.get_ordered_questions(optimize_layout=optimize_layout)
+  total_questions = len(ordered_questions)
   log.info(f"Starting to push quiz '{title or canvas_quiz.title}' with {total_questions} questions to Canvas")
   log.info(f"Target: {num_variations} variations per question")
 
-  for question_i, question in enumerate(quiz):
+  for question_i, question in enumerate(ordered_questions):
     log.info(f"Uploading question {question_i + 1}/{total_questions}: '{question.name}'")
     seed_base = question_i * 100_000
+
+    if isinstance(question, QuestionGroup):
+      if question.pick_once:
+        selected = question._select_questions(seed_base)
+      else:
+        selected = list(question.questions)
+
+      group_payloads = []
+      for idx, sub_question in enumerate(selected):
+        sub_seed_base = seed_base + (idx * 10_000)
+        group_payloads.extend(_build_canvas_payloads(
+          sub_question,
+          canvas_course.course,
+          canvas_quiz,
+          num_variations,
+          sub_seed_base
+        ))
+
+      canvas_course.create_question(
+        canvas_quiz,
+        group_payloads,
+        group_name=question.name,
+        question_points=question.points_value,
+        pick_count=question.num_to_pick
+      )
+      continue
+
     payloads = _build_canvas_payloads(
       question,
       canvas_course.course,
@@ -457,7 +520,7 @@ def upload_quiz_to_canvas(
   log.info(f"Canvas quiz URL: {canvas_quiz.html_url}")
 
 
-def generate_typst(typst_text, remove_previous=False, name_prefix=None):
+def generate_typst(typst_text, remove_previous=False, name_prefix=None) -> bool:
   """
   Generate PDF from Typst source code.
 
@@ -502,17 +565,20 @@ def generate_typst(typst_text, remove_previous=False, name_prefix=None):
     try:
       stdout, stderr = p.communicate(timeout=30)
       if p.returncode != 0:
-        stderr_text = stderr.decode("utf-8")
+        stderr_text = stderr.decode("utf-8", errors="ignore")
         log.error(f"Typst compilation failed: {stderr_text}")
+        return False
     except subprocess.TimeoutExpired:
       log.error("Typst compile timed out")
       p.kill()
       p.communicate()
+      return False
 
   finally:
     # Clean up temp file
     if os.path.exists(tmp_typ.name):
       os.unlink(tmp_typ.name)
+  return True
 
 
 def generate_quiz(
@@ -529,7 +595,8 @@ def generate_quiz(
     consistent_pages=False,
     layout_samples=10,
     layout_safety_factor=1.1,
-    embed_images_typst=True
+    embed_images_typst=True,
+    optimize_layout=False
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -570,11 +637,12 @@ def generate_quiz(
         if consistent_pages:
           quiz_kwargs["layout_samples"] = layout_samples
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
-        typst_text = quiz.get_quiz(**quiz_kwargs).render(
+        typst_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render(
           "typst",
           embed_images_typst=embed_images_typst
         )
-        generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name)
+        if not generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name):
+          raise QuizGenError("PDF generation failed (Typst).")
       else:
         # Generate using LaTeX (default)
         quiz_kwargs = {
@@ -585,8 +653,9 @@ def generate_quiz(
         if consistent_pages:
           quiz_kwargs["layout_samples"] = layout_samples
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
-        latex_text = quiz.get_quiz(**quiz_kwargs).render_latex()
-        generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name)
+        latex_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render_latex()
+        if not generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name):
+          raise QuizGenError("PDF generation failed (LaTeX).")
 
     if num_canvas > 0:
       upload_quiz_to_canvas(
@@ -595,7 +664,8 @@ def generate_quiz(
         num_canvas,
         title=quiz.name,
         is_practice=quiz.practice,
-        assignment_group=assignment_group
+        assignment_group=assignment_group,
+        optimize_layout=optimize_layout
       )
     
     quiz.describe()
@@ -626,6 +696,21 @@ def main():
     test()
     return
 
+  # Dependency checks
+  require_typst = bool(getattr(args, "typst", True))
+  require_latex = not require_typst
+  if args.num_pdfs > 0 or args.test_all > 0 or args.check_deps:
+    ok, missing = _check_dependencies(
+      require_typst=require_typst,
+      require_latex=require_latex
+    )
+    if not ok:
+      message = "\n".join(missing)
+      raise QuizGenError(message)
+    if args.check_deps:
+      print("Dependency check passed.")
+      return
+
   if args.allow_generator:
     os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
 
@@ -649,7 +734,9 @@ def main():
       skip_missing_extras=args.skip_missing_extras,
       embed_images_typst=getattr(args, "embed_images_typst", False)
     )
-    exit(0 if success else 1)
+    if not success:
+      raise QuizGenError("One or more questions failed during --test_all.")
+    return
 
   # Clear any previous metrics
   PerformanceTracker.clear_metrics()
@@ -668,9 +755,14 @@ def main():
     consistent_pages=getattr(args, 'consistent_pages', False),
     layout_samples=getattr(args, 'layout_samples', 10),
     layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1),
-    embed_images_typst=getattr(args, 'embed_images_typst', True)
+    embed_images_typst=getattr(args, 'embed_images_typst', True),
+    optimize_layout=getattr(args, 'optimize_space', False)
   )
 
 
 if __name__ == "__main__":
-  main()
+  try:
+    main()
+  except QuizGenError as exc:
+    log.error(str(exc))
+    exit(1)

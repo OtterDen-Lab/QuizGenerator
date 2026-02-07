@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import abc
@@ -7,11 +7,7 @@ import dataclasses
 import enum
 import io
 import logging
-import os
 import random
-import tempfile
-import uuid
-from typing import List
 
 import matplotlib.pyplot as plt
 
@@ -50,6 +46,10 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     try:
       return SchedulingQuestion.Kind[kind_str]
     except KeyError:
+      log.warning(
+        f"Invalid scheduler_kind '{kind_str}'. "
+        f"Valid options: {[k.name for k in SchedulingQuestion.Kind]}. Defaulting to FIFO."
+      )
       return SchedulingQuestion.Kind.FIFO
 
   MAX_JOBS = 4
@@ -79,7 +79,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     unpause_time: float | None = None
     last_run: float = 0               # When were we last scheduled
     
-    state_change_times: List[float] = dataclasses.field(default_factory=lambda: [])
+    state_change_times: list[float] = dataclasses.field(default_factory=lambda: [])
     
     SCHEDULER_EPSILON = 1e-09
     
@@ -122,7 +122,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       return self.response_time is None
   
   @classmethod
-  def get_workload(cls, rng, num_jobs, *args, **kwargs) -> List[SchedulingQuestion.Job]:
+  def get_workload(cls, rng, num_jobs, *args, **kwargs) -> list[SchedulingQuestion.Job]:
     """Makes a guaranteed interesting workload by following rules
     1. First job to arrive is the longest
     2. At least 2 other jobs arrive in its runtime
@@ -203,7 +203,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
   @classmethod
   def run_simulation(
     cls,
-    jobs_to_run: List[SchedulingQuestion.Job],
+    jobs_to_run: list[SchedulingQuestion.Job],
     selector,
     preemptable,
     time_quantum=None,
@@ -227,7 +227,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       ))
 
       # Get the jobs that will enter the system in the future
-      future_jobs : List[SchedulingQuestion.Job] = list(filter(
+      future_jobs : list[SchedulingQuestion.Job] = list(filter(
         (lambda j: j.arrival_time > curr_time),
         jobs_to_run
       ))
@@ -290,7 +290,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       selected_job = None
 
       # Filter out completed jobs
-      jobs_to_run : List[SchedulingQuestion.Job] = list(filter(
+      jobs_to_run : list[SchedulingQuestion.Job] = list(filter(
         (lambda j: not j.is_complete(curr_time)),
         jobs_to_run
       ))
@@ -388,7 +388,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     Returns:
         Tuple of (body_ast, answers_list)
     """
-    answers: List[ca.Answer] = []
+    answers: list[ca.Answer] = []
 
     # Create table data for scheduling results
     table_rows = []
@@ -633,11 +633,11 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     response_time: float | None = None
     turnaround_time: float | None = None
     remaining_quantum: int | None = None
-    run_intervals: List[tuple] = dataclasses.field(default_factory=list)
+    run_intervals: list[tuple] = dataclasses.field(default_factory=list)
     max_queue_level: int = 0
 
   @classmethod
-  def get_workload(cls, rng, num_jobs: int, min_job_length: int, max_job_length: int) -> List[MLFQQuestion.Job]:
+  def get_workload(cls, rng, num_jobs: int, min_job_length: int, max_job_length: int) -> list[MLFQQuestion.Job]:
     arrivals = [0]
     if num_jobs > 1:
       arrivals.extend(
@@ -665,7 +665,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     return jobs
 
   @staticmethod
-  def _normalize_queue_params(values: List[int] | None, num_queues: int) -> List[int]:
+  def _normalize_queue_params(values: list[int] | None, num_queues: int) -> list[int]:
     if values is None:
       return []
     values = list(values)
@@ -737,9 +737,9 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   @classmethod
   def run_simulation(
     cls,
-    jobs: List[MLFQQuestion.Job],
-    queue_quantums: List[int],
-    queue_allotments: List[int | None],
+    jobs: list[MLFQQuestion.Job],
+    queue_quantums: list[int],
+    queue_allotments: list[int | None],
     boost_interval: int | None,
   ) -> None:
     timeline = collections.defaultdict(list)
@@ -885,7 +885,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
   @classmethod
   def _build_body(cls, context):
-    answers: List[ca.Answer] = []
+    answers: list[ca.Answer] = []
 
     queue_rows = []
     for i in reversed(range(context["num_queues"])):

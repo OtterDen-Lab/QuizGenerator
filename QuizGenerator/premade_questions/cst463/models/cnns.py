@@ -1,5 +1,4 @@
 import logging
-from typing import List, Tuple
 
 import numpy as np
 
@@ -73,7 +72,7 @@ class ConvolutionCalculation(MatrixQuestion):
     }
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -117,7 +116,7 @@ class ConvolutionCalculation(MatrixQuestion):
     return body, answers
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
     digits = ca.Answer.DEFAULT_ROUNDING_DIGITS

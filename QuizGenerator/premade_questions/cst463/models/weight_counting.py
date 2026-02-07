@@ -11,7 +11,6 @@ except ImportError as exc:
   _KERAS_IMPORT_ERROR = exc
 else:
   _KERAS_IMPORT_ERROR = None
-from typing import List, Tuple
 
 import numpy as np
 
@@ -113,7 +112,7 @@ class WeightCounting(Question, abc.ABC):
     }
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -144,7 +143,7 @@ class WeightCounting(Question, abc.ABC):
     return body, answers
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import abc
 import logging
-from typing import List, Tuple
 
 import sympy as sp
 
@@ -34,7 +33,7 @@ class DerivativeQuestion(Question, abc.ABC):
     return context
 
   @classmethod
-  def _generate_evaluation_point(cls, context) -> List[float]:
+  def _generate_evaluation_point(cls, context) -> list[float]:
     """Generate a random point for gradient evaluation."""
     return [context.rng.randint(-3, 3) for _ in range(context.num_variables)]
 
@@ -46,9 +45,9 @@ class DerivativeQuestion(Question, abc.ABC):
     return f"\\frac{{\\partial f}}{{\\partial x_{var_index}}}"
 
   @staticmethod
-  def _create_derivative_answers(context) -> List[ca.Answer]:
+  def _create_derivative_answers(context) -> list[ca.Answer]:
     """Create answer fields for each partial derivative at the evaluation point."""
-    answers: List[ca.Answer] = []
+    answers: list[ca.Answer] = []
 
     # Evaluate gradient at the specified point
     subs_map = dict(zip(context.variables, context.evaluation_point))
@@ -96,7 +95,7 @@ class DerivativeQuestion(Question, abc.ABC):
     return ca.AnswerTypes.String(vector_str, pdf_only=True)
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     body = ca.Section()
     answers = []
@@ -148,7 +147,7 @@ class DerivativeQuestion(Question, abc.ABC):
     return body, answers
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 
@@ -299,7 +298,7 @@ class DerivativeChain(DerivativeQuestion):
     return context
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question explanation."""
     explanation = ca.Section()
 

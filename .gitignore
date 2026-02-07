@@ -12,3 +12,5 @@ debug.*
 *.log
 dist/
 agent_notes/
+
+todo.md

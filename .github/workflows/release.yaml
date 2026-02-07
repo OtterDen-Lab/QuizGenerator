@@ -7,7 +7,32 @@ on:
   workflow_dispatch:    # allows manual triggering from GitHub Actions UI
 
 jobs:
+  # Run tests before releasing
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Install Typst
+        run: |
+          curl -fsSL https://typst.community/typst-install/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Run tests
+        run: uv run pytest tests/ lms_interface/tests/ -v --tb=short
+
   release:
+    needs: test  # Only release if tests pass
     runs-on: ubuntu-latest
     environment:
       name: pypi

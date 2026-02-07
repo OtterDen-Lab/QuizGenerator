@@ -1,0 +1,91 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:  # allows manual triggering
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.12"]
+      fail-fast: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run tests
+        run: uv run pytest tests/ lms_interface/tests/ -v --tb=short
+
+      - name: Run linter (ruff)
+        run: uv run ruff check --output-format=github .
+        continue-on-error: true  # Don't fail the build on lint warnings for now
+
+  # Quick smoke test that quiz generation actually works
+  smoke-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Install Typst
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          ASSET_URL=$(python - <<'PY'
+          import json
+          import urllib.request
+
+          url = "https://api.github.com/repos/typst/typst/releases/latest"
+          data = json.load(urllib.request.urlopen(url))
+          asset_url = None
+          for asset in data.get("assets", []):
+              name = asset.get("name", "").lower()
+              if "linux" in name and ("x86_64" in name or "amd64" in name):
+                  if name.endswith((".tar.xz", ".tar.gz")):
+                      asset_url = asset.get("browser_download_url")
+                      break
+          if not asset_url:
+              raise SystemExit("No suitable Typst asset found.")
+          print(asset_url)
+          PY
+          )
+          curl -fsSL -o /tmp/typst.tar $ASSET_URL
+          rm -rf /tmp/typst && mkdir -p /tmp/typst
+          tar -xf /tmp/typst.tar -C /tmp/typst
+          TYPST_BIN=$(find /tmp/typst -type f -name typst | head -n 1)
+          if [ -z "$TYPST_BIN" ]; then
+            echo "Typst binary not found in archive."
+            exit 1
+          fi
+          cp "$TYPST_BIN" "$HOME/.local/bin/typst"
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          typst --version
+
+      - name: Generate a test PDF
+        run: |
+          export QUIZGEN_ALLOW_GENERATOR=1
+          uv run quizgen --allow_generator --yaml example_files/example_exam.yaml --num_pdfs 1
+          ls -la out/
+          ls out/*.pdf && echo "PDF generated successfully!"
