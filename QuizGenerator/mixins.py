@@ -5,7 +5,7 @@ These mixins provide reusable patterns for common question structures.
 """
 
 import abc
-from typing import Any, Dict, List, Union
+from typing import Any, Union
 
 import QuizGenerator.contentast as ca
 
@@ -19,7 +19,7 @@ class TableQuestionMixin:
   """
   
   @staticmethod
-  def create_info_table(info_dict: Dict[str, Any], transpose: bool = False) -> ca.Table:
+  def create_info_table(info_dict: dict[str, Any], transpose: bool = False) -> ca.Table:
     """
     Creates a vertical info table (key-value pairs).
 
@@ -49,9 +49,9 @@ class TableQuestionMixin:
   
   @staticmethod
   def create_answer_table(
-      headers: List[str],
-      data_rows: List[Dict[str, Any]],
-      answer_columns: List[str] = None
+      headers: list[str],
+      data_rows: list[dict[str, Any]],
+      answer_columns: list[str] | None = None
   ) -> ca.Table:
     """
     Creates a table where some cells are answer blanks.
@@ -93,7 +93,7 @@ class TableQuestionMixin:
   
   @staticmethod
   def create_parameter_answer_table(
-      parameter_info: Dict[str, Any],
+      parameter_info: dict[str, Any],
       answer_label: str,
       answer: ca.Answer,
       transpose: bool = True
@@ -126,8 +126,8 @@ class TableQuestionMixin:
   
   @staticmethod
   def create_fill_in_table(
-      headers: List[str],
-      template_rows: List[Dict[str, Any]]
+      headers: list[str],
+      template_rows: list[dict[str, Any]]
   ) -> ca.Table:
     """
     Creates a table where multiple cells are answer blanks to fill in.

@@ -10,7 +10,6 @@ import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple
 
 from dotenv import load_dotenv
 
@@ -107,7 +106,7 @@ def parse_args():
   return args
 
 
-def _check_dependencies(*, require_typst: bool, require_latex: bool) -> Tuple[bool, list[str]]:
+def _check_dependencies(*, require_typst: bool, require_latex: bool) -> tuple[bool, list[str]]:
   missing = []
 
   if require_typst and shutil.which("typst") is None:

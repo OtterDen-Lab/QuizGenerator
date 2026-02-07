@@ -8,7 +8,6 @@ import enum
 import logging
 import math
 import random
-from typing import List
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.mixins import BodyTemplatesMixin, TableQuestionMixin
@@ -126,7 +125,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       return self.name
   
   class Cache:
-    def __init__(self, kind: CachingQuestion.Kind, cache_size: int, all_requests: List[int] = None):
+    def __init__(self, kind: CachingQuestion.Kind, cache_size: int, all_requests: list[int] | None = None):
       self.kind = kind
       self.cache_size = cache_size
       self.all_requests = all_requests

@@ -8,7 +8,7 @@ import functools
 import io
 import os
 import urllib.request
-from typing import Optional, List, Dict
+
 
 import canvasapi.canvas
 
@@ -65,10 +65,10 @@ class Submission:
       status : Submission.Status = Status.UNGRADED,
       **kwargs
   ):
-    self._student: Optional[Student] = student
+    self._student: Student | None = student
     self.status = status
     self.input_files = None
-    self.feedback : Optional[Feedback] = None
+    self.feedback : Feedback | None = None
     self.extra_info = {}
 
   @property
@@ -106,7 +106,7 @@ class FileSubmission(Submission):
 
 class FileSubmission__Canvas(FileSubmission):
   """Canvas-specific file submission with attachment downloading"""
-  def __init__(self, *args, attachments : Optional[List], **kwargs):
+  def __init__(self, *args, attachments : List | None, **kwargs):
     super().__init__(*args, **kwargs)
     self._attachments = attachments
     self.submission_index = kwargs.get("submission_index", None)
@@ -211,9 +211,9 @@ Submission__Canvas = FileSubmission__Canvas
 @functools.total_ordering
 @dataclasses.dataclass
 class Feedback:
-  percentage_score: Optional[float] = None
+  percentage_score: float | None = None
   comments: str = ""
-  attachments: List[io.BytesIO] = dataclasses.field(default_factory=list)
+  attachments: list[io.BytesIO] = dataclasses.field(default_factory=list)
   
   def __str__(self):
     short_comment = self.comments[:10].replace('\n', '\\n')

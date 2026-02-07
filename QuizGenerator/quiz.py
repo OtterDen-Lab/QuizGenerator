@@ -7,7 +7,7 @@ import logging
 import random
 import re
 from datetime import datetime
-from typing import List, Optional
+
 
 import yaml
 
@@ -26,15 +26,15 @@ class Quiz:
   INTEREST_THRESHOLD = 1.0
   
   name: str
-  questions: List[Question | QuestionGroup]
+  questions: list[Question | QuestionGroup]
   instructions: str
-  description: Optional[str]
-  question_sort_order: Optional[List[Question.Topic]]
+  description: str | None
+  question_sort_order: list[Question.Topic] | None
   practice: bool
   preserve_order_point_values: set[float]
   preserve_yaml_order: bool
 
-  def __init__(self, name: str, questions: List[Question | QuestionGroup], practice: bool, *args, **kwargs):
+  def __init__(self, name: str, questions: list[Question | QuestionGroup], practice: bool, *args, **kwargs):
     self.name = name
     self.questions = questions
     self.instructions = kwargs.get("instructions", "")
@@ -60,9 +60,9 @@ class Quiz:
     return iter(self.get_ordered_questions())
   
   @classmethod
-  def from_yaml(cls, path_to_yaml) -> List[Quiz]:
+  def from_yaml(cls, path_to_yaml) -> list[Quiz]:
 
-    quizes_loaded : List[Quiz] = []
+    quizes_loaded : list[Quiz] = []
 
     with open(path_to_yaml) as fid:
       list_of_exam_dicts = list(yaml.safe_load_all(fid))
@@ -365,7 +365,7 @@ class Quiz:
       sample_count = 1
     safety_factor = float(kwargs.pop("layout_safety_factor", 1.1))
 
-    def deterministic_seeds(count: int) -> List[int]:
+    def deterministic_seeds(count: int) -> list[int]:
       seed_input = f"{question.__class__.__name__}:{question.name}:{question.points_value}"
       digest = hashlib.sha256(seed_input.encode("utf-8")).digest()
       base_seed = int.from_bytes(digest[:4], "big")
@@ -422,7 +422,7 @@ class Quiz:
     heights = [estimate_for_seed(seed) for seed in deterministic_seeds(sample_count)]
     return max(heights) * safety_factor
 
-  def _optimize_question_order(self, questions, **kwargs) -> List[Question]:
+  def _optimize_question_order(self, questions, **kwargs) -> list[Question]:
     """
     Optimize question ordering to minimize PDF length while respecting point-value tiers.
     Uses bin-packing heuristics to reorder questions within each point-value group.
@@ -581,7 +581,7 @@ class Quiz:
 
     return optimized_questions
 
-  def get_ordered_questions(self, **kwargs) -> List[Question]:
+  def get_ordered_questions(self, **kwargs) -> list[Question]:
     if self.question_sort_order is None:
       self.question_sort_order = list(Question.Topic)
 

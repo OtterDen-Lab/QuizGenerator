@@ -18,7 +18,7 @@ import tempfile
 import zlib
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any
 
 import segno
 from cryptography.fernet import Fernet
@@ -41,7 +41,7 @@ class QuestionQRCode:
 
     # Error correction level: M = 15% recovery (balanced for compact encoded data)
     ERROR_CORRECTION = 'M'
-    _generated_key: Optional[bytes] = None
+    _generated_key: bytes | None = None
     V2_PREFIX = "v2."
 
     @classmethod
@@ -94,7 +94,7 @@ class QuestionQRCode:
         return hashlib.sha256(key).digest()
 
     @classmethod
-    def _encrypt_v2(cls, payload: Dict[str, Any], *, key: Optional[bytes] = None) -> str:
+    def _encrypt_v2(cls, payload: dict[str, Any], *, key: bytes | None = None) -> str:
         if key is None:
             key = cls.get_encryption_key()
         aead_key = cls._derive_aead_key(key)
@@ -107,7 +107,7 @@ class QuestionQRCode:
         return f"{cls.V2_PREFIX}{token}"
 
     @classmethod
-    def _decrypt_v2(cls, encrypted_data: str, *, key: Optional[bytes] = None) -> Dict[str, Any]:
+    def _decrypt_v2(cls, encrypted_data: str, *, key: bytes | None = None) -> dict[str, Any]:
         if not encrypted_data.startswith(cls.V2_PREFIX):
             raise ValueError("Not a v2 payload")
         if key is None:
@@ -122,11 +122,11 @@ class QuestionQRCode:
         return json.loads(json_bytes.decode("utf-8"))
 
     @classmethod
-    def encrypt_question_data(cls, question_type: str, seed: int, version: Optional[str] = None,
-                              config: Optional[Dict[str, Any]] = None,
-                              context: Optional[Dict[str, Any]] = None,
-                              points_value: Optional[float] = None,
-                              key: Optional[bytes] = None) -> str:
+    def encrypt_question_data(cls, question_type: str, seed: int, version: str | None = None,
+                              config: dict[str, Any] | None = None,
+                              context: dict[str, Any] | None = None,
+                              points_value: float | None = None,
+                              key: bytes | None = None) -> str:
         """
         Encode question regeneration data for QR embedding.
 
@@ -147,7 +147,7 @@ class QuestionQRCode:
             >>> print(encrypted)
             'VmVjdG9yRG90OjEyMzQ1OjEuMA=='
         """
-        payload: Dict[str, Any] = {
+        payload: dict[str, Any] = {
             "t": question_type,
             "s": seed,
         }
@@ -166,7 +166,7 @@ class QuestionQRCode:
 
     @classmethod
     def decrypt_question_data(cls, encrypted_data: str,
-                             key: Optional[bytes] = None) -> Dict[str, Any]:
+                             key: bytes | None = None) -> dict[str, Any]:
         """
         Decode question regeneration data from QR code (v2 preferred, v1 fallback).
 

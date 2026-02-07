@@ -7,7 +7,6 @@ import random
 import sys
 import types
 from types import SimpleNamespace
-from typing import List, Tuple
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.mixins import TableQuestionMixin
@@ -55,11 +54,11 @@ class FromText(Question):
     return context
   
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     return ca.Section([ca.Text(context["text"])]), []
 
   @classmethod
-  def _build_explanation(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_explanation(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     return ca.Section(), []
 
 
@@ -164,7 +163,7 @@ class _LocalRandomProxy:
     return getattr(random, name)
 
   @classmethod
-  def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+  def _build_body(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     generator_fn = context.get("generator_fn")
     if generator_fn is None:
       raise ValueError("No generator provided for FromGenerator.")

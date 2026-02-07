@@ -14,7 +14,7 @@ import tempfile
 import uuid
 import base64
 from io import BytesIO
-from typing import Callable, List
+from typing import Callable
 
 import markdown
 import numpy as np
@@ -108,7 +108,7 @@ class Element(abc.ABC):
   """
   def __init__(self, elements=None, add_spacing_before=False):
     pass
-    # self.elements : List[Element] = [
+    # self.elements : list[Element] = [
     #   e if isinstance(e, Element) else Text(e)
     #   for e in (elements if elements else [])
     # ]
@@ -148,7 +148,7 @@ class Container(Element):
   """Elements that contain other elements.  Generally are formatting of larger pieces."""
   def __init__(self, elements=None, **kwargs):
     super().__init__(**kwargs)
-    self.elements : List[Element] = elements if elements is not None else []
+    self.elements : list[Element] = elements if elements is not None else []
     self.add_spacing_before = kwargs.get("add_spacing_before", False)
   
   def add_element(self, element):
@@ -1078,7 +1078,7 @@ class Equation(Leaf):
     return latex_str
 
   @classmethod
-  def make_block_equation__multiline_equals(cls, lhs : str, rhs : List[str]):
+  def make_block_equation__multiline_equals(cls, lhs : str, rhs : list[str]):
     equation_lines = []
     equation_lines.extend([
       r"\begin{array}{l}",
@@ -1248,7 +1248,7 @@ class Matrix(Leaf):
     Creates a matrix element that renders consistently across output formats.
 
     Args:
-        data: Matrix data as List[List[numbers/strings]] or numpy ndarray (1D or 2D)
+        data: Matrix data as list[list[numbers/strings]] or numpy ndarray (1D or 2D)
               For vectors: [[v1], [v2], [v3]] (column vector) or np.array([v1, v2, v3])
               For matrices: [[a, b], [c, d]] or np.array([[a, b], [c, d]])
         bracket_type: Bracket style - "b" for [], "p" for (), "v" for |, etc.
@@ -1283,7 +1283,7 @@ class Matrix(Leaf):
         Equation(f"A = {matrix_latex}")
 
     Args:
-        data: Matrix data as List[List[numbers/strings]]
+        data: Matrix data as list[list[numbers/strings]]
         bracket_type: Bracket style ("b", "p", "v", etc.)
 
     Returns:
@@ -1575,7 +1575,7 @@ class Paragraph(Container):
       ])
   """
   
-  def __init__(self, lines_or_elements: List[str | Element] = None):
+  def __init__(self, lines_or_elements: list[str | Element] | None = None):
     super().__init__(add_spacing_before=True)
     for line in lines_or_elements:
       if isinstance(line, str):
@@ -1982,7 +1982,7 @@ class AnswerBlock(Table):
       result_ans = Answer.integer("result", self.result_value, label="Final result")
       single_answer = AnswerBlock(result_ans)
   """
-  def __init__(self, answers: Answer|List[Answer]):
+  def __init__(self, answers: Answer|list[Answer]):
     if not isinstance(answers, list):
       answers = [answers]
 
@@ -2263,7 +2263,7 @@ class Answer(Leaf):
     self.blank_length = blank_length
 
   # Canvas export methods (from misc.Answer)
-  def get_for_canvas(self, single_answer=False) -> List[dict]:
+  def get_for_canvas(self, single_answer=False) -> list[dict]:
     """Generate Canvas answer dictionaries based on variable_kind."""
     
     # If this answer is PDF-only, don't send it to Canvas
@@ -2331,7 +2331,7 @@ class Answer(Leaf):
     return f"{label_part} {blank}{unit_part}".strip()
 
   @classmethod
-  def get_entry_warning(cls) -> List[str] | None:
+  def get_entry_warning(cls) -> list[str] | None:
     return None
   
   # Factory methods for common answer types
@@ -2453,7 +2453,7 @@ class AnswerTypes:
     These are answers that can accept answers in any sort of format, and default to displaying in hex when written out.
     This will be the parent class for Binary, Hex, and Integer answers most likely.
     """
-    def get_for_canvas(self, single_answer=False) -> List[dict]:
+    def get_for_canvas(self, single_answer=False) -> list[dict]:
 
       canvas_answers = [
         {
@@ -2504,7 +2504,7 @@ class AnswerTypes:
   # Concrete type answers
   class Float(Answer):
     @classmethod
-    def get_entry_warning(cls) -> List[str] | None:
+    def get_entry_warning(cls) -> list[str] | None:
       digits = Answer.DEFAULT_ROUNDING_DIGITS
       return [
         f"Round floats to {digits} decimal places (fewer if exact, e.g., `1.25`). "
@@ -2512,7 +2512,7 @@ class AnswerTypes:
         "Integers as integers (e.g., `2`, not `2/1`)."
       ]
 
-    def get_for_canvas(self, single_answer=False) -> List[dict]:
+    def get_for_canvas(self, single_answer=False) -> list[dict]:
       if single_answer:
         canvas_answers = [
           {
@@ -2547,7 +2547,7 @@ class AnswerTypes:
   class Int(Answer):
 
   # Canvas export methods (from misc.Answer)
-    def get_for_canvas(self, single_answer=False) -> List[dict]:
+    def get_for_canvas(self, single_answer=False) -> list[dict]:
       canvas_answers = [
         {
           "blank_id": self.key,
@@ -2568,7 +2568,7 @@ class AnswerTypes:
 
   class List(Answer):
     @classmethod
-    def get_entry_warning(cls) -> List[str] | None:
+    def get_entry_warning(cls) -> list[str] | None:
       return ["Enter lists as comma-separated values with a space after the comma (e.g., `1, 2, 3`)."]
 
     def __init__(self, order_matters=True, *args, **kwargs):
@@ -2610,14 +2610,14 @@ class AnswerTypes:
     """
 
     @classmethod
-    def get_entry_warning(cls) -> List[str] | None:
+    def get_entry_warning(cls) -> list[str] | None:
       return [
         "Enter vectors as comma-separated values with a space after the comma, "
         "with optional parentheses (e.g., `1, 2` or `(1, 2)`)."
       ]
   
   # Canvas export methods (from misc.Answer)
-    def get_for_canvas(self, single_answer=False) -> List[dict]:
+    def get_for_canvas(self, single_answer=False) -> list[dict]:
       # Get all answer variations
       answer_variations = [
         Answer.accepted_strings(dimension_value)
@@ -2659,7 +2659,7 @@ class AnswerTypes:
     """
 
     @classmethod
-    def get_entry_warning(cls) -> List[str] | None:
+    def get_entry_warning(cls) -> list[str] | None:
       return [
         "For result matrices, enter `-` in any cell that does not exist.",
         *AnswerTypes.Float.get_entry_warning()
@@ -2679,7 +2679,7 @@ class AnswerTypes:
         for i in range(self.value.shape[0])
       ]
   
-    def get_for_canvas(self, single_answer=False) -> List[dict]:
+    def get_for_canvas(self, single_answer=False) -> list[dict]:
       """Generate Canvas answers for each matrix element."""
       canvas_answers = []
     

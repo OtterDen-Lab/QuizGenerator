@@ -107,7 +107,7 @@ class block:
   def getEntry(self, num):
     assert(self.ftype == 'd')
     assert(num < self.dirUsed)
-    return self.dirList[num]
+    return self.dirlist[num]
 
   def addDirEntry(self, name, inum):
     assert(self.ftype == 'd')
@@ -120,7 +120,7 @@ class block:
     tname = name.split('/')
     dname = tname[len(tname) - 1]
     for i in range(len(self.dirList)):
-      if self.dirList[i][0] == dname:
+      if self.dirlist[i][0] == dname:
         self.dirList.pop(i)
         self.dirUsed -= 1
         return

@@ -12,14 +12,12 @@ import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
-from typing import Optional
-
 import QuizGenerator.contentast as ca
 
 log = logging.getLogger(__name__)
 
 
-def measure_typst_content(typst_content: str, page_width_cm: float = 18.0) -> Optional[float]:
+def measure_typst_content(typst_content: str, page_width_cm: float = 18.0) -> float | None:
     """
     Measure the height of Typst content by compiling and querying.
 

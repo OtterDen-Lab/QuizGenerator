@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import logging
 import random
-from typing import List, Tuple
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import Question, QuestionRegistry
@@ -111,7 +110,7 @@ class MatrixAddition(MatrixMathQuestion):
         return body, table_answers
 
     @classmethod
-    def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+    def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
         explanation = ca.Section()
 
         explanation.add_element(
@@ -213,7 +212,7 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
         return body, table_answers
 
     @classmethod
-    def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+    def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
         explanation = ca.Section()
 
         explanation.add_element(
@@ -358,7 +357,7 @@ class MatrixMultiplication(MatrixMathQuestion):
         return body, answers
 
     @classmethod
-    def _build_explanation(cls, context) -> Tuple[ca.Section, List[ca.Answer]]:
+    def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
         explanation = ca.Section()
 
         if context["multiplication_possible"]:
