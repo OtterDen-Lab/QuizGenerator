@@ -16,10 +16,14 @@ from dotenv import load_dotenv
 
 from lms_interface.canvas_interface import CanvasInterface
 from QuizGenerator.performance import PerformanceTracker
-from QuizGenerator.question import QuestionRegistry
+from QuizGenerator.question import QuestionGroup, QuestionRegistry
 from QuizGenerator.quiz import Quiz
 
 log = logging.getLogger(__name__)
+
+
+class QuizGenError(Exception):
+  """User-facing error for CLI operations."""
 
 
 
@@ -95,12 +99,10 @@ def parse_args():
   args = parser.parse_args()
 
   if args.num_canvas > 0 and args.course_id is None:
-    log.error("Must provide course_id when pushing to canvas")
-    exit(8)
+    parser.error("Missing --course_id for Canvas upload. Example: --course_id 12345")
 
   if args.test_all <= 0 and not args.quiz_yaml:
-    log.error("Must provide --yaml unless using --test_all")
-    exit(8)
+    parser.error("Missing --yaml. Example: quizgen --yaml example_files/example_exam.yaml --num_pdfs 1")
 
   return args
 
@@ -641,8 +643,7 @@ def generate_quiz(
           embed_images_typst=embed_images_typst
         )
         if not generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name):
-          log.error("PDF generation failed (Typst). Aborting.")
-          exit(1)
+          raise QuizGenError("PDF generation failed (Typst).")
       else:
         # Generate using LaTeX (default)
         quiz_kwargs = {
@@ -655,8 +656,7 @@ def generate_quiz(
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
         latex_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render_latex()
         if not generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name):
-          log.error("PDF generation failed (LaTeX). Aborting.")
-          exit(1)
+          raise QuizGenError("PDF generation failed (LaTeX).")
 
     if num_canvas > 0:
       upload_quiz_to_canvas(
@@ -706,14 +706,11 @@ def main():
       require_latex=require_latex
     )
     if not ok:
-      for msg in missing:
-        log.error(msg)
-      if args.check_deps:
-        exit(1)
-      exit(8)
+      message = "\n".join(missing)
+      raise QuizGenError(message)
     if args.check_deps:
       print("Dependency check passed.")
-      exit(0)
+      return
 
   if args.allow_generator:
     os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
@@ -738,7 +735,9 @@ def main():
       skip_missing_extras=args.skip_missing_extras,
       embed_images_typst=getattr(args, "embed_images_typst", False)
     )
-    exit(0 if success else 1)
+    if not success:
+      raise QuizGenError("One or more questions failed during --test_all.")
+    return
 
   # Clear any previous metrics
   PerformanceTracker.clear_metrics()
@@ -763,4 +762,8 @@ def main():
 
 
 if __name__ == "__main__":
-  main()
+  try:
+    main()
+  except QuizGenError as exc:
+    log.error(str(exc))
+    exit(1)
