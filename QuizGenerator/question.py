@@ -14,6 +14,7 @@ import os
 import pathlib
 import pkgutil
 import random
+import tempfile
 import types
 import uuid
 from types import MappingProxyType
@@ -159,8 +160,8 @@ def parse_spacing(spacing_value) -> float:
         Spacing in cm as a float
 
     Examples:
-        parse_spacing("SHORT") -> 5.0
-        parse_spacing("NONE") -> 1.0
+        parse_spacing("SHORT") -> 4.0
+        parse_spacing("NONE") -> 0.0
         parse_spacing(3.5) -> 3.5
         parse_spacing("3.5") -> 3.5
     """
@@ -947,6 +948,8 @@ class Question(abc.ABC):
     question_ast.question_version = instance.flags.question_version
     question_ast.config_params = dict(instance.flags.config_params)
     question_ast.qr_context_extras = dict(instance.flags.context_extras)
+    if hasattr(self, "layout_reserved_height"):
+      question_ast.reserve_height_cm = self.layout_reserved_height
 
     return question_ast
 
@@ -971,23 +974,41 @@ class Question(abc.ABC):
     def image_upload(img_data) -> str:
 
       course.create_folder(f"{quiz.id}", parent_folder_path="Quiz Files")
-      file_name = f"{uuid.uuid4()}.png"
 
-      with io.FileIO(file_name, 'w+') as ffid:
-        ffid.write(img_data.getbuffer())
-        ffid.flush()
-        ffid.seek(0)
-        upload_success, f = course.upload(ffid, parent_folder_path=f"Quiz Files/{quiz.id}")
-      os.remove(file_name)
+      temp_dir = os.path.join(tempfile.gettempdir(), "quiz_canvas_uploads")
+      os.makedirs(temp_dir, exist_ok=True)
+      temp_file = tempfile.NamedTemporaryFile(
+        mode="w+b",
+        suffix=".png",
+        delete=False,
+        dir=temp_dir
+      )
+
+      try:
+        temp_file.write(img_data.getbuffer())
+        temp_file.flush()
+        temp_file.seek(0)
+        upload_success, f = course.upload(temp_file, parent_folder_path=f"Quiz Files/{quiz.id}")
+      finally:
+        temp_file.close()
+        try:
+          os.remove(temp_file.name)
+        except OSError:
+          log.warning(f"Failed to remove temp image {temp_file.name}")
 
       img_data.name = "img.png"
-      # upload_success, f = course.upload(img_data, parent_folder_path=f"Quiz Files/{quiz.id}")
       log.debug("path: " + f"/courses/{course.id}/files/{f['id']}/preview")
       return f"/courses/{course.id}/files/{f['id']}/preview"
 
     # Render AST to HTML for Canvas
-    question_html = questionAST.render("html", upload_func=image_upload)
-    explanation_html = questionAST.explanation.render("html", upload_func=image_upload)
+    question_html = questionAST.render(
+      "html",
+      upload_func=image_upload
+    )
+    explanation_html = questionAST.explanation.render(
+      "html",
+      upload_func=image_upload
+    )
 
     # Build appropriate dictionary to send to canvas
     return {
@@ -1020,34 +1041,55 @@ class Question(abc.ABC):
     return registered_name
 
 class QuestionGroup():
-  
-  def __init__(self, questions_in_group: List[Question], pick_once : bool):
+
+  def __init__(self, questions_in_group: List[Question], pick_once: bool, name: Optional[str] = None):
     self.questions = questions_in_group
     self.pick_once = pick_once
-  
-    self._current_question : Optional[Question] = None
-    
+    self.name = name or "QuestionGroup"
+
+    # Deterministic metadata without selecting a specific question.
+    first_question = questions_in_group[0] if questions_in_group else None
+    self.points_value = getattr(first_question, "points_value", 0)
+    self.topic = getattr(first_question, "topic", Question.Topic.MISC)
+    self.spacing = max((q.spacing for q in questions_in_group), default=0)
+    self.possible_variations = float("inf")
+
+    self._current_question: Optional[Question] = None
+
   def instantiate(self, *args, **kwargs):
-    
     # Use a local RNG to avoid global side effects.
     rng = random.Random(kwargs.get("rng_seed", None))
-    
+
     if not self.pick_once or self._current_question is None:
       self._current_question = rng.choice(self.questions)
-    
+
   def __getattr__(self, name):
-    if self._current_question is None or name == "generate":
-      self.instantiate()
-    try:
-      attr = getattr(self._current_question, name)
-    except AttributeError:
-      raise AttributeError(
-        f"Neither QuestionGroup nor Question has attribute '{name}'"
-      )
-    
+    # Avoid instantiating without a seed when accessing metadata.
+    if name in {"points_value", "topic", "spacing", "name", "possible_variations"}:
+      return getattr(self, name)
+
+    if self._current_question is None:
+      representative = self.questions[0] if self.questions else None
+      if representative is None:
+        raise AttributeError(
+          f"Neither QuestionGroup nor Question has attribute '{name}'"
+        )
+      rep_attr = getattr(representative, name, None)
+      if callable(rep_attr):
+        def wrapped_method(*args, **kwargs):
+          if self._current_question is None or not self.pick_once:
+            self.instantiate(*args, **kwargs)
+          return getattr(self._current_question, name)(*args, **kwargs)
+        return wrapped_method
+      if rep_attr is not None:
+        return rep_attr
+
+    attr = getattr(self._current_question, name)
     if callable(attr):
       def wrapped_method(*args, **kwargs):
+        if self._current_question is None or not self.pick_once:
+          self.instantiate(*args, **kwargs)
         return attr(*args, **kwargs)
       return wrapped_method
-    
+
     return attr

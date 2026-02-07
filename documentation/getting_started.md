@@ -14,6 +14,14 @@ For local development:
 pip install -e .
 ```
 
+## Reproducible installs (recommended)
+
+For a fully pinned environment, use the lockfile:
+
+```bash
+uv sync --locked
+```
+
 ## Requirements
 
 - Python 3.12+

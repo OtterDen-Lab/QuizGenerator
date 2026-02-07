@@ -13,7 +13,11 @@ questions:
       kwargs:
         spacing: 5
     persistence group 1:
-      pick: 1
+      _config:
+        group: true
+        num_to_pick: 1
+        random_per_student: false
+        topic: io
       vsfs changes:
         class: VSFS_states
         kwargs:

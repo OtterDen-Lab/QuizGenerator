@@ -61,6 +61,15 @@ def parse_args():
   parser.set_defaults(typst=True)
   parser.add_argument("--typst_measurement", action="store_true",
                      help="Use Typst measurement for layout optimization (experimental)")
+  parser.add_argument("--consistent_pages", action="store_true",
+                     help="Reserve question heights to keep pagination consistent across versions (auto-enabled when --num_pdfs > 1)")
+  parser.add_argument("--layout_samples", type=int, default=10,
+                     help="Number of deterministic samples per question to estimate height")
+  parser.add_argument("--layout_safety_factor", type=float, default=1.1,
+                     help="Multiplier applied to max sampled height for safety")
+  parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
+                     help="Disable embedding images in Typst output")
+  parser.set_defaults(embed_images_typst=True)
 
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",
@@ -71,6 +80,8 @@ def parse_args():
                      help="With --test_all, skip PDF/Canvas generation if any questions fail")
   parser.add_argument("--skip_missing_extras", action="store_true",
                      help="With --test_all, skip questions that fail due to missing optional dependencies")
+  parser.add_argument("--allow_generator", action="store_true",
+                     help="Enable FromGenerator questions (executes Python from YAML)")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
@@ -104,7 +115,8 @@ def test_all_questions(
     canvas_course=None,
     strict: bool = False,
     question_filter: list = None,
-    skip_missing_extras: bool = False
+    skip_missing_extras: bool = False,
+    embed_images_typst: bool = False
 ):
   """
   Test all registered questions by generating N variations of each.
@@ -120,6 +132,8 @@ def test_all_questions(
     strict: If True, skip PDF/Canvas generation if any questions fail
     question_filter: If provided, only test questions whose names contain one of these strings (case-insensitive)
   """
+  # Allow FromGenerator during test_all runs so coverage includes generator-based questions.
+  os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
   # Ensure all premade questions are loaded
   QuestionRegistry.load_premade_questions()
 
@@ -258,7 +272,10 @@ def test_all_questions(
       print("Generating PDF...")
       pdf_seed = 12345  # Fixed seed for reproducibility
       if use_typst:
-        typst_text = test_quiz.get_quiz(rng_seed=pdf_seed).render("typst")
+        typst_text = test_quiz.get_quiz(rng_seed=pdf_seed).render(
+          "typst",
+          embed_images_typst=embed_images_typst
+        )
         generate_typst(typst_text, remove_previous=True, name_prefix="test_all_questions")
       else:
         latex_text = test_quiz.get_quiz(rng_seed=pdf_seed).render_latex()
@@ -300,25 +317,26 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   os.makedirs(os.path.join("out", "debug"), exist_ok=True)
   debug_name = f"debug-{datetime.now().strftime('%Y%m%d-%H%M%S')}.tex"
   shutil.copy(f"{tmp_tex.name}", os.path.join("out", "debug", debug_name))
-  p = subprocess.Popen(
-    f"latexmk -pdf -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
-    shell=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE)
   try:
-    p.wait(30)
+    subprocess.run(
+      f"latexmk -pdf -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
+      shell=True,
+      capture_output=True,
+      timeout=30,
+      check=False
+    )
   except subprocess.TimeoutExpired:
     logging.error("Latex Compile timed out")
-    p.kill()
     tmp_tex.close()
     return
-  proc = subprocess.Popen(
+
+  subprocess.run(
     f"latexmk -c {tmp_tex.name} -output-directory={os.path.join(os.getcwd(), 'out')}",
     shell=True,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.PIPE
+    capture_output=True,
+    timeout=30,
+    check=False
   )
-  proc.wait(timeout=30)
   tmp_tex.close()
 
 
@@ -411,7 +429,10 @@ def generate_quiz(
     use_typst=False,
     use_typst_measurement=False,
     base_seed=None,
-    env_path=None
+    env_path=None,
+    consistent_pages=False,
+    layout_samples=10,
+    layout_safety_factor=1.1
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -444,11 +465,30 @@ def generate_quiz(
 
       if use_typst:
         # Generate using Typst
-        typst_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render("typst")
+        quiz_kwargs = {
+          "rng_seed": pdf_seed,
+          "use_typst_measurement": use_typst_measurement,
+          "consistent_pages": consistent_pages,
+        }
+        if consistent_pages:
+          quiz_kwargs["layout_samples"] = layout_samples
+          quiz_kwargs["layout_safety_factor"] = layout_safety_factor
+        typst_text = quiz.get_quiz(**quiz_kwargs).render(
+          "typst",
+          embed_images_typst=getattr(args, "embed_images_typst", False)
+        )
         generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name)
       else:
         # Generate using LaTeX (default)
-        latex_text = quiz.get_quiz(rng_seed=pdf_seed, use_typst_measurement=use_typst_measurement).render_latex()
+        quiz_kwargs = {
+          "rng_seed": pdf_seed,
+          "use_typst_measurement": use_typst_measurement,
+          "consistent_pages": consistent_pages,
+        }
+        if consistent_pages:
+          quiz_kwargs["layout_samples"] = layout_samples
+          quiz_kwargs["layout_safety_factor"] = layout_safety_factor
+        latex_text = quiz.get_quiz(**quiz_kwargs).render_latex()
         generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name)
 
     if num_canvas > 0:
@@ -488,6 +528,12 @@ def main():
     test()
     return
 
+  if args.allow_generator:
+    os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
+
+  if args.num_pdfs and args.num_pdfs > 1:
+    args.consistent_pages = True
+
   if args.test_all > 0:
     # Set up Canvas course if course_id provided
     canvas_course = None
@@ -502,7 +548,8 @@ def main():
       canvas_course=canvas_course,
       strict=args.strict,
       question_filter=args.test_questions,
-      skip_missing_extras=args.skip_missing_extras
+      skip_missing_extras=args.skip_missing_extras,
+      embed_images_typst=getattr(args, "embed_images_typst", False)
     )
     exit(0 if success else 1)
 
@@ -519,7 +566,10 @@ def main():
     use_typst=getattr(args, 'typst', True),
     use_typst_measurement=getattr(args, 'typst_measurement', False),
     base_seed=getattr(args, 'seed', None),
-    env_path=args.env
+    env_path=args.env,
+    consistent_pages=getattr(args, 'consistent_pages', False),
+    layout_samples=getattr(args, 'layout_samples', 10),
+    layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1)
   )
 
 

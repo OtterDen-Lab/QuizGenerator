@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import collections
+import hashlib
 import logging
 import random
 import re
@@ -147,8 +148,16 @@ class Quiz:
             q_data.get("_config", {})
           )
           q_data.pop("_config", None)
-          q_data.pop("pick", None) # todo: don't use this anymore
-          q_data.pop("repeat", None) # todo: don't use this anymore
+          if "pick" in q_data:
+            raise ValueError(
+              f"Legacy 'pick' key found in question '{q_name}'. "
+              "Use _config.group with num_to_pick instead."
+            )
+          if "repeat" in q_data:
+            raise ValueError(
+              f"Legacy 'repeat' key found in question '{q_name}'. "
+              "Use _config.repeat instead."
+            )
           
           # Check if it is a question group
           if question_config["group"]:
@@ -161,7 +170,8 @@ class Quiz:
                 questions_in_group=[
                   make_question(name, data | {"topic" : question_config["topic"]}) for name, data in q_data.items()
                 ],
-                pick_once=(not question_config["random_per_student"])
+                pick_once=(not question_config["random_per_student"]),
+                name=q_name
               )
             )
           
@@ -194,71 +204,67 @@ class Quiz:
     Returns:
         Height in centimeters
     """
-    # Try Typst measurement if requested and available
+    sample_count = int(kwargs.pop("layout_samples", 1))
+    if sample_count < 1:
+      sample_count = 1
+    safety_factor = float(kwargs.pop("layout_safety_factor", 1.1))
+
+    def deterministic_seeds(count: int) -> List[int]:
+      seed_input = f"{question.__class__.__name__}:{question.name}:{question.points_value}"
+      digest = hashlib.sha256(seed_input.encode("utf-8")).digest()
+      base_seed = int.from_bytes(digest[:4], "big")
+      rng = random.Random(base_seed)
+      return [rng.randint(0, 2**31 - 1) for _ in range(count)]
+
+    use_typst = False
     if use_typst_measurement:
-      from QuizGenerator.typst_utils import check_typst_available, measure_typst_content
-
-      if check_typst_available():
-        try:
-          # Render question to Typst
-          instance = question.instantiate(**kwargs)
-
-          # Get just the content body (without the #question wrapper which adds spacing)
-          typst_body = instance.body.render("typst", **kwargs)
-
-          # Measure the content
-          measured_height = measure_typst_content(typst_body, page_width_cm=18.0)
-
-          if measured_height is not None:
-            # Add base height for question formatting (header, line, etc.) ~1.5cm
-            # Plus the spacing parameter
-            total_height = 1.5 + measured_height + question.spacing
-            log.debug(f"Typst measurement: {question.name} = {total_height:.2f}cm (content: {measured_height:.2f}cm, spacing: {question.spacing}cm)")
-            return total_height
-          else:
-            log.debug(f"Typst measurement failed for {question.name}, falling back to heuristics")
-        except Exception as e:
-          log.warning(f"Error during Typst measurement: {e}, falling back to heuristics")
-      else:
+      from QuizGenerator.typst_utils import check_typst_available
+      use_typst = check_typst_available()
+      if not use_typst:
         log.debug("Typst not available, using heuristic estimation")
 
-    # Fallback: Use heuristic estimation (original implementation)
-    # Base height for question header, borders, and minimal content
-    # Each question has: horizontal rule, question number line, and minipage wrapper
-    base_height = 1.5  # cm
+    def estimate_for_seed(seed: int) -> float:
+      if use_typst:
+        try:
+          from QuizGenerator.typst_utils import measure_typst_content
+          instance = question.instantiate(rng_seed=seed, **kwargs)
+          typst_body = instance.body.render("typst", **kwargs)
+          measured_height = measure_typst_content(typst_body, page_width_cm=18.0)
+          if measured_height is not None:
+            total_height = 1.5 + measured_height + question.spacing
+            log.debug(
+              f"Typst measurement: {question.name} = {total_height:.2f}cm "
+              f"(content: {measured_height:.2f}cm, spacing: {question.spacing}cm)"
+            )
+            return total_height
+        except Exception as e:
+          log.warning(f"Error during Typst measurement: {e}, falling back to heuristics")
 
-    # The spacing parameter directly controls \vspace{} in cm
-    spacing_height = question.spacing  # cm
+      # Fallback: Use heuristic estimation
+      base_height = 1.5  # cm
+      spacing_height = question.spacing  # cm
 
-    # Estimate content height by rendering to LaTeX and analyzing structure
-    instance = question.instantiate(**kwargs)
-    question_ast = question._build_question_ast(instance)
-    latex_content = question_ast.render("latex")
+      instance = question.instantiate(rng_seed=seed, **kwargs)
+      question_ast = question._build_question_ast(instance)
+      latex_content = question_ast.render("latex")
 
-    # Count content that adds height (rough estimates in cm)
-    content_height = 0.0
+      content_height = 0.0
+      table_count = latex_content.count('\\begin{tabular}')
+      content_height += table_count * 3.0
 
-    # Tables add significant height (~0.5cm per row as rough estimate)
-    table_count = latex_content.count('\\begin{tabular}')
-    content_height += table_count * 3.0  # Assume ~3cm per table on average
+      matrix_count = latex_content.count('\\begin{') - table_count
+      content_height += matrix_count * 2.0
 
-    # Matrices add height
-    matrix_count = latex_content.count('\\begin{') - table_count  # Rough matrix count
-    content_height += matrix_count * 2.0  # ~2cm per matrix
+      verbatim_count = latex_content.count('\\begin{verbatim}')
+      content_height += verbatim_count * 4.0
 
-    # Code blocks (verbatim) add significant height
-    verbatim_count = latex_content.count('\\begin{verbatim}')
-    content_height += verbatim_count * 4.0  # ~4cm per code block
+      char_count = len(latex_content)
+      content_height += (char_count / 500.0) * 0.5
 
-    # Count paragraphs and text blocks (very rough estimate)
-    # Each ~500 characters of text ≈ 1cm of height
-    char_count = len(latex_content)
-    content_height += (char_count / 500.0) * 0.5
+      return base_height + spacing_height + content_height
 
-    # Total estimated height
-    total_height = base_height + spacing_height + content_height
-
-    return total_height
+    heights = [estimate_for_seed(seed) for seed in deterministic_seeds(sample_count)]
+    return max(heights) * safety_factor
 
   def _optimize_question_order(self, questions, **kwargs) -> List[Question]:
     """
@@ -323,7 +329,12 @@ class Quiz:
         continue
 
       # Estimate height for each question, preserving original index for stable sorting
-      question_heights = [(i, q, self._estimate_question_height(q, **kwargs)) for i, q in enumerate(group)]
+      question_heights = []
+      for i, q in enumerate(group):
+        height = getattr(q, "layout_reserved_height", None)
+        if height is None:
+          height = self._estimate_question_height(q, **kwargs)
+        question_heights.append((i, q, height))
 
       # Sort by:
       # 1. Spacing priority (LONG, MEDIUM, SHORT, NONE, then PAGE, EXTRA_PAGE)
@@ -417,8 +428,19 @@ class Quiz:
   def get_quiz(self, **kwargs) -> ca.Document:
     quiz = ca.Document(title=self.name)
 
+    if self.question_sort_order is None:
+      self.question_sort_order = list(Question.Topic)
+
     # Extract master RNG seed (if provided) and remove from kwargs
     master_seed = kwargs.pop('rng_seed', None)
+
+    consistent_pages = kwargs.pop("consistent_pages", False)
+
+    # Precompute reserved heights for consistent pagination (Typst only).
+    if consistent_pages:
+      for question in self.questions:
+        if getattr(question, "layout_reserved_height", None) is None:
+          question.layout_reserved_height = self._estimate_question_height(question, **dict(kwargs))
 
     # Check if optimization is requested (default: True)
     optimize_layout = kwargs.pop('optimize_layout', True)
