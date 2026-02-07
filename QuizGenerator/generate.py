@@ -297,10 +297,14 @@ def test_all_questions(
           "typst",
           embed_images_typst=embed_images_typst
         )
-        generate_typst(typst_text, remove_previous=True, name_prefix="test_all_questions")
+        if not generate_typst(typst_text, remove_previous=True, name_prefix="test_all_questions"):
+          log.error("Test PDF generation failed (Typst).")
+          return False
       else:
         latex_text = test_quiz.get_quiz(rng_seed=pdf_seed).render_latex()
-        generate_latex(latex_text, remove_previous=True, name_prefix="test_all_questions")
+        if not generate_latex(latex_text, remove_previous=True, name_prefix="test_all_questions"):
+          log.error("Test PDF generation failed (LaTeX).")
+          return False
       print("PDF generated in out/ directory")
 
     if canvas_course:
@@ -318,7 +322,7 @@ def test_all_questions(
   return len(failed_questions) == 0
 
 
-def generate_latex(latex_text, remove_previous=False, name_prefix=None):
+def generate_latex(latex_text, remove_previous=False, name_prefix=None) -> bool:
   """
   Generate PDF from LaTeX source code.
 
@@ -340,7 +344,7 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   debug_name = f"debug-{datetime.now().strftime('%Y%m%d-%H%M%S')}.tex"
   shutil.copy(f"{tmp_tex.name}", os.path.join("out", "debug", debug_name))
   try:
-    subprocess.run(
+    result = subprocess.run(
       f"latexmk -pdf -shell-escape -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
       shell=True,
       capture_output=True,
@@ -350,9 +354,9 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   except subprocess.TimeoutExpired:
     logging.error("Latex Compile timed out")
     tmp_tex.close()
-    return
+    return False
 
-  subprocess.run(
+  cleanup_result = subprocess.run(
     f"latexmk -c {tmp_tex.name} -output-directory={os.path.join(os.getcwd(), 'out')}",
     shell=True,
     capture_output=True,
@@ -360,6 +364,14 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
     check=False
   )
   tmp_tex.close()
+  if result.returncode != 0:
+    stderr_text = result.stderr.decode("utf-8", errors="ignore")
+    log.error(f"Latex compilation failed: {stderr_text}")
+    return False
+  if cleanup_result.returncode != 0:
+    stderr_text = cleanup_result.stderr.decode("utf-8", errors="ignore")
+    log.warning(f"Latex cleanup failed: {stderr_text}")
+  return True
 
 
 def sanitize_filename(name):
@@ -480,7 +492,7 @@ def upload_quiz_to_canvas(
   log.info(f"Canvas quiz URL: {canvas_quiz.html_url}")
 
 
-def generate_typst(typst_text, remove_previous=False, name_prefix=None):
+def generate_typst(typst_text, remove_previous=False, name_prefix=None) -> bool:
   """
   Generate PDF from Typst source code.
 
@@ -525,17 +537,20 @@ def generate_typst(typst_text, remove_previous=False, name_prefix=None):
     try:
       stdout, stderr = p.communicate(timeout=30)
       if p.returncode != 0:
-        stderr_text = stderr.decode("utf-8")
+        stderr_text = stderr.decode("utf-8", errors="ignore")
         log.error(f"Typst compilation failed: {stderr_text}")
+        return False
     except subprocess.TimeoutExpired:
       log.error("Typst compile timed out")
       p.kill()
       p.communicate()
+      return False
 
   finally:
     # Clean up temp file
     if os.path.exists(tmp_typ.name):
       os.unlink(tmp_typ.name)
+  return True
 
 
 def generate_quiz(
@@ -598,7 +613,9 @@ def generate_quiz(
           "typst",
           embed_images_typst=embed_images_typst
         )
-        generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name)
+        if not generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name):
+          log.error("PDF generation failed (Typst). Aborting.")
+          exit(1)
       else:
         # Generate using LaTeX (default)
         quiz_kwargs = {
@@ -610,7 +627,9 @@ def generate_quiz(
           quiz_kwargs["layout_samples"] = layout_samples
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
         latex_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render_latex()
-        generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name)
+        if not generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name):
+          log.error("PDF generation failed (LaTeX). Aborting.")
+          exit(1)
 
     if num_canvas > 0:
       upload_quiz_to_canvas(
