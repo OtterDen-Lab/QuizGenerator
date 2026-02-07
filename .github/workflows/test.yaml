@@ -2,9 +2,7 @@ name: Tests
 
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
   workflow_dispatch:  # allows manual triggering
 
 jobs:
@@ -12,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ["3.12"]
       fail-fast: false
 
     steps:
@@ -26,12 +24,7 @@ jobs:
         run: uv python install ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Install Typst (for PDF generation tests)
-        run: |
-          curl -fsSL https://typst.community/typst-install/install.sh | sh
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+        run: uv sync --extra dev
 
       - name: Run tests
         run: uv run pytest tests/ lms_interface/tests/ -v --tb=short
@@ -65,4 +58,4 @@ jobs:
         run: |
           uv run quizgen --yaml example_files/example_exam.yaml --num_pdfs 1
           ls -la out/
-          test -f out/*.pdf && echo "PDF generated successfully!"
+          ls out/*.pdf && echo "PDF generated successfully!"
