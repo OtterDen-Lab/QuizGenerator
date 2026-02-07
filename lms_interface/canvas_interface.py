@@ -2,34 +2,31 @@
 from __future__ import annotations
 
 import itertools
-import logging
-import os
+import queue
 import tempfile
+import threading
 import time
-from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 
 import canvasapi
-import canvasapi.assignment
 import canvasapi.course
-import canvasapi.exceptions
 import canvasapi.quiz
+import canvasapi.assignment
 import canvasapi.submission
+import canvasapi.exceptions
+import os
 import dotenv
 import requests
 
-from .classes import (
-  FileSubmission__Canvas,
-  LMSWrapper,
-  QuizSubmission,
-  Student,
-  Submission,
-  TextSubmission__Canvas,
-)
+from .classes import LMSWrapper, Student, Submission, Submission__Canvas, FileSubmission__Canvas, TextSubmission__Canvas, QuizSubmission
+
+import logging
 
 log = logging.getLogger(__name__)
 
 MAX_UPLOAD_RETRIES = 50
+UPLOAD_MAX_WORKERS = 4
+UPLOAD_MAX_IN_FLIGHT = 8
 RETRY_BACKOFF_BASE = 1.0
 RETRY_BACKOFF_MAX = 10.0
 
@@ -53,22 +50,64 @@ def _is_retryable_canvas_exception(exc: Exception) -> bool:
   return False
 
 
+def _format_canvas_exception(exc: Exception) -> str:
+  status = _canvas_exception_status(exc)
+  parts = []
+  if status is not None:
+    parts.append(f"status={status}")
+  response = getattr(exc, "response", None)
+  if response is not None:
+    method = getattr(response, "request", None)
+    if method is not None:
+      req_method = getattr(method, "method", None)
+      req_url = getattr(method, "url", None)
+      if req_method or req_url:
+        parts.append(f"request={req_method} {req_url}".strip())
+    try:
+      json_payload = response.json()
+      parts.append(f"response={json_payload}")
+    except Exception:
+      try:
+        text = getattr(response, "text", None)
+        if text:
+          parts.append(f"response_text={text[:200]}")
+      except Exception:
+        pass
+  return " | ".join(parts)
+
+
+
 class CanvasInterface:
-  def __init__(self, *, prod=False, env_path: str | None = None):
-    if env_path:
-      dotenv.load_dotenv(env_path)
+  def __init__(
+      self,
+      *,
+      prod: bool = False,
+      env_path: str | None = None,
+      canvas_url: str | None = None,
+      canvas_key: str | None = None
+  ):
+    self.env_path = env_path
+    if canvas_url is not None or canvas_key is not None:
+      if not canvas_url or not canvas_key:
+        raise ValueError("Both canvas_url and canvas_key are required when providing credentials.")
+      self.canvas_url = canvas_url
+      self.canvas_key = canvas_key
     else:
-      dotenv.load_dotenv(os.path.join(os.path.expanduser("~"), ".env"))
+      if env_path:
+        dotenv.load_dotenv(env_path)
+      else:
+        dotenv.load_dotenv(os.path.join(os.path.expanduser("~"), ".env"))
 
     self.prod = prod
-    if self.prod:
-      log.warning("Using canvas PROD!")
-      self.canvas_url = os.environ.get("CANVAS_API_URL_prod")
-      self.canvas_key = os.environ.get("CANVAS_API_KEY_prod")
-    else:
-      log.info("Using canvas DEV")
-      self.canvas_url = os.environ.get("CANVAS_API_URL")
-      self.canvas_key = os.environ.get("CANVAS_API_KEY")
+    if canvas_url is None and canvas_key is None:
+      if self.prod:
+        log.warning("Using canvas PROD!")
+        self.canvas_url = os.environ.get("CANVAS_API_URL_prod")
+        self.canvas_key = os.environ.get("CANVAS_API_KEY_prod")
+      else:
+        log.info("Using canvas DEV")
+        self.canvas_url = os.environ.get("CANVAS_API_URL")
+        self.canvas_key = os.environ.get("CANVAS_API_KEY")
 
     if not self.canvas_url or not self.canvas_key:
       env_hint = "CANVAS_API_URL[_prod] and CANVAS_API_KEY[_prod]"
@@ -168,7 +207,9 @@ class CanvasCourse(LMSWrapper):
       pick_count: int = 1,
       max_upload_retries: int = MAX_UPLOAD_RETRIES,
       retry_backoff_base: float = RETRY_BACKOFF_BASE,
-      retry_backoff_max: float = RETRY_BACKOFF_MAX
+      retry_backoff_max: float = RETRY_BACKOFF_MAX,
+      max_workers: int = UPLOAD_MAX_WORKERS,
+      max_in_flight: int = UPLOAD_MAX_IN_FLIGHT
   ) -> canvasapi.quiz.QuizGroup | None:
     """
     Upload one question or a group of questions to Canvas.
@@ -230,7 +271,9 @@ class CanvasCourse(LMSWrapper):
         attach_group_id(),
         max_upload_retries=max_upload_retries,
         retry_backoff_base=retry_backoff_base,
-        retry_backoff_max=retry_backoff_max
+        retry_backoff_max=retry_backoff_max,
+        max_workers=max_workers,
+        max_in_flight=max_in_flight
       )
       return group
 
@@ -239,7 +282,9 @@ class CanvasCourse(LMSWrapper):
       payloads_iter,
       max_upload_retries=max_upload_retries,
       retry_backoff_base=retry_backoff_base,
-      retry_backoff_max=retry_backoff_max
+      retry_backoff_max=retry_backoff_max,
+      max_workers=max_workers,
+      max_in_flight=max_in_flight
     )
 
     return group
@@ -251,57 +296,111 @@ class CanvasCourse(LMSWrapper):
       *,
       max_upload_retries: int = MAX_UPLOAD_RETRIES,
       retry_backoff_base: float = RETRY_BACKOFF_BASE,
-      retry_backoff_max: float = RETRY_BACKOFF_MAX
+      retry_backoff_max: float = RETRY_BACKOFF_MAX,
+      max_workers: int = UPLOAD_MAX_WORKERS,
+      max_in_flight: int = UPLOAD_MAX_IN_FLIGHT
   ) -> None:
-    payload_iter = iter(payloads)
-    queue = deque()
-    retry_counts: dict[int, int] = {}
-    total = 0
-    index = 0
+    if max_workers <= 1:
+      for index, payload in enumerate(payloads):
+        label = payload.get("question_name", f"question_{index}")
+        log.info(f"Uploading {index + 1} to canvas!")
+        self._call_canvas_with_retry(
+          label,
+          lambda: canvas_quiz.create_question(question=payload),
+          max_upload_retries=max_upload_retries,
+          retry_backoff_base=retry_backoff_base,
+          retry_backoff_max=retry_backoff_max,
+          backoff_controller=None
+        )
+      return
 
-    def enqueue_next() -> bool:
-      nonlocal index, total
+    quiz_id = getattr(canvas_quiz, "id", None)
+    if quiz_id is None:
+      raise ValueError("canvas_quiz must have an id for multi-threaded uploads.")
+
+    payload_queue: queue.Queue = queue.Queue()
+    for payload in payloads:
+      payload_queue.put(payload)
+    for _ in range(max_workers):
+      payload_queue.put(None)
+
+    in_flight = threading.Semaphore(max_in_flight)
+    backoff = _CanvasBackoffController()
+
+    def worker(worker_index: int):
+      quiz = self._create_quiz_client(quiz_id)
+      while True:
+        payload = payload_queue.get()
+        if payload is None:
+          break
+        label = payload.get("question_name", f"question_{worker_index}")
+        with in_flight:
+          self._call_canvas_with_retry(
+            label,
+            lambda: quiz.create_question(question=payload),
+            max_upload_retries=max_upload_retries,
+            retry_backoff_base=retry_backoff_base,
+            retry_backoff_max=retry_backoff_max,
+            backoff_controller=backoff
+          )
+
+    threads = [
+      threading.Thread(target=worker, args=(i,), daemon=True)
+      for i in range(max_workers)
+    ]
+    for thread in threads:
+      thread.start()
+    for thread in threads:
+      thread.join()
+
+  def _create_quiz_client(self, quiz_id: int) -> canvasapi.quiz.Quiz:
+    canvas_interface = CanvasInterface(
+      prod=self.canvas_interface.prod,
+      env_path=self.canvas_interface.env_path,
+      canvas_url=self.canvas_interface.canvas_url,
+      canvas_key=self.canvas_interface.canvas_key
+    )
+    course = canvas_interface.get_course(self.course.id)
+    return course.course.get_quiz(quiz_id)
+
+  def _call_canvas_with_retry(
+      self,
+      label: str,
+      func,
+      *,
+      max_upload_retries: int,
+      retry_backoff_base: float,
+      retry_backoff_max: float,
+      backoff_controller: "_CanvasBackoffController | None"
+  ) -> bool:
+    for attempt in range(1, max_upload_retries + 1):
+      if backoff_controller is not None:
+        backoff_controller.wait()
       try:
-        payload = next(payload_iter)
-      except StopIteration:
-        return False
-      queue.append((index, payload))
-      index += 1
-      total = max(total, index)
-      return True
-
-    # Prime the queue with the first payload (if any).
-    enqueue_next()
-
-    while queue:
-      index, payload = queue.popleft()
-      label = payload.get("question_name", f"question_{index}")
-      log.info(f"Uploading {index + 1} / {max(total, index + 1)} to canvas!")
-      try:
-        canvas_quiz.create_question(question=payload)
-        enqueue_next()
+        func()
+        return True
       except canvasapi.exceptions.CanvasException as e:
         log.warning("Encountered Canvas error.")
         log.warning(e)
+        extra = _format_canvas_exception(e)
+        if extra:
+          log.warning(extra)
         if not _is_retryable_canvas_exception(e):
           log.error(f"Non-retryable Canvas error; dropping question: {label}")
-          enqueue_next()
-          continue
-        retry_count = retry_counts.get(index, 0) + 1
-        if retry_count > max_upload_retries:
+          return False
+        if attempt >= max_upload_retries:
           log.error(f"Exceeded max retries ({max_upload_retries}); dropping question: {label}")
-          enqueue_next()
-          continue
-        retry_counts[index] = retry_count
-        sleep_s = min(retry_backoff_base * (2 ** (retry_count - 1)), retry_backoff_max)
-        remaining = len(queue) + 1  # include current payload
+          return False
+        sleep_s = min(retry_backoff_base * (2 ** (attempt - 1)), retry_backoff_max)
+        if backoff_controller is not None and _canvas_exception_status(e) == 429:
+          backoff_controller.defer(sleep_s)
         log.warning(
           f"Retrying {label} in {sleep_s:.1f}s "
-          f"(attempt {retry_count}/{max_upload_retries}, {remaining} pending)"
+          f"(attempt {attempt}/{max_upload_retries})"
         )
         time.sleep(sleep_s)
-        queue.append((index, payload))
-  
+    return False
+
   def get_assignment(self, assignment_id : int) -> CanvasAssignment | None:
     try:
       return CanvasAssignment(
@@ -357,6 +456,24 @@ class CanvasCourse(LMSWrapper):
     return quizzes
 
 
+class _CanvasBackoffController:
+  def __init__(self):
+    self._lock = threading.Lock()
+    self._next_allowed = 0.0
+
+  def wait(self) -> None:
+    while True:
+      with self._lock:
+        delay = self._next_allowed - time.monotonic()
+      if delay <= 0:
+        return
+      time.sleep(min(delay, RETRY_BACKOFF_MAX))
+
+  def defer(self, seconds: float) -> None:
+    with self._lock:
+      self._next_allowed = max(self._next_allowed, time.monotonic() + seconds)
+
+
 class CanvasAssignment(LMSWrapper):
   def __init__(self, *args, canvasapi_interface: CanvasInterface, canvasapi_course : CanvasCourse, canvasapi_assignment: canvasapi.assignment.Assignment, **kwargs):
     self.canvas_interface = canvasapi_interface
@@ -375,8 +492,11 @@ class CanvasAssignment(LMSWrapper):
       if keep_previous_best and score is not None and submission.score is not None and submission.score > score:
         log.warning(f"Current score ({submission.score}) higher than new score ({score}).  Going to use previous score.")
         score = submission.score
-    except requests.exceptions.ConnectionError as e:
-      log.warning(f"No previous submission found for {user_id}")
+    except (requests.exceptions.RequestException, canvasapi.exceptions.CanvasException) as e:
+      log.warning(f"No previous submission found for {user_id}: {e}")
+      extra = _format_canvas_exception(e)
+      if extra:
+        log.warning(extra)
     
     # Update the assignment
     # Note: the bulk_update will create a submission if none exists
@@ -389,8 +509,11 @@ class CanvasAssignment(LMSWrapper):
       )
       
       submission = self.assignment.get_submission(user_id)
-    except requests.exceptions.ConnectionError as e:
+    except (requests.exceptions.RequestException, canvasapi.exceptions.CanvasException) as e:
       log.error(e)
+      extra = _format_canvas_exception(e)
+      if extra:
+        log.error(extra)
       log.debug(f"Failed on user_id = {user_id})")
       log.debug(f"username: {self.canvas_course.get_user(user_id)}")
       return
