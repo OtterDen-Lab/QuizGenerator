@@ -940,6 +940,8 @@ class Equation(Leaf):
       return f"<div class='math'>$$ \\displaystyle {self.latex} \\; $$</div>"
 
   def render_latex(self, **kwargs):
+    if kwargs.get("validate_latex", True):
+      self._validate_latex()
     if self.inline:
       return f"${self.latex}$~"
     else:
@@ -1076,6 +1078,36 @@ class Equation(Leaf):
     latex_str = re.sub(r'\\\|', '||', latex_str)
 
     return latex_str
+
+  def _validate_latex(self) -> None:
+    """
+    Basic LaTeX sanity checks to surface errors before compilation.
+    """
+    # Balance curly braces, ignoring escaped braces.
+    depth = 0
+    i = 0
+    while i < len(self.latex):
+      ch = self.latex[i]
+      if ch == "\\" and i + 1 < len(self.latex):
+        i += 2
+        continue
+      if ch == "{":
+        depth += 1
+      elif ch == "}":
+        depth -= 1
+        if depth < 0:
+          raise ValueError(f"Unmatched '}}' in LaTeX equation: {self.latex}")
+      i += 1
+    if depth != 0:
+      raise ValueError(f"Unbalanced braces in LaTeX equation: {self.latex}")
+
+    begin_envs = re.findall(r"\\\\begin\\{([^}]+)\\}", self.latex)
+    end_envs = re.findall(r"\\\\end\\{([^}]+)\\}", self.latex)
+    if begin_envs or end_envs:
+      if len(begin_envs) != len(end_envs) or begin_envs != end_envs:
+        raise ValueError(
+          f"Mismatched LaTeX environments in equation: {self.latex}"
+        )
 
   @classmethod
   def make_block_equation__multiline_equals(cls, lhs : str, rhs : list[str]):
