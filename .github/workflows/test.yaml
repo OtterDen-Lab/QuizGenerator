@@ -72,8 +72,9 @@ jobs:
           PY
           )
           curl -fsSL -o /tmp/typst.tar $ASSET_URL
-          tar -xf /tmp/typst.tar -C /tmp
-          TYPST_BIN=$(find /tmp -maxdepth 2 -type f -name typst | head -n 1)
+          rm -rf /tmp/typst && mkdir -p /tmp/typst
+          tar -xf /tmp/typst.tar -C /tmp/typst
+          TYPST_BIN=$(find /tmp/typst -type f -name typst | head -n 1)
           if [ -z "$TYPST_BIN" ]; then
             echo "Typst binary not found in archive."
             exit 1
