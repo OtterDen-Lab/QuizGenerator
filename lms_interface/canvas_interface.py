@@ -1,4 +1,4 @@
-#!env python
+#!/usr/bin/env python
 from __future__ import annotations
 
 import itertools
@@ -78,9 +78,17 @@ class CanvasInterface:
     self.canvas = canvasapi.Canvas(self.canvas_url, self.canvas_key)
     
   def get_course(self, course_id: int) -> CanvasCourse:
+    if course_id is None:
+      raise ValueError("course_id is required to fetch a Canvas course.")
+    canvasapi_course = self.canvas.get_course(course_id)
+    if not hasattr(canvasapi_course, "id"):
+      raise ValueError(
+        f"Canvas course lookup failed for course_id={course_id}. "
+        "Ensure the course exists and your API key has access."
+      )
     return CanvasCourse(
       canvas_interface = self,
-      canvasapi_course = self.canvas.get_course(course_id)
+      canvasapi_course = canvasapi_course
     )
 
 
@@ -94,6 +102,11 @@ class CanvasCourse(LMSWrapper):
     env_name = os.environ.get("QUIZGEN_ASSIGNMENT_GROUP")
     if env_name:
       name = env_name
+    if not hasattr(self.course, "id"):
+      raise ValueError(
+        "Canvas course object is missing an id. "
+        "Check that the course exists and your API key has access."
+      )
     for assignment_group in self.course.get_assignment_groups():
       if assignment_group.name == name:
         if delete_existing:
