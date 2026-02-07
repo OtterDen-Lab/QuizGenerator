@@ -21,6 +21,15 @@ def setup_logging() -> None:
     
     config_text = re.sub(r'\$\{([^}:]+):-([^}]+)\}', replace_env_vars, config_text)
     config = yaml.safe_load(config_text)
+
+    # Ensure file handler directories exist.
+    for handler in config.get("handlers", {}).values():
+      if handler.get("class") == "logging.FileHandler":
+        filename = handler.get("filename")
+        if filename:
+          log_dir = os.path.dirname(filename)
+          if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
     logging.config.dictConfig(config)
   else:
     # Fallback to basic configuration if logging.yaml is not found

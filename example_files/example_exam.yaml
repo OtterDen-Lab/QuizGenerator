@@ -40,7 +40,7 @@ questions:
           This is a question I can ask.
     generated question:
       # Note: FromGenerator requires running quizgen with --allow_generator
-      class: FromText
+      class: FromGenerator
       kwargs:
-        text: |
-          This is a question I can generate or make up.
+        generator: |
+          return "This is a question I can generate or make up."
