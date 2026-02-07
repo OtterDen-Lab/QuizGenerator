@@ -69,6 +69,20 @@ questions:
       class: VectorAddition
 ```
 
+You can also provide an ordered list of questions:
+
+```yaml
+name: "Midterm Exam"
+question_order: yaml
+questions:
+  - name: "Process Scheduling"
+    points: 10
+    class: FIFOScheduling
+  - name: "Memory Paging"
+    points: 5
+    class: PagingQuestion
+```
+
 ### 2. Generate PDFs
 
 ```bash
@@ -208,6 +222,11 @@ quizgen --latex --num_pdfs 3
 
 Experimental: `--typst_measurement` uses Typst to measure question height for tighter layout.
 It can change pagination and ordering, so use with care on finalized exams.
+
+### Layout Optimization
+
+By default, questions keep their YAML order (or point-value ordering for mapping format).
+Use `--optimize_space` to reorder questions to reduce PDF page count. This also affects Canvas order.
 
 ### Deterministic Generation
 

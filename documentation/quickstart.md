@@ -21,6 +21,14 @@ quizgen --yaml example_files/example_exam.yaml --num_pdfs 1
 
 PDFs are written to `out/`.
 
+To preserve question order, use list-style YAML (`question_order: yaml`).
+
+To optimize spacing and reduce PDF pages (reorders questions):
+
+```bash
+quizgen --yaml example_files/example_exam.yaml --num_pdfs 1 --optimize_space
+```
+
 ## Push to Canvas
 
 Create `~/.env` (or pass `--env`) with:

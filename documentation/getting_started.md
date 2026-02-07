@@ -47,6 +47,32 @@ quizgen --yaml example_files/example_exam.yaml --num_pdfs 1
 
 PDFs are generated in `out/`.
 
+## Ordered YAML (Optional)
+
+If you want to preserve question order, use the list format:
+
+```yaml
+name: "Midterm Exam"
+question_order: yaml
+questions:
+  - name: "Process Scheduling"
+    points: 10
+    class: FIFOScheduling
+  - name: "Memory Paging"
+    points: 5
+    class: PagingQuestion
+```
+
+## Layout Optimization (Optional)
+
+To reduce PDF page count by reordering questions, use:
+
+```bash
+quizgen --yaml example_files/example_exam.yaml --num_pdfs 1 --optimize_space
+```
+
+This affects both PDF and Canvas order.
+
 ## Canvas Upload (Optional)
 
 Create `~/.env` or pass `--env`:

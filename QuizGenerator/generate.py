@@ -67,6 +67,8 @@ def parse_args():
                      help="Number of deterministic samples per question to estimate height")
   parser.add_argument("--layout_safety_factor", type=float, default=1.1,
                      help="Multiplier applied to max sampled height for safety")
+  parser.add_argument("--optimize_space", action="store_true",
+                     help="Optimize question order to reduce PDF page count (affects Canvas order too)")
   parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
                      help="Disable embedding images in Typst output")
   parser.set_defaults(embed_images_typst=True)
@@ -420,7 +422,8 @@ def upload_quiz_to_canvas(
     *,
     title=None,
     is_practice=False,
-    assignment_group=None
+    assignment_group=None,
+    optimize_layout=False
 ):
   if assignment_group is None:
     assignment_group = canvas_course.create_assignment_group()
@@ -432,11 +435,12 @@ def upload_quiz_to_canvas(
     description=quiz.description
   )
 
-  total_questions = len(quiz.questions)
+  ordered_questions = quiz.get_ordered_questions(optimize_layout=optimize_layout)
+  total_questions = len(ordered_questions)
   log.info(f"Starting to push quiz '{title or canvas_quiz.title}' with {total_questions} questions to Canvas")
   log.info(f"Target: {num_variations} variations per question")
 
-  for question_i, question in enumerate(quiz):
+  for question_i, question in enumerate(ordered_questions):
     log.info(f"Uploading question {question_i + 1}/{total_questions}: '{question.name}'")
     seed_base = question_i * 100_000
     payloads = _build_canvas_payloads(
@@ -529,7 +533,8 @@ def generate_quiz(
     consistent_pages=False,
     layout_samples=10,
     layout_safety_factor=1.1,
-    embed_images_typst=True
+    embed_images_typst=True,
+    optimize_layout=False
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -570,7 +575,7 @@ def generate_quiz(
         if consistent_pages:
           quiz_kwargs["layout_samples"] = layout_samples
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
-        typst_text = quiz.get_quiz(**quiz_kwargs).render(
+        typst_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render(
           "typst",
           embed_images_typst=embed_images_typst
         )
@@ -585,7 +590,7 @@ def generate_quiz(
         if consistent_pages:
           quiz_kwargs["layout_samples"] = layout_samples
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
-        latex_text = quiz.get_quiz(**quiz_kwargs).render_latex()
+        latex_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render_latex()
         generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name)
 
     if num_canvas > 0:
@@ -595,7 +600,8 @@ def generate_quiz(
         num_canvas,
         title=quiz.name,
         is_practice=quiz.practice,
-        assignment_group=assignment_group
+        assignment_group=assignment_group,
+        optimize_layout=optimize_layout
       )
     
     quiz.describe()
@@ -668,7 +674,8 @@ def main():
     consistent_pages=getattr(args, 'consistent_pages', False),
     layout_samples=getattr(args, 'layout_samples', 10),
     layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1),
-    embed_images_typst=getattr(args, 'embed_images_typst', True)
+    embed_images_typst=getattr(args, 'embed_images_typst', True),
+    optimize_layout=getattr(args, 'optimize_space', False)
   )
 
 

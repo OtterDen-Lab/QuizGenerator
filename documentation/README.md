@@ -57,7 +57,7 @@ One-page quick start for installation, PDF generation, and Canvas upload.
 ---
 
 #### [yaml_config_guide.md](yaml_config_guide.md)
-Reference for the quiz YAML schema and configuration options.
+Reference for the quiz YAML schema and configuration options, including list format ordering.
 
 **Audience:** Instructors and question authors
 
@@ -180,4 +180,4 @@ For issues or questions:
 
 ---
 
-*Last updated: 2025-10-09*
+*Last updated: 2026-02-07*
