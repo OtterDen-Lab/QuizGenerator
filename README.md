@@ -265,6 +265,15 @@ QUIZGEN_ALLOW_GENERATOR=1 quizgen --yaml my_quiz.yaml
 
 If you need dynamic question generation with untrusted inputs, consider writing a proper `Question` subclass instead, which provides better control and validation.
 
+### LaTeX `-shell-escape` Warning
+
+When using `--latex`, QuizGenerator invokes `latexmk -shell-escape` to compile PDFs. This allows LaTeX to execute external commands (for example, via `\write18`). If your question content includes raw LaTeX (e.g., from custom question types or untrusted YAML sources), this can be a command‑execution vector.
+
+Guidance:
+- Only use `--latex` with trusted question sources.
+- Prefer Typst (default) when possible.
+- If you need LaTeX but want to reduce risk, avoid raw LaTeX content and keep custom questions constrained to ContentAST elements.
+
 ## Project Structure
 
 ```
