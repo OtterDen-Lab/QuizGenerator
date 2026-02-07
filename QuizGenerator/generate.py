@@ -10,6 +10,7 @@ import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
+from typing import Tuple
 
 from dotenv import load_dotenv
 
@@ -84,6 +85,8 @@ def parse_args():
                      help="With --test_all, skip questions that fail due to missing optional dependencies")
   parser.add_argument("--allow_generator", action="store_true",
                      help="Enable FromGenerator questions (executes Python from YAML)")
+  parser.add_argument("--check-deps", action="store_true",
+                     help="Check external dependencies (Typst/LaTeX/Pandoc) and exit")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
@@ -100,6 +103,22 @@ def parse_args():
     exit(8)
 
   return args
+
+
+def _check_dependencies(*, require_typst: bool, require_latex: bool) -> Tuple[bool, list[str]]:
+  missing = []
+
+  if require_typst and shutil.which("typst") is None:
+    missing.append("Typst not found. Install from https://typst.app/ or ensure `typst` is in PATH.")
+
+  if require_latex and shutil.which("latexmk") is None:
+    missing.append("latexmk not found. Install a LaTeX distribution that provides latexmk.")
+
+  # Pandoc is optional but improves markdown rendering.
+  if shutil.which("pandoc") is None:
+    log.warning("Pandoc not found. Markdown rendering may be lower quality.")
+
+  return (len(missing) == 0), missing
 
 
 def test():
@@ -631,6 +650,24 @@ def main():
   if args.command == "TEST":
     test()
     return
+
+  # Dependency checks
+  require_typst = bool(getattr(args, "typst", True))
+  require_latex = not require_typst
+  if args.num_pdfs > 0 or args.test_all > 0 or args.check_deps:
+    ok, missing = _check_dependencies(
+      require_typst=require_typst,
+      require_latex=require_latex
+    )
+    if not ok:
+      for msg in missing:
+        log.error(msg)
+      if args.check_deps:
+        exit(1)
+      exit(8)
+    if args.check_deps:
+      print("Dependency check passed.")
+      exit(0)
 
   if args.allow_generator:
     os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
