@@ -51,8 +51,13 @@ jobs:
 
       - name: Install Typst
         run: |
-          curl -fsSL https://typst.community/typst-install/install.sh | sh
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL -o /tmp/typst.tar.xz https://github.com/typst/typst/releases/latest/download/typst-linux-x64.tar.xz
+          tar -xf /tmp/typst.tar.xz -C /tmp
+          cp /tmp/typst-linux-x64/typst "$HOME/.local/bin/typst"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          typst --version
 
       - name: Generate a test PDF
         run: |
