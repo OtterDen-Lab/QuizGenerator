@@ -53,9 +53,32 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o /tmp/typst.tar.xz https://github.com/typst/typst/releases/latest/download/typst-linux-x64.tar.xz
-          tar -xf /tmp/typst.tar.xz -C /tmp
-          cp /tmp/typst-linux-x64/typst "$HOME/.local/bin/typst"
+          ASSET_URL=$(python - <<'PY'
+          import json
+          import urllib.request
+
+          url = "https://api.github.com/repos/typst/typst/releases/latest"
+          data = json.load(urllib.request.urlopen(url))
+          asset_url = None
+          for asset in data.get("assets", []):
+              name = asset.get("name", "").lower()
+              if "linux" in name and ("x86_64" in name or "amd64" in name):
+                  if name.endswith((".tar.xz", ".tar.gz")):
+                      asset_url = asset.get("browser_download_url")
+                      break
+          if not asset_url:
+              raise SystemExit("No suitable Typst asset found.")
+          print(asset_url)
+          PY
+          )
+          curl -fsSL -o /tmp/typst.tar $ASSET_URL
+          tar -xf /tmp/typst.tar -C /tmp
+          TYPST_BIN=$(find /tmp -maxdepth 2 -type f -name typst | head -n 1)
+          if [ -z "$TYPST_BIN" ]; then
+            echo "Typst binary not found in archive."
+            exit 1
+          fi
+          cp "$TYPST_BIN" "$HOME/.local/bin/typst"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
           typst --version
 
