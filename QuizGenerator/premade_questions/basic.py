@@ -8,6 +8,7 @@ import sys
 from types import SimpleNamespace
 
 import QuizGenerator.contentast as ca
+from QuizGenerator import yaml_question
 from QuizGenerator.mixins import TableQuestionMixin
 from QuizGenerator.question import Question, QuestionRegistry
 
@@ -177,7 +178,6 @@ class FromGenerator(FromText, TableQuestionMixin):
 
     return body, []
 
-
 class _LocalRandomProxy:
   """Proxy random-like functions to a local RNG while preserving module attributes."""
 
@@ -188,3 +188,39 @@ class _LocalRandomProxy:
     if hasattr(self._rng, name):
       return getattr(self._rng, name)
     return getattr(random, name)
+
+
+@QuestionRegistry.register()
+class FromYaml(Question):
+  def __init__(self, *args, yaml_path=None, yaml_text=None, yaml_spec=None, yaml_base_dir=None, **kwargs):
+    if yaml_path is None and yaml_text is None and yaml_spec is None:
+      raise TypeError(f"Must supply yaml_path, yaml_text, or yaml_spec for {self.__class__.__name__}")
+    kwargs["yaml_path"] = yaml_path
+    kwargs["yaml_text"] = yaml_text
+    kwargs["yaml_spec"] = yaml_spec
+    kwargs["yaml_base_dir"] = yaml_base_dir
+    super().__init__(*args, **kwargs)
+
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    spec = yaml_question.load_question_spec(
+      yaml_path=kwargs.get("yaml_path"),
+      yaml_text=kwargs.get("yaml_text"),
+      yaml_spec=kwargs.get("yaml_spec"),
+      base_dir=kwargs.get("yaml_base_dir")
+    )
+    context["yaml_spec"] = spec
+    yaml_question.apply_context_spec(spec, context)
+    templates = yaml_question.parse_question_templates(spec)
+    context["yaml_body_template"] = templates["body"]
+    context["yaml_explanation_template"] = templates["explanation"]
+    return context
+
+  @classmethod
+  def _build_body(cls, context):
+    return context.get("yaml_body_template", ca.Section())
+
+  @classmethod
+  def _build_explanation(cls, context):
+    return context.get("yaml_explanation_template", ca.Section())

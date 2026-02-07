@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import base64
+import copy
 import decimal
 import enum
 import fractions
@@ -144,6 +145,210 @@ class Element(abc.ABC):
 
   def is_mergeable(self, other: Element):
     return False
+
+
+_YAML_NODE_REGISTRY: dict[str, dict[str, object]] = {}
+
+
+def register_yaml_node(
+  name: str,
+  parser: Callable[[object], Element],
+  *,
+  form_spec: dict[str, object] | None = None
+) -> None:
+  """Register a YAML node parser and optional GUI form spec."""
+  _YAML_NODE_REGISTRY[name] = {
+    "parser": parser,
+    "form_spec": form_spec or {},
+  }
+
+
+def get_yaml_node_parser(name: str) -> Callable[[object], Element] | None:
+  entry = _YAML_NODE_REGISTRY.get(name)
+  if entry is None:
+    return None
+  return entry.get("parser")
+
+
+def get_yaml_node_form_spec(name: str) -> dict[str, object] | None:
+  entry = _YAML_NODE_REGISTRY.get(name)
+  if entry is None:
+    return None
+  return entry.get("form_spec")  # type: ignore[return-value]
+
+
+def list_yaml_nodes() -> dict[str, dict[str, object]]:
+  """Return form specs for all registered YAML nodes."""
+  return {
+    name: entry.get("form_spec", {})
+    for name, entry in _YAML_NODE_REGISTRY.items()
+  }
+
+class TemplateElement(Element):
+  """
+  Base class for template AST elements that must be resolved with a context
+  before rendering.
+
+  Template elements allow you to build a stable AST skeleton and then
+  evaluate it with different inputs without rebuilding the whole tree.
+  """
+  @abc.abstractmethod
+  def resolve(self, context):
+    """Return a concrete value or Element for the given context."""
+    raise NotImplementedError
+
+  def _not_resolved(self):
+    raise RuntimeError(
+      f"{type(self).__name__} must be resolved before rendering. "
+      "Call contentast.resolve_template(...) in the question build path."
+    )
+
+  def render_markdown(self, **kwargs):
+    self._not_resolved()
+
+  def render_html(self, **kwargs):
+    self._not_resolved()
+
+  def render_latex(self, **kwargs):
+    self._not_resolved()
+
+  def render_typst(self, **kwargs):
+    self._not_resolved()
+
+class Expr(TemplateElement):
+  """
+  Evaluates a callable against the context and returns a concrete value
+  (Element, string, number, or list of Elements).
+  """
+  def __init__(self, fn: Callable[[object], object], label: str | None = None):
+    super().__init__()
+    self.fn = fn
+    self.label = label
+
+  def resolve(self, context):
+    return self.fn(context)
+
+class When(TemplateElement):
+  """
+  Conditional template node. The condition can be a bool, a callable, or another
+  TemplateElement. The branches may be Elements, strings, or lists.
+  """
+  def __init__(self, condition, then, otherwise=None):
+    super().__init__()
+    self.condition = condition
+    self.then = then
+    self.otherwise = otherwise
+
+  def _eval_condition(self, context) -> bool:
+    if isinstance(self.condition, TemplateElement):
+      return bool(self.condition.resolve(context))
+    if callable(self.condition):
+      return bool(self.condition(context))
+    return bool(self.condition)
+
+  def resolve(self, context):
+    return self.then if self._eval_condition(context) else self.otherwise
+
+class Choose(TemplateElement):
+  """
+  Deterministic choice using context.rng.
+  """
+  def __init__(self, options, weights=None):
+    super().__init__()
+    self.options = list(options)
+    self.weights = list(weights) if weights is not None else None
+
+  def resolve(self, context):
+    rng = getattr(context, "rng", None)
+    if rng is None and hasattr(context, "get"):
+      rng = context.get("rng")
+    if rng is None:
+      raise ValueError("Choose requires context.rng to be available.")
+    if self.weights:
+      return rng.choices(self.options, weights=self.weights, k=1)[0]
+    return rng.choice(self.options)
+
+def resolve_template(node, context):
+  """
+  Resolve a template AST into a concrete content AST.
+
+  This walks the tree, evaluates TemplateElement nodes, and returns a new
+  AST with no template elements remaining.
+  """
+  return _resolve_element(node, context)
+
+def _resolve_element(node, context):
+  value = _resolve_value(node, context)
+  if value is None:
+    return None
+  if isinstance(value, Element):
+    return _resolve_element_fields(value, context)
+  if isinstance(value, (list, tuple)):
+    elements = _resolve_elements(value, context)
+    return Section(elements)
+  return Text(str(value))
+
+def _resolve_elements(seq, context):
+  result = []
+  for item in seq:
+    value = _resolve_value(item, context)
+    if value is None:
+      continue
+    if isinstance(value, (list, tuple)):
+      result.extend(_resolve_elements(value, context))
+    elif isinstance(value, Element):
+      result.append(_resolve_element_fields(value, context))
+    else:
+      result.append(Text(str(value)))
+  return result
+
+def _resolve_value(node, context):
+  if isinstance(node, TemplateElement):
+    return _resolve_value(node.resolve(context), context)
+  return node
+
+def _resolve_element_fields(element, context):
+  if isinstance(element, Table):
+    new_table = copy.copy(element)
+    if element.headers is not None:
+      new_table.headers = _resolve_elements(element.headers, context)
+    new_table.data = []
+    for row in element.data:
+      new_row = []
+      for cell in row:
+        cell_value = _resolve_value(cell, context)
+        if cell_value is None:
+          new_row.append(Text(""))
+        elif isinstance(cell_value, (list, tuple)):
+          new_row.append(Section(_resolve_elements(cell_value, context)))
+        elif isinstance(cell_value, Element):
+          new_row.append(_resolve_element_fields(cell_value, context))
+        else:
+          new_row.append(Text(str(cell_value)))
+      new_table.data.append(new_row)
+    return new_table
+
+  if isinstance(element, TableGroup):
+    new_group = copy.copy(element)
+    new_group.tables = []
+    for label, table in element.tables:
+      label_value = _resolve_value(label, context)
+      if label_value is None:
+        resolved_label = None
+      elif isinstance(label_value, Element):
+        resolved_label = label_value.render_markdown()
+      else:
+        resolved_label = str(label_value)
+      resolved_table = _resolve_element(table, context)
+      new_group.tables.append((resolved_label, resolved_table))
+    return new_group
+
+  if isinstance(element, Container):
+    new_container = copy.copy(element)
+    new_container.elements = _resolve_elements(element.elements, context)
+    return new_container
+
+  return element
 
 class Container(Element):
   """Elements that contain other elements.  Generally are formatting of larger pieces."""
@@ -2551,6 +2756,98 @@ class AnswerTypes:
   class Decimal(MultiBase):
     def get_display_string(self) -> str:
       return f"{self.value:0{self.length if self.length is not None else 0}}"
+
+  class StrictBase(Answer):
+    """
+    Base class for strict-format answers (binary/hex/decimal).
+    Only accepts the target base, optionally requiring a prefix.
+    """
+    prefix = ""
+    fmt = "d"
+
+    def __init__(self, *args, require_prefix: bool = False, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.require_prefix = require_prefix
+
+    def _format_value(self) -> str:
+      value = int(self.value)
+      formatted = format(value, self.fmt)
+
+      if self.length is not None:
+        if self.fmt == "b":
+          width = self.length
+        elif self.fmt in ("X", "x"):
+          width = math.ceil(self.length / 8)
+        else:
+          width = self.length
+        formatted = formatted.zfill(width)
+
+      return formatted
+
+    def _candidate_strings(self) -> List[str]:
+      base = self._format_value()
+      candidates = []
+      seen = set()
+
+      def add(val: str) -> None:
+        if val not in seen:
+          candidates.append(val)
+          seen.add(val)
+
+      base_variants = [base]
+      if self.fmt in ("X", "x"):
+        base_variants.append(base.lower())
+
+      if self.prefix:
+        prefixes = [self.prefix, self.prefix.lower()]
+        if self.require_prefix:
+          for p in prefixes:
+            for b in base_variants:
+              add(p + b)
+          return candidates
+        for b in base_variants:
+          add(b)
+        for p in prefixes:
+          for b in base_variants:
+            add(p + b)
+        return candidates
+
+      for b in base_variants:
+        add(b)
+      return candidates
+
+    def get_for_canvas(self, single_answer=False) -> List[dict]:
+      if self.pdf_only:
+        return []
+      return [
+        {
+          "blank_id": self.key,
+          "answer_text": candidate,
+          "answer_weight": 100 if self.correct else 0,
+        }
+        for candidate in self._candidate_strings()
+      ]
+
+  class BinaryStrict(StrictBase):
+    prefix = "0b"
+    fmt = "b"
+
+    def get_display_string(self) -> str:
+      return f"{self.prefix}{self._format_value()}"
+
+  class HexStrict(StrictBase):
+    prefix = "0x"
+    fmt = "X"
+
+    def get_display_string(self) -> str:
+      return f"{self.prefix}{self._format_value()}"
+
+  class DecimalStrict(StrictBase):
+    prefix = ""
+    fmt = "d"
+
+    def get_display_string(self) -> str:
+      return self._format_value()
 
   # Concrete type answers
   class Float(Answer):

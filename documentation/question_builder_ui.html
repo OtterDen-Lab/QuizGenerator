@@ -1,0 +1,1464 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quiz Question Builder</title>
+    <style>
+      :root {
+        --ink: #1e1d1b;
+        --muted: #5c5b57;
+        --paper: #f5f1ea;
+        --card: #ffffff;
+        --accent: #0f6b6b;
+        --accent-2: #c86c4e;
+        --line: #ded7cc;
+        --soft: #f0e9df;
+        --shadow: 0 14px 40px rgba(30, 29, 27, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Avenir Next", "Fira Sans", "Trebuchet MS", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 15% 10%, rgba(15, 107, 107, 0.12), transparent 40%),
+          radial-gradient(circle at 85% 20%, rgba(200, 108, 78, 0.14), transparent 45%),
+          linear-gradient(135deg, #f7f2ea 0%, #eef5f2 100%);
+        min-height: 100vh;
+      }
+
+      header {
+        padding: 36px 24px 12px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2.4rem;
+        letter-spacing: -0.02em;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        max-width: 680px;
+      }
+
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 24px 80px;
+        display: grid;
+        gap: 24px;
+        grid-template-columns: minmax(280px, 1fr) minmax(360px, 2fr);
+        align-items: start;
+      }
+
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+        animation: fadeUp 0.6s ease both;
+      }
+
+      .panel.full {
+        grid-column: 1 / -1;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 1.25rem;
+      }
+
+      .panel h3 {
+        margin: 18px 0 10px;
+        font-size: 1.05rem;
+      }
+
+      .panel p {
+        margin: 0 0 12px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select,
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: var(--soft);
+        font-family: inherit;
+        font-size: 0.95rem;
+      }
+
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .row > * {
+        flex: 1 1 auto;
+      }
+
+      .btn {
+        border: none;
+        border-radius: 999px;
+        padding: 10px 18px;
+        font-weight: 600;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .btn.secondary {
+        background: var(--accent-2);
+      }
+
+      .btn.ghost {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+      }
+
+      .btn.small {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+      }
+
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .node-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        background: #fffdf9;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .chip {
+        background: #e7f2f0;
+        color: #0f6b6b;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+
+      .chip.derived {
+        background: #f4e6dd;
+        color: #a04527;
+      }
+
+      .chip:hover {
+        border-color: currentColor;
+      }
+
+      .editor {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        min-height: 160px;
+        background: #fffdf9;
+        font-size: 1rem;
+      }
+
+      .expr-editor {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: var(--soft);
+        min-height: 42px;
+      }
+
+      .editor:focus,
+      .expr-editor:focus {
+        outline: 2px solid rgba(15, 107, 107, 0.4);
+      }
+
+      .token {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #dfeff0;
+        color: #0f6b6b;
+        font-size: 0.85rem;
+        margin: 0 2px;
+      }
+
+      .token.answer {
+        background: #f7e4d9;
+        color: #a04527;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .output {
+        background: #131313;
+        color: #f5f1ea;
+        border-radius: 14px;
+        padding: 16px;
+        font-family: "JetBrains Mono", "Fira Code", "Menlo", monospace;
+        min-height: 200px;
+        white-space: pre;
+        overflow-x: auto;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .hint {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+
+      .operator-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .operator-bar button {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+
+      .answer-builder h4 {
+        margin: 0 0 8px;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(30, 29, 27, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 50;
+      }
+
+      .modal.hidden {
+        display: none;
+      }
+
+      .modal-card {
+        width: min(720px, 96%);
+        background: var(--card);
+        border-radius: 18px;
+        padding: 20px;
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .preview-box {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        background: #fffdf9;
+      }
+
+      .preview-box h3 {
+        margin: 0 0 10px;
+      }
+
+      .preview-section {
+        margin-bottom: 16px;
+      }
+
+      .preview-context {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-bottom: 10px;
+      }
+
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 980px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="chips">
+        <span class="chip">Quick & dirty builder</span>
+      </div>
+      <h1>Quiz Question Builder</h1>
+      <p class="subtitle">
+        Build YAML questions visually. Click chips to insert variables, or drag them into the editors.
+      </p>
+    </header>
+
+    <main>
+      <section class="panel">
+        <div class="section-title">
+          <h2>Metadata</h2>
+          <span class="muted">Optional fields for later use</span>
+        </div>
+        <div class="grid two">
+          <div>
+            <label>Name</label>
+            <input type="text" id="meta-name" placeholder="Paging Question" />
+          </div>
+          <div>
+            <label>Topic</label>
+            <input type="text" id="meta-topic" placeholder="MEMORY" />
+          </div>
+          <div>
+            <label>Points</label>
+            <input type="number" id="meta-points" placeholder="5" />
+          </div>
+          <div>
+            <label>Spacing</label>
+            <input type="text" id="meta-spacing" placeholder="MEDIUM" />
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Variables</h2>
+          <button class="btn" id="add-var">Add Variable</button>
+        </div>
+        <p>Create random inputs or fixed values. These become draggable chips.</p>
+        <div class="chips" id="var-chips"></div>
+        <div id="vars"></div>
+
+        <div class="section-title" style="margin-top: 18px;">
+          <h3>Derived Values</h3>
+          <button class="btn secondary" id="add-derived">Add Derived</button>
+        </div>
+        <p class="muted">Build formulas by clicking variable chips or using operators.</p>
+        <div class="chips" id="derived-chips"></div>
+        <div id="derived"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Question Body</h2>
+          <span class="muted">Type text, insert variables, or add answer fields.</span>
+        </div>
+        <div class="toolbar">
+          <button class="btn ghost small" id="insert-var-body">Insert Variable</button>
+          <button class="btn ghost small" id="insert-derived-body">Insert Derived</button>
+          <button class="btn secondary small" id="insert-answer-body">Insert Answer</button>
+        </div>
+        <div class="chips" id="body-var-chips"></div>
+        <div class="chips" id="body-derived-chips"></div>
+        <div id="body-editor" class="editor" contenteditable="true" data-editor="body"></div>
+        <div class="hint">Use “Insert Answer” to open the answer builder.</div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>Explanation</h2>
+          <span class="muted">Same tools as the question body.</span>
+        </div>
+        <div class="toolbar">
+          <button class="btn ghost small" id="insert-var-expl">Insert Variable</button>
+          <button class="btn ghost small" id="insert-derived-expl">Insert Derived</button>
+          <button class="btn secondary small" id="insert-answer-expl">Insert Answer</button>
+        </div>
+        <div class="chips" id="expl-var-chips"></div>
+        <div class="chips" id="expl-derived-chips"></div>
+        <div id="expl-editor" class="editor" contenteditable="true" data-editor="explanation"></div>
+      </section>
+
+      <section class="panel full">
+        <div class="section-title">
+          <h2>Live Preview</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <label class="toggle">
+              <input type="checkbox" id="preview-show-answers" />
+              Show answers
+            </label>
+            <button class="btn ghost" id="refresh-preview">Refresh</button>
+          </div>
+        </div>
+        <div id="preview-context" class="preview-context"></div>
+        <div class="preview-box">
+          <div class="preview-section">
+            <h3>Question</h3>
+            <div id="preview-body"></div>
+          </div>
+          <div class="preview-section">
+            <h3>Explanation</h3>
+            <div id="preview-expl"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel full">
+        <div class="section-title">
+          <h2>Export YAML</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <button class="btn ghost" id="copy-yaml">Copy</button>
+            <button class="btn ghost" id="download-yaml">Download</button>
+            <button class="btn" id="generate">Generate YAML</button>
+          </div>
+        </div>
+        <div id="yaml-output" class="output"></div>
+      </section>
+    </main>
+
+    <div id="answer-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Insert Answer</h3>
+          <button class="btn ghost small" id="answer-cancel">Cancel</button>
+        </div>
+        <p class="muted">Choose where the answer value comes from and how it should be formatted.</p>
+        <div class="grid two">
+          <div>
+            <label>Type</label>
+            <select id="answer-type">
+              <option value="int">int</option>
+              <option value="float">float</option>
+              <option value="string">string</option>
+              <option value="binary">binary</option>
+              <option value="hex">hex</option>
+              <option value="decimal">decimal</option>
+              <option value="list">list</option>
+              <option value="vector">vector</option>
+              <option value="matrix">matrix</option>
+              <option value="open_ended">open_ended</option>
+              <option value="dropdown">dropdown</option>
+              <option value="multiple_choice">multiple_choice</option>
+            </select>
+          </div>
+          <div>
+            <label>Label (optional)</label>
+            <input type="text" id="answer-label" placeholder="Physical Address" />
+          </div>
+          <div>
+            <label>Value Source</label>
+            <select id="answer-source">
+              <option value="var">Variable</option>
+              <option value="derived">Derived</option>
+              <option value="expr">Expression</option>
+            </select>
+          </div>
+          <div>
+            <label>Value Name</label>
+            <select id="answer-source-name"></select>
+          </div>
+          <div id="answer-expr-row" class="hidden">
+            <label>Expression</label>
+            <input type="text" id="answer-expr" class="expr-input" placeholder="pfn * 2" />
+          </div>
+          <div id="answer-length-row">
+            <label>Length (optional)</label>
+            <input type="text" id="answer-length" class="expr-input" placeholder="4" />
+          </div>
+          <div id="answer-strict-row">
+            <label>Strict</label>
+            <select id="answer-strict">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+          <div id="answer-prefix-row">
+            <label>Require Prefix</label>
+            <select id="answer-require-prefix">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+        </div>
+        <div id="answer-baffles-row" class="hidden" style="margin-top: 12px;">
+          <label>Baffles (one per line)</label>
+          <textarea id="answer-baffles" placeholder="Incorrect choices"></textarea>
+        </div>
+        <div class="chips" id="answer-var-chips"></div>
+        <div class="chips" id="answer-derived-chips"></div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="answer-clear">Clear</button>
+          <button class="btn secondary" id="answer-insert">Insert Answer</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        version: 1,
+        meta: { name: "", topic: "", points: "", spacing: "" },
+        context: { vars: [], derived: [] },
+      };
+
+      let formSpec = {};
+      let activeEditor = null;
+      let activeInput = null;
+      let activeExprEditor = null;
+      let currentAnswerTarget = null;
+      let previewTimer = null;
+
+      const el = (id) => document.getElementById(id);
+
+      const inputMeta = () => {
+        state.meta.name = el("meta-name").value.trim();
+        state.meta.topic = el("meta-topic").value.trim();
+        state.meta.points = el("meta-points").value.trim();
+        state.meta.spacing = el("meta-spacing").value.trim();
+      };
+
+      const normalizeText = (text) => (text || "").replace(/\u00a0/g, " ");
+
+      document.querySelectorAll("#meta-name, #meta-topic, #meta-points, #meta-spacing")
+        .forEach((input) => input.addEventListener("input", inputMeta));
+
+      const VAR_TYPES = [
+        { value: "int", label: "Random integer", fields: ["min", "max"] },
+        { value: "float", label: "Random decimal", fields: ["min", "max"] },
+        { value: "choice", label: "Pick from list", fields: ["options"] },
+        { value: "weighted_choice", label: "Pick from list (weighted)", fields: ["options", "weights"] },
+        { value: "bool", label: "Yes / No", fields: [] },
+        { value: "literal", label: "Fixed value", fields: ["value"] },
+      ];
+
+      const defaultVar = () => ({ name: "", type: "int", min: "", max: "", options: [], weights: [], value: "" });
+      const defaultDerived = () => ({ name: "", expr: "" });
+
+      const insertIntoInput = (input, text) => {
+        if (!input) return;
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? input.value.length;
+        const before = input.value.slice(0, start);
+        const after = input.value.slice(end);
+        input.value = before + text + after;
+        const pos = start + text.length;
+        input.setSelectionRange(pos, pos);
+        input.dispatchEvent(new Event("input"));
+      };
+
+      const createTokenSpan = (kind, name, extra = {}) => {
+        const span = document.createElement("span");
+        span.className = `token ${kind}`;
+        span.contentEditable = "false";
+        span.dataset.kind = kind;
+        span.dataset.name = name;
+        Object.entries(extra).forEach(([key, value]) => {
+          if (value !== "" && value !== null && value !== undefined) {
+            span.dataset[key] = String(value);
+          }
+        });
+        if (kind === "answer") {
+          span.textContent = `Answer: ${extra.label || name || ""}`.trim();
+        } else {
+          span.textContent = name;
+        }
+        return span;
+      };
+
+      const insertTokenIntoEditor = (editor, token) => {
+        if (!editor) return;
+        editor.focus();
+        const selection = window.getSelection();
+        if (!selection) return;
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(token);
+        range.setStartAfter(token);
+        range.setEndAfter(token);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      };
+
+      const insertTokenIntoExprEditor = (editor, token) => {
+        if (!editor) return;
+        editor.focus();
+        const selection = window.getSelection();
+        if (!selection) return;
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(token);
+        range.setStartAfter(token);
+        range.setEndAfter(token);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        editor.dispatchEvent(new Event("input"));
+      };
+
+      const insertVariable = (name, options = {}) => {
+        const targetEditor = options.targetEditor || null;
+        const preferInput = options.preferInput !== false;
+        if (targetEditor) {
+          insertTokenIntoEditor(targetEditor, createTokenSpan("var", name));
+          schedulePreview();
+          return;
+        }
+        if (activeExprEditor) {
+          insertTokenIntoExprEditor(activeExprEditor, createTokenSpan("var", name));
+          schedulePreview();
+          return;
+        }
+        if (preferInput && activeInput && activeInput.classList.contains("expr-input")) {
+          insertIntoInput(activeInput, name);
+          schedulePreview();
+          return;
+        }
+        if (activeEditor) {
+          insertTokenIntoEditor(activeEditor, createTokenSpan("var", name));
+          schedulePreview();
+          return;
+        }
+        if (activeInput) {
+          insertIntoInput(activeInput, `{{ ${name} }}`);
+          schedulePreview();
+        }
+      };
+
+      const insertDerived = (name, options = {}) => {
+        const targetEditor = options.targetEditor || null;
+        const preferInput = options.preferInput !== false;
+        if (targetEditor) {
+          insertTokenIntoEditor(targetEditor, createTokenSpan("derived", name));
+          schedulePreview();
+          return;
+        }
+        if (activeExprEditor) {
+          insertTokenIntoExprEditor(activeExprEditor, createTokenSpan("derived", name));
+          schedulePreview();
+          return;
+        }
+        if (preferInput && activeInput && activeInput.classList.contains("expr-input")) {
+          insertIntoInput(activeInput, name);
+          schedulePreview();
+          return;
+        }
+        if (activeEditor) {
+          insertTokenIntoEditor(activeEditor, createTokenSpan("derived", name));
+          schedulePreview();
+          return;
+        }
+        if (activeInput) {
+          insertIntoInput(activeInput, `{{ ${name} }}`);
+          schedulePreview();
+        }
+      };
+
+      const pickName = (entries, label) => {
+        const names = entries.map((entry) => entry.name).filter(Boolean);
+        if (names.length === 0) {
+          alert(`No ${label} available yet.`);
+          return null;
+        }
+        if (names.length === 1) {
+          return names[0];
+        }
+        const choice = window.prompt(`Choose ${label} (type exact name):\n${names.join(", ")}`, names[0]);
+        if (!choice) return null;
+        if (!names.includes(choice)) {
+          alert(`"${choice}" not found. Use one of: ${names.join(", ")}`);
+          return null;
+        }
+        return choice;
+      };
+
+      const openAnswerModal = (targetEditor) => {
+        currentAnswerTarget = targetEditor;
+        el("answer-modal").classList.remove("hidden");
+        updateAnswerModalOptions();
+        updateAnswerModalVisibility();
+        renderAnswerChips();
+      };
+
+      const closeAnswerModal = () => {
+        el("answer-modal").classList.add("hidden");
+        currentAnswerTarget = null;
+      };
+
+      const clearAnswerModal = () => {
+        el("answer-label").value = "";
+        el("answer-type").value = "int";
+        el("answer-source").value = "var";
+        el("answer-expr").value = "";
+        el("answer-length").value = "";
+        el("answer-strict").value = "false";
+        el("answer-require-prefix").value = "false";
+        el("answer-baffles").value = "";
+        updateAnswerModalOptions();
+        updateAnswerModalVisibility();
+      };
+
+      const updateAnswerModalOptions = () => {
+        const source = el("answer-source").value;
+        const nameSelect = el("answer-source-name");
+        nameSelect.innerHTML = "";
+        let entries = [];
+        if (source === "var") {
+          entries = state.context.vars;
+        } else if (source === "derived") {
+          entries = state.context.derived;
+        }
+        const names = entries.map((entry) => entry.name).filter(Boolean);
+        if (names.length === 0) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "No values yet";
+          nameSelect.appendChild(opt);
+        } else {
+          names.forEach((name) => {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            nameSelect.appendChild(opt);
+          });
+        }
+      };
+
+      const updateAnswerModalVisibility = () => {
+        const type = el("answer-type").value;
+        const source = el("answer-source").value;
+        const isBinary = type === "binary";
+        const isHex = type === "hex";
+        const isDecimal = type === "decimal";
+        const isStrictCapable = isBinary || isHex || isDecimal;
+        const isChoice = type === "dropdown" || type === "multiple_choice";
+
+        el("answer-length-row").classList.toggle("hidden", !(isBinary || isHex || isDecimal));
+        el("answer-strict-row").classList.toggle("hidden", !isStrictCapable);
+        el("answer-prefix-row").classList.toggle("hidden", !(isBinary || isHex));
+        el("answer-baffles-row").classList.toggle("hidden", !isChoice);
+
+        el("answer-expr-row").classList.toggle("hidden", source !== "expr");
+        el("answer-source-name").parentElement.classList.toggle("hidden", source === "expr");
+      };
+
+      const insertAnswerFromModal = () => {
+        const label = el("answer-label").value.trim();
+        const type = el("answer-type").value;
+        const source = el("answer-source").value;
+        const name = el("answer-source-name").value;
+        const expr = el("answer-expr").value.trim();
+        const length = el("answer-length").value.trim();
+        const strict = el("answer-strict").value === "true";
+        const requirePrefix = el("answer-require-prefix").value === "true";
+        const bafflesRaw = el("answer-baffles").value.trim();
+
+        let value = "";
+        if (source === "expr") {
+          value = expr;
+        } else {
+          value = name;
+        }
+
+        if (!value) {
+          alert("Choose a value source or enter an expression.");
+          return;
+        }
+
+        const token = createTokenSpan("answer", label || type, {
+          label,
+          type,
+          value,
+          length,
+          strict,
+          require_prefix: requirePrefix,
+          baffles: bafflesRaw,
+        });
+        insertTokenIntoEditor(currentAnswerTarget || activeEditor, token);
+        closeAnswerModal();
+        schedulePreview();
+      };
+
+      const renderChips = (containerId, entries, kind, onClick) => {
+        const container = el(containerId);
+        if (!container) return;
+        container.innerHTML = "";
+        entries
+          .filter((entry) => entry.name)
+          .forEach((entry) => {
+            const chip = document.createElement("span");
+            chip.className = kind === "derived" ? "chip derived" : "chip";
+            chip.textContent = entry.name;
+            chip.draggable = true;
+            chip.addEventListener("click", () => {
+              if (onClick) {
+                onClick(entry.name);
+              } else if (kind === "derived") {
+                insertDerived(entry.name);
+              } else {
+                insertVariable(entry.name);
+              }
+            });
+            chip.addEventListener("dragstart", (e) => {
+              e.dataTransfer.setData("application/x-quiz-token", JSON.stringify({ kind, name: entry.name }));
+              e.dataTransfer.setData("text/plain", entry.name);
+            });
+            container.appendChild(chip);
+          });
+      };
+
+      const renderVarChips = () => {
+        renderChips("var-chips", state.context.vars, "var");
+        renderChips("body-var-chips", state.context.vars, "var", (name) => {
+          insertVariable(name, { targetEditor: el("body-editor"), preferInput: false });
+        });
+        renderChips("expl-var-chips", state.context.vars, "var", (name) => {
+          insertVariable(name, { targetEditor: el("expl-editor"), preferInput: false });
+        });
+      };
+
+      const renderDerivedChips = () => {
+        renderChips("derived-chips", state.context.derived, "derived");
+        renderChips("body-derived-chips", state.context.derived, "derived", (name) => {
+          insertDerived(name, { targetEditor: el("body-editor"), preferInput: false });
+        });
+        renderChips("expl-derived-chips", state.context.derived, "derived", (name) => {
+          insertDerived(name, { targetEditor: el("expl-editor"), preferInput: false });
+        });
+      };
+
+      const renderAnswerChips = () => {
+        renderChips("answer-var-chips", state.context.vars, "var", (name) => {
+          el("answer-source").value = "var";
+          updateAnswerModalOptions();
+          el("answer-source-name").value = name;
+          updateAnswerModalVisibility();
+        });
+        renderChips("answer-derived-chips", state.context.derived, "derived", (name) => {
+          el("answer-source").value = "derived";
+          updateAnswerModalOptions();
+          el("answer-source-name").value = name;
+          updateAnswerModalVisibility();
+        });
+      };
+
+      const renderVarRow = (container, entry, index, list) => {
+        const row = document.createElement("div");
+        row.className = "node-card";
+
+        const typeOptions = VAR_TYPES.map(
+          (t) => `<option value="${t.value}">${t.label}</option>`
+        ).join("");
+
+        row.innerHTML = `
+          <div class="row">
+            <div>
+              <label>Name</label>
+              <input type="text" value="${entry.name || ""}" />
+            </div>
+            <div>
+              <label>Type</label>
+              <select>${typeOptions}</select>
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <button class="btn ghost">Remove</button>
+            </div>
+          </div>
+          <div class="grid two" style="margin-top:12px;">
+            <div class="field-min">
+              <label>Minimum</label>
+              <input type="text" value="${entry.min || ""}" class="expr-input" />
+            </div>
+            <div class="field-max">
+              <label>Maximum</label>
+              <input type="text" value="${entry.max || ""}" class="expr-input" />
+            </div>
+            <div class="field-options">
+              <label>Options (one per line)</label>
+              <textarea>${(entry.options || []).join("\n")}</textarea>
+            </div>
+            <div class="field-weights">
+              <label>Weights (same order)</label>
+              <textarea>${(entry.weights || []).join("\n")}</textarea>
+            </div>
+            <div class="field-value">
+              <label>Fixed value</label>
+              <input type="text" value="${entry.value || ""}" class="expr-input" />
+            </div>
+          </div>
+        `;
+
+        const nameInput = row.querySelectorAll("input")[0];
+        const typeSelect = row.querySelector("select");
+        const removeBtn = row.querySelector("button");
+        const minInput = row.querySelector(".field-min input");
+        const maxInput = row.querySelector(".field-max input");
+        const optionsArea = row.querySelector(".field-options textarea");
+        const weightsArea = row.querySelector(".field-weights textarea");
+        const valueInput = row.querySelector(".field-value input");
+
+        typeSelect.value = entry.type || "int";
+
+        const updateVisibility = () => {
+          const def = VAR_TYPES.find((t) => t.value === entry.type) || VAR_TYPES[0];
+          row.querySelector(".field-min").style.display = def.fields.includes("min") ? "block" : "none";
+          row.querySelector(".field-max").style.display = def.fields.includes("max") ? "block" : "none";
+          row.querySelector(".field-options").style.display = def.fields.includes("options") ? "block" : "none";
+          row.querySelector(".field-weights").style.display = def.fields.includes("weights") ? "block" : "none";
+          row.querySelector(".field-value").style.display = def.fields.includes("value") ? "block" : "none";
+        };
+
+        updateVisibility();
+
+        nameInput.addEventListener("input", (e) => {
+          entry.name = e.target.value;
+          renderVarChips();
+          renderDerivedChips();
+          schedulePreview();
+        });
+        typeSelect.addEventListener("change", (e) => {
+          entry.type = e.target.value;
+          updateVisibility();
+        });
+        minInput.addEventListener("input", (e) => {
+          entry.min = e.target.value;
+          schedulePreview();
+        });
+        maxInput.addEventListener("input", (e) => {
+          entry.max = e.target.value;
+          schedulePreview();
+        });
+        optionsArea.addEventListener("input", (e) => {
+          entry.options = e.target.value.split("\n").map((l) => l.trim()).filter(Boolean);
+          schedulePreview();
+        });
+        weightsArea.addEventListener("input", (e) => {
+          entry.weights = e.target.value.split("\n").map((l) => l.trim()).filter(Boolean);
+          schedulePreview();
+        });
+        valueInput.addEventListener("input", (e) => {
+          entry.value = e.target.value;
+          schedulePreview();
+        });
+        removeBtn.addEventListener("click", () => {
+          list.splice(index, 1);
+          render();
+        });
+
+        row.querySelectorAll("input, textarea").forEach((input) => {
+          input.addEventListener("focus", () => {
+            activeInput = input;
+            activeExprEditor = null;
+          });
+        });
+
+        container.appendChild(row);
+      };
+
+      const serializeExprEditor = (editor) => {
+        const parts = [];
+        Array.from(editor.childNodes).forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            parts.push(normalizeText(node.textContent));
+            return;
+          }
+          if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("token")) {
+            parts.push(node.dataset.name || "");
+            return;
+          }
+          parts.push(normalizeText(node.textContent));
+        });
+        return parts.join("").replace(/\s+/g, " ").trim();
+      };
+
+      const renderDerivedRow = (container, entry, index, list) => {
+        const row = document.createElement("div");
+        row.className = "node-card";
+        row.innerHTML = `
+          <div class="row">
+            <div>
+              <label>Name</label>
+              <input type="text" value="${entry.name || ""}" />
+            </div>
+            <div>
+              <label>Expression</label>
+              <div class="expr-editor" contenteditable="true"></div>
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <button class="btn ghost">Remove</button>
+            </div>
+          </div>
+          <div class="operator-bar">
+            <button data-op="+">+</button>
+            <button data-op="-">-</button>
+            <button data-op="*">*</button>
+            <button data-op="/">/</button>
+            <button data-op="//">//</button>
+            <button data-op="%">%</button>
+            <button data-op="**">**</button>
+            <button data-op="(">(</button>
+            <button data-op=")">)</button>
+          </div>
+        `;
+        const inputs = row.querySelectorAll("input");
+        const exprEditor = row.querySelector(".expr-editor");
+        exprEditor.textContent = entry.expr || "";
+        inputs[0].addEventListener("input", (e) => {
+          entry.name = e.target.value;
+          renderDerivedChips();
+          schedulePreview();
+        });
+        exprEditor.addEventListener("input", () => {
+          entry.expr = serializeExprEditor(exprEditor);
+          schedulePreview();
+        });
+        exprEditor.addEventListener("focus", () => {
+          activeExprEditor = exprEditor;
+          activeInput = null;
+          activeEditor = null;
+        });
+        exprEditor.addEventListener("dragover", (e) => {
+          e.preventDefault();
+        });
+        exprEditor.addEventListener("drop", (e) => {
+          e.preventDefault();
+          const tokenData = e.dataTransfer.getData("application/x-quiz-token");
+          if (!tokenData) return;
+          try {
+            const data = JSON.parse(tokenData);
+            if (data.kind === "var") {
+              insertTokenIntoExprEditor(exprEditor, createTokenSpan("var", data.name));
+            } else if (data.kind === "derived") {
+              insertTokenIntoExprEditor(exprEditor, createTokenSpan("derived", data.name));
+            }
+          } catch (err) {
+            // ignore
+          }
+        });
+        row.querySelector("button.btn.ghost").addEventListener("click", () => {
+          list.splice(index, 1);
+          render();
+        });
+        row.querySelectorAll(".operator-bar button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            exprEditor.focus();
+            const token = document.createTextNode(btn.dataset.op);
+            insertTokenIntoExprEditor(exprEditor, token);
+          });
+        });
+        container.appendChild(row);
+      };
+
+      const render = () => {
+        const varsContainer = el("vars");
+        varsContainer.innerHTML = "";
+        state.context.vars.forEach((entry, idx) => renderVarRow(varsContainer, entry, idx, state.context.vars));
+
+        const derivedContainer = el("derived");
+        derivedContainer.innerHTML = "";
+        state.context.derived.forEach((entry, idx) => renderDerivedRow(derivedContainer, entry, idx, state.context.derived));
+
+        renderVarChips();
+        renderDerivedChips();
+        updateAnswerModalOptions();
+        schedulePreview();
+      };
+
+      const addVar = () => {
+        state.context.vars.push(defaultVar());
+        render();
+      };
+
+      const addDerived = () => {
+        state.context.derived.push(defaultDerived());
+        render();
+      };
+
+      const serializeInline = (nodes) => {
+        const result = [];
+        let buffer = "";
+
+        const flush = () => {
+          if (buffer !== "") {
+            result.push(buffer);
+            buffer = "";
+          }
+        };
+
+        nodes.forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            buffer += normalizeText(node.textContent);
+            return;
+          }
+          if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("token")) {
+            const kind = node.dataset.kind;
+            if (kind === "var" || kind === "derived") {
+              buffer += `{{ ${node.dataset.name} }}`;
+              return;
+            }
+            if (kind === "answer") {
+              flush();
+              const answerSpec = {
+                type: node.dataset.type,
+                value: node.dataset.value,
+              };
+              if (node.dataset.label) answerSpec.label = node.dataset.label;
+              if (node.dataset.length) answerSpec.length = node.dataset.length;
+              if (node.dataset.strict) answerSpec.strict = node.dataset.strict === "true";
+              if (node.dataset.require_prefix) answerSpec.require_prefix = node.dataset.require_prefix === "true";
+              if (node.dataset.baffles) {
+                answerSpec.baffles = node.dataset.baffles.split("\n").map((line) => line.trim()).filter(Boolean);
+              }
+              result.push({ answer: answerSpec });
+              return;
+            }
+          }
+          buffer += normalizeText(node.textContent);
+        });
+
+        flush();
+        return result.filter((item) => item !== "" && item !== null && item !== undefined);
+      };
+
+      const serializeEditor = (editor) => {
+        const blocks = [];
+        let current = [];
+
+        const flush = () => {
+          if (current.length) {
+            const inline = serializeInline(current);
+            if (inline.length) blocks.push(inline);
+            current = [];
+          }
+        };
+
+        const handleNode = (node) => {
+          if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === "DIV" || node.tagName === "P")) {
+            flush();
+            const inline = serializeInline(Array.from(node.childNodes));
+            if (inline.length) blocks.push(inline);
+            return;
+          }
+          if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "BR") {
+            flush();
+            return;
+          }
+          current.push(node);
+        };
+
+        Array.from(editor.childNodes).forEach(handleNode);
+        flush();
+
+        const paragraphs = [];
+        blocks.forEach((inline) => {
+          if (!inline.length) return;
+          paragraphs.push({ paragraph: { lines: inline } });
+        });
+
+        return paragraphs;
+      };
+
+      const buildSpec = () => {
+        inputMeta();
+        const spec = { version: state.version };
+
+        const meta = {};
+        if (state.meta.name) meta.name = state.meta.name;
+        if (state.meta.topic) meta.topic = state.meta.topic;
+        if (state.meta.points) meta.points = Number(state.meta.points);
+        if (state.meta.spacing) meta.spacing = state.meta.spacing;
+        if (Object.keys(meta).length) spec.meta = meta;
+
+        const vars = {};
+        state.context.vars.forEach((entry) => {
+          if (!entry.name) return;
+          const def = { type: entry.type };
+          if (entry.type === "int" || entry.type === "float") {
+            if (entry.min) def.min = entry.min;
+            if (entry.max) def.max = entry.max;
+          }
+          if (entry.type === "choice" || entry.type === "weighted_choice") {
+            if (entry.options && entry.options.length) def.options = entry.options;
+            if (entry.type === "weighted_choice" && entry.weights && entry.weights.length) {
+              def.weights = entry.weights;
+            }
+          }
+          if (entry.type === "literal" && entry.value !== "") {
+            def.value = entry.value;
+          }
+          vars[entry.name] = def;
+        });
+
+        const derived = {};
+        state.context.derived.forEach((entry) => {
+          if (!entry.name || !entry.expr) return;
+          derived[entry.name] = entry.expr;
+        });
+
+        if (Object.keys(vars).length || Object.keys(derived).length) {
+          spec.context = {};
+          if (Object.keys(vars).length) spec.context.vars = vars;
+          if (Object.keys(derived).length) spec.context.derived = derived;
+        }
+
+        spec.body = serializeEditor(el("body-editor"));
+        spec.explanation = serializeEditor(el("expl-editor"));
+        return spec;
+      };
+
+      const generateYaml = async () => {
+        const spec = buildSpec();
+        const response = await fetch("/to_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec }),
+        });
+        const data = await response.json();
+        el("yaml-output").textContent = data.yaml || data.error || "No output.";
+        return data.yaml || "";
+      };
+
+      const updatePreview = async () => {
+        const spec = buildSpec();
+        const showAnswers = el("preview-show-answers").checked;
+        const response = await fetch("/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec, show_answers: showAnswers }),
+        });
+        const data = await response.json();
+        if (data.error) {
+          el("preview-body").innerHTML = `<p style=\"color:#a04527;\">${data.error}</p>`;
+          el("preview-expl").innerHTML = "";
+          el("preview-context").textContent = "";
+          return;
+        }
+        el("preview-body").innerHTML = data.body_html || "";
+        el("preview-expl").innerHTML = data.explanation_html || "";
+        if (data.context) {
+          const contextEntries = Object.entries(data.context)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(", ");
+          el("preview-context").textContent = contextEntries ? `Context: ${contextEntries}` : "";
+        } else {
+          el("preview-context").textContent = "";
+        }
+      };
+
+      const schedulePreview = () => {
+        if (previewTimer) {
+          clearTimeout(previewTimer);
+        }
+        previewTimer = setTimeout(updatePreview, 400);
+      };
+
+      const setupEditor = (editor) => {
+        editor.addEventListener("focus", () => {
+          activeEditor = editor;
+          activeInput = null;
+          activeExprEditor = null;
+        });
+        editor.addEventListener("input", () => {
+          schedulePreview();
+        });
+        editor.addEventListener("dragover", (e) => {
+          e.preventDefault();
+        });
+        editor.addEventListener("drop", (e) => {
+          e.preventDefault();
+          const tokenData = e.dataTransfer.getData("application/x-quiz-token");
+          if (!tokenData) return;
+          try {
+            const data = JSON.parse(tokenData);
+            if (data.kind === "var") {
+              insertTokenIntoEditor(editor, createTokenSpan("var", data.name));
+            } else if (data.kind === "derived") {
+              insertTokenIntoEditor(editor, createTokenSpan("derived", data.name));
+            }
+          } catch (err) {
+            // ignore
+          }
+        });
+      };
+
+      const boot = async () => {
+        const res = await fetch("/form_spec");
+        const data = await res.json();
+        formSpec = data.nodes || {};
+        setupEditor(el("body-editor"));
+        setupEditor(el("expl-editor"));
+        render();
+      };
+
+      el("add-var").addEventListener("click", addVar);
+      el("add-derived").addEventListener("click", addDerived);
+      el("generate").addEventListener("click", generateYaml);
+      el("refresh-preview").addEventListener("click", updatePreview);
+      el("preview-show-answers").addEventListener("change", updatePreview);
+
+      el("copy-yaml").addEventListener("click", async () => {
+        const yamlText = await generateYaml();
+        if (!yamlText) return;
+        await navigator.clipboard.writeText(yamlText);
+      });
+
+      el("download-yaml").addEventListener("click", async () => {
+        const yamlText = await generateYaml();
+        if (!yamlText) return;
+        const blob = new Blob([yamlText], { type: "text/yaml" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "question.yaml";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      el("insert-var-body").addEventListener("click", () => {
+        const choice = pickName(state.context.vars, "variable");
+        if (choice) insertVariable(choice, { targetEditor: el("body-editor"), preferInput: false });
+      });
+      el("insert-derived-body").addEventListener("click", () => {
+        const choice = pickName(state.context.derived, "derived value");
+        if (choice) insertDerived(choice, { targetEditor: el("body-editor"), preferInput: false });
+      });
+      el("insert-answer-body").addEventListener("click", () => openAnswerModal(el("body-editor")));
+      el("insert-var-expl").addEventListener("click", () => {
+        const choice = pickName(state.context.vars, "variable");
+        if (choice) insertVariable(choice, { targetEditor: el("expl-editor"), preferInput: false });
+      });
+      el("insert-derived-expl").addEventListener("click", () => {
+        const choice = pickName(state.context.derived, "derived value");
+        if (choice) insertDerived(choice, { targetEditor: el("expl-editor"), preferInput: false });
+      });
+      el("insert-answer-expl").addEventListener("click", () => openAnswerModal(el("expl-editor")));
+      el("answer-cancel").addEventListener("click", closeAnswerModal);
+      el("answer-clear").addEventListener("click", clearAnswerModal);
+      el("answer-insert").addEventListener("click", insertAnswerFromModal);
+      el("answer-source").addEventListener("change", () => {
+        updateAnswerModalOptions();
+        updateAnswerModalVisibility();
+      });
+      el("answer-type").addEventListener("change", updateAnswerModalVisibility);
+      el("answer-modal").addEventListener("click", (e) => {
+        if (e.target.id === "answer-modal") {
+          closeAnswerModal();
+        }
+      });
+
+      document.querySelectorAll("input, textarea").forEach((input) => {
+        input.addEventListener("focus", () => {
+          activeInput = input;
+          activeExprEditor = null;
+        });
+        input.addEventListener("dragover", (e) => {
+          if (input.classList.contains("expr-input")) {
+            e.preventDefault();
+          }
+        });
+        input.addEventListener("drop", (e) => {
+          if (!input.classList.contains("expr-input")) return;
+          e.preventDefault();
+          const tokenData = e.dataTransfer.getData("application/x-quiz-token");
+          if (!tokenData) return;
+          try {
+            const data = JSON.parse(tokenData);
+            if (data.kind === "var" || data.kind === "derived") {
+              insertIntoInput(input, data.name);
+            }
+          } catch (err) {
+            // ignore
+          }
+        });
+      });
+
+      boot();
+    </script>
+  </body>
+</html>

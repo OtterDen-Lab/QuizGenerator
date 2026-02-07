@@ -754,6 +754,14 @@ class Question(abc.ABC):
     body, body_answers = cls._normalize_build_output(cls._build_body(context))
     explanation, explanation_answers = cls._normalize_build_output(cls._build_explanation(context))
 
+    # Resolve any template AST elements against the context before collecting answers.
+    body = ca.resolve_template(body, context)
+    explanation = ca.resolve_template(explanation, context)
+    if body is None:
+      body = ca.Section()
+    if explanation is None:
+      explanation = ca.Section()
+
     # Collect inline answers from both body and explanation.
     inline_body_answers = cls._collect_answers_from_ast(body)
     inline_explanation_answers = cls._collect_answers_from_ast(explanation)

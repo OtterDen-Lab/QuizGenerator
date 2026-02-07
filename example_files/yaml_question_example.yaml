@@ -1,0 +1,26 @@
+version: 1
+context:
+  vars:
+    value:
+      type: int
+      min: 0
+      max: 15
+  derived:
+    value_bin: "bin(value, 4)"
+
+body:
+  - paragraph:
+      - "Convert the following decimal value to 4-bit binary."
+      - "Value: {{ value }}"
+  - answer_block:
+      - answer:
+          type: binary
+          strict: true
+          require_prefix: false
+          value: "{{ value }}"
+          length: 4
+          label: "Binary"
+
+explanation:
+  - paragraph:
+      - "Binary is: 0b{{ value_bin }}"
