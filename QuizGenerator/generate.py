@@ -398,7 +398,7 @@ def sanitize_filename(name):
 
 
 def _canvas_payload_fingerprint(payload):
-  fingerprint = payload.get("question_text", "")
+  fingerprint = _normalize_canvas_html(payload.get("question_text", ""))
   answers = payload.get("answers", [])
   try:
     fingerprint += "".join(
@@ -408,6 +408,28 @@ def _canvas_payload_fingerprint(payload):
   except TypeError:
     log.warning("Failed to fingerprint Canvas answers; falling back to question text only.")
   return fingerprint
+
+
+def _normalize_canvas_html(html: str) -> str:
+  """
+  Normalize HTML for Canvas dedupe.
+
+  Strips volatile URLs (e.g., uploaded image file IDs) while preserving
+  stable attributes like data-quizgen-hash for image identity.
+  """
+  if not html:
+    return ""
+  # Only strip src on <img> tags that include data-quizgen-hash.
+  def _normalize_img_tag(match: re.Match) -> str:
+    tag = match.group(0)
+    if "data-quizgen-hash" not in tag:
+      return tag
+    return re.sub(r'\s+src=(".*?"|\'.*?\')', r' src="__URL__"', tag)
+
+  normalized = re.sub(r"<img\b[^>]*>", _normalize_img_tag, html)
+  # Collapse whitespace for stability across rendering differences.
+  normalized = re.sub(r"\s+", " ", normalized).strip()
+  return normalized
 
 
 def _build_canvas_payloads(

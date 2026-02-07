@@ -55,3 +55,20 @@ questions:
     path.write_text(yaml_text)
     with pytest.raises(ValueError, match="Unknown question type"):
         Quiz.from_yaml(str(path))
+
+
+def test_yaml_fromgenerator_disabled_error(tmp_path, monkeypatch):
+    monkeypatch.delenv("QUIZGEN_ALLOW_GENERATOR", raising=False)
+    yaml_text = """
+name: "Gen Quiz"
+questions:
+  5:
+    "Gen":
+      class: FromGenerator
+      generator: |
+        return "hi"
+"""
+    path = tmp_path / "gen.yaml"
+    path.write_text(yaml_text)
+    with pytest.raises(ValueError, match="FromGenerator is disabled by default"):
+        Quiz.from_yaml(str(path))

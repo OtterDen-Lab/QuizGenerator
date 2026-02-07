@@ -5,6 +5,7 @@ import base64
 import decimal
 import enum
 import fractions
+import hashlib
 import itertools
 import logging
 import math
@@ -420,9 +421,11 @@ class Document(Container):
     ]
     body
     if reserve_height != none {
-      let pad = reserve_height - measure(body).height
-      if pad > 0pt {
-        v(pad)
+      context {
+        let pad = reserve_height - measure(body).height
+        if pad > 0pt {
+          v(pad)
+        }
       }
     }
       // Check if spacing >= 199cm (EXTRA_PAGE preset)
@@ -1508,6 +1511,19 @@ class Picture(Leaf):
     attrs = []
     if self.width:
       attrs.append(f'width="{self.width}"')
+
+    # Stable hash for deduping identical images across uploads.
+    img_hash = None
+    try:
+      pos = self.img_data.tell()
+      self.img_data.seek(0)
+      img_bytes = self.img_data.read()
+      self.img_data.seek(pos)
+      img_hash = hashlib.sha256(img_bytes).hexdigest()[:16]
+    except Exception:
+      img_hash = None
+    if img_hash:
+      attrs.append(f'data-quizgen-hash="{img_hash}"')
 
     src = upload_func(self.img_data)
 
