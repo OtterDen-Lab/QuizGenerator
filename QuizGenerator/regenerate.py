@@ -8,10 +8,10 @@ scanning from webcam/scanner.
 
 CLI Usage:
     # Scan a single QR code image
-    python grade_from_qr.py --image qr_code.png
+    quizregen --image qr_code.png
 
     # Scan QR codes from a scanned exam page
-    python grade_from_qr.py --image exam_page.jpg --all
+    quizregen --image exam_page.jpg --all
 
     # Decode an encrypted string directly
     python -m QuizGenerator.regenerate --encrypted_str "EzE6JF86CDlf..."
@@ -20,7 +20,7 @@ CLI Usage:
     python -m QuizGenerator.regenerate --encrypted_str "EzE6JF86CDlf..." --points 5.0
 
 API Usage (recommended for web UIs):
-    from grade_from_qr import regenerate_from_encrypted
+    from QuizGenerator.regenerate import regenerate_from_encrypted
 
     # Parse QR code JSON
     qr_data = json.loads(qr_string)

@@ -100,6 +100,18 @@ class TestFloatAnswer:
                 "answer_exact" in first_answer or
                 "answer_approximate" in first_answer)
 
+    def test_float_answer_default_tolerance_value(self):
+        answer = ca.AnswerTypes.Float(3.14, label="Pi")
+        canvas_data = answer.get_for_canvas(single_answer=True)
+        first_answer = canvas_data[0]
+        assert first_answer.get("answer_error_margin") == ca.Answer.DEFAULT_FLOAT_TOLERANCE
+
+    def test_float_answer_custom_tolerance(self):
+        answer = ca.AnswerTypes.Float(3.14, label="Pi", tolerance=0.005)
+        canvas_data = answer.get_for_canvas(single_answer=True)
+        first_answer = canvas_data[0]
+        assert first_answer.get("answer_error_margin") == 0.005
+
     def test_float_answer_display_rounding(self):
         answer = ca.AnswerTypes.Float(3.14159265, label="Pi")
         display = answer.display

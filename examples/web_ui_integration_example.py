@@ -8,7 +8,7 @@ to regenerate answers from QR code data.
 
 import os
 
-from grade_from_qr import regenerate_from_metadata
+from QuizGenerator.regenerate import regenerate_from_metadata
 
 from QuizGenerator.qrcode_generator import QuestionQRCode
 
@@ -203,7 +203,7 @@ if __name__ == '__main__':
     print("\n" + "="*70)
     print("\nINTEGRATION SUMMARY:")
     print("  1. Install this repo alongside your web UI")
-    print("  2. Import: from grade_from_qr import regenerate_from_metadata")
+    print("  2. Import: from QuizGenerator.regenerate import regenerate_from_metadata")
     print("  3. Set QUIZ_ENCRYPTION_KEY environment variable")
     print("  4. Decode QR -> Extract metadata -> Call regenerate_from_metadata()")
     print("  5. Display answers in your grading UI")

@@ -2245,6 +2245,7 @@ class Answer(Leaf):
   """
 
   DEFAULT_ROUNDING_DIGITS = 4
+  DEFAULT_FLOAT_TOLERANCE = 0.01
 
   class CanvasAnswerKind(enum.Enum):
     BLANK = "fill_in_multiple_blanks_question"
@@ -2281,6 +2282,7 @@ class Answer(Leaf):
       label: str = "",
       unit: str = "",
       blank_length=5,
+      tolerance: float | None = None,
   ):
     
     # Initialize Leaf with label as content
@@ -2304,6 +2306,7 @@ class Answer(Leaf):
     self.correct = correct
     self.baffles = baffles
     self.pdf_only = pdf_only
+    self.tolerance = tolerance
 
     # Rendering fields
     self.label = label
@@ -2562,12 +2565,17 @@ class AnswerTypes:
 
     def get_for_canvas(self, single_answer=False) -> list[dict]:
       if single_answer:
+        tolerance = (
+          self.tolerance
+          if self.tolerance is not None
+          else Answer.DEFAULT_FLOAT_TOLERANCE
+        )
         canvas_answers = [
           {
             "numerical_answer_type": "exact_answer",
             "answer_text": round(self.value, Answer.DEFAULT_ROUNDING_DIGITS),
             "answer_exact": round(self.value, Answer.DEFAULT_ROUNDING_DIGITS),
-            "answer_error_margin": 0.1,
+            "answer_error_margin": tolerance,
             "answer_weight": 100 if self.correct else 0,
           }
         ]

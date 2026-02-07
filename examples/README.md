@@ -9,7 +9,7 @@ This directory contains working examples and demo code for using QuizGeneration.
 Complete working example demonstrating how to integrate QuizGeneration with a web-based grading UI.
 
 **Shows:**
-- How to import and use `grade_from_qr` module
+- How to import and use `QuizGenerator.regenerate`
 - Direct API: `regenerate_from_metadata()` function
 - Full flow: QR scan → decode → regenerate answers
 - Answer formatting for web display
@@ -40,7 +40,7 @@ Regenerated 1 answer(s):
 ======================================================================
 INTEGRATION SUMMARY:
   1. Install this repo alongside your web UI
-  2. Import: from grade_from_qr import regenerate_from_metadata
+  2. Import: from QuizGenerator.regenerate import regenerate_from_metadata
   3. Set QUIZ_ENCRYPTION_KEY environment variable
   4. Decode QR -> Extract metadata -> Call regenerate_from_metadata()
   5. Display answers in your grading UI
