@@ -1044,10 +1044,19 @@ class Question(abc.ABC):
 
 class QuestionGroup():
 
-  def __init__(self, questions_in_group: List[Question], pick_once: bool, name: Optional[str] = None):
+  def __init__(
+      self,
+      questions_in_group: List[Question],
+      pick_once: bool,
+      name: Optional[str] = None,
+      num_to_pick: int = 1,
+      random_per_student: bool = False,
+  ):
     self.questions = questions_in_group
     self.pick_once = pick_once
     self.name = name or "QuestionGroup"
+    self.num_to_pick = max(1, int(num_to_pick))
+    self.random_per_student = random_per_student
 
     # Deterministic metadata without selecting a specific question.
     first_question = questions_in_group[0] if questions_in_group else None
@@ -1057,19 +1066,38 @@ class QuestionGroup():
     self.possible_variations = float("inf")
 
     self._current_question: Optional[Question] = None
+    self._current_questions: Optional[List[Question]] = None
+
+  def _select_questions(self, rng_seed: Optional[int]) -> List[Question]:
+    if not self.questions:
+      return []
+    if self.num_to_pick >= len(self.questions):
+      return list(self.questions)
+    pick_rng = random.Random(rng_seed)
+    return list(pick_rng.sample(self.questions, self.num_to_pick))
 
   def instantiate(self, *args, **kwargs):
     # Use a local RNG seeded deterministically for question selection.
     rng_seed = kwargs.get("rng_seed", None)
-    pick_rng = random.Random(rng_seed)
 
-    if not self.pick_once or self._current_question is None:
-      self._current_question = pick_rng.choice(self.questions)
+    if self.num_to_pick <= 1:
+      if not self.pick_once or self._current_question is None:
+        selected = self._select_questions(rng_seed)
+        self._current_question = selected[0] if selected else None
 
-    # Instantiate the selected question and return the result.
-    # The underlying question creates its own RNG from the seed,
-    # so pick and content generation are independent.
-    return self._current_question.instantiate(*args, **kwargs)
+      # Instantiate the selected question and return the result.
+      # The underlying question creates its own RNG from the seed,
+      # so pick and content generation are independent.
+      if self._current_question is None:
+        raise AttributeError("QuestionGroup has no questions to instantiate.")
+      return self._current_question.instantiate(*args, **kwargs)
+
+    if not self.pick_once or self._current_questions is None:
+      self._current_questions = self._select_questions(rng_seed)
+
+    if not self._current_questions:
+      raise AttributeError("QuestionGroup has no questions to instantiate.")
+    return [q.instantiate(*args, **kwargs) for q in self._current_questions]
 
   def __getattr__(self, name):
     # Metadata attributes are set in __init__, so this branch handles

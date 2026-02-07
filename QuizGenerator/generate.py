@@ -474,6 +474,33 @@ def upload_quiz_to_canvas(
   for question_i, question in enumerate(ordered_questions):
     log.info(f"Uploading question {question_i + 1}/{total_questions}: '{question.name}'")
     seed_base = question_i * 100_000
+
+    if isinstance(question, QuestionGroup):
+      if question.pick_once:
+        selected = question._select_questions(seed_base)
+      else:
+        selected = list(question.questions)
+
+      group_payloads = []
+      for idx, sub_question in enumerate(selected):
+        sub_seed_base = seed_base + (idx * 10_000)
+        group_payloads.extend(_build_canvas_payloads(
+          sub_question,
+          canvas_course.course,
+          canvas_quiz,
+          num_variations,
+          sub_seed_base
+        ))
+
+      canvas_course.create_question(
+        canvas_quiz,
+        group_payloads,
+        group_name=question.name,
+        question_points=question.points_value,
+        pick_count=question.num_to_pick
+      )
+      continue
+
     payloads = _build_canvas_payloads(
       question,
       canvas_course.course,

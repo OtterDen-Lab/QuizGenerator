@@ -254,7 +254,9 @@ class Quiz:
                   make_question(name, data | {"topic" : question_config["topic"]}) for name, data in q_data.items()
                 ],
                 pick_once=(not question_config["random_per_student"]),
-                name=q_name
+                name=q_name,
+                num_to_pick=question_config.get("num_to_pick", 1),
+                random_per_student=question_config.get("random_per_student", False)
               )
             )
           
@@ -569,19 +571,23 @@ class Quiz:
       # Create RNG from master seed to generate per-question seeds
       master_rng = random.Random(master_seed)
 
-    for question_number, question in enumerate(ordered_questions, start=1):
+    question_number = 1
+    for question in ordered_questions:
       # Generate a unique seed for this question from the master seed
       if master_seed is not None:
         question_seed = master_rng.randint(0, 2**31 - 1)
         instance = question.instantiate(rng_seed=question_seed, **kwargs)
-        question_ast = question._build_question_ast(instance)
+        instances = instance if isinstance(instance, list) else [instance]
       else:
         instance = question.instantiate(**kwargs)
-        question_ast = question._build_question_ast(instance)
+        instances = instance if isinstance(instance, list) else [instance]
 
       # Add question number to the AST for QR code generation
-      question_ast.question_number = question_number
-      quiz.add_element(question_ast)
+      for item in instances:
+        question_ast = question._build_question_ast(item)
+        question_ast.question_number = question_number
+        quiz.add_element(question_ast)
+        question_number += 1
 
     return quiz
   
