@@ -18,7 +18,7 @@ import tempfile
 import types
 import uuid
 from types import MappingProxyType
-from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Tuple
+from typing import Any, Callable, Dict, List, Mapping, MutableMapping, Optional, Tuple
 
 import canvasapi.course
 import canvasapi.quiz
@@ -153,14 +153,16 @@ def parse_spacing(spacing_value) -> float:
     Parse spacing value from YAML config.
 
     Args:
-        spacing_value: Either a preset name ("NONE", "SHORT", "LONG", "PAGE")
-                      or a numeric value in cm
+        spacing_value: Either a preset name ("NONE", "SHORT", "MEDIUM", "LONG",
+                      "PAGE", "EXTRA_PAGE") or a numeric value in cm
 
     Returns:
         Spacing in cm as a float
 
     Examples:
         parse_spacing("SHORT") -> 4.0
+        parse_spacing("MEDIUM") -> 6.0
+        parse_spacing("EXTRA_PAGE") -> 199.0
         parse_spacing("NONE") -> 0.0
         parse_spacing(3.5) -> 3.5
         parse_spacing("3.5") -> 3.5
@@ -183,13 +185,13 @@ def parse_spacing(spacing_value) -> float:
 
 
 class QuestionRegistry:
-  _registry = {}
-  _class_name_to_registered_name = {}  # Reverse mapping: ClassName -> registered_name
-  _scanned = False
+  _registry: Dict[str, type["Question"]] = {}
+  _class_name_to_registered_name: Dict[str, str] = {}  # Reverse mapping: ClassName -> registered_name
+  _scanned: bool = False
 
   @classmethod
-  def register(cls, question_type=None):
-    def decorator(subclass):
+  def register(cls, question_type: Optional[str] = None) -> Callable[[type["Question"]], type["Question"]]:
+    def decorator(subclass: type["Question"]) -> type["Question"]:
       # Use the provided name or fall back to the class name
       name = question_type.lower() if question_type else subclass.__name__.lower()
       cls._registry[name] = subclass
@@ -203,7 +205,7 @@ class QuestionRegistry:
     return decorator
     
   @classmethod
-  def create(cls, question_type, **kwargs) -> Question:
+  def create(cls, question_type: str, **kwargs) -> "Question":
     """Instantiate a registered subclass."""
     # If we haven't already loaded our premades, do so now
     if not cls._scanned:
@@ -254,7 +256,7 @@ class QuestionRegistry:
     
     
   @classmethod
-  def load_premade_questions(cls):
+  def load_premade_questions(cls) -> None:
     package_name = "QuizGenerator.premade_questions"  # Fully qualified package name
     package_path = pathlib.Path(__file__).parent / "premade_questions"
 
@@ -1057,39 +1059,40 @@ class QuestionGroup():
     self._current_question: Optional[Question] = None
 
   def instantiate(self, *args, **kwargs):
-    # Use a local RNG to avoid global side effects.
-    rng = random.Random(kwargs.get("rng_seed", None))
+    # Use a local RNG seeded deterministically for question selection.
+    rng_seed = kwargs.get("rng_seed", None)
+    pick_rng = random.Random(rng_seed)
 
     if not self.pick_once or self._current_question is None:
-      self._current_question = rng.choice(self.questions)
+      self._current_question = pick_rng.choice(self.questions)
+
+    # Instantiate the selected question and return the result.
+    # The underlying question creates its own RNG from the seed,
+    # so pick and content generation are independent.
+    return self._current_question.instantiate(*args, **kwargs)
 
   def __getattr__(self, name):
-    # Avoid instantiating without a seed when accessing metadata.
-    if name in {"points_value", "topic", "spacing", "name", "possible_variations"}:
-      return getattr(self, name)
+    # Metadata attributes are set in __init__, so this branch handles
+    # other attributes that need delegation to the selected question.
 
     if self._current_question is None:
+      # No question selected yet - use first question as representative
+      # for introspection, but raise if the attribute doesn't exist.
       representative = self.questions[0] if self.questions else None
       if representative is None:
         raise AttributeError(
-          f"Neither QuestionGroup nor Question has attribute '{name}'"
+          f"QuestionGroup has no questions and no attribute '{name}'"
         )
-      rep_attr = getattr(representative, name, None)
-      if callable(rep_attr):
-        def wrapped_method(*args, **kwargs):
-          if self._current_question is None or not self.pick_once:
-            self.instantiate(*args, **kwargs)
-          return getattr(self._current_question, name)(*args, **kwargs)
-        return wrapped_method
-      if rep_attr is not None:
-        return rep_attr
+      if not hasattr(representative, name):
+        raise AttributeError(
+          f"QuestionGroup (via representative) has no attribute '{name}'. "
+          f"Call instantiate() first to select a question."
+        )
+      # Return representative's attribute for introspection.
+      # Callers should call instantiate() before using methods.
+      return getattr(representative, name)
 
-    attr = getattr(self._current_question, name)
-    if callable(attr):
-      def wrapped_method(*args, **kwargs):
-        if self._current_question is None or not self.pick_once:
-          self.instantiate(*args, **kwargs)
-        return attr(*args, **kwargs)
-      return wrapped_method
+    # Delegate to the selected question
+    return getattr(self._current_question, name)
 
     return attr

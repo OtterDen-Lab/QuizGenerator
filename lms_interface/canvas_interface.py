@@ -1,55 +1,59 @@
 #!env python
 from __future__ import annotations
 
-import os
-import queue
+import itertools
 import tempfile
 import time
-import typing
+from collections import deque
 from datetime import datetime, timezone
 from typing import List, Optional
 
 import canvasapi
-import canvasapi.assignment
 import canvasapi.course
-import canvasapi.exceptions
 import canvasapi.quiz
+import canvasapi.assignment
 import canvasapi.submission
+import canvasapi.exceptions
+import os
 import dotenv
 import requests
 
-try:
-  pass  # urllib3 v2
-except Exception:
-  pass        # urllib3 v1 fallback
+from .classes import LMSWrapper, Student, Submission, Submission__Canvas, FileSubmission__Canvas, TextSubmission__Canvas, QuizSubmission
 
 import logging
-import os
-
-import dotenv
-
-from .classes import (
-  FileSubmission__Canvas,
-  LMSWrapper,
-  QuizSubmission,
-  Student,
-  Submission,
-  TextSubmission__Canvas,
-)
 
 log = logging.getLogger(__name__)
 
-QUESTION_VARIATIONS_TO_TRY = 1000
-NUM_WORKERS = 4
+MAX_UPLOAD_RETRIES = 50
+RETRY_BACKOFF_BASE = 1.0
+RETRY_BACKOFF_MAX = 10.0
+
+
+def _canvas_exception_status(exc: Exception) -> Optional[int]:
+  status = getattr(exc, "status_code", None)
+  if status is not None:
+    return status
+  response = getattr(exc, "response", None)
+  return getattr(response, "status_code", None)
+
+
+def _is_retryable_canvas_exception(exc: Exception) -> bool:
+  status = _canvas_exception_status(exc)
+  if status is None:
+    return True
+  if status == 429:
+    return True
+  if 500 <= status <= 599:
+    return True
+  return False
 
 
 class CanvasInterface:
-  def __init__(self, *, prod=False, env_path: str | None = None):
-    default_env = os.path.join(os.path.expanduser("~"), ".env")
-    if env_path and os.path.exists(env_path):
+  def __init__(self, *, prod=False, env_path: Optional[str] = None):
+    if env_path:
       dotenv.load_dotenv(env_path)
-    elif os.path.exists(default_env):
-      dotenv.load_dotenv(default_env)
+    else:
+      dotenv.load_dotenv(os.path.join(os.path.expanduser("~"), ".env"))
 
     self.prod = prod
     if self.prod:
@@ -60,6 +64,13 @@ class CanvasInterface:
       log.info("Using canvas DEV")
       self.canvas_url = os.environ.get("CANVAS_API_URL")
       self.canvas_key = os.environ.get("CANVAS_API_KEY")
+
+    if not self.canvas_url or not self.canvas_key:
+      env_hint = "CANVAS_API_URL[_prod] and CANVAS_API_KEY[_prod]"
+      raise ValueError(
+        "Canvas credentials are missing. "
+        f"Set {env_hint} in your .env or environment variables."
+      )
 
     # Monkeypatch BEFORE constructing Canvas so all children use RobustRequester.
     # cap_req.Requester = RobustRequester
@@ -126,119 +137,145 @@ class CanvasCourse(LMSWrapper):
     })
     return q
 
-  def push_quiz_to_canvas(
+  def create_question(
       self,
-      quiz: Quiz,
-      num_variations: int,
-      title: typing.Optional[str] = None,
-      is_practice = False,
-      assignment_group: typing.Optional[canvasapi.course.AssignmentGroup] = None
-  ):
-    if assignment_group is None:
-      assignment_group = self.create_assignment_group()
-    canvas_quiz = self.add_quiz(assignment_group, title, is_practice=is_practice, description=quiz.description)
-    
-    total_questions = len(quiz.questions)
-    total_variations_created = 0
-    underfilled_questions = []
-    log.info(f"Starting to push quiz '{title or canvas_quiz.title}' with {total_questions} questions to Canvas")
-    log.info(f"Target: {num_variations} variations per question")
-    
-    all_variations = set() # Track all variations so we can ensure we aren't uploading duplicates
-    questions_to_upload = queue.Queue() # Make a queue of questions to upload so we can do so in the background
-    
-    # Generate all quiz questions
-    for question_i, question in enumerate(quiz):
-      log.info(f"Processing question {question_i + 1}/{total_questions}: '{question.name}'")
-  
-      group : canvasapi.quiz.QuizGroup = canvas_quiz.create_question_group([
+      canvas_quiz: canvasapi.quiz.Quiz,
+      question_payloads,
+      *,
+      group_name: Optional[str] = None,
+      question_points: Optional[float] = None,
+      pick_count: int = 1,
+      max_upload_retries: int = MAX_UPLOAD_RETRIES,
+      retry_backoff_base: float = RETRY_BACKOFF_BASE,
+      retry_backoff_max: float = RETRY_BACKOFF_MAX
+  ) -> Optional[canvasapi.quiz.QuizGroup]:
+    """
+    Upload one question or a group of questions to Canvas.
+
+    Args:
+      canvas_quiz: Canvas quiz object to receive questions.
+      question_payloads: A single payload dict or an iterable of payload dicts.
+      group_name: If provided (or if multiple payloads), create a question group.
+      question_points: Points per question in the group (required for grouping).
+      pick_count: Number of questions to pick from the group.
+
+    Note:
+      If question_payloads is an iterator, uploads are streamed without buffering.
+    """
+    if isinstance(question_payloads, dict):
+      payload_iter = iter([question_payloads])
+      use_group = False
+    elif isinstance(question_payloads, (list, tuple)):
+      payload_iter = iter(question_payloads)
+      use_group = True
+    else:
+      payload_iter = iter(question_payloads)
+      use_group = True
+
+    if group_name is not None or question_points is not None:
+      use_group = True
+
+    try:
+      first_payload = next(payload_iter)
+    except StopIteration:
+      log.warning("No question payloads provided; skipping upload.")
+      return None
+
+    payloads_iter = itertools.chain([first_payload], payload_iter)
+
+    group = None
+    if use_group:
+      if question_points is None:
+        question_points = first_payload.get("points_possible")
+      if question_points is None:
+        raise ValueError("question_points is required when creating a question group.")
+      if group_name is None:
+        group_name = first_payload.get("question_name", "Question Group")
+
+      group = canvas_quiz.create_question_group([
         {
-          "name": f"{question.name}",
-          "pick_count": 1,
-          "question_points": question.points_value
+          "name": group_name,
+          "pick_count": pick_count,
+          "question_points": question_points
         }
       ])
-      
-      # Track all variations across every question, in case we have duplicate questions
-      variation_count = 0
-      for attempt_number in range(QUESTION_VARIATIONS_TO_TRY):
+      def attach_group_id():
+        for payload in payloads_iter:
+          payload["quiz_group_id"] = group.id
+          yield payload
 
-        # Get the question in a format that is ready for canvas (e.g. json)
-        # Use large gaps between base seeds to avoid overlap with backoff attempts
-        # Each variation gets seeds: base_seed, base_seed+1, base_seed+2, ... for backoffs
-        # Include question_i in the seed so different questions get different seed spaces
-        base_seed = (question_i * 100_000) + (attempt_number * 1000)
-        question_for_canvas = question.get__canvas(
-          self.course,
-          canvas_quiz,
-          rng_seed=base_seed
-        )
+      self._upload_question_payloads(
+        canvas_quiz,
+        attach_group_id(),
+        max_upload_retries=max_upload_retries,
+        retry_backoff_base=retry_backoff_base,
+        retry_backoff_max=retry_backoff_max
+      )
+      return group
 
-        question_fingerprint = question_for_canvas["question_text"]
-        try:
-          question_fingerprint += ''.join([
-            '|'.join([
-              f"{k}:{a[k]}" for k in sorted(a.keys())
-            ])
-            for a in question_for_canvas["answers"]
-          ])
-        except TypeError as e:
-          log.error(e)
-          log.warning("Continuing anyway")
+    self._upload_question_payloads(
+      canvas_quiz,
+      payloads_iter,
+      max_upload_retries=max_upload_retries,
+      retry_backoff_base=retry_backoff_base,
+      retry_backoff_max=retry_backoff_max
+    )
 
-        # if it is in the variations that we have already seen then skip ahead, else track
-        if question_fingerprint in all_variations:
-          continue
-        all_variations.add(question_fingerprint)
-        
-        # Push question to canvas
-        log.info(f"Creating #{question_i} ({question.name}) {variation_count + 1} / {num_variations} for canvas.")
-        
-        # Set group ID to add it to the question group
-        question_for_canvas["quiz_group_id"] = group.id
+    return group
 
-        questions_to_upload.put(question_for_canvas)
-        total_variations_created += 1
-      
-        # Update and check variations already seen
-        variation_count += 1
-        if variation_count >= num_variations:
-          break
-        if variation_count >= question.possible_variations:
-          break
-      
-      if variation_count < num_variations:
-        log.warning(
-          f"Completed question '{question.name}': {variation_count}/{num_variations} variations created "
-          f"after {attempt_number + 1} attempts (unique de-dup collisions or limited variation space)."
-        )
-        underfilled_questions.append(
-          (question.name, variation_count, num_variations, attempt_number + 1)
-        )
-      else:
-        log.info(f"Completed question '{question.name}': {variation_count} variations created")
+  def _upload_question_payloads(
+      self,
+      canvas_quiz: canvasapi.quiz.Quiz,
+      payloads,
+      *,
+      max_upload_retries: int = MAX_UPLOAD_RETRIES,
+      retry_backoff_base: float = RETRY_BACKOFF_BASE,
+      retry_backoff_max: float = RETRY_BACKOFF_MAX
+  ) -> None:
+    payload_iter = iter(payloads)
+    queue = deque()
+    retry_counts: dict[int, int] = {}
+    total = 0
+    index = 0
 
-    # Upload questions
-    num_questions_to_upload = questions_to_upload.qsize()
-    while not questions_to_upload.empty():
-      q_to_upload = questions_to_upload.get()
-      log.info(f"Uploading {num_questions_to_upload-questions_to_upload.qsize()} / {num_questions_to_upload} to canvas!")
+    def enqueue_next() -> bool:
+      nonlocal index, total
       try:
-        canvas_quiz.create_question(question=q_to_upload)
+        payload = next(payload_iter)
+      except StopIteration:
+        return False
+      queue.append((index, payload))
+      index += 1
+      total = max(total, index)
+      return True
+
+    # Prime the queue with the first payload (if any).
+    enqueue_next()
+
+    while queue:
+      index, payload = queue.popleft()
+      label = payload.get("question_name", f"question_{index}")
+      log.info(f"Uploading {index + 1} / {max(total, index + 1)} to canvas!")
+      try:
+        canvas_quiz.create_question(question=payload)
+        enqueue_next()
       except canvasapi.exceptions.CanvasException as e:
         log.warning("Encountered Canvas error.")
         log.warning(e)
-        questions_to_upload.put(q_to_upload)
-        log.warning("Sleeping for 1s...")
-        time.sleep(1)
-        continue
-    
-    log.info(f"Quiz upload completed! Total variations created: {total_variations_created}")
-    if underfilled_questions:
-      log.warning("Some questions did not reach the requested variation count:")
-      for q_name, actual, target, attempts in underfilled_questions:
-        log.warning(f"  - {q_name}: {actual}/{target} after {attempts} attempts")
-    log.info(f"Canvas quiz URL: {canvas_quiz.html_url}")
+        if not _is_retryable_canvas_exception(e):
+          log.error(f"Non-retryable Canvas error; dropping question: {label}")
+          enqueue_next()
+          continue
+        retry_count = retry_counts.get(index, 0) + 1
+        if retry_count > max_upload_retries:
+          log.error(f"Exceeded max retries ({max_upload_retries}); dropping question: {label}")
+          enqueue_next()
+          continue
+        retry_counts[index] = retry_count
+        sleep_s = min(retry_backoff_base * (2 ** (retry_count - 1)), retry_backoff_max)
+        log.warning(f"Retrying in {sleep_s:.1f}s (attempt {retry_count}/{max_upload_retries})")
+        time.sleep(sleep_s)
+        queue.append((index, payload))
   
   def get_assignment(self, assignment_id : int) -> Optional[CanvasAssignment]:
     try:
@@ -261,8 +298,6 @@ class CanvasCourse(LMSWrapper):
           canvasapi_assignment=canvasapi_assignment
         )
       )
-    
-    assignments = self.course.get_assignments(**kwargs)
     return assignments
   
   def get_username(self, user_id: int):
@@ -565,93 +600,4 @@ class CanvasQuiz(LMSWrapper):
     pass
 
 
-class CanvasHelpers:
-  @staticmethod
-  def get_closed_assignments(interface: CanvasCourse) -> List[canvasapi.assignment.Assignment]:
-    closed_assignments : List[canvasapi.assignment.Assignment] = []
-    for assignment in interface.get_assignments(
-      include=["all_dates"], 
-      order_by="name"
-    ):
-      if not assignment.published:
-        continue
-      if assignment.lock_at is not None:
-        # Then it's the easy case because there's no overrides
-        if datetime.fromisoformat(assignment.lock_at) < datetime.now(timezone.utc):
-          # Then the assignment is past due
-          closed_assignments.append(assignment)
-          continue
-      elif assignment.all_dates is not None:
-        
-        # First we need to figure out what the latest time this assignment could be available is
-        # todo: This could be done on a per-student basis
-        last_lock_datetime = None
-        for dates_dict in assignment.all_dates:
-          if dates_dict["lock_at"] is not None:
-            lock_datetime = datetime.fromisoformat(dates_dict["lock_at"])
-            if (last_lock_datetime is None) or (lock_datetime >= last_lock_datetime):
-              last_lock_datetime = lock_datetime
-        
-        # If we have found a valid lock time, and it's in the past then we lock
-        if last_lock_datetime is not None and last_lock_datetime <= datetime.now(timezone.utc):
-          closed_assignments.append(assignment)
-          continue
-          
-      else:
-        log.warning(f"Cannot find any lock dates for assignment {assignment.name}!")
-    
-    return closed_assignments
-  
-  @staticmethod
-  def get_unsubmitted_submissions(interface: CanvasCourse, assignment: canvasapi.assignment.Assignment) -> List[canvasapi.submission.Submission]:
-    submissions : List[canvasapi.submission.Submission] = list(filter(
-      lambda s: s.submitted_at is None and s.percentage_score is None and not s.excused,
-      assignment.get_submissions()
-    ))
-    return submissions
-  
-  @classmethod
-  def clear_out_missing(cls, interface: CanvasCourse):
-    assignments = cls.get_closed_assignments(interface)
-    for assignment in assignments:
-      missing_submissions = cls.get_unsubmitted_submissions(interface, assignment)
-      if not missing_submissions:
-        continue
-      log.info(f"Assignment: ({assignment.quiz_id if hasattr(assignment, 'quiz_id') else assignment.id}) {assignment.name} {assignment.published}")
-      for submission in missing_submissions:
-        log.info(f"{submission.user_id} ({interface.get_username(submission.user_id)}) : {submission.workflow_state} : {submission.missing} : {submission.score} : {submission.grader_id} : {submission.graded_at}")
-        submission.edit(submission={"late_policy_status" : "missing"})
-      log.info("")
-  
-  @staticmethod
-  def deprecate_assignment(canvas_course: CanvasCourse, assignment_id) -> List[canvasapi.assignment.Assignment]:
-    
-    log.debug(canvas_course.__dict__)
-    
-    # for assignment in canvas_course.get_assignments():
-    #   print(assignment)
-    
-    canvas_assignment : CanvasAssignment = canvas_course.get_assignment(assignment_id=assignment_id)
-    
-    canvas_assignment.assignment.edit(
-      assignment={
-        "name": f"{canvas_assignment.assignment.name} (deprecated)",
-        "due_at": f"{datetime.now(timezone.utc).isoformat()}",
-        "lock_at": f"{datetime.now(timezone.utc).isoformat()}"
-      }
-    )
-  
-  @staticmethod
-  def mark_future_assignments_as_ungraded(canvas_course: CanvasCourse):
-    
-    for assignment in canvas_course.get_assignments(
-        include=["all_dates"],
-        order_by="name"
-    ):
-      if assignment.unlock_at is not None:
-        if datetime.fromisoformat(assignment.unlock_at) > datetime.now(timezone.utc):
-          log.debug(assignment)
-          for submission in assignment.get_submissions():
-            submission.mark_unread()
-          
     

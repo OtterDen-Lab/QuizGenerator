@@ -39,7 +39,8 @@ questions:
         text: |
           This is a question I can ask.
     generated question:
-      class: FromGenerator
+      # Note: FromGenerator requires running quizgen with --allow_generator
+      class: FromText
       kwargs:
-        generator: |
-          return f"This is a question I can {random.choice(['generate', 'make up'])}."
+        text: |
+          This is a question I can generate or make up.

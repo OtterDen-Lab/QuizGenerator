@@ -13,7 +13,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from QuizGenerator.canvas.canvas_interface import CanvasInterface
+from lms_interface.canvas_interface import CanvasInterface
 from QuizGenerator.performance import PerformanceTracker
 from QuizGenerator.question import QuestionRegistry
 from QuizGenerator.quiz import Quiz
@@ -285,9 +285,10 @@ def test_all_questions(
     if canvas_course:
       print("Pushing to Canvas...")
       quiz_title = f"Test All Questions ({int(datetime.now().timestamp())} : {datetime.now().strftime('%b %d %I:%M%p')})"
-      canvas_course.push_quiz_to_canvas(
+      upload_quiz_to_canvas(
+        canvas_course,
         test_quiz,
-        num_variations=1,
+        1,
         title=quiz_title,
         is_practice=True
       )
@@ -319,7 +320,7 @@ def generate_latex(latex_text, remove_previous=False, name_prefix=None):
   shutil.copy(f"{tmp_tex.name}", os.path.join("out", "debug", debug_name))
   try:
     subprocess.run(
-      f"latexmk -pdf -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
+      f"latexmk -pdf -shell-escape -output-directory={os.path.join(os.getcwd(), 'out')} {tmp_tex.name}",
       shell=True,
       capture_output=True,
       timeout=30,
@@ -360,6 +361,100 @@ def sanitize_filename(name):
     sanitized = sanitized[:50]
 
   return sanitized
+
+
+def _canvas_payload_fingerprint(payload):
+  fingerprint = payload.get("question_text", "")
+  answers = payload.get("answers", [])
+  try:
+    fingerprint += "".join(
+      "|".join(f"{k}:{a[k]}" for k in sorted(a.keys()))
+      for a in answers
+    )
+  except TypeError:
+    log.warning("Failed to fingerprint Canvas answers; falling back to question text only.")
+  return fingerprint
+
+
+def _build_canvas_payloads(
+    question,
+    course,
+    canvas_quiz,
+    num_variations,
+    seed_base,
+    max_attempts=1000
+):
+  max_variations = num_variations
+  possible_variations = getattr(question, "possible_variations", None)
+  try:
+    if possible_variations is not None:
+      max_variations = min(max_variations, int(possible_variations))
+  except Exception:
+    pass
+
+  payloads = []
+  seen = set()
+  for attempt in range(max_attempts):
+    rng_seed = seed_base + (attempt * 1000)
+    payload = question.get__canvas(course, canvas_quiz, rng_seed=rng_seed)
+    fingerprint = _canvas_payload_fingerprint(payload)
+    if fingerprint in seen:
+      continue
+    seen.add(fingerprint)
+    payloads.append(payload)
+    if len(payloads) >= max_variations:
+      break
+
+  if len(payloads) < max_variations:
+    log.warning(
+      f"Completed question '{question.name}': {len(payloads)}/{max_variations} variations "
+      f"after {max_attempts} attempts (dedup collisions or limited variation space)."
+    )
+  return payloads
+
+
+def upload_quiz_to_canvas(
+    canvas_course,
+    quiz,
+    num_variations,
+    *,
+    title=None,
+    is_practice=False,
+    assignment_group=None
+):
+  if assignment_group is None:
+    assignment_group = canvas_course.create_assignment_group()
+
+  canvas_quiz = canvas_course.add_quiz(
+    assignment_group,
+    title,
+    is_practice=is_practice,
+    description=quiz.description
+  )
+
+  total_questions = len(quiz.questions)
+  log.info(f"Starting to push quiz '{title or canvas_quiz.title}' with {total_questions} questions to Canvas")
+  log.info(f"Target: {num_variations} variations per question")
+
+  for question_i, question in enumerate(quiz):
+    log.info(f"Uploading question {question_i + 1}/{total_questions}: '{question.name}'")
+    seed_base = question_i * 100_000
+    payloads = _build_canvas_payloads(
+      question,
+      canvas_course.course,
+      canvas_quiz,
+      num_variations,
+      seed_base
+    )
+    canvas_course.create_question(
+      canvas_quiz,
+      payloads,
+      group_name=question.name,
+      question_points=question.points_value,
+      pick_count=1
+    )
+
+  log.info(f"Canvas quiz URL: {canvas_quiz.html_url}")
 
 
 def generate_typst(typst_text, remove_previous=False, name_prefix=None):
@@ -405,13 +500,14 @@ def generate_typst(typst_text, remove_previous=False, name_prefix=None):
     )
 
     try:
-      p.wait(30)
+      stdout, stderr = p.communicate(timeout=30)
       if p.returncode != 0:
-        stderr = p.stderr.read().decode('utf-8')
-        log.error(f"Typst compilation failed: {stderr}")
+        stderr_text = stderr.decode("utf-8")
+        log.error(f"Typst compilation failed: {stderr_text}")
     except subprocess.TimeoutExpired:
       log.error("Typst compile timed out")
       p.kill()
+      p.communicate()
 
   finally:
     # Clean up temp file
@@ -432,7 +528,8 @@ def generate_quiz(
     env_path=None,
     consistent_pages=False,
     layout_samples=10,
-    layout_safety_factor=1.1
+    layout_safety_factor=1.1,
+    embed_images_typst=True
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -475,7 +572,7 @@ def generate_quiz(
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
         typst_text = quiz.get_quiz(**quiz_kwargs).render(
           "typst",
-          embed_images_typst=getattr(args, "embed_images_typst", False)
+          embed_images_typst=embed_images_typst
         )
         generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name)
       else:
@@ -492,7 +589,8 @@ def generate_quiz(
         generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name)
 
     if num_canvas > 0:
-      canvas_course.push_quiz_to_canvas(
+      upload_quiz_to_canvas(
+        canvas_course,
         quiz,
         num_canvas,
         title=quiz.name,
@@ -569,7 +667,8 @@ def main():
     env_path=args.env,
     consistent_pages=getattr(args, 'consistent_pages', False),
     layout_samples=getattr(args, 'layout_samples', 10),
-    layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1)
+    layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1),
+    embed_images_typst=getattr(args, 'embed_images_typst', True)
   )
 
 

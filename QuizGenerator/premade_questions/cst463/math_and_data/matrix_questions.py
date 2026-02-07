@@ -386,7 +386,8 @@ class MatrixMultiplication(MatrixMathQuestion):
                     col_b = [str(context["matrix_b"][k][j]) for k in range(context["cols_a"])]
 
                     row_latex = rf"\begin{{bmatrix}} {' & '.join(row_a)} \end{{bmatrix}}"
-                    col_latex = rf"\begin{{bmatrix}} {' \\ '.join(col_b)} \end{{bmatrix}}"
+                    col_entries = " \\\\ ".join(col_b)
+                    col_latex = rf"\begin{{bmatrix}} {col_entries} \end{{bmatrix}}"
                     element_calc = " + ".join([
                         rf"{context['matrix_a'][i][k]} \cdot {context['matrix_b'][k][j]}"
                         for k in range(context["cols_a"])

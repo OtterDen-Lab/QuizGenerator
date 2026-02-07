@@ -25,12 +25,16 @@ If you want a fully pinned environment for a semester, use the lockfile:
 uv sync --locked
 ```
 
+We keep dependency ranges in `pyproject.toml` for flexibility and rely on `uv.lock`
+to pin exact versions when you need reproducible builds.
+
 ### System Requirements
 
 - Python 3.12+
 - [Typst](https://typst.app/) (default PDF renderer)
 - Optional: LaTeX distribution with `latexmk` (if using `--latex`)
 - Recommended: [Pandoc](https://pandoc.org/) (for markdown conversion)
+- Optional (LaTeX + QR codes): [Inkscape](https://inkscape.org/) for SVG conversion
 
 ### Optional Dependencies
 
@@ -221,6 +225,25 @@ Each generated exam includes a QR code that stores:
 - Version information
 
 Use the grading tools to scan QR codes and regenerate exact exam versions.
+
+## Security Considerations
+
+### FromGenerator Warning
+
+The `FromGenerator` question type executes **arbitrary Python code** from your YAML configuration files. This is a powerful feature for creating dynamic questions, but it carries security risks:
+
+- **Only use `FromGenerator` with YAML files you completely trust**
+- Never run `--allow_generator` on YAML files from untrusted sources
+- Be cautious when sharing question banks that contain generator code
+
+`FromGenerator` is disabled by default. To enable it, use one of:
+```bash
+quizgen --allow_generator --yaml my_quiz.yaml
+# or
+QUIZGEN_ALLOW_GENERATOR=1 quizgen --yaml my_quiz.yaml
+```
+
+If you need dynamic question generation with untrusted inputs, consider writing a proper `Question` subclass instead, which provides better control and validation.
 
 ## Project Structure
 

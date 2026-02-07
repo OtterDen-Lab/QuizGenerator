@@ -149,6 +149,7 @@ class Container(Element):
   def __init__(self, elements=None, **kwargs):
     super().__init__(**kwargs)
     self.elements : List[Element] = elements if elements is not None else []
+    self.add_spacing_before = kwargs.get("add_spacing_before", False)
   
   def add_element(self, element):
     self.elements.append(element)
@@ -178,13 +179,12 @@ class Container(Element):
     ])
 
   def render_latex(self, **kwargs):
-    return "".join([
+    latex = "".join([
       self.render_element(element, output_format=OutputFormat.LATEX, **kwargs)
       for element in self.elements
     ])
-    
-    latex = "".join(element.render("latex", **kwargs) for element in self.elements)
-    return f"{'\n\n\\vspace{0.5cm}' if self.add_spacing_before else ''}{latex}"
+    spacing = "\n\n\\vspace{0.5cm}" if self.add_spacing_before else ""
+    return f"{spacing}{latex}"
   
   def render_typst(self, **kwargs):
 
@@ -302,6 +302,7 @@ class Document(Container):
 
   % Graphics for QR codes
   \usepackage{graphicx}       % For including QR code images
+  \usepackage{svg}            % For including SVG QR codes
 
   % Math packages
   \usepackage[leqno,fleqn]{amsmath}        % For advanced math environments (matrices, equations)
@@ -408,7 +409,7 @@ class Document(Container):
         #v(spacing)
       ][
         #if qr_code != none {
-          image(qr_code, width: 2cm, format: "png")
+          image(qr_code, width: 2cm, format: "svg")
         }
       ]
       #if spacing >= 199cm {
@@ -598,6 +599,7 @@ class Question(Container):
             self.value,
             **extra_data
           )
+          qr_path_no_ext = os.path.splitext(qr_path)[0]
           # Build custom question header with QR code centered
           # Format: Question N:  [QR code centered]  __ / points
           question_header = (
@@ -607,7 +609,7 @@ class Question(Container):
             int(self.value)
           ) + "\n"
               r"\raisebox{-1cm}{"  # Reduced lift to minimize extra space above
-              rf"\includegraphics[width={QuestionQRCode.DEFAULT_SIZE_CM}cm]{{{qr_path}}}"
+              rf"\includesvg[width={QuestionQRCode.DEFAULT_SIZE_CM}cm]{{{qr_path_no_ext}}}"
               r"} "
               r"\par\vspace{-1cm}"
           )
@@ -663,7 +665,7 @@ class Question(Container):
             if hasattr(self, 'qr_context_extras') and self.qr_context_extras:
               extra_data['context'] = self.qr_context_extras
         
-        # Generate QR code PNG
+        # Generate QR code SVG
         qr_path = QuestionQRCode.generate_qr_pdf(
           self.question_number,
           self.value,
@@ -673,9 +675,14 @@ class Question(Container):
         
         # Add QR code parameter to question function call
         if embed_images:
-          with open(qr_path, "rb") as handle:
-            b64 = base64.b64encode(handle.read()).decode("ascii")
-          qr_param = f'qr_code: base64.decode("{b64}")'
+          with open(qr_path, "r", encoding="utf-8") as handle:
+            svg_text = handle.read()
+          escaped_svg = (
+            svg_text.replace("\\", "\\\\")
+            .replace('"', '\\"')
+            .replace("\n", "\\n")
+          )
+          qr_param = f'qr_code: bytes("{escaped_svg}")'
         else:
           qr_param = f'qr_code: "{qr_path}"'
       
@@ -808,6 +815,9 @@ class Text(Leaf):
       self.content,
       flags=re.DOTALL
     )
+
+    # Normalize markdown bold (**text**) to Typst emphasis (*text*) to avoid warnings.
+    content = re.sub(r"\*\*(.+?)\*\*", r"*\1*", content)
 
     # In Typst, # starts code/function calls, so we need to escape it in regular text
     # (but not in code blocks, which are now placeholders)

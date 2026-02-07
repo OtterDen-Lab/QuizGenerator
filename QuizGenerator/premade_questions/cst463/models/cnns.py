@@ -131,8 +131,12 @@ class ConvolutionCalculation(MatrixQuestion):
     explanation.add_element(
       ca.Paragraph([
         f"With stride={context['stride']} and padding={context['padding']}: ",
-        f"stride controls how many pixels the filter moves each step, ",
-        f"and padding adds zeros around the border {'(no border in this case)' if context['padding'] == 0 else f'({context['padding']} pixels)'}."
+        "stride controls how many pixels the filter moves each step, ",
+        (
+          "and padding adds zeros around the border "
+          + ("(no border in this case)" if context["padding"] == 0 else f"({context['padding']} pixels)")
+          + "."
+        )
       ])
     )
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import os
 import random
+import sys
 from types import SimpleNamespace
 from typing import List, Tuple
 
@@ -26,6 +27,11 @@ def _generator_allowed() -> bool:
 def _warn_generator_enabled() -> None:
   global _GENERATOR_WARNING_EMITTED
   if not _GENERATOR_WARNING_EMITTED:
+    # Print prominent warning to stderr (not just log)
+    print("\n" + "=" * 70, file=sys.stderr)
+    print("WARNING: FromGenerator executes arbitrary Python code from YAML.", file=sys.stderr)
+    print("Only use this with YAML files you trust completely.", file=sys.stderr)
+    print("=" * 70 + "\n", file=sys.stderr)
     log.warning(
       "FromGenerator is enabled. Generator code is executed with full Python permissions."
     )
@@ -143,23 +149,29 @@ class FromGenerator(FromText, TableQuestionMixin):
 
   @classmethod
   def _build_body(cls, context) -> Tuple[ca.Element, List[ca.Answer]]:
+    generator_fn = context.get("generator_fn")
+    if generator_fn is None:
+      raise ValueError("No generator provided for FromGenerator.")
+
     try:
-      generator_fn = context.get("generator_fn")
-      if generator_fn is None:
-        raise TypeError("No generator provided for FromGenerator.")
       generated_content = generator_fn(context.get("generator_scope"))
-      if isinstance(generated_content, ca.Section):
-        body = generated_content
-      elif isinstance(generated_content, str):
-        body = ca.Section([ca.Text(generated_content)])
-      else:
-        body = ca.Section([ca.Text(str(generated_content))])
-    except TypeError as e:
-      log.error(f"Error generating from text: {e}")
-      log.debug(context.get("generator_text"))
-      exit(8)
+    except Exception as e:
+      generator_text = context.get("generator_text", "<unknown>")
+      # Truncate long generator text for readability
+      if len(generator_text) > 200:
+        generator_text = generator_text[:200] + "..."
+      raise RuntimeError(
+        f"FromGenerator failed to execute:\n"
+        f"  Error: {type(e).__name__}: {e}\n"
+        f"  Generator code:\n    {generator_text.replace(chr(10), chr(10) + '    ')}"
+      ) from e
+
+    if isinstance(generated_content, ca.Section):
+      body = generated_content
+    elif isinstance(generated_content, str):
+      body = ca.Section([ca.Text(generated_content)])
+    else:
+      body = ca.Section([ca.Text(str(generated_content))])
 
     return body, []
     
-class TrueFalse(FromText):
-  pass

@@ -68,7 +68,10 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.hatch.build.targets.wheel]
-packages = ["QuizGenerator"]
+packages = ["QuizGenerator", "lms_interface"]
+
+[tool.hatch.build.targets.sdist]
+include = ["QuizGenerator/**", "lms_interface/**", "pyproject.toml", "README.md"]
 
 [tool.hatch.metadata]
 allow-direct-references = true

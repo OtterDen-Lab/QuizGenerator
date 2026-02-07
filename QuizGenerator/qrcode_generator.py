@@ -304,34 +304,34 @@ class QuestionQRCode:
     def generate_qr_pdf(cls, question_number: int, points_value: float,
                          scale: int = 10, **extra_data) -> str:
         """
-        Generate QR code and save as PNG file, returning the file path.
+        Generate QR code and save as SVG file, returning the file path.
 
-        This is used for LaTeX inclusion via \\includegraphics.
-        The file is saved to a temporary location that LaTeX can access.
+        This is used for LaTeX/Typst inclusion.
+        The file is saved to a temporary location that renderers can access.
 
         Args:
             question_number: Sequential question number
             points_value: Point value of the question
-            scale: Scale factor for PNG generation (higher = larger file, better quality)
+            scale: Scale factor for SVG generation (higher = larger output)
             **extra_data: Additional metadata
 
         Returns:
-            Path to generated PNG file
+            Path to generated SVG file
         """
         qr_data = cls.generate_qr_data(question_number, points_value, **extra_data)
 
         # Generate QR code with high error correction
         qr = segno.make(qr_data, error=cls.ERROR_CORRECTION)
 
-        # Create temporary file for the PNG
-        # We use a predictable name based on question number so LaTeX can find it
+        # Create temporary file for the SVG
+        # We use a predictable name based on question number so renderers can find it
         temp_dir = Path(tempfile.gettempdir()) / "quiz_qrcodes"
         temp_dir.mkdir(exist_ok=True)
 
-        qr_path = temp_dir / f"qr_q{question_number}.png"
+        qr_path = temp_dir / f"qr_q{question_number}.svg"
 
-        # Save as PNG with appropriate scale
-        qr.save(str(qr_path), scale=scale, border=0)
+        # Save as SVG with appropriate scale
+        qr.save(str(qr_path), scale=scale, border=0, kind="svg")
 
         log.debug(f"Generated QR code for question {question_number} at {qr_path}")
 
@@ -346,7 +346,7 @@ class QuestionQRCode:
         """
         temp_dir = Path(tempfile.gettempdir()) / "quiz_qrcodes"
         if temp_dir.exists():
-            for qr_file in temp_dir.glob("qr_q*.png"):
+            for qr_file in temp_dir.glob("qr_q*.svg"):
                 try:
                     qr_file.unlink()
                     log.debug(f"Cleaned up QR code file: {qr_file}")

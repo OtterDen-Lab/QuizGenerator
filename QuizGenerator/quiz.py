@@ -7,7 +7,7 @@ import logging
 import random
 import re
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 import yaml
 
@@ -25,7 +25,15 @@ class Quiz:
   
   INTEREST_THRESHOLD = 1.0
   
-  def __init__(self, name, questions: List[dict|Question], practice, *args, **kwargs):
+  name: str
+  questions: List[Question | QuestionGroup]
+  instructions: str
+  description: Optional[str]
+  question_sort_order: Optional[List[Question.Topic]]
+  practice: bool
+  preserve_order_point_values: set[float]
+
+  def __init__(self, name: str, questions: List[Question | QuestionGroup], practice: bool, *args, **kwargs):
     self.name = name
     self.questions = questions
     self.instructions = kwargs.get("instructions", "")
