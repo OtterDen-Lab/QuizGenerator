@@ -91,6 +91,9 @@ class CanvasCourse(LMSWrapper):
     super().__init__(_inner=self.course)
   
   def create_assignment_group(self, name="dev", delete_existing=False) -> canvasapi.course.AssignmentGroup:
+    env_name = os.environ.get("QUIZGEN_ASSIGNMENT_GROUP")
+    if env_name:
+      name = env_name
     for assignment_group in self.course.get_assignment_groups():
       if assignment_group.name == name:
         if delete_existing:
@@ -273,7 +276,11 @@ class CanvasCourse(LMSWrapper):
           continue
         retry_counts[index] = retry_count
         sleep_s = min(retry_backoff_base * (2 ** (retry_count - 1)), retry_backoff_max)
-        log.warning(f"Retrying in {sleep_s:.1f}s (attempt {retry_count}/{max_upload_retries})")
+        remaining = len(queue) + 1  # include current payload
+        log.warning(
+          f"Retrying {label} in {sleep_s:.1f}s "
+          f"(attempt {retry_count}/{max_upload_retries}, {remaining} pending)"
+        )
         time.sleep(sleep_s)
         queue.append((index, payload))
   
