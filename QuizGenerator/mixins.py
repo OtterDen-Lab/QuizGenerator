@@ -69,7 +69,7 @@ class TableQuestionMixin:
     """
     answer_columns = answer_columns or []
     
-    def format_cell(row_data: Dict, column: str) -> Union[str, ca.Answer]:
+    def format_cell(row_data: dict[str, Any], column: str) -> Union[str, ca.Answer]:
       """Format a cell based on whether it should be an answer or plain data"""
       value = row_data.get(column, "")
 
