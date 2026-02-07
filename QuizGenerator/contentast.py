@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import abc
+import base64
 import decimal
 import enum
 import fractions
@@ -9,10 +10,9 @@ import logging
 import math
 import os
 import re
-import textwrap
 import tempfile
+import textwrap
 import uuid
-import base64
 from io import BytesIO
 from typing import Callable
 

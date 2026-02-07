@@ -7,10 +7,7 @@ import dataclasses
 import enum
 import io
 import logging
-import os
 import random
-import tempfile
-import uuid
 
 import matplotlib.pyplot as plt
 

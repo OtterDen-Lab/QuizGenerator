@@ -5,12 +5,13 @@ These tests verify that Quiz.from_yaml() correctly parses various YAML configura
 and handles edge cases appropriately.
 """
 
-import pytest
 import tempfile
 from pathlib import Path
 
+import pytest
+
+from QuizGenerator.question import Question, QuestionGroup
 from QuizGenerator.quiz import Quiz
-from QuizGenerator.question import Question, QuestionGroup, QuestionRegistry
 
 
 @pytest.fixture

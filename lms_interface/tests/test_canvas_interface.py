@@ -5,9 +5,10 @@ These tests use mocking to avoid hitting real Canvas APIs.
 They verify the logic of the canvas_interface module without network calls.
 """
 
-import pytest
-from unittest.mock import Mock, MagicMock, patch, PropertyMock
 import os
+from unittest.mock import MagicMock, Mock, patch
+
+import pytest
 
 
 class TestCanvasInterfaceCredentials:

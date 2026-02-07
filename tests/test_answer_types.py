@@ -5,7 +5,6 @@ These tests verify that Answer types correctly render across formats
 and generate proper Canvas export data.
 """
 
-import pytest
 import numpy as np
 
 import QuizGenerator.contentast as ca

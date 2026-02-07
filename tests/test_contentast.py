@@ -4,8 +4,8 @@ Tests for the Content AST rendering system.
 These tests verify that content AST elements render correctly to each output format.
 """
 
-import pytest
 import numpy as np
+import pytest
 
 import QuizGenerator.contentast as ca
 

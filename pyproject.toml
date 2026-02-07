@@ -36,6 +36,7 @@ dependencies = [
     "segno~=1.6.0",
     "cryptography~=41.0.0",
     "canvasapi~=3.2.0",
+    "ruff~=0.7.4",
 ]
 
 [project.urls]
@@ -76,6 +77,9 @@ include = ["QuizGenerator/**", "lms_interface/**", "pyproject.toml", "README.md"
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.uv]
+default-groups = "all"
 
 # Entry point group for custom question types (for plugin developers)
 # Users can register custom question types in their own packages using:

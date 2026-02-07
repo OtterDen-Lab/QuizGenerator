@@ -5,19 +5,20 @@ These tests verify the full question lifecycle from creation through instantiati
 and rendering.
 """
 
-import pytest
 import random
+
+import pytest
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import (
+    SPACING_PRESETS,
     Question,
-    QuestionRegistry,
     QuestionContext,
     QuestionGroup,
     QuestionInstance,
+    QuestionRegistry,
     RegenerationFlags,
     parse_spacing,
-    SPACING_PRESETS,
 )
 
 

@@ -12,6 +12,7 @@ import subprocess
 import tempfile
 import textwrap
 from pathlib import Path
+
 import QuizGenerator.contentast as ca
 
 log = logging.getLogger(__name__)

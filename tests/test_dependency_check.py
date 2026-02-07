@@ -1,7 +1,5 @@
 from unittest.mock import patch
 
-import pytest
-
 from QuizGenerator.generate import _check_dependencies
 
 

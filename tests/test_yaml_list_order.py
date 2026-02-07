@@ -4,12 +4,13 @@ Tests for list-style YAML question format and ordering behavior.
 This tests the ordered list format for questions and the question_order option.
 """
 
-import pytest
 import tempfile
 from pathlib import Path
 
-from QuizGenerator.quiz import Quiz
+import pytest
+
 from QuizGenerator.question import Question
+from QuizGenerator.quiz import Quiz
 
 
 def _write_tmp_yaml(text):

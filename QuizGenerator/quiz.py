@@ -8,7 +8,6 @@ import random
 import re
 from datetime import datetime
 
-
 import yaml
 
 import QuizGenerator.contentast as ca

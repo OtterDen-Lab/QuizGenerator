@@ -5,12 +5,13 @@ These tests verify that appropriate errors are raised for invalid inputs
 and edge cases are handled gracefully.
 """
 
-import pytest
 import tempfile
 from pathlib import Path
 
+import pytest
+
 import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry, QuestionContext
+from QuizGenerator.question import QuestionContext, QuestionRegistry
 from QuizGenerator.quiz import Quiz
 
 
@@ -248,10 +249,11 @@ class TestFromGeneratorErrors:
         old_value = os.environ.pop("QUIZGEN_ALLOW_GENERATOR", None)
 
         try:
-            from QuizGenerator.premade_questions.basic import ALLOW_GENERATOR, FromGenerator
-
             # Reset the global flag
             import QuizGenerator.premade_questions.basic as basic_module
+            from QuizGenerator.premade_questions.basic import (
+                FromGenerator,
+            )
             basic_module.ALLOW_GENERATOR = False
 
             with pytest.raises(ValueError, match="disabled"):

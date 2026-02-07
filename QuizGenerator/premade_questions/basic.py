@@ -5,7 +5,6 @@ import logging
 import os
 import random
 import sys
-import types
 from types import SimpleNamespace
 
 import QuizGenerator.contentast as ca
