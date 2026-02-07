@@ -67,8 +67,9 @@ def parse_args():
                      help="Number of deterministic samples per question to estimate height")
   parser.add_argument("--layout_safety_factor", type=float, default=1.1,
                      help="Multiplier applied to max sampled height for safety")
-  parser.add_argument("--embed_images_typst", action="store_true",
-                     help="Embed images directly in Typst output (no external files)")
+  parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
+                     help="Disable embedding images in Typst output")
+  parser.set_defaults(embed_images_typst=True)
 
   # Testing flags
   parser.add_argument("--test_all", type=int, default=0, metavar="N",
