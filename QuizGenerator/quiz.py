@@ -148,8 +148,16 @@ class Quiz:
             q_data.get("_config", {})
           )
           q_data.pop("_config", None)
-          q_data.pop("pick", None) # todo: don't use this anymore
-          q_data.pop("repeat", None) # todo: don't use this anymore
+          if "pick" in q_data:
+            raise ValueError(
+              f"Legacy 'pick' key found in question '{q_name}'. "
+              "Use _config.group with num_to_pick instead."
+            )
+          if "repeat" in q_data:
+            raise ValueError(
+              f"Legacy 'repeat' key found in question '{q_name}'. "
+              "Use _config.repeat instead."
+            )
           
           # Check if it is a question group
           if question_config["group"]:

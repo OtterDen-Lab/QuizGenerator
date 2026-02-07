@@ -609,25 +609,6 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     buffer.seek(0)
     return buffer
     
-  @classmethod
-  def make_image_file(cls, context, image_dir=None):
-    
-    image_buffer = cls.make_image(context)
-    
-    # Original file-saving logic
-    if image_dir is None:
-      image_dir = os.path.join(tempfile.gettempdir(), "quiz_images")
-    if not os.path.exists(image_dir):
-      os.makedirs(image_dir)
-    image_path = os.path.join(
-      image_dir,
-      f"{str(context['scheduler_algorithm']).replace(' ', '_')}-{uuid.uuid4()}.png"
-    )
-
-    with open(image_path, 'wb') as fid:
-      fid.write(image_buffer.getvalue())
-    return image_path
-    
 
 @QuestionRegistry.register()
 class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):

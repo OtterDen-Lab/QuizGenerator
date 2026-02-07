@@ -34,6 +34,8 @@ Used to enable grouping and repeats:
 - `repeat` (int): Repeat a question N times (with seed offsets).
 - `topic` (string): Topic for all grouped questions.
 
+**Note:** Legacy keys `pick` and `repeat` at the question level are no longer supported. Use `_config` instead.
+
 ### Per-Point `_config`
 
 Used for layout rules:
