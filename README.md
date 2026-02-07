@@ -48,7 +48,7 @@ pip install "QuizGenerator[cst463]"
 
 ## Quick Start
 
-Need a 2‑minute setup? See `documentation/quickstart.md`.
+Need a 2‑minute setup? See `documentation/getting_started.md`.
 
 ### 1. Create a quiz configuration (YAML)
 

@@ -47,6 +47,14 @@ quizgen --yaml example_files/example_exam.yaml --num_pdfs 1
 
 PDFs are generated in `out/`.
 
+## Dependency Check (Optional)
+
+Verify external tools before generating:
+
+```bash
+quizgen --check-deps --yaml example_files/example_exam.yaml --num_pdfs 1
+```
+
 ## Ordered YAML (Optional)
 
 If you want to preserve question order, use the list format:

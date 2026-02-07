@@ -56,13 +56,6 @@ Copy-pasteable walkthrough: install → create YAML → generate PDF → preview
 
 ---
 
-#### [quickstart.md](quickstart.md)
-One-page quick start for installation, PDF generation, and Canvas upload.
-
-**Audience:** Instructors and new users
-
----
-
 #### [yaml_config_guide.md](yaml_config_guide.md)
 Reference for the quiz YAML schema and configuration options, including list format ordering.
 
