@@ -56,7 +56,7 @@
         display: grid;
         gap: 24px;
         grid-template-columns: minmax(280px, 1fr) minmax(360px, 2fr);
-        align-items: start;
+        align-items: stretch;
       }
 
       .panel {
@@ -70,6 +70,18 @@
 
       .panel.full {
         grid-column: 1 / -1;
+      }
+
+      .panel.equal {
+        min-height: 320px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .panel.equal .editor {
+        flex: 1 1 auto;
+        min-height: 200px;
       }
 
       @keyframes fadeUp {
@@ -361,6 +373,29 @@
         margin-bottom: 10px;
       }
 
+      .validation-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .validation-item {
+        background: #fff4ef;
+        border: 1px solid #f1d4c7;
+        color: #a04527;
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+      }
+
+      .validation-item.ok {
+        background: #e8f3ef;
+        border-color: #bcd7cf;
+        color: #236c5b;
+      }
+
       .toggle {
         display: inline-flex;
         align-items: center;
@@ -392,7 +427,7 @@
     </header>
 
     <main>
-      <section class="panel">
+      <section class="panel full">
         <div class="section-title">
           <h2>Metadata</h2>
           <span class="muted">Optional fields for later use</span>
@@ -417,7 +452,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel full">
         <div class="section-title">
           <h2>Variables</h2>
           <button class="btn" id="add-var">Add Variable</button>
@@ -435,7 +470,7 @@
         <div id="derived"></div>
       </section>
 
-      <section class="panel">
+      <section class="panel full equal">
         <div class="section-title">
           <h2>Question Body</h2>
           <span class="muted">Type text, insert variables, or add answer fields.</span>
@@ -451,7 +486,7 @@
         <div class="hint">Use “Insert Answer” to open the answer builder.</div>
       </section>
 
-      <section class="panel">
+      <section class="panel full equal">
         <div class="section-title">
           <h2>Explanation</h2>
           <span class="muted">Same tools as the question body.</span>
@@ -464,6 +499,14 @@
         <div class="chips" id="expl-var-chips"></div>
         <div class="chips" id="expl-derived-chips"></div>
         <div id="expl-editor" class="editor" contenteditable="true" data-editor="explanation"></div>
+      </section>
+
+      <section class="panel full">
+        <div class="section-title">
+          <h2>Validation</h2>
+          <span class="muted" id="validation-summary">No warnings yet.</span>
+        </div>
+        <ul id="validation-list" class="validation-list"></ul>
       </section>
 
       <section class="panel full">
@@ -499,6 +542,16 @@
             <button class="btn" id="generate">Generate YAML</button>
           </div>
         </div>
+        <div class="row" style="margin-top: 12px;">
+          <div style="flex: 1 1 320px;">
+            <label>Save path</label>
+            <input type="text" id="save-path" value="out/question.yaml" />
+          </div>
+          <div style="flex: 0 0 auto; align-self: flex-end;">
+            <button class="btn secondary" id="save-yaml">Save File</button>
+          </div>
+        </div>
+        <div class="hint" id="save-status"></div>
         <div id="yaml-output" class="output"></div>
       </section>
     </main>
@@ -617,8 +670,30 @@
         { value: "literal", label: "Fixed value", fields: ["value"] },
       ];
 
+      const VALID_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+      const BUILTIN_NAMES = new Set([
+        "min", "max", "abs", "round", "int", "float", "str", "len",
+        "math", "ceil", "floor", "log2", "randint", "choice",
+        "weighted_choice", "uniform", "sample", "bin", "hex", "var",
+        "and", "or", "not", "True", "False", "None",
+      ]);
+
       const defaultVar = () => ({ name: "", type: "int", min: "", max: "", options: [], weights: [], value: "" });
       const defaultDerived = () => ({ name: "", expr: "" });
+
+      const formatExprName = (name) => {
+        const cleaned = (name || "").trim();
+        if (!cleaned) return "";
+        if (VALID_NAME_RE.test(cleaned)) return cleaned;
+        return `var(${JSON.stringify(cleaned)})`;
+      };
+
+      const wrapExpr = (expr) => {
+        const cleaned = (expr || "").trim();
+        if (!cleaned) return "";
+        if (cleaned.startsWith("{{") && cleaned.endsWith("}}")) return cleaned;
+        return `{{ ${cleaned} }}`;
+      };
 
       const insertIntoInput = (input, text) => {
         if (!input) return;
@@ -681,6 +756,7 @@
       };
 
       const insertVariable = (name, options = {}) => {
+        const exprName = formatExprName(name);
         const targetEditor = options.targetEditor || null;
         const preferInput = options.preferInput !== false;
         if (targetEditor) {
@@ -694,7 +770,7 @@
           return;
         }
         if (preferInput && activeInput && activeInput.classList.contains("expr-input")) {
-          insertIntoInput(activeInput, name);
+          insertIntoInput(activeInput, exprName);
           schedulePreview();
           return;
         }
@@ -704,12 +780,13 @@
           return;
         }
         if (activeInput) {
-          insertIntoInput(activeInput, `{{ ${name} }}`);
+          insertIntoInput(activeInput, `{{ ${exprName} }}`);
           schedulePreview();
         }
       };
 
       const insertDerived = (name, options = {}) => {
+        const exprName = formatExprName(name);
         const targetEditor = options.targetEditor || null;
         const preferInput = options.preferInput !== false;
         if (targetEditor) {
@@ -723,7 +800,7 @@
           return;
         }
         if (preferInput && activeInput && activeInput.classList.contains("expr-input")) {
-          insertIntoInput(activeInput, name);
+          insertIntoInput(activeInput, exprName);
           schedulePreview();
           return;
         }
@@ -733,7 +810,7 @@
           return;
         }
         if (activeInput) {
-          insertIntoInput(activeInput, `{{ ${name} }}`);
+          insertIntoInput(activeInput, `{{ ${exprName} }}`);
           schedulePreview();
         }
       };
@@ -756,10 +833,22 @@
         return choice;
       };
 
-      const openAnswerModal = (targetEditor) => {
+      const openAnswerModal = (targetEditor, preset = {}) => {
         currentAnswerTarget = targetEditor;
         el("answer-modal").classList.remove("hidden");
+        if (preset.label !== undefined) {
+          el("answer-label").value = preset.label;
+        }
+        if (preset.type) {
+          el("answer-type").value = preset.type;
+        }
+        if (preset.source) {
+          el("answer-source").value = preset.source;
+        }
         updateAnswerModalOptions();
+        if (preset.name) {
+          el("answer-source-name").value = preset.name;
+        }
         updateAnswerModalVisibility();
         renderAnswerChips();
       };
@@ -837,14 +926,14 @@
         const requirePrefix = el("answer-require-prefix").value === "true";
         const bafflesRaw = el("answer-baffles").value.trim();
 
-        let value = "";
+        let valueExpr = "";
         if (source === "expr") {
-          value = expr;
+          valueExpr = wrapExpr(expr);
         } else {
-          value = name;
+          valueExpr = wrapExpr(formatExprName(name));
         }
 
-        if (!value) {
+        if (!valueExpr) {
           alert("Choose a value source or enter an expression.");
           return;
         }
@@ -852,7 +941,7 @@
         const token = createTokenSpan("answer", label || type, {
           label,
           type,
-          value,
+          value: valueExpr,
           length,
           strict,
           require_prefix: requirePrefix,
@@ -1048,7 +1137,7 @@
             return;
           }
           if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("token")) {
-            parts.push(node.dataset.name || "");
+            parts.push(formatExprName(node.dataset.name || ""));
             return;
           }
           parts.push(normalizeText(node.textContent));
@@ -1071,7 +1160,10 @@
             </div>
             <div>
               <label>&nbsp;</label>
-              <button class="btn ghost">Remove</button>
+              <div class="row" style="gap:8px; justify-content:flex-end;">
+                <button class="btn ghost small" data-action="answer">Make Answer</button>
+                <button class="btn ghost small" data-action="remove">Remove</button>
+              </div>
             </div>
           </div>
           <div class="operator-bar">
@@ -1121,7 +1213,17 @@
             // ignore
           }
         });
-        row.querySelector("button.btn.ghost").addEventListener("click", () => {
+        const answerBtn = row.querySelector("[data-action='answer']");
+        const removeBtn = row.querySelector("[data-action='remove']");
+        answerBtn.addEventListener("click", () => {
+          if (!entry.name) {
+            alert("Give this derived value a name first.");
+            return;
+          }
+          const target = activeEditor || el("body-editor");
+          openAnswerModal(target, { source: "derived", name: entry.name, label: entry.name });
+        });
+        removeBtn.addEventListener("click", () => {
           list.splice(index, 1);
           render();
         });
@@ -1179,7 +1281,7 @@
           if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("token")) {
             const kind = node.dataset.kind;
             if (kind === "var" || kind === "derived") {
-              buffer += `{{ ${node.dataset.name} }}`;
+              buffer += `{{ ${formatExprName(node.dataset.name)} }}`;
               return;
             }
             if (kind === "answer") {
@@ -1244,6 +1346,132 @@
         return paragraphs;
       };
 
+      const extractExprNames = (expr) => {
+        if (!expr) return [];
+        const matches = expr.match(/[A-Za-z_][A-Za-z0-9_]*/g);
+        return matches || [];
+      };
+
+      const collectWarnings = () => {
+        const warnings = [];
+        const push = (msg) => warnings.push(msg);
+
+        const varNames = state.context.vars.map((entry) => (entry.name || "").trim()).filter(Boolean);
+        const derivedNames = state.context.derived.map((entry) => (entry.name || "").trim()).filter(Boolean);
+        const allNames = new Set([...varNames, ...derivedNames]);
+
+        const nameCounts = {};
+        [...varNames, ...derivedNames].forEach((name) => {
+          nameCounts[name] = (nameCounts[name] || 0) + 1;
+        });
+        Object.entries(nameCounts).forEach(([name, count]) => {
+          if (count > 1) push(`Name "${name}" is defined multiple times.`);
+        });
+
+        varNames.forEach((name) => {
+          if (!VALID_NAME_RE.test(name)) {
+            push(`Variable "${name}" contains spaces or symbols. Use letters, numbers, and underscores for expressions.`);
+          }
+        });
+        derivedNames.forEach((name) => {
+          if (!VALID_NAME_RE.test(name)) {
+            push(`Derived "${name}" contains spaces or symbols. Use letters, numbers, and underscores for expressions.`);
+          }
+        });
+
+        state.context.vars.forEach((entry) => {
+          if (!entry.name) return;
+          if ((entry.type === "int" || entry.type === "float") && (entry.min === "" || entry.max === "")) {
+            push(`Variable "${entry.name}" is missing a min or max.`);
+          }
+          if ((entry.type === "choice" || entry.type === "weighted_choice") && (!entry.options || entry.options.length === 0)) {
+            push(`Variable "${entry.name}" needs at least one option.`);
+          }
+          if (entry.type === "weighted_choice") {
+            const optionCount = entry.options ? entry.options.length : 0;
+            const weightCount = entry.weights ? entry.weights.length : 0;
+            if (optionCount && weightCount && optionCount !== weightCount) {
+              push(`Variable "${entry.name}" has ${optionCount} options but ${weightCount} weights.`);
+            }
+          }
+          if (entry.type === "literal" && entry.value === "") {
+            push(`Variable "${entry.name}" is a literal but has no value.`);
+          }
+        });
+
+        state.context.derived.forEach((entry) => {
+          if (!entry.name && entry.expr) {
+            push("A derived value is missing a name.");
+            return;
+          }
+          if (entry.name && !entry.expr) {
+            push(`Derived "${entry.name}" is missing an expression.`);
+            return;
+          }
+          if (!entry.expr) return;
+          const exprNames = extractExprNames(entry.expr);
+          exprNames.forEach((name) => {
+            if (BUILTIN_NAMES.has(name)) return;
+            if (!allNames.has(name)) {
+              push(`Derived "${entry.name}" references unknown name "${name}".`);
+            }
+          });
+        });
+
+        const answerTokens = Array.from(document.querySelectorAll(".token.answer"));
+        if (answerTokens.length === 0) {
+          push("No answers inserted yet.");
+        }
+        answerTokens.forEach((token, idx) => {
+          const type = token.dataset.type || "string";
+          const value = token.dataset.value || "";
+          const label = token.dataset.label || `answer ${idx + 1}`;
+          if (!value) {
+            push(`Answer "${label}" is missing a value.`);
+          } else if (!value.includes("{{") && /[A-Za-z_]/.test(value)) {
+            push(`Answer "${label}" looks like an expression. Wrap it in {{ }} to evaluate.`);
+          }
+          if ((type === "dropdown" || type === "multiple_choice") && !token.dataset.baffles) {
+            push(`Answer "${label}" is missing distractors (baffles).`);
+          }
+          if (token.dataset.require_prefix === "true" && !(type === "binary" || type === "hex")) {
+            push(`Answer "${label}" uses require_prefix but is not binary or hex.`);
+          }
+          if (token.dataset.strict === "true" && !(type === "binary" || type === "hex" || type === "decimal")) {
+            push(`Answer "${label}" uses strict but is not binary, hex, or decimal.`);
+          }
+        });
+
+        const bodyHasContent = el("body-editor").textContent.trim() !== "" || el("body-editor").querySelector(".token");
+        if (!bodyHasContent) {
+          push("Question body is empty.");
+        }
+
+        return warnings;
+      };
+
+      const renderWarnings = () => {
+        const warnings = collectWarnings();
+        const list = el("validation-list");
+        const summary = el("validation-summary");
+        list.innerHTML = "";
+        if (!warnings.length) {
+          summary.textContent = "All clear.";
+          const li = document.createElement("li");
+          li.className = "validation-item ok";
+          li.textContent = "No issues found.";
+          list.appendChild(li);
+          return;
+        }
+        summary.textContent = `${warnings.length} warning${warnings.length === 1 ? "" : "s"}`;
+        warnings.forEach((warning) => {
+          const li = document.createElement("li");
+          li.className = "validation-item";
+          li.textContent = warning;
+          list.appendChild(li);
+        });
+      };
+
       const buildSpec = () => {
         inputMeta();
         const spec = { version: state.version };
@@ -1304,6 +1532,28 @@
         return data.yaml || "";
       };
 
+      const setSaveStatus = (message, isError = false) => {
+        const status = el("save-status");
+        status.textContent = message;
+        status.style.color = isError ? "#a04527" : "var(--muted)";
+      };
+
+      const saveYamlToFile = async () => {
+        const spec = buildSpec();
+        const path = el("save-path").value.trim();
+        const response = await fetch("/save_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec, path }),
+        });
+        const data = await response.json();
+        if (data.error) {
+          setSaveStatus(data.error, true);
+          return;
+        }
+        setSaveStatus(`Saved to ${data.path}`);
+      };
+
       const updatePreview = async () => {
         const spec = buildSpec();
         const showAnswers = el("preview-show-answers").checked;
@@ -1332,6 +1582,7 @@
       };
 
       const schedulePreview = () => {
+        renderWarnings();
         if (previewTimer) {
           clearTimeout(previewTimer);
         }
@@ -1400,6 +1651,8 @@
         URL.revokeObjectURL(url);
       });
 
+      el("save-yaml").addEventListener("click", saveYamlToFile);
+
       el("insert-var-body").addEventListener("click", () => {
         const choice = pickName(state.context.vars, "variable");
         if (choice) insertVariable(choice, { targetEditor: el("body-editor"), preferInput: false });
@@ -1450,7 +1703,7 @@
           try {
             const data = JSON.parse(tokenData);
             if (data.kind === "var" || data.kind === "derived") {
-              insertIntoInput(input, data.name);
+              insertIntoInput(input, formatExprName(data.name));
             }
           } catch (err) {
             // ignore
