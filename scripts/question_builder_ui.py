@@ -323,21 +323,32 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         return
 
       output_dir = BASE_DIR / "out"
-      pdfs: list[str] = []
+      pdfs: list[pathlib.Path] = []
       if output_dir.exists():
         for pdf_path in output_dir.glob("*.pdf"):
           try:
             if pdf_path.stat().st_mtime >= start_time - 1:
-              pdfs.append(str(pdf_path))
+              pdfs.append(pdf_path)
           except OSError:
             continue
 
-      self._send_json({
-        "ok": True,
-        "path": str(save_path),
-        "output_dir": str(output_dir),
-        "pdfs": pdfs,
-      })
+      if not pdfs:
+        self._send_json({"error": "PDF export succeeded but no PDF was found."}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      pdf_path = max(pdfs, key=lambda p: p.stat().st_mtime)
+      try:
+        pdf_bytes = pdf_path.read_bytes()
+      except OSError as exc:
+        self._send_json({"error": f"Failed to read PDF: {exc}"}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      self.send_response(HTTPStatus.OK)
+      self.send_header("Content-Type", "application/pdf")
+      self.send_header("Content-Disposition", f'attachment; filename="{pdf_path.name}"')
+      self.send_header("Content-Length", str(len(pdf_bytes)))
+      self.end_headers()
+      self.wfile.write(pdf_bytes)
       return
 
 
