@@ -8,6 +8,7 @@ import random
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler
 from socketserver import TCPServer
+from typing import Any
 
 import yaml
 
@@ -26,7 +27,7 @@ HTML_PATH = BASE_DIR / "documentation" / "question_builder_ui.html"
 
 
 class QuestionBuilderHandler(SimpleHTTPRequestHandler):
-  def _send_json(self, payload, status=HTTPStatus.OK):
+  def _send_json(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
     data = json.dumps(payload).encode("utf-8")
     self.send_response(status)
     self.send_header("Content-Type", "application/json")
@@ -34,7 +35,12 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
     self.end_headers()
     self.wfile.write(data)
 
-  def _send_text(self, text, status=HTTPStatus.OK, content_type="text/plain; charset=utf-8"):
+  def _send_text(
+    self,
+    text: str,
+    status: HTTPStatus = HTTPStatus.OK,
+    content_type: str = "text/plain; charset=utf-8"
+  ) -> None:
     data = text.encode("utf-8")
     self.send_response(status)
     self.send_header("Content-Type", content_type)
@@ -42,7 +48,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
     self.end_headers()
     self.wfile.write(data)
 
-  def _load_html(self):
+  def _load_html(self) -> str | None:
     if not HTML_PATH.exists():
       return None
     return HTML_PATH.read_text(encoding="utf-8")
@@ -57,7 +63,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
       raise ValueError("Save path must be within the repository.")
     return path
 
-  def do_GET(self):
+  def do_GET(self) -> None:
     if self.path == "/" or self.path.startswith("/index"):
       html = self._load_html()
       if html is None:
@@ -72,23 +78,13 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
       return
 
     if self.path == "/premade_list":
-      QuestionRegistry.load_premade_questions()
-      items = []
-      for registered_name, cls in QuestionRegistry._registry.items():
-        doc = (cls.__doc__ or "").strip().splitlines()
-        items.append({
-          "registered_name": registered_name,
-          "class_name": cls.__name__,
-          "module": cls.__module__,
-          "doc": doc[0] if doc else ""
-        })
-      items.sort(key=lambda item: (item["class_name"].lower(), item["registered_name"]))
+      items = QuestionRegistry.list_registered()
       self._send_json({"items": items})
       return
 
     return super().do_GET()
 
-  def do_POST(self):
+  def do_POST(self) -> None:
     if self.path not in {"/to_yaml", "/from_yaml", "/preview", "/save_yaml", "/preview_premade"}:
       self._send_text("Not found.", status=HTTPStatus.NOT_FOUND)
       return
@@ -242,7 +238,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
       return
 
 
-def main():
+def main() -> None:
   parser = argparse.ArgumentParser(description="Run the YAML question builder UI.")
   parser.add_argument("--host", default="127.0.0.1", help="Host to bind (default: 127.0.0.1)")
   parser.add_argument("--port", default=8787, type=int, help="Port to bind (default: 8787)")

@@ -251,6 +251,26 @@ class QuestionRegistry:
     # Note: Don't build context here - instantiate() handles it
     # Calling it here would consume RNG calls and break QR code regeneration
     return new_question
+
+  @classmethod
+  def list_registered(cls, *, sort: bool = True) -> list[dict[str, str]]:
+    """Return metadata for registered question types."""
+    if not cls._scanned:
+      cls.load_premade_questions()
+
+    items: list[dict[str, str]] = []
+    for registered_name, question_cls in cls._registry.items():
+      doc = (question_cls.__doc__ or "").strip().splitlines()
+      items.append({
+        "registered_name": registered_name,
+        "class_name": question_cls.__name__,
+        "module": question_cls.__module__,
+        "doc": doc[0] if doc else ""
+      })
+
+    if sort:
+      items.sort(key=lambda item: (item["class_name"].lower(), item["registered_name"]))
+    return items
     
     
   @classmethod

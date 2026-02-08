@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import os
+import random
 import re
 from typing import Any
 
@@ -9,6 +10,7 @@ import numpy as np
 import yaml
 
 import QuizGenerator.contentast as ca
+from QuizGenerator.question import QuestionContext
 
 
 _TEMPLATE_RE = re.compile(r"\{\{(.*?)\}\}")
@@ -50,7 +52,7 @@ def _resolve_path(path: str, base_dir: str | None = None) -> str:
   return os.path.abspath(path)
 
 
-def apply_context_spec(spec: dict[str, Any], context) -> None:
+def apply_context_spec(spec: dict[str, Any], context: QuestionContext | dict[str, Any]) -> None:
   ctx_spec = spec.get("context", {}) or {}
   vars_spec = ctx_spec.get("vars", {}) or {}
   derived_spec = ctx_spec.get("derived", {}) or {}
@@ -72,7 +74,7 @@ def parse_question_templates(spec: dict[str, Any]) -> dict[str, ca.Element]:
   return {"body": body, "explanation": explanation}
 
 
-def _parse_section(nodes) -> ca.Section:
+def _parse_section(nodes: Any) -> ca.Section:
   if isinstance(nodes, dict):
     nodes = nodes.get("children", nodes.get("nodes", []))
   elements = []
@@ -84,7 +86,7 @@ def _parse_section(nodes) -> ca.Section:
   return ca.Section(elements)
 
 
-def _normalize_nodes(nodes):
+def _normalize_nodes(nodes: Any) -> list[Any]:
   if nodes is None:
     return []
   if isinstance(nodes, list):
@@ -116,7 +118,7 @@ def _parse_node(node) -> ca.Element | ca.TemplateElement | None:
   raise ValueError(f"Unknown YAML AST node: {node}")
 
 
-def _parse_paragraph(lines) -> ca.Paragraph:
+def _parse_paragraph(lines: Any) -> ca.Paragraph:
   if isinstance(lines, dict):
     lines = lines.get("lines", lines.get("value", []))
   if isinstance(lines, (str, int, float, bool)):
@@ -127,7 +129,7 @@ def _parse_paragraph(lines) -> ca.Paragraph:
   return ca.Paragraph(elements)
 
 
-def _parse_inline(item):
+def _parse_inline(item: Any) -> ca.Element | ca.TemplateElement | None:
   if isinstance(item, str):
     return _parse_text(item)
   if isinstance(item, (int, float, bool)):
@@ -140,7 +142,7 @@ def _parse_inline(item):
   return _parse_node(item)
 
 
-def _parse_text(text_value) -> ca.Element:
+def _parse_text(text_value: Any) -> ca.Element:
   if text_value is None:
     return ca.Text("")
   if isinstance(text_value, dict):
@@ -152,7 +154,7 @@ def _parse_text(text_value) -> ca.Element:
   return ca.Text(text_value)
 
 
-def _parse_equation(spec, *, inline: bool) -> ca.Element:
+def _parse_equation(spec: Any, *, inline: bool) -> ca.Element:
   if isinstance(spec, dict):
     latex = spec.get("latex", "")
     inline = spec.get("inline", inline)
@@ -167,7 +169,7 @@ def _parse_equation(spec, *, inline: bool) -> ca.Element:
   return ca.Equation(latex, inline=inline)
 
 
-def _parse_code(spec) -> ca.Element:
+def _parse_code(spec: Any) -> ca.Element:
   if isinstance(spec, dict):
     content = spec.get("content", spec.get("value", ""))
   else:
@@ -206,7 +208,7 @@ def _parse_table(spec: dict[str, Any]) -> ca.Table:
   )
 
 
-def _parse_answer_block(spec) -> ca.AnswerBlock:
+def _parse_answer_block(spec: Any) -> ca.AnswerBlock:
   if isinstance(spec, dict):
     spec = spec.get("answers", [])
   if not isinstance(spec, list):
@@ -237,7 +239,7 @@ def _parse_when(spec: dict[str, Any]) -> ca.When:
   return ca.When(cond_fn, then_node, else_node)
 
 
-def _parse_branch(branch):
+def _parse_branch(branch: Any) -> ca.Element | ca.TemplateElement | None:
   if branch is None:
     return None
   if isinstance(branch, list):
@@ -394,7 +396,7 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
   return ca.Expr(builder)
 
 
-def _evaluate_var_def(var_def: Any, context):
+def _evaluate_var_def(var_def: Any, context: QuestionContext | dict[str, Any]) -> Any:
   if isinstance(var_def, dict):
     var_type = str(var_def.get("type", "expr")).lower()
     if var_type == "int":
@@ -426,7 +428,7 @@ def _evaluate_var_def(var_def: Any, context):
   return var_def
 
 
-def _eval_field(value: Any, context):
+def _eval_field(value: Any, context: QuestionContext | dict[str, Any]) -> Any:
   if isinstance(value, str):
     expr_match = _EXPR_ONLY_RE.match(value)
     if expr_match:
@@ -441,19 +443,19 @@ def _eval_field(value: Any, context):
   return value
 
 
-def _eval_expr(expr: str, context):
+def _eval_expr(expr: str, context: QuestionContext | dict[str, Any]) -> Any:
   env = _build_eval_env(context)
   return eval(expr, {"__builtins__": {}}, env)
 
 
-def _render_template(text: str, context) -> str:
+def _render_template(text: str, context: QuestionContext | dict[str, Any]) -> str:
   def repl(match: re.Match) -> str:
     expr = match.group(1).strip()
     return str(_eval_expr(expr, context))
   return _TEMPLATE_RE.sub(repl, text)
 
 
-def _get_rng(context):
+def _get_rng(context: QuestionContext | dict[str, Any]) -> random.Random:
   rng = getattr(context, "rng", None)
   if rng is None and hasattr(context, "get"):
     rng = context.get("rng")
@@ -462,7 +464,7 @@ def _get_rng(context):
   return rng
 
 
-def _build_eval_env(context) -> dict[str, Any]:
+def _build_eval_env(context: QuestionContext | dict[str, Any]) -> dict[str, Any]:
   rng = _get_rng(context)
 
   def randint(a, b):

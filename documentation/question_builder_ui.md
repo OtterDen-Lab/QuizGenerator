@@ -15,3 +15,9 @@ http://127.0.0.1:8787
 ```
 
 The UI exports YAML compatible with `FromYaml` questions.
+
+## Security note
+
+YAML expressions and `{{ }}` templates are evaluated with Python `eval` in
+`QuizGenerator/yaml_question.py`. Use trusted input only and keep the UI
+local (do not expose it to the public internet).
