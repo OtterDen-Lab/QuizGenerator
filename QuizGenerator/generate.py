@@ -28,7 +28,13 @@ class QuizGenError(Exception):
 
 
 def parse_args():
-  parser = argparse.ArgumentParser()
+  parser = argparse.ArgumentParser(
+    epilog=(
+      "Generation controls:\n"
+      "  --max_backoff_attempts N   Limit retries for 'interesting' questions\n"
+      "  --float_tolerance X        Default tolerance for float answers\n"
+    )
+  )
 
   parser.add_argument(
     "--env",
