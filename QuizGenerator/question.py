@@ -467,6 +467,7 @@ class RegenerableChoiceMixin:
 
 class Question(abc.ABC):
   AUTO_ENTRY_WARNINGS = True
+  DEFAULT_MAX_BACKOFF_ATTEMPTS = 200
   """
   Base class for all quiz questions with cross-format rendering support.
 
@@ -627,6 +628,8 @@ class Question(abc.ABC):
     # Generate the question, retrying with incremented seeds until we get an interesting one
     base_seed = kwargs.get("rng_seed", None)
     max_backoff_attempts = kwargs.get("max_backoff_attempts", None)
+    if max_backoff_attempts is None:
+      max_backoff_attempts = self.DEFAULT_MAX_BACKOFF_ATTEMPTS
     build_kwargs = dict(kwargs)
     build_kwargs.pop("rng_seed", None)
     build_kwargs.pop("max_backoff_attempts", None)
