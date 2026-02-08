@@ -26,3 +26,11 @@ and writes output to `out/`. Install Typst and keep the UI local-only.
 YAML expressions and `{{ }}` templates are evaluated with Python `eval` in
 `QuizGenerator/yaml_question.py`. Use trusted input only and keep the UI
 local (do not expose it to the public internet).
+
+## Beta smoke checklist
+
+- Create a quiz with 2+ questions, reorder them, and export YAML.
+- Import the exported YAML and confirm ordering + points are preserved.
+- Preview a premade question and a YAML question (with MathJax).
+- Export PDF with `PDF count = 1` (downloads PDF).
+- Export PDF with `PDF count > 1` (downloads ZIP).
