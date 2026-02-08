@@ -62,7 +62,7 @@ If you have a smartphone or QR scanner app, you can extract QR codes individuall
 
 ```bash
 # Scan a single QR code image
-python grade_from_qr.py --image qr_code_q3.png
+quizregen --image qr_code_q3.png
 ```
 
 Output:
@@ -85,7 +85,7 @@ Scan a full exam page and extract all QR codes at once:
 
 ```bash
 # Process all QR codes in the scanned page
-python grade_from_qr.py --image scanned_exam_page1.jpg --all
+quizregen --image scanned_exam_page1.jpg --all
 ```
 
 This will regenerate answers for all questions on that page.
@@ -95,7 +95,7 @@ This will regenerate answers for all questions on that page.
 For automated grading systems, save results to JSON:
 
 ```bash
-python grade_from_qr.py --image exam_page1.jpg --all --output answers_page1.json
+quizregen --image exam_page1.jpg --all --output answers_page1.json
 ```
 
 The JSON output contains structured answer data that can be processed programmatically:
@@ -199,7 +199,7 @@ Interactive webcam scanning is planned for future releases:
 
 ```bash
 # Not yet implemented
-python grade_from_qr.py --interactive
+quizregen --interactive
 ```
 
 ### Batch Answer Key Generation
@@ -211,7 +211,7 @@ Generate answer keys for all exams in a directory:
 for exam in exams/*.pdf; do
     # Extract QR codes from PDF
     # Scan each page
-    python grade_from_qr.py --image "$exam" --all --output "answers_$(basename $exam).json"
+    quizregen --image "$exam" --all --output "answers_$(basename $exam).json"
 done
 ```
 
@@ -248,7 +248,7 @@ Versioning ensures that regenerated answers match the questions that were actual
 
 4. **Extract answers**:
    ```bash
-   python grade_from_qr.py --image exam_student123_page1.jpg --all
+   quizregen --image exam_student123_page1.jpg --all
    ```
 
 5. **Compare student answers to regenerated answers**

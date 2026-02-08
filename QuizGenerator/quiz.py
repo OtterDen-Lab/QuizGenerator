@@ -187,6 +187,28 @@ class Quiz:
           return ", ".join(available)
         shown = ", ".join(available[:limit])
         return f"{shown}, ... (+{len(available) - limit} more)"
+
+      def _is_known_question_type(question_class: str) -> bool:
+        key = question_class.lower()
+        registry = QuestionRegistry._registry
+        reverse = QuestionRegistry._class_name_to_registered_name
+        if key in registry or key in reverse:
+          return True
+        # Backward-compat prefix handling
+        for prefix in ["cst334.", "cst463."]:
+          if key.startswith(prefix):
+            stripped = key[len(prefix):]
+            if stripped in registry or stripped in reverse:
+              return True
+            if "." in stripped:
+              final = stripped.split(".")[-1]
+              if final in registry or final in reverse:
+                return True
+        if "." in key:
+          final = key.split(".")[-1]
+          if final in registry or final in reverse:
+            return True
+        return False
       if isinstance(questions_block, list):
         # List format preserves YAML order by default.
         if question_order_setting is None:
@@ -222,12 +244,16 @@ class Quiz:
               kwargs["topic"] = Question.Topic.from_string(q_data.get("topic", "Misc"))
             question_class = q_data.get("class", "FromText")
             try:
+              if not _is_known_question_type(question_class):
+                available = _format_available_questions()
+                raise ValueError(
+                  f"Unknown question type '{question_class}' for '{q_name}'. "
+                  f"Available question types: {available}"
+                )
               return QuestionRegistry.create(question_class, **kwargs)
-            except ValueError as e:
-              available = _format_available_questions()
+            except Exception as e:
               raise ValueError(
-                f"Unknown question type '{question_class}' for '{q_name}'. "
-                f"Available question types: {available}"
+                f"Failed to instantiate question '{q_name}' with class '{question_class}': {e}"
               ) from e
 
           questions_for_exam.extend([
@@ -243,96 +269,100 @@ class Quiz:
           # todo: I can also add in "extra credit" and "mix-ins" as other keys to indicate extra credit or questions that can go anywhere
           log.info(f"Parsing {question_value} point questions")
 
-        # Check for point-value-level config
-        point_config = question_definitions.pop("_config", {})
-        if point_config.get("preserve_order", False):
-          preserve_order_point_values.add(question_value)
-          log.info(f"  Point value {question_value} will preserve question order")
+          # Check for point-value-level config
+          point_config = question_definitions.pop("_config", {})
+          if point_config.get("preserve_order", False):
+            preserve_order_point_values.add(question_value)
+            log.info(f"  Point value {question_value} will preserve question order")
 
-        def make_question(q_name, q_data, **kwargs):
-          # Build up the kwargs that we're going to pass in
-          # todo: this is currently a mess due to legacy things, so before I tell others to use this make it cleaner
-          kwargs= {
-            "name": q_name,
-            "points_value": question_value,
-            **q_data.get("kwargs", {}),
-            **q_data,
-            **kwargs,
-          }
-          
-          # If we are passed in a topic then use it, otherwise don't set it which will have it set to a default
-          if "topic" in q_data:
-            kwargs["topic"] = Question.Topic.from_string(q_data.get("topic", "Misc"))
-          
-          # Add in a default, where if it isn't specified we're going to simply assume it is a text
-          question_class = q_data.get("class", "FromText")
-          
-          try:
-            new_question = QuestionRegistry.create(
-              question_class,
-              **kwargs
-            )
-            return new_question
-          except ValueError as e:
-            available = _format_available_questions()
-            raise ValueError(
-              f"Unknown question type '{question_class}' for '{q_name}'. "
-              f"Available question types: {available}"
-            ) from e
-        
-        for q_name, q_data in question_definitions.items():
-          # Set defaults for config
-          question_config = {
-            "group" : False,
-            "num_to_pick" : 1,
-            "random_per_student" : False,
-            "repeat": 1,
-            "topic": "MISC"
-          }
-          
-          # Update config if it exists
-          question_config.update(
-            q_data.get("_config", {})
-          )
-          q_data.pop("_config", None)
-          if "pick" in q_data:
-            raise ValueError(
-              f"Legacy 'pick' key found in question '{q_name}'. "
-              "Use _config.group with num_to_pick instead."
-            )
-          if "repeat" in q_data:
-            raise ValueError(
-              f"Legacy 'repeat' key found in question '{q_name}'. "
-              "Use _config.repeat instead."
-            )
-          
-          # Check if it is a question group
-          if question_config["group"]:
+          def make_question(q_name, q_data, **kwargs):
+            # Build up the kwargs that we're going to pass in
+            # todo: this is currently a mess due to legacy things, so before I tell others to use this make it cleaner
+            kwargs= {
+              "name": q_name,
+              "points_value": question_value,
+              **q_data.get("kwargs", {}),
+              **q_data,
+              **kwargs,
+            }
             
-            # todo: Find a way to allow for "num_to_pick" to ensure lack of duplicates when using duplicates.
-            #    It's probably going to be somewhere in the instantiate and get_attr fields, with "_current_questions"
-            #    But will require changing how we add concrete questions (but that'll just be everything returns a list
-            questions_for_exam.append(
-              QuestionGroup(
-                questions_in_group=[
-                  make_question(name, data | {"topic" : question_config["topic"]}) for name, data in q_data.items()
-                ],
-                pick_once=(not question_config["random_per_student"]),
-                name=q_name,
-                num_to_pick=question_config.get("num_to_pick", 1),
-                random_per_student=question_config.get("random_per_student", False)
+            # If we are passed in a topic then use it, otherwise don't set it which will have it set to a default
+            if "topic" in q_data:
+              kwargs["topic"] = Question.Topic.from_string(q_data.get("topic", "Misc"))
+            
+            # Add in a default, where if it isn't specified we're going to simply assume it is a text
+            question_class = q_data.get("class", "FromText")
+            
+            try:
+              if not _is_known_question_type(question_class):
+                available = _format_available_questions()
+                raise ValueError(
+                  f"Unknown question type '{question_class}' for '{q_name}'. "
+                  f"Available question types: {available}"
+                )
+              new_question = QuestionRegistry.create(
+                question_class,
+                **kwargs
               )
-            )
+              return new_question
+            except Exception as e:
+              raise ValueError(
+                f"Failed to instantiate question '{q_name}' with class '{question_class}': {e}"
+              ) from e
           
-          else: # Then this is just a single question
-            questions_for_exam.extend([
-              make_question(
-                q_name,
-                q_data,
-                rng_seed_offset=repeat_number
+          for q_name, q_data in question_definitions.items():
+            # Set defaults for config
+            question_config = {
+              "group" : False,
+              "num_to_pick" : 1,
+              "random_per_student" : False,
+              "repeat": 1,
+              "topic": "MISC"
+            }
+            
+            # Update config if it exists
+            question_config.update(
+              q_data.get("_config", {})
+            )
+            q_data.pop("_config", None)
+            if "pick" in q_data:
+              raise ValueError(
+                f"Legacy 'pick' key found in question '{q_name}'. "
+                "Use _config.group with num_to_pick instead."
               )
-              for repeat_number in range(question_config["repeat"])
-            ])
+            if "repeat" in q_data:
+              raise ValueError(
+                f"Legacy 'repeat' key found in question '{q_name}'. "
+                "Use _config.repeat instead."
+              )
+            
+            # Check if it is a question group
+            if question_config["group"]:
+              
+              # todo: Find a way to allow for "num_to_pick" to ensure lack of duplicates when using duplicates.
+              #    It's probably going to be somewhere in the instantiate and get_attr fields, with "_current_questions"
+              #    But will require changing how we add concrete questions (but that'll just be everything returns a list
+              questions_for_exam.append(
+                QuestionGroup(
+                  questions_in_group=[
+                    make_question(name, data | {"topic" : question_config["topic"]}) for name, data in q_data.items()
+                  ],
+                  pick_once=(not question_config["random_per_student"]),
+                  name=q_name,
+                  num_to_pick=question_config.get("num_to_pick", 1),
+                  random_per_student=question_config.get("random_per_student", False)
+                )
+              )
+            
+            else: # Then this is just a single question
+              questions_for_exam.extend([
+                make_question(
+                  q_name,
+                  q_data,
+                  rng_seed_offset=repeat_number
+                )
+                for repeat_number in range(question_config["repeat"])
+              ])
       log.debug(f"len(questions_for_exam): {len(questions_for_exam)}")
       quiz_from_yaml = cls(
         name,

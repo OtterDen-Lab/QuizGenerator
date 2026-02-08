@@ -14,6 +14,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from lms_interface.canvas_interface import CanvasInterface
+from QuizGenerator.contentast import Answer
 from QuizGenerator.performance import PerformanceTracker
 from QuizGenerator.question import QuestionGroup, QuestionRegistry
 from QuizGenerator.quiz import Quiz
@@ -27,7 +28,13 @@ class QuizGenError(Exception):
 
 
 def parse_args():
-  parser = argparse.ArgumentParser()
+  parser = argparse.ArgumentParser(
+    epilog=(
+      "Generation controls:\n"
+      "  --max_backoff_attempts N   Limit retries for 'interesting' questions\n"
+      "  --float_tolerance X        Default tolerance for float answers\n"
+    )
+  )
 
   parser.add_argument(
     "--env",
@@ -90,6 +97,10 @@ def parse_args():
                      help="Enable FromGenerator questions (executes Python from YAML)")
   parser.add_argument("--check-deps", action="store_true",
                      help="Check external dependencies (Typst/LaTeX/Pandoc) and exit")
+  parser.add_argument("--max_backoff_attempts", type=int, default=None,
+                     help="Max attempts for question generation backoff (default: 200)")
+  parser.add_argument("--float_tolerance", type=float, default=None,
+                     help="Default numeric tolerance for float answers (default: 0.01)")
 
   subparsers = parser.add_subparsers(dest='command')
   test_parser = subparsers.add_parser("TEST")
@@ -398,7 +409,7 @@ def sanitize_filename(name):
 
 
 def _canvas_payload_fingerprint(payload):
-  fingerprint = payload.get("question_text", "")
+  fingerprint = _normalize_canvas_html(payload.get("question_text", ""))
   answers = payload.get("answers", [])
   try:
     fingerprint += "".join(
@@ -410,13 +421,36 @@ def _canvas_payload_fingerprint(payload):
   return fingerprint
 
 
+def _normalize_canvas_html(html: str) -> str:
+  """
+  Normalize HTML for Canvas dedupe.
+
+  Strips volatile URLs (e.g., uploaded image file IDs) while preserving
+  stable attributes like data-quizgen-hash for image identity.
+  """
+  if not html:
+    return ""
+  # Only strip src on <img> tags that include data-quizgen-hash.
+  def _normalize_img_tag(match: re.Match) -> str:
+    tag = match.group(0)
+    if "data-quizgen-hash" not in tag:
+      return tag
+    return re.sub(r'\s+src=(".*?"|\'.*?\')', r' src="__URL__"', tag)
+
+  normalized = re.sub(r"<img\b[^>]*>", _normalize_img_tag, html)
+  # Collapse whitespace for stability across rendering differences.
+  normalized = re.sub(r"\s+", " ", normalized).strip()
+  return normalized
+
+
 def _build_canvas_payloads(
     question,
     course,
     canvas_quiz,
     num_variations,
     seed_base,
-    max_attempts=1000
+    max_attempts=1000,
+    max_backoff_attempts=None
 ):
   max_variations = num_variations
   possible_variations = getattr(question, "possible_variations", None)
@@ -430,7 +464,12 @@ def _build_canvas_payloads(
   seen = set()
   for attempt in range(max_attempts):
     rng_seed = seed_base + (attempt * 1000)
-    payload = question.get__canvas(course, canvas_quiz, rng_seed=rng_seed)
+    payload = question.get__canvas(
+      course,
+      canvas_quiz,
+      rng_seed=rng_seed,
+      max_backoff_attempts=max_backoff_attempts
+    )
     fingerprint = _canvas_payload_fingerprint(payload)
     if fingerprint in seen:
       continue
@@ -455,7 +494,8 @@ def upload_quiz_to_canvas(
     title=None,
     is_practice=False,
     assignment_group=None,
-    optimize_layout=False
+    optimize_layout=False,
+    max_backoff_attempts=None
 ):
   if assignment_group is None:
     assignment_group = canvas_course.create_assignment_group()
@@ -485,13 +525,14 @@ def upload_quiz_to_canvas(
       group_payloads = []
       for idx, sub_question in enumerate(selected):
         sub_seed_base = seed_base + (idx * 10_000)
-        group_payloads.extend(_build_canvas_payloads(
+      group_payloads.extend(_build_canvas_payloads(
           sub_question,
           canvas_course.course,
           canvas_quiz,
           num_variations,
-          sub_seed_base
-        ))
+          sub_seed_base,
+          max_backoff_attempts=max_backoff_attempts
+      ))
 
       canvas_course.create_question(
         canvas_quiz,
@@ -507,7 +548,8 @@ def upload_quiz_to_canvas(
       canvas_course.course,
       canvas_quiz,
       num_variations,
-      seed_base
+      seed_base,
+      max_backoff_attempts=max_backoff_attempts
     )
     canvas_course.create_question(
       canvas_quiz,
@@ -596,7 +638,8 @@ def generate_quiz(
     layout_samples=10,
     layout_safety_factor=1.1,
     embed_images_typst=True,
-    optimize_layout=False
+    optimize_layout=False,
+    max_backoff_attempts=None
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -634,6 +677,8 @@ def generate_quiz(
           "use_typst_measurement": use_typst_measurement,
           "consistent_pages": consistent_pages,
         }
+        if max_backoff_attempts is not None:
+          quiz_kwargs["max_backoff_attempts"] = max_backoff_attempts
         if consistent_pages:
           quiz_kwargs["layout_samples"] = layout_samples
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
@@ -650,6 +695,8 @@ def generate_quiz(
           "use_typst_measurement": use_typst_measurement,
           "consistent_pages": consistent_pages,
         }
+        if max_backoff_attempts is not None:
+          quiz_kwargs["max_backoff_attempts"] = max_backoff_attempts
         if consistent_pages:
           quiz_kwargs["layout_samples"] = layout_samples
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
@@ -665,7 +712,8 @@ def generate_quiz(
         title=quiz.name,
         is_practice=quiz.practice,
         assignment_group=assignment_group,
-        optimize_layout=optimize_layout
+        optimize_layout=optimize_layout,
+        max_backoff_attempts=max_backoff_attempts
       )
     
     quiz.describe()
@@ -714,6 +762,15 @@ def main():
   if args.allow_generator:
     os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
 
+  if args.float_tolerance is not None:
+    if args.float_tolerance < 0:
+      raise QuizGenError("float_tolerance must be non-negative.")
+    Answer.DEFAULT_FLOAT_TOLERANCE = args.float_tolerance
+
+  if args.max_backoff_attempts is not None:
+    if args.max_backoff_attempts < 1:
+      raise QuizGenError("max_backoff_attempts must be >= 1.")
+
   if args.num_pdfs and args.num_pdfs > 1:
     args.consistent_pages = True
 
@@ -756,7 +813,8 @@ def main():
     layout_samples=getattr(args, 'layout_samples', 10),
     layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1),
     embed_images_typst=getattr(args, 'embed_images_typst', True),
-    optimize_layout=getattr(args, 'optimize_space', False)
+    optimize_layout=getattr(args, 'optimize_space', False),
+    max_backoff_attempts=getattr(args, "max_backoff_attempts", None)
   )
 
 

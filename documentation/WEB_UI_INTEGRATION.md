@@ -71,7 +71,7 @@ load_dotenv()  # Reads QUIZ_ENCRYPTION_KEY from .env
 If your web UI already decodes QR codes and extracts the metadata, use this simple API:
 
 ```python
-from grade_from_qr import regenerate_from_metadata
+from QuizGenerator.regenerate import regenerate_from_metadata
 
 def grade_question(question_type: str, seed: int, version: str, points: float):
     """
@@ -120,7 +120,7 @@ If you want this module to handle QR decoding:
 
 ```python
 import json
-from grade_from_qr import scan_qr_from_image, parse_qr_data, regenerate_from_metadata
+from QuizGenerator.regenerate import scan_qr_from_image, parse_qr_data, regenerate_from_metadata
 from QuizGenerator.qrcode_generator import QuestionQRCode
 
 def grade_from_qr_image(image_path: str):
@@ -176,7 +176,7 @@ def format_answers(answer_objects):
 
 ```python
 from flask import Flask, request, jsonify
-from grade_from_qr import regenerate_from_metadata
+from QuizGenerator.regenerate import regenerate_from_metadata
 from QuizGenerator.qrcode_generator import QuestionQRCode
 import json
 
@@ -244,7 +244,7 @@ if __name__ == '__main__':
 ```python
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from grade_from_qr import regenerate_from_metadata
+from QuizGenerator.regenerate import regenerate_from_metadata
 from QuizGenerator.qrcode_generator import QuestionQRCode
 import json
 
@@ -360,7 +360,7 @@ Common answer object types and their attributes:
 ## Error Handling
 
 ```python
-from grade_from_qr import regenerate_from_metadata
+from QuizGenerator.regenerate import regenerate_from_metadata
 
 try:
     result = regenerate_from_metadata("UnknownQuestion", 12345, "1.0")
@@ -385,7 +385,7 @@ Test the integration with your web UI:
 import os
 os.environ['QUIZ_ENCRYPTION_KEY'] = 'your-test-key'
 
-from grade_from_qr import regenerate_from_metadata
+from QuizGenerator.regenerate import regenerate_from_metadata
 
 # Test regeneration
 result = regenerate_from_metadata(

@@ -149,18 +149,6 @@ class FromGenerator(FromText, TableQuestionMixin):
       )
     return context
 
-
-class _LocalRandomProxy:
-  """Proxy random-like functions to a local RNG while preserving module attributes."""
-
-  def __init__(self, rng: random.Random):
-    self._rng = rng
-
-  def __getattr__(self, name):
-    if hasattr(self._rng, name):
-      return getattr(self._rng, name)
-    return getattr(random, name)
-
   @classmethod
   def _build_body(cls, context) -> tuple[ca.Element, list[ca.Answer]]:
     generator_fn = context.get("generator_fn")
@@ -188,4 +176,15 @@ class _LocalRandomProxy:
       body = ca.Section([ca.Text(str(generated_content))])
 
     return body, []
-    
+
+
+class _LocalRandomProxy:
+  """Proxy random-like functions to a local RNG while preserving module attributes."""
+
+  def __init__(self, rng: random.Random):
+    self._rng = rng
+
+  def __getattr__(self, name):
+    if hasattr(self._rng, name):
+      return getattr(self._rng, name)
+    return getattr(random, name)

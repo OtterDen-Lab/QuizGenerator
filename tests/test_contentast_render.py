@@ -71,3 +71,9 @@ def test_table_renders_html_and_typst():
     assert "<table" in html
     assert "Sum" in html
     assert "question(" in typst
+
+
+def test_typst_question_reserve_height_uses_context():
+    header = ca.Document.TYPST_HEADER
+    assert "context {" in header
+    assert "measure(body).height" in header

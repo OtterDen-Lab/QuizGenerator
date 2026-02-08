@@ -112,7 +112,7 @@ uv sync --extra grading
 export QUIZ_ENCRYPTION_KEY="your-key-here"
 
 # Scan QR code from image
-python grade_from_qr.py --image scanned_exam.jpg
+quizregen --image scanned_exam.jpg
 ```
 
 ### For Web Developers (Using API)
@@ -123,7 +123,7 @@ See [WEB_UI_INTEGRATION.md](WEB_UI_INTEGRATION.md)
 pip install -e /path/to/QuizGeneration
 
 # Use in your code
-from grade_from_qr import regenerate_from_metadata
+from QuizGenerator.regenerate import regenerate_from_metadata
 
 result = regenerate_from_metadata(
     question_type="VirtualAddressParts",
@@ -161,7 +161,7 @@ QuizGeneration/
 │   └── WEB_UI_INTEGRATION.md  # Web API guide
 ├── examples/
 │   └── web_ui_integration_example.py  # Working code examples
-├── grade_from_qr.py        # Main grading module (CLI + library)
+├── QuizGenerator/regenerate.py        # Main grading module (CLI + library, `quizregen`)
 ├── QuizGenerator/
 │   ├── qrcode_generator.py # QR code generation/encryption
 │   ├── question.py         # Question classes and registry
