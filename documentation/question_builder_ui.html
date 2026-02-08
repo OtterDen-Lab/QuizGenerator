@@ -2457,6 +2457,8 @@
           const label = question.name || `Question ${idx + 1}`;
           if (question.points === "" || question.points === null || question.points === undefined) {
             errors.push(`${label}: points are required.`);
+          } else if (Number.isNaN(Number(question.points))) {
+            errors.push(`${label}: points must be numeric.`);
           }
           if (question.kind === "premade" && !question.premade.class) {
             errors.push(`${label}: premade class is required.`);
@@ -2628,22 +2630,20 @@
       const importQuizFromSpec = async (spec) => {
         const warnings = [];
         const questions = [];
-        const questionBlocks = spec?.questions || {};
+        const questionBlocks = spec?.questions || [];
 
-        for (const [pointsKey, block] of Object.entries(questionBlocks)) {
-          if (!block || typeof block !== "object") continue;
-          if (block._config) {
-            warnings.push(`Point group ${pointsKey} has _config which is not yet editable here.`);
-          }
-          for (const [name, qData] of Object.entries(block)) {
-            if (name === "_config") continue;
+        if (Array.isArray(questionBlocks)) {
+          for (const qData of questionBlocks) {
             if (!qData || typeof qData !== "object") continue;
+            if (!qData.name) {
+              warnings.push("A question entry is missing a name.");
+            }
             if (qData._config) {
-              warnings.push(`Question "${name}" has _config which is not yet editable here.`);
+              warnings.push(`Question "${qData.name || "Unnamed"}" has _config which is not yet editable here.`);
             }
             const question = newQuestion("premade");
-            question.name = name;
-            question.points = pointsKey;
+            question.name = qData.name || "";
+            question.points = qData.points !== undefined && qData.points !== null ? String(qData.points) : "";
             question.topic = qData.topic || "";
             question.spacing = qData.spacing || "";
             question.num_subquestions = qData.num_subquestions || "";
@@ -2658,7 +2658,7 @@
                 question.premade.class = className;
                 const kwargs = parseQuestionKwargs(qData);
                 question.premade.kwargsText = await stringifyYamlMapping(kwargs);
-                warnings.push(`Question "${name}" uses FromYaml without inline spec; kept as premade.`);
+                warnings.push(`Question "${qData.name || "Unnamed"}" uses FromYaml without inline spec; kept as premade.`);
               }
             } else {
               question.kind = "premade";
@@ -2667,6 +2667,46 @@
               question.premade.kwargsText = await stringifyYamlMapping(kwargs);
             }
             questions.push(question);
+          }
+        } else {
+          for (const [pointsKey, block] of Object.entries(questionBlocks)) {
+            if (!block || typeof block !== "object") continue;
+            if (block._config) {
+              warnings.push(`Point group ${pointsKey} has _config which is not yet editable here.`);
+            }
+            for (const [name, qData] of Object.entries(block)) {
+              if (name === "_config") continue;
+              if (!qData || typeof qData !== "object") continue;
+              if (qData._config) {
+                warnings.push(`Question "${name}" has _config which is not yet editable here.`);
+              }
+              const question = newQuestion("premade");
+              question.name = name;
+              question.points = pointsKey;
+              question.topic = qData.topic || "";
+              question.spacing = qData.spacing || "";
+              question.num_subquestions = qData.num_subquestions || "";
+              const className = qData.class || "FromText";
+              if (className.toLowerCase() === "fromyaml") {
+                const yamlSpec = await extractYamlSpec(qData);
+                if (yamlSpec) {
+                  question.kind = "yaml";
+                  question.yamlSpec = yamlSpec;
+                } else {
+                  question.kind = "premade";
+                  question.premade.class = className;
+                  const kwargs = parseQuestionKwargs(qData);
+                  question.premade.kwargsText = await stringifyYamlMapping(kwargs);
+                  warnings.push(`Question "${name}" uses FromYaml without inline spec; kept as premade.`);
+                }
+              } else {
+                question.kind = "premade";
+                question.premade.class = className;
+                const kwargs = parseQuestionKwargs(qData);
+                question.premade.kwargsText = await stringifyYamlMapping(kwargs);
+              }
+              questions.push(question);
+            }
           }
         }
 
@@ -2747,7 +2787,7 @@
         if (quizState.meta.sort_order.length) quiz["sort order"] = quizState.meta.sort_order;
         if (quizState.meta.custom_modules.length) quiz.custom_modules = quizState.meta.custom_modules;
 
-        const questionsByPoints = {};
+        const questionsList = [];
         const active = getActiveQuestion();
         if (active && active.kind === "yaml") {
           active.yamlSpec = buildSpec(questionMetaFrom(active));
@@ -2755,12 +2795,12 @@
 
         for (let i = 0; i < quizState.questions.length; i += 1) {
           const question = quizState.questions[i];
-          const pointsKey = question.points !== "" ? String(question.points) : "0";
-          if (!questionsByPoints[pointsKey]) {
-            questionsByPoints[pointsKey] = {};
-          }
           const name = question.name || `Question ${i + 1}`;
           const config = {};
+          config.name = name;
+          if (question.points !== "" && question.points !== null && question.points !== undefined) {
+            config.points = Number(question.points);
+          }
           if (question.kind === "yaml") {
             const spec = question.yamlSpec || buildSpec(questionMetaFrom(question));
             config.class = "FromYaml";
@@ -2780,10 +2820,10 @@
           if (question.topic) config.topic = question.topic;
           if (question.spacing) config.spacing = question.spacing;
           if (question.num_subquestions) config.num_subquestions = Number(question.num_subquestions);
-          questionsByPoints[pointsKey][name] = config;
+          questionsList.push(config);
         }
 
-        quiz.questions = questionsByPoints;
+        quiz.questions = questionsList;
         const response = await fetch("/to_yaml", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2818,14 +2858,24 @@
             use_typst: true,
           }),
         });
-        const data = await response.json();
-        if (data.error) {
-          setSaveStatus(data.error, true);
+        const contentType = response.headers.get("Content-Type") || "";
+        if (!response.ok || contentType.includes("application/json")) {
+          const data = await response.json().catch(() => ({}));
+          const message = data.error || `PDF export failed (${response.status})`;
+          setSaveStatus(message, true);
           return;
         }
-        const pdfCount = Array.isArray(data.pdfs) ? data.pdfs.length : 0;
-        const suffix = pdfCount ? ` (${pdfCount} file${pdfCount === 1 ? "" : "s"})` : "";
-        setSaveStatus(`PDF generated in ${data.output_dir || "out/"}${suffix}`);
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = match ? match[1] : "quiz.pdf";
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        setSaveStatus("PDF downloaded.", false);
         markSaved();
       };
 
