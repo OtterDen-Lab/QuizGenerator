@@ -4,6 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Quiz Question Builder</title>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["\\(", "\\)"], ["$", "$"]],
+          displayMath: [["\\[", "\\]"], ["$$", "$$"]],
+        },
+        svg: { fontCache: "global" },
+      };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <style>
       :root {
         --ink: #1e1d1b;
@@ -82,6 +92,14 @@
       .panel.equal .editor {
         flex: 1 1 auto;
         min-height: 200px;
+      }
+
+      .view {
+        display: contents;
+      }
+
+      .view.hidden {
+        display: none;
       }
 
       @keyframes fadeUp {
@@ -422,6 +440,18 @@
         background: #fffdf9;
       }
 
+      .quiz-preview-item {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        background: #fff;
+        margin-bottom: 12px;
+      }
+
+      .quiz-preview-item h4 {
+        margin: 0 0 6px;
+      }
+
       .preview-box h3 {
         margin: 0 0 10px;
       }
@@ -490,6 +520,7 @@
     </header>
 
     <main>
+      <div id="overview-view" class="view">
       <section class="panel full" id="quiz-meta-panel">
         <div class="section-title">
           <h2>Quiz Metadata</h2>
@@ -533,6 +564,72 @@
         </div>
         <p class="muted">Select a question below to edit its setup and content.</p>
         <div id="question-list" class="question-list"></div>
+      </section>
+
+      <section class="panel full" id="quiz-preview-panel">
+        <div class="section-title">
+          <h2>Quiz Preview</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <label class="toggle">
+              Seed
+              <input type="number" id="quiz-preview-seed" placeholder="42" style="width: 90px;" />
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="quiz-preview-show-answers" />
+              Show answers
+            </label>
+            <button class="btn ghost" id="refresh-quiz-preview">Refresh</button>
+          </div>
+        </div>
+        <div id="quiz-preview-body" class="preview-box"></div>
+      </section>
+
+      <section class="panel full" id="export-panel">
+        <div class="section-title">
+          <h2>Export</h2>
+          <span class="muted" id="export-kind">No export yet.</span>
+          <div class="row" style="justify-content: flex-end;">
+            <button class="btn ghost" id="copy-yaml">Copy</button>
+            <button class="btn ghost" id="download-yaml">Download</button>
+            <button class="btn secondary" id="export-pdf">Export PDF</button>
+            <button class="btn secondary" id="export-canvas">Export Canvas</button>
+            <button class="btn" id="generate-quiz">Generate Quiz YAML</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <button class="btn ghost" id="save-quiz-json">Save Quiz JSON</button>
+          <button class="btn ghost" id="load-quiz-json">Load Quiz JSON</button>
+          <button class="btn ghost" id="import-quiz-yaml">Import Quiz YAML</button>
+          <input type="file" id="load-quiz-json-input" class="hidden" accept=".json,application/json" />
+          <input type="file" id="import-quiz-yaml-input" class="hidden" accept=".yaml,.yml,text/yaml" />
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <div style="flex: 1 1 320px;">
+            <label>Save path</label>
+            <input type="text" id="save-path" value="out/quiz.yaml" />
+          </div>
+          <div style="flex: 0 0 auto; align-self: flex-end;">
+            <button class="btn secondary" id="save-yaml">Save File</button>
+          </div>
+        </div>
+        <div class="hint" id="import-status"></div>
+        <div class="hint" id="save-status"></div>
+        <div class="hint" id="save-meta"></div>
+        <div id="yaml-output" class="output"></div>
+      </section>
+
+      </div>
+
+      <div id="question-view" class="view hidden">
+      <section class="panel full" id="question-detail-header">
+        <div class="section-title">
+          <h2>Question Detail</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <span class="muted" id="question-detail-title">Select a question to edit.</span>
+            <button class="btn ghost" id="generate-question">Question YAML</button>
+            <button class="btn ghost" id="back-overview">Back to Overview</button>
+          </div>
+        </div>
       </section>
 
       <section class="panel full" id="question-setup-panel">
@@ -651,6 +748,10 @@
           <h2>Live Preview</h2>
           <div class="row" style="justify-content: flex-end;">
             <label class="toggle">
+              Seed
+              <input type="number" id="question-preview-seed" placeholder="42" style="width: 90px;" />
+            </label>
+            <label class="toggle">
               <input type="checkbox" id="preview-show-answers" />
               Show answers
             </label>
@@ -669,30 +770,7 @@
           </div>
         </div>
       </section>
-
-      <section class="panel full">
-        <div class="section-title">
-          <h2>Export</h2>
-          <span class="muted" id="export-kind">No export yet.</span>
-          <div class="row" style="justify-content: flex-end;">
-            <button class="btn ghost" id="copy-yaml">Copy</button>
-            <button class="btn ghost" id="download-yaml">Download</button>
-            <button class="btn ghost" id="generate-question">Generate Question YAML</button>
-            <button class="btn" id="generate-quiz">Generate Quiz YAML</button>
-          </div>
-        </div>
-        <div class="row" style="margin-top: 12px;">
-          <div style="flex: 1 1 320px;">
-            <label>Save path</label>
-            <input type="text" id="save-path" value="out/quiz.yaml" />
-          </div>
-          <div style="flex: 0 0 auto; align-self: flex-end;">
-            <button class="btn secondary" id="save-yaml">Save File</button>
-          </div>
-        </div>
-        <div class="hint" id="save-status"></div>
-        <div id="yaml-output" class="output"></div>
-      </section>
+      </div>
     </main>
 
     <div id="add-question-modal" class="modal hidden">
@@ -816,6 +894,10 @@
         activeQuestionId: null,
         lastExport: "",
         lastExportKind: "",
+        previewSeed: "",
+        isDirty: false,
+        lastSavedAt: null,
+        dirtyFlags: new Set(),
       };
 
       let questionCounter = 1;
@@ -827,10 +909,14 @@
       let activeExprEditor = null;
       let currentAnswerTarget = null;
       let previewTimer = null;
+      let quizPreviewTimer = null;
+      let quizPreviewToken = 0;
+      let currentView = "overview";
+      let suppressDirty = false;
 
       const el = (id) => document.getElementById(id);
 
-      const inputQuizMeta = () => {
+      const inputQuizMeta = (mark = false) => {
         quizState.meta.name = el("quiz-name").value.trim();
         quizState.meta.description = el("quiz-description").value.trim();
         quizState.meta.practice = el("quiz-practice").value === "true";
@@ -842,13 +928,16 @@
           .value.split("\n")
           .map((item) => item.trim())
           .filter(Boolean);
+        if (mark) {
+          markDirty("quiz meta");
+        }
       };
 
       const normalizeText = (text) => (text || "").replace(/\u00a0/g, " ");
 
       document.querySelectorAll(
         "#quiz-name, #quiz-description, #quiz-practice, #quiz-sort-order, #quiz-custom-modules"
-      ).forEach((input) => input.addEventListener("input", inputQuizMeta));
+      ).forEach((input) => input.addEventListener("input", () => inputQuizMeta(true)));
 
       const VAR_TYPES = [
         { value: "int", label: "Random integer", fields: ["min", "max"] },
@@ -882,6 +971,69 @@
         if (!cleaned) return "";
         if (cleaned.startsWith("{{") && cleaned.endsWith("}}")) return cleaned;
         return `{{ ${cleaned} }}`;
+      };
+
+      const updateSaveMeta = () => {
+        const metaEl = el("save-meta");
+        if (!metaEl) return;
+        const status = quizState.isDirty ? "Unsaved changes" : "Saved";
+        const detail = quizState.isDirty && quizState.dirtyFlags.size
+          ? ` (${Array.from(quizState.dirtyFlags).join(", ")})`
+          : "";
+        const savedAt = quizState.lastSavedAt
+          ? `Last saved: ${quizState.lastSavedAt.toLocaleString()}`
+          : "Not saved yet";
+        metaEl.textContent = `${status}${detail} • ${savedAt}`;
+      };
+
+      const markDirty = (kind = null) => {
+        if (suppressDirty) return;
+        if (kind) {
+          quizState.dirtyFlags.add(kind);
+        }
+        if (!quizState.isDirty) {
+          quizState.isDirty = true;
+          updateSaveMeta();
+        }
+      };
+
+      const markSaved = () => {
+        quizState.isDirty = false;
+        quizState.lastSavedAt = new Date();
+        quizState.dirtyFlags.clear();
+        updateSaveMeta();
+      };
+
+      const resetDirtyState = () => {
+        quizState.isDirty = false;
+        quizState.lastSavedAt = null;
+        quizState.dirtyFlags.clear();
+        updateSaveMeta();
+      };
+
+      const syncPreviewSeedInputs = () => {
+        const value = quizState.previewSeed || "";
+        const quizSeedInput = el("quiz-preview-seed");
+        const questionSeedInput = el("question-preview-seed");
+        if (quizSeedInput && quizSeedInput.value !== value) {
+          quizSeedInput.value = value;
+        }
+        if (questionSeedInput && questionSeedInput.value !== value) {
+          questionSeedInput.value = value;
+        }
+      };
+
+      const setPreviewSeed = (value) => {
+        quizState.previewSeed = value;
+        syncPreviewSeedInputs();
+      };
+
+      const getPreviewSeedValue = () => {
+        if (quizState.previewSeed === "" || quizState.previewSeed === null || quizState.previewSeed === undefined) {
+          return null;
+        }
+        const value = Number(quizState.previewSeed);
+        return Number.isNaN(value) ? null : value;
       };
 
       const newQuestion = (kind = "yaml") => ({
@@ -1126,6 +1278,34 @@
         }
       };
 
+      const updateQuestionDetailTitle = () => {
+        const question = getActiveQuestion();
+        const title = el("question-detail-title");
+        if (!title) return;
+        title.textContent = question ? (question.name || "Untitled question") : "Select a question to edit.";
+      };
+
+      const showOverview = () => {
+        el("overview-view").classList.remove("hidden");
+        el("question-view").classList.add("hidden");
+        currentView = "overview";
+        commitActiveQuestion();
+        updateQuestionDetailTitle();
+        scheduleQuizPreview();
+      };
+
+      const showQuestionView = () => {
+        if (!getActiveQuestion()) {
+          showOverview();
+          return;
+        }
+        el("overview-view").classList.add("hidden");
+        el("question-view").classList.remove("hidden");
+        currentView = "question";
+        updateQuestionDetailTitle();
+        schedulePreview();
+      };
+
       const renderQuestionList = () => {
         const list = el("question-list");
         list.innerHTML = "";
@@ -1143,7 +1323,7 @@
           const card = document.createElement("div");
           card.className = `question-card${question.id === quizState.activeQuestionId ? " active" : ""}`;
           card.dataset.id = question.id;
-          card.addEventListener("click", () => setActiveQuestion(question.id));
+          card.addEventListener("click", () => openQuestionDetail(question.id));
           card.addEventListener("dragover", (e) => {
             e.preventDefault();
           });
@@ -1156,7 +1336,9 @@
             if (fromIdx === -1 || toIdx === -1) return;
             const [moved] = quizState.questions.splice(fromIdx, 1);
             quizState.questions.splice(toIdx, 0, moved);
+            markDirty("ordering");
             renderQuestionList();
+            scheduleQuizPreview();
           });
           const title = document.createElement("div");
           title.className = "question-title";
@@ -1199,12 +1381,15 @@
           handle.addEventListener("dragend", () => {
             card.classList.remove("dragging");
           });
+          handle.addEventListener("click", (e) => {
+            e.stopPropagation();
+          });
           const selectBtn = document.createElement("button");
           selectBtn.className = "btn ghost small";
-          selectBtn.textContent = "Select";
+          selectBtn.textContent = "Open";
           selectBtn.addEventListener("click", (e) => {
             e.stopPropagation();
-            setActiveQuestion(question.id);
+            openQuestionDetail(question.id);
           });
           const deleteBtn = document.createElement("button");
           deleteBtn.className = "btn ghost small";
@@ -1221,7 +1406,7 @@
             setClassBtn.textContent = "Set Class";
             setClassBtn.addEventListener("click", (e) => {
               e.stopPropagation();
-              setActiveQuestion(question.id);
+              openQuestionDetail(question.id);
               focusQuestionSetup("premade-class");
             });
             actions.appendChild(setClassBtn);
@@ -1246,6 +1431,8 @@
           updateBuilderVisibility();
           renderQuestionList();
           schedulePreview();
+          updateQuestionDetailTitle();
+          showOverview();
           return;
         }
         applyQuestionFields(next);
@@ -1257,9 +1444,16 @@
         updateBuilderVisibility();
         renderQuestionList();
         schedulePreview();
+        updateQuestionDetailTitle();
+      };
+
+      const openQuestionDetail = (id) => {
+        setActiveQuestion(id);
+        showQuestionView();
       };
 
       const focusQuestionSetup = (fieldId) => {
+        showQuestionView();
         const panel = el("question-setup-panel");
         if (panel) {
           panel.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1276,6 +1470,8 @@
         const question = newQuestion(kind);
         quizState.questions.push(question);
         setActiveQuestion(question.id);
+        markDirty("questions");
+        scheduleQuizPreview();
       };
 
       const openAddQuestionModal = () => {
@@ -1289,6 +1485,7 @@
       const addYamlFromModal = () => {
         addQuestion("yaml");
         closeAddQuestionModal();
+        showQuestionView();
       };
 
       const addPremadeFromModal = () => {
@@ -1300,16 +1497,14 @@
         quizState.questions.push(question);
         setActiveQuestion(question.id);
         closeAddQuestionModal();
+        showQuestionView();
       };
 
       const deleteQuestion = (id) => {
-        if (quizState.questions.length <= 1) {
-          alert("Keep at least one question in the quiz.");
-          return;
-        }
         const index = quizState.questions.findIndex((q) => q.id === id);
         if (index === -1) return;
         quizState.questions.splice(index, 1);
+        markDirty("questions");
         if (quizState.activeQuestionId === id) {
           const next = quizState.questions[Math.max(0, index - 1)];
           quizState.activeQuestionId = next?.id || null;
@@ -1321,6 +1516,7 @@
         }
         renderQuestionList();
         schedulePreview();
+        scheduleQuizPreview();
       };
 
       const applyQuestionFields = (question) => {
@@ -1345,6 +1541,23 @@
         el("premade-class").value = "";
         el("premade-kwargs").value = "";
         syncPremadeSelect();
+      };
+
+      const applyQuizMetaToInputs = () => {
+        el("quiz-name").value = quizState.meta.name || "";
+        el("quiz-description").value = quizState.meta.description || "";
+        el("quiz-practice").value = quizState.meta.practice ? "true" : "false";
+        el("quiz-sort-order").value = (quizState.meta.sort_order || []).join(", ");
+        el("quiz-custom-modules").value = (quizState.meta.custom_modules || []).join("\n");
+      };
+
+      const commitActiveQuestion = () => {
+        const question = getActiveQuestion();
+        if (!question) return;
+        updateQuestionFromInputs(false);
+        if (question.kind === "yaml") {
+          question.yamlSpec = buildSpec(questionMetaFrom(question));
+        }
       };
 
       const insertIntoInput = (input, text) => {
@@ -1408,6 +1621,7 @@
       };
 
       const insertVariable = (name, options = {}) => {
+        markDirty("builder content");
         const exprName = formatExprName(name);
         const targetEditor = options.targetEditor || null;
         const preferInput = options.preferInput !== false;
@@ -1438,6 +1652,7 @@
       };
 
       const insertDerived = (name, options = {}) => {
+        markDirty("builder content");
         const exprName = formatExprName(name);
         const targetEditor = options.targetEditor || null;
         const preferInput = options.preferInput !== false;
@@ -1601,6 +1816,7 @@
         });
         insertTokenIntoEditor(currentAnswerTarget || activeEditor, token);
         closeAnswerModal();
+        markDirty("builder content");
         schedulePreview();
       };
 
@@ -1740,34 +1956,42 @@
           entry.name = e.target.value;
           renderVarChips();
           renderDerivedChips();
+          markDirty("builder content");
           schedulePreview();
         });
         typeSelect.addEventListener("change", (e) => {
           entry.type = e.target.value;
           updateVisibility();
+          markDirty("builder content");
         });
         minInput.addEventListener("input", (e) => {
           entry.min = e.target.value;
+          markDirty("builder content");
           schedulePreview();
         });
         maxInput.addEventListener("input", (e) => {
           entry.max = e.target.value;
+          markDirty("builder content");
           schedulePreview();
         });
         optionsArea.addEventListener("input", (e) => {
           entry.options = e.target.value.split("\n").map((l) => l.trim()).filter(Boolean);
+          markDirty("builder content");
           schedulePreview();
         });
         weightsArea.addEventListener("input", (e) => {
           entry.weights = e.target.value.split("\n").map((l) => l.trim()).filter(Boolean);
+          markDirty("builder content");
           schedulePreview();
         });
         valueInput.addEventListener("input", (e) => {
           entry.value = e.target.value;
+          markDirty("builder content");
           schedulePreview();
         });
         removeBtn.addEventListener("click", () => {
           list.splice(index, 1);
+          markDirty("builder content");
           render();
         });
 
@@ -1836,10 +2060,12 @@
         inputs[0].addEventListener("input", (e) => {
           entry.name = e.target.value;
           renderDerivedChips();
+          markDirty("builder content");
           schedulePreview();
         });
         exprEditor.addEventListener("input", () => {
           entry.expr = serializeExprEditor(exprEditor);
+          markDirty("builder content");
           schedulePreview();
         });
         exprEditor.addEventListener("focus", () => {
@@ -1877,6 +2103,7 @@
         });
         removeBtn.addEventListener("click", () => {
           list.splice(index, 1);
+          markDirty("builder content");
           render();
         });
         row.querySelectorAll(".operator-bar button").forEach((btn) => {
@@ -1906,11 +2133,13 @@
 
       const addVar = () => {
         state.context.vars.push(defaultVar());
+        markDirty("builder content");
         render();
       };
 
       const addDerived = () => {
         state.context.derived.push(defaultDerived());
+        markDirty("builder content");
         render();
       };
 
@@ -2009,28 +2238,35 @@
         const warnings = [];
         const push = (msg) => warnings.push(msg);
 
-        if (!quizState.meta.name) {
-          push("Quiz name is empty.");
-        }
-        if (quizState.questions.length === 0) {
-          push("No questions in the quiz yet.");
+        if (currentView === "overview") {
+          if (!quizState.meta.name) {
+            push("Quiz name is empty.");
+          }
+          if (quizState.questions.length === 0) {
+            push("No questions in the quiz yet.");
+          }
+
+          quizState.questions.forEach((question, idx) => {
+            const label = question.name || `Question ${idx + 1}`;
+            if (!question.name) {
+              push(`${label} is missing a name.`);
+            }
+            if (question.points === "" || question.points === null || question.points === undefined) {
+              push(`${label} is missing a points value.`);
+            }
+            if (question.kind === "premade" && !question.premade.class) {
+              push(`${label} is missing a premade class name.`);
+            }
+            if (question.kind === "yaml" && !question.yamlSpec && question.id !== quizState.activeQuestionId) {
+              push(`${label} has no YAML content saved yet.`);
+            }
+          });
         }
 
-        quizState.questions.forEach((question, idx) => {
-          const label = question.name || `Question ${idx + 1}`;
-          if (!question.name) {
-            push(`${label} is missing a name.`);
-          }
-          if (question.points === "" || question.points === null || question.points === undefined) {
-            push(`${label} is missing a points value.`);
-          }
-          if (question.kind === "premade" && !question.premade.class) {
-            push(`${label} is missing a premade class name.`);
-          }
-          if (question.kind === "yaml" && !question.yamlSpec && question.id !== quizState.activeQuestionId) {
-            push(`${label} has no YAML content saved yet.`);
-          }
-        });
+        if (quizState.isDirty && quizState.dirtyFlags.size) {
+          const details = Array.from(quizState.dirtyFlags).join(", ");
+          push(`Unsaved changes: ${details}.`);
+        }
 
         const activeQuestion = getActiveQuestion();
         if (!activeQuestion || activeQuestion.kind !== "yaml") {
@@ -2209,6 +2445,29 @@
         el("export-kind").textContent = label || "No export yet.";
       };
 
+      const quizExportErrors = () => {
+        const errors = [];
+        if (!quizState.meta.name) {
+          errors.push("Quiz name is required for export.");
+        }
+        if (quizState.questions.length === 0) {
+          errors.push("Add at least one question before exporting.");
+        }
+        quizState.questions.forEach((question, idx) => {
+          const label = question.name || `Question ${idx + 1}`;
+          if (question.points === "" || question.points === null || question.points === undefined) {
+            errors.push(`${label}: points are required.`);
+          }
+          if (question.kind === "premade" && !question.premade.class) {
+            errors.push(`${label}: premade class is required.`);
+          }
+          if (question.kind === "yaml" && !question.yamlSpec && question.id !== quizState.activeQuestionId) {
+            errors.push(`${label}: YAML content is missing.`);
+          }
+        });
+        return errors;
+      };
+
       const generateQuestionYaml = async () => {
         const question = getActiveQuestion();
         if (!question) {
@@ -2219,6 +2478,7 @@
           setExportOutput("Active question is premade. Generate Quiz YAML instead.", "Error");
           return "";
         }
+        commitActiveQuestion();
         const spec = buildSpec(questionMetaFrom(question));
         question.yamlSpec = spec;
         const response = await fetch("/to_yaml", {
@@ -2247,9 +2507,240 @@
         return data.spec || {};
       };
 
+      const stringifyYamlMapping = async (mapping) => {
+        if (!mapping || typeof mapping !== "object" || Array.isArray(mapping)) {
+          return "";
+        }
+        const response = await fetch("/to_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec: mapping }),
+        });
+        const data = await response.json();
+        return (data.yaml || "").trim();
+      };
+
+      const serializeQuizState = () => {
+        commitActiveQuestion();
+        return {
+          version: 1,
+          meta: quizState.meta,
+          questions: quizState.questions,
+          activeQuestionId: quizState.activeQuestionId,
+          previewSeed: quizState.previewSeed,
+        };
+      };
+
+      const setImportStatus = (message, isError = false) => {
+        const status = el("import-status");
+        if (!status) return;
+        status.textContent = message;
+        status.style.color = isError ? "#a04527" : "var(--muted)";
+      };
+
+      const loadQuizState = (stateObj, { markClean = true } = {}) => {
+        suppressDirty = true;
+        quizState.meta = {
+          name: stateObj?.meta?.name || "",
+          description: stateObj?.meta?.description || "",
+          practice: Boolean(stateObj?.meta?.practice),
+          sort_order: Array.isArray(stateObj?.meta?.sort_order) ? stateObj.meta.sort_order : [],
+          custom_modules: Array.isArray(stateObj?.meta?.custom_modules) ? stateObj.meta.custom_modules : [],
+        };
+        quizState.questions = Array.isArray(stateObj?.questions)
+          ? stateObj.questions.map((q) => ({
+            id: q.id || `q_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            kind: q.kind || "premade",
+            name: q.name || "",
+            points: q.points ?? "",
+            topic: q.topic || "",
+            spacing: q.spacing || "",
+            num_subquestions: q.num_subquestions || "",
+            yamlSpec: q.yamlSpec || null,
+            premade: {
+              class: q.premade?.class || "",
+              kwargsText: q.premade?.kwargsText || "",
+            },
+          }))
+          : [];
+        quizState.activeQuestionId = stateObj?.activeQuestionId || null;
+        if (!quizState.questions.find((q) => q.id === quizState.activeQuestionId)) {
+          quizState.activeQuestionId = null;
+        }
+        quizState.previewSeed = stateObj?.previewSeed || "";
+        quizState.lastExport = "";
+        quizState.lastExportKind = "";
+
+        questionCounter = Math.max(quizState.questions.length + 1, questionCounter);
+
+        applyQuizMetaToInputs();
+        syncPreviewSeedInputs();
+        renderQuestionList();
+
+        const active = getActiveQuestion();
+        if (active) {
+          applyQuestionFields(active);
+          if (active.kind === "yaml") {
+            loadSpecIntoBuilder(active.yamlSpec, active);
+          } else {
+            resetBuilder();
+          }
+        } else {
+          clearQuestionFields();
+          resetBuilder();
+        }
+        updateBuilderVisibility();
+        renderWarnings();
+        if (markClean) {
+          resetDirtyState();
+        }
+        suppressDirty = false;
+        showOverview();
+      };
+
+      const parseQuestionKwargs = (qData) => {
+        const kwargs = { ...(qData.kwargs || {}) };
+        Object.entries(qData || {}).forEach(([key, value]) => {
+          if (["class", "topic", "spacing", "kwargs", "num_subquestions", "_config"].includes(key)) {
+            return;
+          }
+          kwargs[key] = value;
+        });
+        return kwargs;
+      };
+
+      const extractYamlSpec = async (qData) => {
+        const directSpec = qData?.yaml_spec || qData?.kwargs?.yaml_spec;
+        if (directSpec && typeof directSpec === "object") {
+          return directSpec;
+        }
+        const yamlText = qData?.yaml_text || qData?.kwargs?.yaml_text;
+        if (typeof yamlText === "string" && yamlText.trim()) {
+          try {
+            return await parseYamlMapping(yamlText);
+          } catch (err) {
+            return null;
+          }
+        }
+        return null;
+      };
+
+      const importQuizFromSpec = async (spec) => {
+        const warnings = [];
+        const questions = [];
+        const questionBlocks = spec?.questions || {};
+
+        for (const [pointsKey, block] of Object.entries(questionBlocks)) {
+          if (!block || typeof block !== "object") continue;
+          if (block._config) {
+            warnings.push(`Point group ${pointsKey} has _config which is not yet editable here.`);
+          }
+          for (const [name, qData] of Object.entries(block)) {
+            if (name === "_config") continue;
+            if (!qData || typeof qData !== "object") continue;
+            if (qData._config) {
+              warnings.push(`Question "${name}" has _config which is not yet editable here.`);
+            }
+            const question = newQuestion("premade");
+            question.name = name;
+            question.points = pointsKey;
+            question.topic = qData.topic || "";
+            question.spacing = qData.spacing || "";
+            question.num_subquestions = qData.num_subquestions || "";
+            const className = qData.class || "FromText";
+            if (className.toLowerCase() === "fromyaml") {
+              const yamlSpec = await extractYamlSpec(qData);
+              if (yamlSpec) {
+                question.kind = "yaml";
+                question.yamlSpec = yamlSpec;
+              } else {
+                question.kind = "premade";
+                question.premade.class = className;
+                const kwargs = parseQuestionKwargs(qData);
+                question.premade.kwargsText = await stringifyYamlMapping(kwargs);
+                warnings.push(`Question "${name}" uses FromYaml without inline spec; kept as premade.`);
+              }
+            } else {
+              question.kind = "premade";
+              question.premade.class = className;
+              const kwargs = parseQuestionKwargs(qData);
+              question.premade.kwargsText = await stringifyYamlMapping(kwargs);
+            }
+            questions.push(question);
+          }
+        }
+
+        const importedState = {
+          meta: {
+            name: spec?.name || "",
+            description: spec?.description || "",
+            practice: Boolean(spec?.practice),
+            sort_order: Array.isArray(spec?.["sort order"]) ? spec["sort order"] : [],
+            custom_modules: Array.isArray(spec?.custom_modules) ? spec.custom_modules : [],
+          },
+          questions,
+          activeQuestionId: null,
+          previewSeed: "",
+        };
+
+        loadQuizState(importedState, { markClean: false });
+        resetDirtyState();
+        if (warnings.length) {
+          setImportStatus(warnings.join(" "), true);
+        } else {
+          setImportStatus("Quiz imported successfully.");
+        }
+      };
+
+      const saveQuizJson = () => {
+        const stateObj = serializeQuizState();
+        const blob = new Blob([JSON.stringify(stateObj, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "quiz_state.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        setImportStatus("Quiz JSON downloaded.");
+        markSaved();
+      };
+
+      const loadQuizJsonFile = async (file) => {
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          loadQuizState(data);
+          setImportStatus("Quiz JSON loaded.");
+        } catch (err) {
+          setImportStatus(`Failed to load JSON: ${err}`, true);
+        }
+      };
+
+      const loadQuizYamlFile = async (file) => {
+        try {
+          const text = await file.text();
+          const spec = await parseYamlMapping(text);
+          await importQuizFromSpec(spec);
+        } catch (err) {
+          setImportStatus(`Failed to import YAML: ${err}`, true);
+        }
+      };
+
       const generateQuizYaml = async () => {
         const quiz = {};
         inputQuizMeta();
+        commitActiveQuestion();
+        const errors = quizExportErrors();
+        if (errors.length) {
+          const message = errors.join("\n");
+          const confirmExport = window.confirm(`Export has issues:\n${message}\n\nExport anyway?`);
+          if (!confirmExport) {
+            setExportOutput(message, "Error");
+            setSaveStatus("Fix export errors before generating quiz YAML.", true);
+            return "";
+          }
+          setSaveStatus("Exporting despite warnings.", false);
+        }
         if (quizState.meta.name) quiz.name = quizState.meta.name;
         if (quizState.meta.description) quiz.description = quizState.meta.description;
         if (quizState.meta.practice) quiz.practice = true;
@@ -2305,6 +2796,24 @@
         return data.yaml;
       };
 
+      const defaultExport = async () => {
+        if (currentView === "overview") {
+          return generateQuizYaml();
+        }
+        return generateQuestionYaml();
+      };
+
+      const exportHint = async (kind) => {
+        const yamlText = await generateQuizYaml();
+        if (!yamlText) return;
+        const path = el("save-path").value.trim() || "out/quiz.yaml";
+        if (kind === "pdf") {
+          setSaveStatus(`Run: quizgen --yaml ${path} --num_pdfs 1`, false);
+        } else if (kind === "canvas") {
+          setSaveStatus(`Run: quizgen --yaml ${path} --num_canvas 1 --course_id <ID>`, false);
+        }
+      };
+
       const setSaveStatus = (message, isError = false) => {
         const status = el("save-status");
         status.textContent = message;
@@ -2314,12 +2823,13 @@
       const saveYamlToFile = async () => {
         const path = el("save-path").value.trim();
         const payload = { path };
+        if (!quizState.lastExport) {
+          await defaultExport();
+        }
         if (quizState.lastExport) {
           payload.yaml = quizState.lastExport;
         } else {
-          const question = getActiveQuestion();
-          const spec = question ? buildSpec(questionMetaFrom(question)) : buildSpec();
-          payload.spec = spec;
+          payload.spec = buildSpec();
         }
         const response = await fetch("/save_yaml", {
           method: "POST",
@@ -2332,6 +2842,35 @@
           return;
         }
         setSaveStatus(`Saved to ${data.path}`);
+        markSaved();
+      };
+
+      const buildPremadePayload = async (question, { useInputs = false } = {}) => {
+        const className = useInputs ? el("premade-class").value.trim() : (question.premade.class || "");
+        if (!className) {
+          return { error: "Choose a premade class to preview." };
+        }
+        let kwargs = {};
+        const kwargsText = useInputs ? (el("premade-kwargs").value || "") : (question.premade.kwargsText || "");
+        if (kwargsText.trim()) {
+          try {
+            kwargs = await parseYamlMapping(kwargsText);
+            if (!kwargs || typeof kwargs !== "object" || Array.isArray(kwargs)) {
+              return { error: "Premade kwargs must be a mapping." };
+            }
+          } catch (err) {
+            return { error: String(err) };
+          }
+        }
+        kwargs = {
+          ...kwargs,
+          name: question.name || "Premade Preview",
+          points_value: Number(question.points || 1),
+        };
+        if (question.topic) kwargs.topic = question.topic;
+        if (question.spacing) kwargs.spacing = question.spacing;
+        if (question.num_subquestions) kwargs.num_subquestions = Number(question.num_subquestions);
+        return { className, kwargs };
       };
 
       const updatePreview = async () => {
@@ -2344,43 +2883,20 @@
         }
 
         const showAnswers = el("preview-show-answers").checked;
+        const seed = getPreviewSeedValue();
 
         if (question.kind === "premade") {
-          const className = el("premade-class").value.trim();
-          if (!className) {
-            el("preview-body").innerHTML = "<p class=\"muted\">Choose a premade class to preview.</p>";
+          const payload = await buildPremadePayload(question, { useInputs: true });
+          if (payload.error) {
+            el("preview-body").innerHTML = `<p style=\"color:#a04527;\">${payload.error}</p>`;
             el("preview-expl").innerHTML = "";
             el("preview-context").textContent = "";
             return;
           }
-          let kwargs = {};
-          const kwargsText = el("premade-kwargs").value || "";
-          if (kwargsText.trim()) {
-            try {
-              kwargs = await parseYamlMapping(kwargsText);
-              if (!kwargs || typeof kwargs !== "object" || Array.isArray(kwargs)) {
-                throw new Error("Premade kwargs must be a mapping.");
-              }
-            } catch (err) {
-              el("preview-body").innerHTML = `<p style=\"color:#a04527;\">${err}</p>`;
-              el("preview-expl").innerHTML = "";
-              el("preview-context").textContent = "";
-              return;
-            }
-          }
-          kwargs = {
-            ...kwargs,
-            name: question.name || "Premade Preview",
-            points_value: Number(question.points || 1),
-          };
-          if (question.topic) kwargs.topic = question.topic;
-          if (question.spacing) kwargs.spacing = question.spacing;
-          if (question.num_subquestions) kwargs.num_subquestions = Number(question.num_subquestions);
-
           const response = await fetch("/preview_premade", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ class: className, kwargs, show_answers: showAnswers }),
+            body: JSON.stringify({ class: payload.className, kwargs: payload.kwargs, show_answers: showAnswers, seed }),
           });
           const data = await response.json();
           if (data.error) {
@@ -2392,6 +2908,9 @@
           el("preview-body").innerHTML = data.body_html || "";
           el("preview-expl").innerHTML = data.explanation_html || "";
           el("preview-context").textContent = "";
+          if (window.MathJax?.typesetPromise) {
+            window.MathJax.typesetPromise([el("preview-body"), el("preview-expl")]);
+          }
           return;
         }
 
@@ -2399,7 +2918,7 @@
         const response = await fetch("/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ spec, show_answers: showAnswers }),
+          body: JSON.stringify({ spec, show_answers: showAnswers, seed }),
         });
         const data = await response.json();
         if (data.error) {
@@ -2418,6 +2937,101 @@
         } else {
           el("preview-context").textContent = "";
         }
+        if (window.MathJax?.typesetPromise) {
+          window.MathJax.typesetPromise([el("preview-body"), el("preview-expl")]);
+        }
+      };
+
+      const updateQuizPreview = async () => {
+        if (currentView !== "overview") {
+          return;
+        }
+        const runToken = ++quizPreviewToken;
+        const container = el("quiz-preview-body");
+        if (!container) return;
+        container.innerHTML = "";
+        if (quizState.questions.length === 0) {
+          container.innerHTML = "<p class=\"muted\">No questions yet.</p>";
+          return;
+        }
+
+        const active = getActiveQuestion();
+        if (active) {
+          updateQuestionFromInputs();
+          if (active.kind === "yaml") {
+            active.yamlSpec = buildSpec(questionMetaFrom(active));
+          }
+        }
+
+        const showAnswers = el("quiz-preview-show-answers").checked;
+        const seed = getPreviewSeedValue();
+
+        for (let i = 0; i < quizState.questions.length; i += 1) {
+          if (runToken !== quizPreviewToken) {
+            return;
+          }
+          const question = quizState.questions[i];
+          const item = document.createElement("div");
+          item.className = "quiz-preview-item";
+          const title = document.createElement("h4");
+          const label = question.name || `Question ${i + 1}`;
+          title.textContent = `${i + 1}. ${label}`;
+          const meta = document.createElement("div");
+          meta.className = "muted";
+          const metaParts = [];
+          if (question.points) metaParts.push(`${question.points} pts`);
+          if (question.topic) metaParts.push(`topic: ${question.topic}`);
+          meta.textContent = metaParts.join(" · ");
+          const body = document.createElement("div");
+          body.innerHTML = "<p class=\"muted\">Loading preview…</p>";
+          item.appendChild(title);
+          if (meta.textContent) item.appendChild(meta);
+          item.appendChild(body);
+          container.appendChild(item);
+
+          try {
+            if (question.kind === "yaml") {
+              const spec = question.yamlSpec || (question === active ? buildSpec(questionMetaFrom(question)) : null);
+              if (!spec) {
+                body.innerHTML = "<p class=\"muted\">No YAML content yet.</p>";
+                continue;
+              }
+              const response = await fetch("/preview", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ spec, show_answers: showAnswers, seed }),
+              });
+              const data = await response.json();
+              if (data.error) {
+                body.innerHTML = `<p style=\"color:#a04527;\">${data.error}</p>`;
+              } else {
+                body.innerHTML = data.body_html || "";
+              }
+            } else {
+              const payload = await buildPremadePayload(question, { useInputs: question === active });
+              if (payload.error) {
+                body.innerHTML = `<p style=\"color:#a04527;\">${payload.error}</p>`;
+                continue;
+              }
+              const response = await fetch("/preview_premade", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ class: payload.className, kwargs: payload.kwargs, show_answers: showAnswers, seed }),
+              });
+              const data = await response.json();
+              if (data.error) {
+                body.innerHTML = `<p style=\"color:#a04527;\">${data.error}</p>`;
+              } else {
+                body.innerHTML = data.body_html || "";
+              }
+            }
+          } catch (err) {
+            body.innerHTML = `<p style=\"color:#a04527;\">${err}</p>`;
+          }
+        }
+        if (window.MathJax?.typesetPromise) {
+          window.MathJax.typesetPromise([container]);
+        }
       };
 
       const schedulePreview = () => {
@@ -2428,6 +3042,10 @@
         previewTimer = setTimeout(updatePreview, 400);
       };
 
+      const scheduleQuizPreview = () => {
+        // Manual refresh only.
+      };
+
       const setupEditor = (editor) => {
         editor.addEventListener("focus", () => {
           activeEditor = editor;
@@ -2435,6 +3053,7 @@
           activeExprEditor = null;
         });
         editor.addEventListener("input", () => {
+          markDirty("builder content");
           schedulePreview();
         });
         editor.addEventListener("dragover", (e) => {
@@ -2469,6 +3088,9 @@
         updateBuilderVisibility();
         renderQuestionList();
         renderWarnings();
+        syncPreviewSeedInputs();
+        updateSaveMeta();
+        showOverview();
       };
 
       el("add-var").addEventListener("click", addVar);
@@ -2484,17 +3106,37 @@
       });
       el("generate-question").addEventListener("click", generateQuestionYaml);
       el("generate-quiz").addEventListener("click", generateQuizYaml);
+      el("export-pdf").addEventListener("click", () => exportHint("pdf"));
+      el("export-canvas").addEventListener("click", () => exportHint("canvas"));
+      el("refresh-quiz-preview").addEventListener("click", updateQuizPreview);
+      el("quiz-preview-show-answers").addEventListener("change", updateQuizPreview);
+      el("quiz-preview-seed").addEventListener("input", (e) => setPreviewSeed(e.target.value.trim()));
+      el("question-preview-seed").addEventListener("input", (e) => setPreviewSeed(e.target.value.trim()));
+      el("back-overview").addEventListener("click", showOverview);
       el("refresh-preview").addEventListener("click", updatePreview);
       el("preview-show-answers").addEventListener("change", updatePreview);
+      el("save-quiz-json").addEventListener("click", saveQuizJson);
+      el("load-quiz-json").addEventListener("click", () => el("load-quiz-json-input").click());
+      el("load-quiz-json-input").addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (file) loadQuizJsonFile(file);
+        e.target.value = "";
+      });
+      el("import-quiz-yaml").addEventListener("click", () => el("import-quiz-yaml-input").click());
+      el("import-quiz-yaml-input").addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (file) loadQuizYamlFile(file);
+        e.target.value = "";
+      });
 
       el("copy-yaml").addEventListener("click", async () => {
-        const yamlText = quizState.lastExport || (await generateQuestionYaml());
+        const yamlText = quizState.lastExport || (await defaultExport());
         if (!yamlText) return;
         await navigator.clipboard.writeText(yamlText);
       });
 
       el("download-yaml").addEventListener("click", async () => {
-        const yamlText = quizState.lastExport || (await generateQuestionYaml());
+        const yamlText = quizState.lastExport || (await defaultExport());
         if (!yamlText) return;
         const blob = new Blob([yamlText], { type: "text/yaml" });
         const url = URL.createObjectURL(blob);
@@ -2508,7 +3150,7 @@
       el("save-yaml").addEventListener("click", saveYamlToFile);
       el("preview-premade").addEventListener("click", updatePreview);
 
-      const updateQuestionFromInputs = () => {
+      const updateQuestionFromInputs = (mark = true) => {
         const question = getActiveQuestion();
         if (!question) return;
         question.name = el("question-name").value.trim();
@@ -2521,6 +3163,10 @@
         syncPremadeSelect();
         renderQuestionList();
         renderWarnings();
+        if (mark) {
+          markDirty("question setup");
+        }
+        scheduleQuizPreview();
       };
 
       ["question-name", "question-points", "question-topic", "question-spacing", "question-num-sub",
@@ -2546,6 +3192,7 @@
           question.yamlSpec = buildSpec(questionMetaFrom(question));
         }
         question.kind = e.target.value;
+        markDirty("question setup");
         if (question.kind === "yaml") {
           loadSpecIntoBuilder(question.yamlSpec, question);
         } else {
