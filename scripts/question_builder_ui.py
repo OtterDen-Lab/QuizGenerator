@@ -19,7 +19,7 @@ if str(BASE_DIR) not in sys.path:
 
 import QuizGenerator.contentast as ca
 import QuizGenerator.yaml_question  # registers YAML nodes
-from QuizGenerator.question import QuestionContext
+from QuizGenerator.question import QuestionContext, QuestionRegistry, Question
 
 
 HTML_PATH = BASE_DIR / "documentation" / "question_builder_ui.html"
@@ -47,6 +47,16 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
       return None
     return HTML_PATH.read_text(encoding="utf-8")
 
+  def _resolve_save_path(self, path_text: str | None) -> pathlib.Path:
+    target = path_text or "out/question.yaml"
+    path = pathlib.Path(target)
+    if not path.is_absolute():
+      path = BASE_DIR / path
+    path = path.resolve()
+    if BASE_DIR not in path.parents and path != BASE_DIR:
+      raise ValueError("Save path must be within the repository.")
+    return path
+
   def do_GET(self):
     if self.path == "/" or self.path.startswith("/index"):
       html = self._load_html()
@@ -61,10 +71,25 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
       self._send_json({"nodes": specs, "version": 1})
       return
 
+    if self.path == "/premade_list":
+      QuestionRegistry.load_premade_questions()
+      items = []
+      for registered_name, cls in QuestionRegistry._registry.items():
+        doc = (cls.__doc__ or "").strip().splitlines()
+        items.append({
+          "registered_name": registered_name,
+          "class_name": cls.__name__,
+          "module": cls.__module__,
+          "doc": doc[0] if doc else ""
+        })
+      items.sort(key=lambda item: (item["class_name"].lower(), item["registered_name"]))
+      self._send_json({"items": items})
+      return
+
     return super().do_GET()
 
   def do_POST(self):
-    if self.path not in {"/to_yaml", "/from_yaml", "/preview"}:
+    if self.path not in {"/to_yaml", "/from_yaml", "/preview", "/save_yaml", "/preview_premade"}:
       self._send_text("Not found.", status=HTTPStatus.NOT_FOUND)
       return
 
@@ -147,6 +172,73 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         "explanation_html": explanation_html,
         "context": dict(ctx.data),
       })
+      return
+
+    if self.path == "/preview_premade":
+      question_class = payload.get("class")
+      kwargs = payload.get("kwargs") or {}
+      show_answers = bool(payload.get("show_answers", False))
+      seed = payload.get("seed")
+      rng_seed = None if seed in (None, "") else int(seed)
+
+      if not isinstance(question_class, str) or not question_class.strip():
+        self._send_json({"error": "Provide a 'class' for preview."}, status=HTTPStatus.BAD_REQUEST)
+        return
+      if not isinstance(kwargs, dict):
+        self._send_json({"error": "'kwargs' must be a mapping."}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      try:
+        QuestionRegistry.load_premade_questions()
+        if "topic" in kwargs and isinstance(kwargs["topic"], str):
+          kwargs["topic"] = Question.Topic.from_string(kwargs["topic"])
+        question = QuestionRegistry.create(question_class, **kwargs)
+        instance = question.instantiate(rng_seed=rng_seed, max_backoff_attempts=3)
+        body_html = instance.body.render("html", show_answers=show_answers)
+        explanation_html = instance.explanation.render("html", show_answers=show_answers)
+      except Exception as exc:
+        self._send_json({"error": f"Preview failed: {type(exc).__name__}: {exc}"}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      self._send_json({
+        "body_html": body_html,
+        "explanation_html": explanation_html,
+      })
+      return
+
+    if self.path == "/save_yaml":
+      spec = payload.get("spec")
+      yaml_text = payload.get("yaml")
+      if spec is not None and not isinstance(spec, dict):
+        self._send_json({"error": "'spec' must be a mapping."}, status=HTTPStatus.BAD_REQUEST)
+        return
+      if spec is None and not isinstance(yaml_text, str):
+        self._send_json({"error": "Provide 'spec' or 'yaml' to save."}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      try:
+        save_path = self._resolve_save_path(payload.get("path"))
+      except ValueError as exc:
+        self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      if save_path.exists() and save_path.is_dir():
+        self._send_json({"error": "Save path points to a directory."}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      if spec is not None:
+        yaml_text = yaml.safe_dump(spec, sort_keys=False)
+
+      if yaml_text is None:
+        self._send_json({"error": "No YAML content provided."}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      if not yaml_text.endswith("\n"):
+        yaml_text += "\n"
+
+      save_path.parent.mkdir(parents=True, exist_ok=True)
+      save_path.write_text(yaml_text, encoding="utf-8")
+      self._send_json({"ok": True, "path": str(save_path)})
       return
 
 

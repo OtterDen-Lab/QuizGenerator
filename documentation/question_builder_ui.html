@@ -309,6 +309,69 @@
         font-size: 0.85rem;
       }
 
+      .question-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .question-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        background: #fffdf9;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .question-card.dragging {
+        opacity: 0.6;
+      }
+
+      .question-card.active {
+        border-color: rgba(15, 107, 107, 0.7);
+        box-shadow: 0 10px 24px rgba(15, 107, 107, 0.12);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .question-title {
+        font-weight: 600;
+      }
+
+      .question-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .question-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .drag-handle {
+        font-size: 0.75rem;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        padding: 4px 8px;
+        border-radius: 8px;
+        cursor: grab;
+        user-select: none;
+      }
+
       .answer-builder h4 {
         margin: 0 0 8px;
       }
@@ -422,37 +485,111 @@
       </div>
       <h1>Quiz Question Builder</h1>
       <p class="subtitle">
-        Build YAML questions visually. Click chips to insert variables, or drag them into the editors.
+        Build YAML questions and assemble full quizzes. Click chips to insert variables, or drag them into the editors.
       </p>
     </header>
 
     <main>
-      <section class="panel full">
+      <section class="panel full" id="quiz-meta-panel">
         <div class="section-title">
-          <h2>Metadata</h2>
-          <span class="muted">Optional fields for later use</span>
+          <h2>Quiz Metadata</h2>
+          <span class="muted">Overall quiz settings</span>
         </div>
         <div class="grid two">
           <div>
-            <label>Name</label>
-            <input type="text" id="meta-name" placeholder="Paging Question" />
+            <label>Quiz Name</label>
+            <input type="text" id="quiz-name" placeholder="CST 334 Exam" />
           </div>
           <div>
-            <label>Topic</label>
-            <input type="text" id="meta-topic" placeholder="MEMORY" />
+            <label>Practice</label>
+            <select id="quiz-practice">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label>Description (optional)</label>
+            <textarea id="quiz-description" placeholder="Exam coverage: memory, scheduling."></textarea>
+          </div>
+        </div>
+        <div class="grid two" style="margin-top: 12px;">
+          <div>
+            <label>Sort Order (comma separated)</label>
+            <input type="text" id="quiz-sort-order" placeholder="memory, concurrency, io" />
           </div>
           <div>
-            <label>Points</label>
-            <input type="number" id="meta-points" placeholder="5" />
-          </div>
-          <div>
-            <label>Spacing</label>
-            <input type="text" id="meta-spacing" placeholder="MEDIUM" />
+            <label>Custom Modules (one per line)</label>
+            <textarea id="quiz-custom-modules" placeholder="my_questions"></textarea>
           </div>
         </div>
       </section>
 
-      <section class="panel full">
+      <section class="panel full" id="questions-panel">
+        <div class="section-title">
+          <h2>Questions</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <button class="btn" id="open-add-question">Add Question</button>
+          </div>
+        </div>
+        <p class="muted">Select a question below to edit its setup and content.</p>
+        <div id="question-list" class="question-list"></div>
+      </section>
+
+      <section class="panel full" id="question-setup-panel">
+        <div class="section-title">
+          <h2>Question Setup</h2>
+          <span class="muted" id="question-kind-label">YAML question</span>
+        </div>
+        <div class="grid two">
+          <div>
+            <label>Question Name</label>
+            <input type="text" id="question-name" placeholder="Paging Question" />
+          </div>
+          <div>
+            <label>Points</label>
+            <input type="number" id="question-points" placeholder="5" />
+          </div>
+          <div>
+            <label>Topic</label>
+            <input type="text" id="question-topic" placeholder="memory" />
+          </div>
+          <div>
+            <label>Spacing</label>
+            <input type="text" id="question-spacing" placeholder="MEDIUM" />
+          </div>
+          <div>
+            <label>Num Subquestions</label>
+            <input type="number" id="question-num-sub" placeholder="2" />
+          </div>
+          <div>
+            <label>Kind</label>
+            <select id="question-kind">
+              <option value="yaml">YAML Builder</option>
+              <option value="premade">Premade Class</option>
+            </select>
+          </div>
+        </div>
+        <div id="premade-fields" class="grid" style="margin-top: 12px;">
+          <div>
+            <label>Premade Class</label>
+            <select id="premade-class-select"></select>
+            <div class="hint" id="premade-class-desc">Loading available classes…</div>
+          </div>
+          <div>
+            <label>Or type class</label>
+            <input type="text" id="premade-class" placeholder="Paging" />
+          </div>
+          <div>
+            <label>Premade Kwargs (YAML mapping)</label>
+            <textarea id="premade-kwargs" placeholder="spacing: MEDIUM"></textarea>
+          </div>
+          <div style="align-self: end;">
+            <button class="btn ghost" id="preview-premade">Preview Premade</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel full" id="vars-panel">
         <div class="section-title">
           <h2>Variables</h2>
           <button class="btn" id="add-var">Add Variable</button>
@@ -470,7 +607,7 @@
         <div id="derived"></div>
       </section>
 
-      <section class="panel full equal">
+      <section class="panel full equal" id="body-panel">
         <div class="section-title">
           <h2>Question Body</h2>
           <span class="muted">Type text, insert variables, or add answer fields.</span>
@@ -486,7 +623,7 @@
         <div class="hint">Use “Insert Answer” to open the answer builder.</div>
       </section>
 
-      <section class="panel full equal">
+      <section class="panel full equal" id="expl-panel">
         <div class="section-title">
           <h2>Explanation</h2>
           <span class="muted">Same tools as the question body.</span>
@@ -501,7 +638,7 @@
         <div id="expl-editor" class="editor" contenteditable="true" data-editor="explanation"></div>
       </section>
 
-      <section class="panel full">
+      <section class="panel full" id="validation-panel">
         <div class="section-title">
           <h2>Validation</h2>
           <span class="muted" id="validation-summary">No warnings yet.</span>
@@ -509,7 +646,7 @@
         <ul id="validation-list" class="validation-list"></ul>
       </section>
 
-      <section class="panel full">
+      <section class="panel full" id="preview-panel">
         <div class="section-title">
           <h2>Live Preview</h2>
           <div class="row" style="justify-content: flex-end;">
@@ -535,17 +672,19 @@
 
       <section class="panel full">
         <div class="section-title">
-          <h2>Export YAML</h2>
+          <h2>Export</h2>
+          <span class="muted" id="export-kind">No export yet.</span>
           <div class="row" style="justify-content: flex-end;">
             <button class="btn ghost" id="copy-yaml">Copy</button>
             <button class="btn ghost" id="download-yaml">Download</button>
-            <button class="btn" id="generate">Generate YAML</button>
+            <button class="btn ghost" id="generate-question">Generate Question YAML</button>
+            <button class="btn" id="generate-quiz">Generate Quiz YAML</button>
           </div>
         </div>
         <div class="row" style="margin-top: 12px;">
           <div style="flex: 1 1 320px;">
             <label>Save path</label>
-            <input type="text" id="save-path" value="out/question.yaml" />
+            <input type="text" id="save-path" value="out/quiz.yaml" />
           </div>
           <div style="flex: 0 0 auto; align-self: flex-end;">
             <button class="btn secondary" id="save-yaml">Save File</button>
@@ -555,6 +694,32 @@
         <div id="yaml-output" class="output"></div>
       </section>
     </main>
+
+    <div id="add-question-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Add Question</h3>
+          <button class="btn ghost small" id="add-question-cancel">Cancel</button>
+        </div>
+        <p class="muted">Choose what kind of question to add to the quiz.</p>
+        <div class="grid two" style="margin-top: 12px;">
+          <div class="node-card">
+            <h4>YAML Builder</h4>
+            <p class="muted">Build a new question with variables, derived values, and answers.</p>
+            <button class="btn" id="add-question-yaml">Add YAML Question</button>
+          </div>
+          <div class="node-card">
+            <h4>Premade Class</h4>
+            <p class="muted">Use an existing Python question class.</p>
+            <div style="margin-top: 10px;">
+              <label>Premade Class</label>
+              <select id="add-premade-select"></select>
+            </div>
+            <button class="btn secondary" id="add-question-premade" style="margin-top: 10px;">Add Premade</button>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div id="answer-modal" class="modal hidden">
       <div class="modal-card">
@@ -636,11 +801,27 @@
     <script>
       const state = {
         version: 1,
-        meta: { name: "", topic: "", points: "", spacing: "" },
         context: { vars: [], derived: [] },
       };
 
+      const quizState = {
+        meta: {
+          name: "",
+          description: "",
+          practice: false,
+          sort_order: [],
+          custom_modules: [],
+        },
+        questions: [],
+        activeQuestionId: null,
+        lastExport: "",
+        lastExportKind: "",
+      };
+
+      let questionCounter = 1;
+
       let formSpec = {};
+      let premadeList = [];
       let activeEditor = null;
       let activeInput = null;
       let activeExprEditor = null;
@@ -649,17 +830,25 @@
 
       const el = (id) => document.getElementById(id);
 
-      const inputMeta = () => {
-        state.meta.name = el("meta-name").value.trim();
-        state.meta.topic = el("meta-topic").value.trim();
-        state.meta.points = el("meta-points").value.trim();
-        state.meta.spacing = el("meta-spacing").value.trim();
+      const inputQuizMeta = () => {
+        quizState.meta.name = el("quiz-name").value.trim();
+        quizState.meta.description = el("quiz-description").value.trim();
+        quizState.meta.practice = el("quiz-practice").value === "true";
+        quizState.meta.sort_order = el("quiz-sort-order")
+          .value.split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        quizState.meta.custom_modules = el("quiz-custom-modules")
+          .value.split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean);
       };
 
       const normalizeText = (text) => (text || "").replace(/\u00a0/g, " ");
 
-      document.querySelectorAll("#meta-name, #meta-topic, #meta-points, #meta-spacing")
-        .forEach((input) => input.addEventListener("input", inputMeta));
+      document.querySelectorAll(
+        "#quiz-name, #quiz-description, #quiz-practice, #quiz-sort-order, #quiz-custom-modules"
+      ).forEach((input) => input.addEventListener("input", inputQuizMeta));
 
       const VAR_TYPES = [
         { value: "int", label: "Random integer", fields: ["min", "max"] },
@@ -693,6 +882,469 @@
         if (!cleaned) return "";
         if (cleaned.startsWith("{{") && cleaned.endsWith("}}")) return cleaned;
         return `{{ ${cleaned} }}`;
+      };
+
+      const newQuestion = (kind = "yaml") => ({
+        id: `q_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        kind,
+        name: `Question ${questionCounter++}`,
+        points: "",
+        topic: "",
+        spacing: "",
+        num_subquestions: "",
+        yamlSpec: null,
+        premade: { class: "", kwargsText: "" },
+      });
+
+      const getActiveQuestion = () =>
+        quizState.questions.find((q) => q.id === quizState.activeQuestionId) || null;
+
+      const questionMetaFrom = (question) => ({
+        name: question.name,
+        topic: question.topic,
+        points: question.points,
+        spacing: question.spacing,
+      });
+
+      const resetBuilder = () => {
+        state.context.vars = [];
+        state.context.derived = [];
+        el("body-editor").innerHTML = "";
+        el("expl-editor").innerHTML = "";
+        render();
+      };
+
+      const resolvePremadeValue = (item) => {
+        if (!item) return "";
+        if (item.class_name && item.registered_name && item.class_name.toLowerCase() === item.registered_name) {
+          return item.class_name;
+        }
+        return item.registered_name || item.class_name || "";
+      };
+
+      const updatePremadeDescription = (item) => {
+        const desc = el("premade-class-desc");
+        if (!desc) return;
+        if (!item) {
+          desc.textContent = "Pick a premade class to see details.";
+          return;
+        }
+        const label = item.doc ? `${item.class_name}: ${item.doc}` : `${item.class_name} (${item.module})`;
+        desc.textContent = label;
+      };
+
+      const renderPremadeSelect = () => {
+        const select = el("premade-class-select");
+        if (!select) return;
+        select.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = premadeList.length ? `Select a class (${premadeList.length} available)` : "No premade classes found";
+        select.appendChild(placeholder);
+        premadeList.forEach((item) => {
+          const opt = document.createElement("option");
+          opt.value = resolvePremadeValue(item);
+          opt.textContent = `${item.class_name} (${item.registered_name})`;
+          select.appendChild(opt);
+        });
+      };
+
+      const renderAddPremadeSelect = () => {
+        const select = el("add-premade-select");
+        if (!select) return;
+        select.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = premadeList.length ? `Select a class (${premadeList.length} available)` : "No premade classes found";
+        select.appendChild(placeholder);
+        premadeList.forEach((item) => {
+          const opt = document.createElement("option");
+          opt.value = resolvePremadeValue(item);
+          opt.textContent = `${item.class_name} (${item.registered_name})`;
+          select.appendChild(opt);
+        });
+      };
+
+      const syncPremadeSelect = () => {
+        const select = el("premade-class-select");
+        if (!select) return;
+        const current = (el("premade-class").value || "").trim();
+        if (!current) {
+          select.value = "";
+          updatePremadeDescription(null);
+          return;
+        }
+        const match = premadeList.find((item) => {
+          const value = resolvePremadeValue(item);
+          return value.toLowerCase() === current.toLowerCase() || item.class_name.toLowerCase() === current.toLowerCase();
+        });
+        if (match) {
+          select.value = resolvePremadeValue(match);
+          updatePremadeDescription(match);
+        } else {
+          select.value = "";
+          updatePremadeDescription(null);
+        }
+      };
+
+      const loadPremadeList = async () => {
+        try {
+          const res = await fetch("/premade_list");
+          const data = await res.json();
+          premadeList = data.items || [];
+        } catch (err) {
+          premadeList = [];
+        }
+        renderPremadeSelect();
+        renderAddPremadeSelect();
+        syncPremadeSelect();
+      };
+
+      const templateToTokens = (text, container) => {
+        const pattern = /\{\{(.*?)\}\}/g;
+        let lastIndex = 0;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+          const before = text.slice(lastIndex, match.index);
+          if (before) container.appendChild(document.createTextNode(before));
+          const expr = match[1].trim();
+          let tokenName = null;
+          const varFunc = expr.match(/^var\((['"])(.*)\1\)$/);
+          if (varFunc) {
+            tokenName = varFunc[2];
+          } else if (VALID_NAME_RE.test(expr)) {
+            tokenName = expr;
+          }
+          if (tokenName) {
+            const isDerived = state.context.derived.some((entry) => entry.name === tokenName);
+            container.appendChild(createTokenSpan(isDerived ? "derived" : "var", tokenName));
+          } else {
+            container.appendChild(document.createTextNode(`{{ ${expr} }}`));
+          }
+          lastIndex = match.index + match[0].length;
+        }
+        const rest = text.slice(lastIndex);
+        if (rest) container.appendChild(document.createTextNode(rest));
+      };
+
+      const appendInlineItem = (item, container) => {
+        if (typeof item === "string") {
+          templateToTokens(item, container);
+          return;
+        }
+        if (typeof item === "number" || typeof item === "boolean") {
+          container.appendChild(document.createTextNode(String(item)));
+          return;
+        }
+        if (item && typeof item === "object") {
+          if (item.answer) {
+            const spec = item.answer;
+            const token = createTokenSpan("answer", spec.label || spec.type || "answer", {
+              label: spec.label || "",
+              type: spec.type || "string",
+              value: typeof spec.value === "string" ? spec.value : JSON.stringify(spec.value ?? ""),
+              length: spec.length ?? "",
+              strict: spec.strict ?? false,
+              require_prefix: spec.require_prefix ?? false,
+              baffles: Array.isArray(spec.baffles) ? spec.baffles.join("\n") : "",
+            });
+            container.appendChild(token);
+            return;
+          }
+          if (item.text) {
+            templateToTokens(String(item.text), container);
+            return;
+          }
+          if (item.equation) {
+            container.appendChild(document.createTextNode(`$${item.equation}$`));
+            return;
+          }
+        }
+        container.appendChild(document.createTextNode(String(item)));
+      };
+
+      const renderSectionFromSpec = (section, editor) => {
+        editor.innerHTML = "";
+        if (!section) return;
+        const nodes = Array.isArray(section) ? section : (section.children || section.nodes || []);
+        nodes.forEach((node) => {
+          if (node && typeof node === "object" && node.paragraph) {
+            const lines = node.paragraph.lines || [];
+            const block = document.createElement("div");
+            lines.forEach((line) => appendInlineItem(line, block));
+            editor.appendChild(block);
+            return;
+          }
+          if (typeof node === "string") {
+            const block = document.createElement("div");
+            appendInlineItem(node, block);
+            editor.appendChild(block);
+            return;
+          }
+        });
+      };
+
+      const loadSpecIntoBuilder = (spec, question) => {
+        resetBuilder();
+        if (!spec) {
+          schedulePreview();
+          return;
+        }
+        const context = spec.context || {};
+        const vars = context.vars || {};
+        const derived = context.derived || {};
+        state.context.vars = Object.entries(vars).map(([name, def]) => ({
+          name,
+          type: def?.type || "int",
+          min: def?.min ?? "",
+          max: def?.max ?? "",
+          options: def?.options || [],
+          weights: def?.weights || [],
+          value: def?.value ?? "",
+        }));
+        state.context.derived = Object.entries(derived).map(([name, expr]) => ({
+          name,
+          expr: expr ?? "",
+        }));
+        render();
+        renderSectionFromSpec(spec.body || [], el("body-editor"));
+        renderSectionFromSpec(spec.explanation || [], el("expl-editor"));
+        schedulePreview();
+      };
+
+      const updateBuilderVisibility = () => {
+        const question = getActiveQuestion();
+        const isYaml = question && question.kind === "yaml";
+        ["vars-panel", "body-panel", "expl-panel"].forEach((id) => {
+          el(id).classList.toggle("hidden", !isYaml);
+        });
+        el("premade-fields").classList.toggle("hidden", !question || isYaml);
+        if (!question) {
+          el("question-kind-label").textContent = "Select a question to edit";
+        } else {
+          el("question-kind-label").textContent = isYaml ? "YAML question" : "Premade question";
+        }
+      };
+
+      const renderQuestionList = () => {
+        const list = el("question-list");
+        list.innerHTML = "";
+        if (quizState.questions.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "node-card";
+          empty.innerHTML = `
+            <h4>No questions yet</h4>
+            <p class="muted">Use “Add Question” to create your first question.</p>
+          `;
+          list.appendChild(empty);
+          return;
+        }
+        quizState.questions.forEach((question) => {
+          const card = document.createElement("div");
+          card.className = `question-card${question.id === quizState.activeQuestionId ? " active" : ""}`;
+          card.dataset.id = question.id;
+          card.addEventListener("click", () => setActiveQuestion(question.id));
+          card.addEventListener("dragover", (e) => {
+            e.preventDefault();
+          });
+          card.addEventListener("drop", (e) => {
+            e.preventDefault();
+            const draggedId = e.dataTransfer.getData("text/plain");
+            if (!draggedId || draggedId === question.id) return;
+            const fromIdx = quizState.questions.findIndex((q) => q.id === draggedId);
+            const toIdx = quizState.questions.findIndex((q) => q.id === question.id);
+            if (fromIdx === -1 || toIdx === -1) return;
+            const [moved] = quizState.questions.splice(fromIdx, 1);
+            quizState.questions.splice(toIdx, 0, moved);
+            renderQuestionList();
+          });
+          const title = document.createElement("div");
+          title.className = "question-title";
+          title.textContent = question.name || "Untitled question";
+          const meta = document.createElement("div");
+          meta.className = "question-meta";
+          const kindBadge = document.createElement("span");
+          kindBadge.className = "badge";
+          kindBadge.textContent = question.kind === "yaml" ? "YAML" : "Premade";
+          const pointsBadge = document.createElement("span");
+          pointsBadge.className = "badge";
+          pointsBadge.textContent = `${question.points || "?"} pts`;
+          meta.appendChild(kindBadge);
+          meta.appendChild(pointsBadge);
+          if (question.topic) {
+            const topicBadge = document.createElement("span");
+            topicBadge.className = "badge";
+            topicBadge.textContent = question.topic;
+            meta.appendChild(topicBadge);
+          }
+          if (question.kind === "premade") {
+            const classBadge = document.createElement("span");
+            classBadge.className = "badge";
+            classBadge.textContent = question.premade.class ? `Class: ${question.premade.class}` : "Class: (not set)";
+            meta.appendChild(classBadge);
+          }
+          const left = document.createElement("div");
+          left.appendChild(title);
+          left.appendChild(meta);
+          const actions = document.createElement("div");
+          actions.className = "question-actions";
+          const handle = document.createElement("div");
+          handle.className = "drag-handle";
+          handle.textContent = "Move";
+          handle.setAttribute("draggable", "true");
+          handle.addEventListener("dragstart", (e) => {
+            card.classList.add("dragging");
+            e.dataTransfer.setData("text/plain", question.id);
+          });
+          handle.addEventListener("dragend", () => {
+            card.classList.remove("dragging");
+          });
+          const selectBtn = document.createElement("button");
+          selectBtn.className = "btn ghost small";
+          selectBtn.textContent = "Select";
+          selectBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            setActiveQuestion(question.id);
+          });
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn ghost small";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteQuestion(question.id);
+          });
+          actions.appendChild(handle);
+          actions.appendChild(selectBtn);
+          if (question.kind === "premade") {
+            const setClassBtn = document.createElement("button");
+            setClassBtn.className = "btn ghost small";
+            setClassBtn.textContent = "Set Class";
+            setClassBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              setActiveQuestion(question.id);
+              focusQuestionSetup("premade-class");
+            });
+            actions.appendChild(setClassBtn);
+          }
+          actions.appendChild(deleteBtn);
+          card.appendChild(left);
+          card.appendChild(actions);
+          list.appendChild(card);
+        });
+      };
+
+      const setActiveQuestion = (id) => {
+        const current = getActiveQuestion();
+        if (current && current.kind === "yaml") {
+          current.yamlSpec = buildSpec(questionMetaFrom(current));
+        }
+        quizState.activeQuestionId = id;
+        const next = getActiveQuestion();
+        if (!next) {
+          clearQuestionFields();
+          resetBuilder();
+          updateBuilderVisibility();
+          renderQuestionList();
+          schedulePreview();
+          return;
+        }
+        applyQuestionFields(next);
+        if (next.kind === "yaml") {
+          loadSpecIntoBuilder(next.yamlSpec, next);
+        } else {
+          resetBuilder();
+        }
+        updateBuilderVisibility();
+        renderQuestionList();
+        schedulePreview();
+      };
+
+      const focusQuestionSetup = (fieldId) => {
+        const panel = el("question-setup-panel");
+        if (panel) {
+          panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        if (fieldId) {
+          setTimeout(() => {
+            const field = el(fieldId);
+            if (field) field.focus();
+          }, 200);
+        }
+      };
+
+      const addQuestion = (kind) => {
+        const question = newQuestion(kind);
+        quizState.questions.push(question);
+        setActiveQuestion(question.id);
+      };
+
+      const openAddQuestionModal = () => {
+        el("add-question-modal").classList.remove("hidden");
+      };
+
+      const closeAddQuestionModal = () => {
+        el("add-question-modal").classList.add("hidden");
+      };
+
+      const addYamlFromModal = () => {
+        addQuestion("yaml");
+        closeAddQuestionModal();
+      };
+
+      const addPremadeFromModal = () => {
+        const question = newQuestion("premade");
+        const selected = el("add-premade-select").value.trim();
+        if (selected) {
+          question.premade.class = selected;
+        }
+        quizState.questions.push(question);
+        setActiveQuestion(question.id);
+        closeAddQuestionModal();
+      };
+
+      const deleteQuestion = (id) => {
+        if (quizState.questions.length <= 1) {
+          alert("Keep at least one question in the quiz.");
+          return;
+        }
+        const index = quizState.questions.findIndex((q) => q.id === id);
+        if (index === -1) return;
+        quizState.questions.splice(index, 1);
+        if (quizState.activeQuestionId === id) {
+          const next = quizState.questions[Math.max(0, index - 1)];
+          quizState.activeQuestionId = next?.id || null;
+        }
+        const active = getActiveQuestion();
+        if (active) {
+          applyQuestionFields(active);
+          updateBuilderVisibility();
+        }
+        renderQuestionList();
+        schedulePreview();
+      };
+
+      const applyQuestionFields = (question) => {
+        el("question-name").value = question.name || "";
+        el("question-points").value = question.points || "";
+        el("question-topic").value = question.topic || "";
+        el("question-spacing").value = question.spacing || "";
+        el("question-num-sub").value = question.num_subquestions || "";
+        el("question-kind").value = question.kind || "yaml";
+        el("premade-class").value = question.premade.class || "";
+        el("premade-kwargs").value = question.premade.kwargsText || "";
+        syncPremadeSelect();
+      };
+
+      const clearQuestionFields = () => {
+        el("question-name").value = "";
+        el("question-points").value = "";
+        el("question-topic").value = "";
+        el("question-spacing").value = "";
+        el("question-num-sub").value = "";
+        el("question-kind").value = "yaml";
+        el("premade-class").value = "";
+        el("premade-kwargs").value = "";
+        syncPremadeSelect();
       };
 
       const insertIntoInput = (input, text) => {
@@ -1353,8 +2005,37 @@
       };
 
       const collectWarnings = () => {
+        inputQuizMeta();
         const warnings = [];
         const push = (msg) => warnings.push(msg);
+
+        if (!quizState.meta.name) {
+          push("Quiz name is empty.");
+        }
+        if (quizState.questions.length === 0) {
+          push("No questions in the quiz yet.");
+        }
+
+        quizState.questions.forEach((question, idx) => {
+          const label = question.name || `Question ${idx + 1}`;
+          if (!question.name) {
+            push(`${label} is missing a name.`);
+          }
+          if (question.points === "" || question.points === null || question.points === undefined) {
+            push(`${label} is missing a points value.`);
+          }
+          if (question.kind === "premade" && !question.premade.class) {
+            push(`${label} is missing a premade class name.`);
+          }
+          if (question.kind === "yaml" && !question.yamlSpec && question.id !== quizState.activeQuestionId) {
+            push(`${label} has no YAML content saved yet.`);
+          }
+        });
+
+        const activeQuestion = getActiveQuestion();
+        if (!activeQuestion || activeQuestion.kind !== "yaml") {
+          return warnings;
+        }
 
         const varNames = state.context.vars.map((entry) => (entry.name || "").trim()).filter(Boolean);
         const derivedNames = state.context.derived.map((entry) => (entry.name || "").trim()).filter(Boolean);
@@ -1472,15 +2153,16 @@
         });
       };
 
-      const buildSpec = () => {
-        inputMeta();
+      const buildSpec = (metaOverride = {}) => {
         const spec = { version: state.version };
 
         const meta = {};
-        if (state.meta.name) meta.name = state.meta.name;
-        if (state.meta.topic) meta.topic = state.meta.topic;
-        if (state.meta.points) meta.points = Number(state.meta.points);
-        if (state.meta.spacing) meta.spacing = state.meta.spacing;
+        if (metaOverride.name) meta.name = metaOverride.name;
+        if (metaOverride.topic) meta.topic = metaOverride.topic;
+        if (metaOverride.points !== undefined && metaOverride.points !== "") {
+          meta.points = Number(metaOverride.points);
+        }
+        if (metaOverride.spacing) meta.spacing = metaOverride.spacing;
         if (Object.keys(meta).length) spec.meta = meta;
 
         const vars = {};
@@ -1520,16 +2202,107 @@
         return spec;
       };
 
-      const generateYaml = async () => {
-        const spec = buildSpec();
+      const setExportOutput = (yamlText, label) => {
+        quizState.lastExport = yamlText || "";
+        quizState.lastExportKind = label || "";
+        el("yaml-output").textContent = yamlText || "No output.";
+        el("export-kind").textContent = label || "No export yet.";
+      };
+
+      const generateQuestionYaml = async () => {
+        const question = getActiveQuestion();
+        if (!question) {
+          setExportOutput("No active question.", "Error");
+          return "";
+        }
+        if (question.kind !== "yaml") {
+          setExportOutput("Active question is premade. Generate Quiz YAML instead.", "Error");
+          return "";
+        }
+        const spec = buildSpec(questionMetaFrom(question));
+        question.yamlSpec = spec;
         const response = await fetch("/to_yaml", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ spec }),
         });
         const data = await response.json();
-        el("yaml-output").textContent = data.yaml || data.error || "No output.";
-        return data.yaml || "";
+        const yamlText = data.yaml || data.error || "No output.";
+        setExportOutput(yamlText, "Question YAML");
+        if (!data.yaml) return "";
+        return data.yaml;
+      };
+
+      const parseYamlMapping = async (yamlText) => {
+        if (!yamlText.trim()) return {};
+        const response = await fetch("/from_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ yaml: yamlText }),
+        });
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        return data.spec || {};
+      };
+
+      const generateQuizYaml = async () => {
+        const quiz = {};
+        inputQuizMeta();
+        if (quizState.meta.name) quiz.name = quizState.meta.name;
+        if (quizState.meta.description) quiz.description = quizState.meta.description;
+        if (quizState.meta.practice) quiz.practice = true;
+        if (quizState.meta.sort_order.length) quiz["sort order"] = quizState.meta.sort_order;
+        if (quizState.meta.custom_modules.length) quiz.custom_modules = quizState.meta.custom_modules;
+
+        const questionsByPoints = {};
+        const active = getActiveQuestion();
+        if (active && active.kind === "yaml") {
+          active.yamlSpec = buildSpec(questionMetaFrom(active));
+        }
+
+        for (let i = 0; i < quizState.questions.length; i += 1) {
+          const question = quizState.questions[i];
+          const pointsKey = question.points !== "" ? String(question.points) : "0";
+          if (!questionsByPoints[pointsKey]) {
+            questionsByPoints[pointsKey] = {};
+          }
+          const name = question.name || `Question ${i + 1}`;
+          const config = {};
+          if (question.kind === "yaml") {
+            const spec = question.yamlSpec || buildSpec(questionMetaFrom(question));
+            config.class = "FromYaml";
+            config.kwargs = { yaml_spec: spec };
+          } else {
+            config.class = question.premade.class || "";
+            const kwargsText = question.premade.kwargsText || "";
+            if (kwargsText.trim()) {
+              try {
+                config.kwargs = await parseYamlMapping(kwargsText);
+              } catch (err) {
+                setExportOutput(`Failed to parse kwargs for "${question.name || "premade question"}": ${err}`, "Error");
+                return "";
+              }
+            }
+          }
+          if (question.topic) config.topic = question.topic;
+          if (question.spacing) config.spacing = question.spacing;
+          if (question.num_subquestions) config.num_subquestions = Number(question.num_subquestions);
+          questionsByPoints[pointsKey][name] = config;
+        }
+
+        quiz.questions = questionsByPoints;
+        const response = await fetch("/to_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec: quiz }),
+        });
+        const data = await response.json();
+        const yamlText = data.yaml || data.error || "No output.";
+        setExportOutput(yamlText, "Quiz YAML");
+        if (!data.yaml) return "";
+        return data.yaml;
       };
 
       const setSaveStatus = (message, isError = false) => {
@@ -1539,12 +2312,19 @@
       };
 
       const saveYamlToFile = async () => {
-        const spec = buildSpec();
         const path = el("save-path").value.trim();
+        const payload = { path };
+        if (quizState.lastExport) {
+          payload.yaml = quizState.lastExport;
+        } else {
+          const question = getActiveQuestion();
+          const spec = question ? buildSpec(questionMetaFrom(question)) : buildSpec();
+          payload.spec = spec;
+        }
         const response = await fetch("/save_yaml", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ spec, path }),
+          body: JSON.stringify(payload),
         });
         const data = await response.json();
         if (data.error) {
@@ -1555,8 +2335,67 @@
       };
 
       const updatePreview = async () => {
-        const spec = buildSpec();
+        const question = getActiveQuestion();
+        if (!question) {
+          el("preview-body").innerHTML = "<p class=\"muted\">Select a question to preview.</p>";
+          el("preview-expl").innerHTML = "";
+          el("preview-context").textContent = "";
+          return;
+        }
+
         const showAnswers = el("preview-show-answers").checked;
+
+        if (question.kind === "premade") {
+          const className = el("premade-class").value.trim();
+          if (!className) {
+            el("preview-body").innerHTML = "<p class=\"muted\">Choose a premade class to preview.</p>";
+            el("preview-expl").innerHTML = "";
+            el("preview-context").textContent = "";
+            return;
+          }
+          let kwargs = {};
+          const kwargsText = el("premade-kwargs").value || "";
+          if (kwargsText.trim()) {
+            try {
+              kwargs = await parseYamlMapping(kwargsText);
+              if (!kwargs || typeof kwargs !== "object" || Array.isArray(kwargs)) {
+                throw new Error("Premade kwargs must be a mapping.");
+              }
+            } catch (err) {
+              el("preview-body").innerHTML = `<p style=\"color:#a04527;\">${err}</p>`;
+              el("preview-expl").innerHTML = "";
+              el("preview-context").textContent = "";
+              return;
+            }
+          }
+          kwargs = {
+            ...kwargs,
+            name: question.name || "Premade Preview",
+            points_value: Number(question.points || 1),
+          };
+          if (question.topic) kwargs.topic = question.topic;
+          if (question.spacing) kwargs.spacing = question.spacing;
+          if (question.num_subquestions) kwargs.num_subquestions = Number(question.num_subquestions);
+
+          const response = await fetch("/preview_premade", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ class: className, kwargs, show_answers: showAnswers }),
+          });
+          const data = await response.json();
+          if (data.error) {
+            el("preview-body").innerHTML = `<p style=\"color:#a04527;\">${data.error}</p>`;
+            el("preview-expl").innerHTML = "";
+            el("preview-context").textContent = "";
+            return;
+          }
+          el("preview-body").innerHTML = data.body_html || "";
+          el("preview-expl").innerHTML = data.explanation_html || "";
+          el("preview-context").textContent = "";
+          return;
+        }
+
+        const spec = buildSpec(questionMetaFrom(question));
         const response = await fetch("/preview", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -1625,33 +2464,97 @@
         setupEditor(el("body-editor"));
         setupEditor(el("expl-editor"));
         render();
+        await loadPremadeList();
+        inputQuizMeta();
+        updateBuilderVisibility();
+        renderQuestionList();
+        renderWarnings();
       };
 
       el("add-var").addEventListener("click", addVar);
       el("add-derived").addEventListener("click", addDerived);
-      el("generate").addEventListener("click", generateYaml);
+      el("open-add-question").addEventListener("click", openAddQuestionModal);
+      el("add-question-cancel").addEventListener("click", closeAddQuestionModal);
+      el("add-question-yaml").addEventListener("click", addYamlFromModal);
+      el("add-question-premade").addEventListener("click", addPremadeFromModal);
+      el("add-question-modal").addEventListener("click", (e) => {
+        if (e.target.id === "add-question-modal") {
+          closeAddQuestionModal();
+        }
+      });
+      el("generate-question").addEventListener("click", generateQuestionYaml);
+      el("generate-quiz").addEventListener("click", generateQuizYaml);
       el("refresh-preview").addEventListener("click", updatePreview);
       el("preview-show-answers").addEventListener("change", updatePreview);
 
       el("copy-yaml").addEventListener("click", async () => {
-        const yamlText = await generateYaml();
+        const yamlText = quizState.lastExport || (await generateQuestionYaml());
         if (!yamlText) return;
         await navigator.clipboard.writeText(yamlText);
       });
 
       el("download-yaml").addEventListener("click", async () => {
-        const yamlText = await generateYaml();
+        const yamlText = quizState.lastExport || (await generateQuestionYaml());
         if (!yamlText) return;
         const blob = new Blob([yamlText], { type: "text/yaml" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
-        a.download = "question.yaml";
+        a.download = quizState.lastExportKind === "Quiz YAML" ? "quiz.yaml" : "question.yaml";
         a.click();
         URL.revokeObjectURL(url);
       });
 
       el("save-yaml").addEventListener("click", saveYamlToFile);
+      el("preview-premade").addEventListener("click", updatePreview);
+
+      const updateQuestionFromInputs = () => {
+        const question = getActiveQuestion();
+        if (!question) return;
+        question.name = el("question-name").value.trim();
+        question.points = el("question-points").value.trim();
+        question.topic = el("question-topic").value.trim();
+        question.spacing = el("question-spacing").value.trim();
+        question.num_subquestions = el("question-num-sub").value.trim();
+        question.premade.class = el("premade-class").value.trim();
+        question.premade.kwargsText = el("premade-kwargs").value;
+        syncPremadeSelect();
+        renderQuestionList();
+        renderWarnings();
+      };
+
+      ["question-name", "question-points", "question-topic", "question-spacing", "question-num-sub",
+       "premade-class", "premade-kwargs"].forEach((id) => {
+        const field = el(id);
+        if (field) {
+          field.addEventListener("input", updateQuestionFromInputs);
+        }
+      });
+
+      el("premade-class-select").addEventListener("change", (e) => {
+        const value = e.target.value;
+        if (value) {
+          el("premade-class").value = value;
+        }
+        updateQuestionFromInputs();
+      });
+
+      el("question-kind").addEventListener("change", (e) => {
+        const question = getActiveQuestion();
+        if (!question) return;
+        if (question.kind === "yaml") {
+          question.yamlSpec = buildSpec(questionMetaFrom(question));
+        }
+        question.kind = e.target.value;
+        if (question.kind === "yaml") {
+          loadSpecIntoBuilder(question.yamlSpec, question);
+        } else {
+          resetBuilder();
+        }
+        updateBuilderVisibility();
+        renderQuestionList();
+        renderWarnings();
+      });
 
       el("insert-var-body").addEventListener("click", () => {
         const choice = pickName(state.context.vars, "variable");
