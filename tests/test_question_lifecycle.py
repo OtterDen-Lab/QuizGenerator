@@ -93,6 +93,31 @@ class _ParameterizedQuestion(Question):
         return explanation
 
 
+class _UninterestingQuestion(Question):
+    VERSION = "1.0"
+    DEFAULT_MAX_BACKOFF_ATTEMPTS = 3
+
+    @classmethod
+    def _build_context(cls, *, rng_seed=None, **kwargs):
+        return super()._build_context(rng_seed=rng_seed, **kwargs)
+
+    @classmethod
+    def is_interesting_ctx(cls, context) -> bool:
+        return False
+
+    @classmethod
+    def _build_body(cls, context):
+        body = ca.Section()
+        body.add_element(ca.Paragraph(["Never interesting."]))
+        return body
+
+    @classmethod
+    def _build_explanation(cls, context):
+        explanation = ca.Section()
+        explanation.add_element(ca.Paragraph(["Explanation."]))
+        return explanation
+
+
 class TestQuestionContext:
     """Tests for QuestionContext class."""
 
@@ -252,6 +277,11 @@ class TestQuestionInstantiation:
         assert instance.flags.question_class_name == "_SimpleQuestion"
         assert instance.flags.generation_seed == 42
         assert instance.flags.question_version == "1.0"
+
+    def test_instantiate_respects_default_backoff_limit(self):
+        q = _UninterestingQuestion(name="Never", points_value=1.0)
+        with pytest.raises(RuntimeError, match="Exceeded max_backoff_attempts=3"):
+            q.instantiate(rng_seed=42)
 
 
 class TestQuestionDeterminism:
