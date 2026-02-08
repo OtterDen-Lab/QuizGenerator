@@ -237,6 +237,20 @@ Use seeds for reproducible quizzes:
 quizgen --seed 42 --num_pdfs 3
 ```
 
+### Generation Controls
+
+Limit backoff attempts for questions that retry until they are "interesting":
+
+```bash
+quizgen --yaml my_quiz.yaml --num_pdfs 1 --max_backoff_attempts 50
+```
+
+Set a default numeric tolerance for float answers (overridable per question):
+
+```bash
+quizgen --yaml my_quiz.yaml --num_pdfs 1 --float_tolerance 0.01
+```
+
 ### QR Code Regeneration
 
 Each generated exam includes a QR code that stores:
