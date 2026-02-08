@@ -491,6 +491,13 @@ def _build_eval_env(context) -> dict[str, Any]:
       return format(int(value), fmt)
     return format(int(value), f"0{int(width)}{fmt}")
 
+  def var(name):
+    if hasattr(context, "data"):
+      return context.data[name]
+    if isinstance(context, dict):
+      return context[name]
+    return getattr(context, name)
+
   env = {
     "min": min,
     "max": max,
@@ -511,6 +518,7 @@ def _build_eval_env(context) -> dict[str, Any]:
     "sample": sample,
     "bin": bin_fmt,
     "hex": hex_fmt,
+    "var": var,
   }
 
   if hasattr(context, "data"):
