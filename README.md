@@ -251,6 +251,12 @@ Set a default numeric tolerance for float answers (overridable per question):
 quizgen --yaml my_quiz.yaml --num_pdfs 1 --float_tolerance 0.01
 ```
 
+Per-answer override in custom questions:
+
+```python
+ca.AnswerTypes.Float(value, label="Result", tolerance=0.005)
+```
+
 ### QR Code Regeneration
 
 Each generated exam includes a QR code that stores:
