@@ -2803,13 +2803,41 @@
         return generateQuestionYaml();
       };
 
-      const exportHint = async (kind) => {
+      const exportPdf = async () => {
         const yamlText = await generateQuizYaml();
         if (!yamlText) return;
         const path = el("save-path").value.trim() || "out/quiz.yaml";
+        setSaveStatus("Generating PDF...", false);
+        const response = await fetch("/export_pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            yaml: yamlText,
+            path,
+            num_pdfs: 1,
+            use_typst: true,
+          }),
+        });
+        const data = await response.json();
+        if (data.error) {
+          setSaveStatus(data.error, true);
+          return;
+        }
+        const pdfCount = Array.isArray(data.pdfs) ? data.pdfs.length : 0;
+        const suffix = pdfCount ? ` (${pdfCount} file${pdfCount === 1 ? "" : "s"})` : "";
+        setSaveStatus(`PDF generated in ${data.output_dir || "out/"}${suffix}`);
+        markSaved();
+      };
+
+      const exportHint = async (kind) => {
         if (kind === "pdf") {
-          setSaveStatus(`Run: quizgen --yaml ${path} --num_pdfs 1`, false);
-        } else if (kind === "canvas") {
+          await exportPdf();
+          return;
+        }
+        const yamlText = await generateQuizYaml();
+        if (!yamlText) return;
+        const path = el("save-path").value.trim() || "out/quiz.yaml";
+        if (kind === "canvas") {
           setSaveStatus(`Run: quizgen --yaml ${path} --num_canvas 1 --course_id <ID>`, false);
         }
       };

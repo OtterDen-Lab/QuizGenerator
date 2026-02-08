@@ -16,6 +16,11 @@ http://127.0.0.1:8787
 
 The UI exports YAML compatible with `FromYaml` questions.
 
+## PDF export
+
+Use the "Export PDF" button to generate a quiz PDF locally. This uses Typst
+and writes output to `out/`. Install Typst and keep the UI local-only.
+
 ## Security note
 
 YAML expressions and `{{ }}` templates are evaluated with Python `eval` in

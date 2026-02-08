@@ -5,6 +5,7 @@ import json
 import os
 import pathlib
 import random
+import time
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler
 from socketserver import TCPServer
@@ -20,6 +21,7 @@ if str(BASE_DIR) not in sys.path:
 
 import QuizGenerator.contentast as ca
 import QuizGenerator.yaml_question  # registers YAML nodes
+from QuizGenerator import generate as quiz_generate
 from QuizGenerator.question import QuestionContext, QuestionRegistry, Question
 
 
@@ -85,7 +87,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
     return super().do_GET()
 
   def do_POST(self) -> None:
-    if self.path not in {"/to_yaml", "/from_yaml", "/preview", "/save_yaml", "/preview_premade"}:
+    if self.path not in {"/to_yaml", "/from_yaml", "/preview", "/save_yaml", "/preview_premade", "/export_pdf"}:
       self._send_text("Not found.", status=HTTPStatus.NOT_FOUND)
       return
 
@@ -235,6 +237,85 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
       save_path.parent.mkdir(parents=True, exist_ok=True)
       save_path.write_text(yaml_text, encoding="utf-8")
       self._send_json({"ok": True, "path": str(save_path)})
+      return
+
+    if self.path == "/export_pdf":
+      spec = payload.get("spec")
+      yaml_text = payload.get("yaml")
+      num_pdfs = payload.get("num_pdfs", 1)
+      use_typst = bool(payload.get("use_typst", True))
+
+      if spec is not None and not isinstance(spec, dict):
+        self._send_json({"error": "'spec' must be a mapping."}, status=HTTPStatus.BAD_REQUEST)
+        return
+      if yaml_text is None and spec is None:
+        self._send_json({"error": "Provide 'yaml' or 'spec' for PDF export."}, status=HTTPStatus.BAD_REQUEST)
+        return
+      if yaml_text is None:
+        yaml_text = yaml.safe_dump(spec, sort_keys=False)
+      if not isinstance(yaml_text, str):
+        self._send_json({"error": "'yaml' must be a string."}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      try:
+        save_path = self._resolve_save_path(payload.get("path") or "out/quiz.yaml")
+      except ValueError as exc:
+        self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      try:
+        num_pdfs = int(num_pdfs)
+      except (TypeError, ValueError):
+        self._send_json({"error": "'num_pdfs' must be an integer."}, status=HTTPStatus.BAD_REQUEST)
+        return
+      if num_pdfs < 1:
+        self._send_json({"error": "'num_pdfs' must be >= 1."}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      if not yaml_text.endswith("\n"):
+        yaml_text += "\n"
+
+      save_path.parent.mkdir(parents=True, exist_ok=True)
+      save_path.write_text(yaml_text, encoding="utf-8")
+
+      ok, missing = quiz_generate._check_dependencies(
+        require_typst=use_typst,
+        require_latex=not use_typst
+      )
+      if not ok:
+        self._send_json({"error": "\n".join(missing)}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      start_time = time.time()
+      try:
+        quiz_generate.generate_quiz(
+          str(save_path),
+          num_pdfs=num_pdfs,
+          use_typst=use_typst
+        )
+      except quiz_generate.QuizGenError as exc:
+        self._send_json({"error": str(exc)}, status=HTTPStatus.BAD_REQUEST)
+        return
+      except Exception as exc:
+        self._send_json({"error": f"PDF export failed: {type(exc).__name__}: {exc}"}, status=HTTPStatus.BAD_REQUEST)
+        return
+
+      output_dir = BASE_DIR / "out"
+      pdfs: list[str] = []
+      if output_dir.exists():
+        for pdf_path in output_dir.glob("*.pdf"):
+          try:
+            if pdf_path.stat().st_mtime >= start_time - 1:
+              pdfs.append(str(pdf_path))
+          except OSError:
+            continue
+
+      self._send_json({
+        "ok": True,
+        "path": str(save_path),
+        "output_dir": str(output_dir),
+        "pdfs": pdfs,
+      })
       return
 
 
