@@ -257,7 +257,7 @@ class TestQuestionUpload:
             "points_possible": 5
         }
 
-        result = mock_canvas_course.create_question(mock_quiz, payload)
+        result = mock_canvas_course.create_question(mock_quiz, payload, max_workers=1)
 
         # Single payload should not create a group
         assert result is None
@@ -280,7 +280,8 @@ class TestQuestionUpload:
         result = mock_canvas_course.create_question(
             mock_quiz,
             payloads,
-            question_points=5
+            question_points=5,
+            max_workers=1
         )
 
         assert result == mock_group
