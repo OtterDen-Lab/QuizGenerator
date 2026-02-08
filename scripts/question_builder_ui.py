@@ -28,6 +28,28 @@ from QuizGenerator.question import QuestionContext, QuestionRegistry, Question
 HTML_PATH = BASE_DIR / "documentation" / "question_builder_ui.html"
 
 
+def _coerce_quiz_spec(spec: dict[str, Any]) -> dict[str, Any]:
+  questions = spec.get("questions")
+  if not isinstance(questions, dict):
+    return spec
+  converted: dict[Any, Any] = {}
+  for key, value in questions.items():
+    new_key = key
+    if isinstance(key, str):
+      stripped = key.strip()
+      try:
+        new_key = int(stripped)
+      except ValueError:
+        try:
+          new_key = float(stripped)
+        except ValueError:
+          new_key = key
+    converted[new_key] = value
+  spec = dict(spec)
+  spec["questions"] = converted
+  return spec
+
+
 class QuestionBuilderHandler(SimpleHTTPRequestHandler):
   def _send_json(self, payload: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
     data = json.dumps(payload).encode("utf-8")
@@ -105,7 +127,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         self._send_json({"error": "Payload must include a 'spec' object."}, status=HTTPStatus.BAD_REQUEST)
         return
 
-      yaml_text = yaml.safe_dump(spec, sort_keys=False)
+      yaml_text = yaml.safe_dump(_coerce_quiz_spec(spec), sort_keys=False)
       self._send_json({"yaml": yaml_text})
       return
 
@@ -225,7 +247,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         return
 
       if spec is not None:
-        yaml_text = yaml.safe_dump(spec, sort_keys=False)
+        yaml_text = yaml.safe_dump(_coerce_quiz_spec(spec), sort_keys=False)
 
       if yaml_text is None:
         self._send_json({"error": "No YAML content provided."}, status=HTTPStatus.BAD_REQUEST)
@@ -252,7 +274,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         self._send_json({"error": "Provide 'yaml' or 'spec' for PDF export."}, status=HTTPStatus.BAD_REQUEST)
         return
       if yaml_text is None:
-        yaml_text = yaml.safe_dump(spec, sort_keys=False)
+        yaml_text = yaml.safe_dump(_coerce_quiz_spec(spec), sort_keys=False)
       if not isinstance(yaml_text, str):
         self._send_json({"error": "'yaml' must be a string."}, status=HTTPStatus.BAD_REQUEST)
         return
