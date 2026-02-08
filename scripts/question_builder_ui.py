@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import os
 import pathlib
 import random
 import time
+import zipfile
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler
 from socketserver import TCPServer
@@ -336,19 +338,38 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         self._send_json({"error": "PDF export succeeded but no PDF was found."}, status=HTTPStatus.BAD_REQUEST)
         return
 
-      pdf_path = max(pdfs, key=lambda p: p.stat().st_mtime)
-      try:
-        pdf_bytes = pdf_path.read_bytes()
-      except OSError as exc:
-        self._send_json({"error": f"Failed to read PDF: {exc}"}, status=HTTPStatus.BAD_REQUEST)
+      if len(pdfs) == 1:
+        pdf_path = pdfs[0]
+        try:
+          pdf_bytes = pdf_path.read_bytes()
+        except OSError as exc:
+          self._send_json({"error": f"Failed to read PDF: {exc}"}, status=HTTPStatus.BAD_REQUEST)
+          return
+
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "application/pdf")
+        self.send_header("Content-Disposition", f'attachment; filename="{pdf_path.name}"')
+        self.send_header("Content-Length", str(len(pdf_bytes)))
+        self.end_headers()
+        self.wfile.write(pdf_bytes)
         return
 
+      archive_bytes = io.BytesIO()
+      with zipfile.ZipFile(archive_bytes, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for pdf_path in sorted(pdfs, key=lambda p: p.name):
+          try:
+            archive.write(pdf_path, arcname=pdf_path.name)
+          except OSError:
+            continue
+      archive_bytes.seek(0)
+      zip_payload = archive_bytes.read()
+
       self.send_response(HTTPStatus.OK)
-      self.send_header("Content-Type", "application/pdf")
-      self.send_header("Content-Disposition", f'attachment; filename="{pdf_path.name}"')
-      self.send_header("Content-Length", str(len(pdf_bytes)))
+      self.send_header("Content-Type", "application/zip")
+      self.send_header("Content-Disposition", "attachment; filename=\"quiz_pdfs.zip\"")
+      self.send_header("Content-Length", str(len(zip_payload)))
       self.end_headers()
-      self.wfile.write(pdf_bytes)
+      self.wfile.write(zip_payload)
       return
 
 

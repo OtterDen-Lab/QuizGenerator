@@ -608,6 +608,10 @@
             <label>Save path</label>
             <input type="text" id="save-path" value="out/quiz.yaml" />
           </div>
+          <div style="flex: 0 0 160px;">
+            <label>PDF count</label>
+            <input type="number" id="pdf-count" min="1" value="1" />
+          </div>
           <div style="flex: 0 0 auto; align-self: flex-end;">
             <button class="btn secondary" id="save-yaml">Save File</button>
           </div>
@@ -2847,6 +2851,8 @@
         const yamlText = await generateQuizYaml();
         if (!yamlText) return;
         const path = el("save-path").value.trim() || "out/quiz.yaml";
+        const countRaw = el("pdf-count")?.value ?? "1";
+        const numPdfs = Math.max(1, Number.parseInt(countRaw, 10) || 1);
         setSaveStatus("Generating PDF...", false);
         const response = await fetch("/export_pdf", {
           method: "POST",
@@ -2854,7 +2860,7 @@
           body: JSON.stringify({
             yaml: yamlText,
             path,
-            num_pdfs: 1,
+            num_pdfs: numPdfs,
             use_typst: true,
           }),
         });
@@ -2875,7 +2881,8 @@
         a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
-        setSaveStatus("PDF downloaded.", false);
+        const label = numPdfs === 1 ? "PDF downloaded." : `PDFs generated: ${numPdfs}.`;
+        setSaveStatus(label, false);
         markSaved();
       };
 
