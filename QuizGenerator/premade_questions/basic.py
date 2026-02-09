@@ -210,6 +210,8 @@ class FromYaml(Question):
       yaml_spec=kwargs.get("yaml_spec"),
       base_dir=kwargs.get("yaml_base_dir")
     )
+    if kwargs.get("yaml_base_dir"):
+      context["yaml_base_dir"] = kwargs.get("yaml_base_dir")
     context["yaml_spec"] = spec
     yaml_question.apply_context_spec(spec, context)
     templates = yaml_question.parse_question_templates(spec)
