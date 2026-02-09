@@ -275,6 +275,11 @@
         color: #a04527;
       }
 
+      .token.node {
+        background: #e6e8f6;
+        color: #3c448c;
+      }
+
       .toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -716,6 +721,7 @@
         <div class="toolbar">
           <button class="btn ghost small" id="insert-var-body">Insert Variable</button>
           <button class="btn ghost small" id="insert-derived-body">Insert Derived</button>
+          <button class="btn ghost small" id="insert-element-body">Insert Element</button>
           <button class="btn secondary small" id="insert-answer-body">Insert Answer</button>
         </div>
         <div class="chips" id="body-var-chips"></div>
@@ -732,6 +738,7 @@
         <div class="toolbar">
           <button class="btn ghost small" id="insert-var-expl">Insert Variable</button>
           <button class="btn ghost small" id="insert-derived-expl">Insert Derived</button>
+          <button class="btn ghost small" id="insert-element-expl">Insert Element</button>
           <button class="btn secondary small" id="insert-answer-expl">Insert Answer</button>
         </div>
         <div class="chips" id="expl-var-chips"></div>
@@ -880,6 +887,30 @@
       </div>
     </div>
 
+    <div id="element-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Insert Element</h3>
+          <button class="btn ghost small" id="element-cancel">Cancel</button>
+        </div>
+        <p class="muted">Choose an element and fill in its fields.</p>
+        <div class="grid two">
+          <div>
+            <label>Element</label>
+            <select id="element-type"></select>
+          </div>
+          <div>
+            <label>Preview</label>
+            <div id="element-preview" class="hint">Select an element to see its fields.</div>
+          </div>
+        </div>
+        <div id="element-fields" class="grid two" style="margin-top: 8px;"></div>
+        <div class="row" style="justify-content: flex-end; margin-top: 12px;">
+          <button class="btn secondary" id="element-insert">Insert Element</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       const state = {
         version: 1,
@@ -912,6 +943,9 @@
       let activeInput = null;
       let activeExprEditor = null;
       let currentAnswerTarget = null;
+      const elementModalState = {
+        target: null,
+      };
       let previewTimer = null;
       let quizPreviewTimer = null;
       let quizPreviewToken = 0;
@@ -1236,6 +1270,16 @@
             appendInlineItem(node, block);
             editor.appendChild(block);
             return;
+          }
+          if (node && typeof node === "object") {
+            const keys = Object.keys(node);
+            if (keys.length === 1) {
+              const key = keys[0];
+              const block = document.createElement("div");
+              block.appendChild(createNodeToken(key, node));
+              editor.appendChild(block);
+              return;
+            }
           }
         });
       };
@@ -1595,6 +1639,15 @@
         return span;
       };
 
+      const createNodeToken = (nodeKey, nodeSpec) => {
+        const label = formSpec[nodeKey]?.title || nodeKey;
+        return createTokenSpan("node", label, {
+          node: nodeKey,
+          label,
+          spec: JSON.stringify(nodeSpec),
+        });
+      };
+
       const insertTokenIntoEditor = (editor, token) => {
         if (!editor) return;
         editor.focus();
@@ -1684,6 +1737,217 @@
           insertIntoInput(activeInput, `{{ ${exprName} }}`);
           schedulePreview();
         }
+      };
+
+      const SUPPORTED_ELEMENT_FIELDS = new Set([
+        "string",
+        "templated_string",
+        "expr",
+        "bool",
+        "enum",
+        "list",
+        "expr_list",
+        "inline_list",
+        "inline_grid",
+      ]);
+
+      const elementNodeOrder = [
+        "equation",
+        "code",
+        "table",
+        "matrix",
+        "math_expression",
+        "picture",
+        "line_break",
+        "choose",
+        "table_group",
+        "repeated_problem_part",
+        "only_latex",
+        "only_html",
+      ];
+
+      const getInsertableNodes = () => {
+        const nodes = Object.entries(formSpec || {});
+        const filtered = nodes.filter(([key, spec]) => {
+          if (["answer", "answer_block", "paragraph", "section", "text"].includes(key)) {
+            return false;
+          }
+          if (!spec?.fields || spec.fields.length === 0) {
+            return true;
+          }
+          return spec.fields.every((field) => SUPPORTED_ELEMENT_FIELDS.has(field.type));
+        });
+        const ordered = [];
+        elementNodeOrder.forEach((key) => {
+          const found = filtered.find(([nodeKey]) => nodeKey === key);
+          if (found) ordered.push(found);
+        });
+        filtered.forEach((entry) => {
+          if (!ordered.some((item) => item[0] === entry[0])) {
+            ordered.push(entry);
+          }
+        });
+        return ordered;
+      };
+
+      const buildElementFields = (nodeKey) => {
+        const spec = formSpec[nodeKey];
+        const container = el("element-fields");
+        container.innerHTML = "";
+        if (!spec) return;
+        const preview = el("element-preview");
+        preview.textContent = spec.title ? `${spec.title} (${nodeKey})` : nodeKey;
+        const fields = spec.fields || [];
+        if (!fields.length) {
+          container.innerHTML = "<div class=\"hint\">No fields required for this element.</div>";
+          return;
+        }
+        fields.forEach((field) => {
+          if (!SUPPORTED_ELEMENT_FIELDS.has(field.type)) return;
+          const wrapper = document.createElement("div");
+          const label = document.createElement("label");
+          label.textContent = field.name.replace(/_/g, " ");
+          wrapper.appendChild(label);
+
+          let input;
+          if (field.type === "bool") {
+            input = document.createElement("select");
+            ["false", "true"].forEach((value) => {
+              const opt = document.createElement("option");
+              opt.value = value;
+              opt.textContent = value;
+              if (field.default !== undefined && String(field.default) === value) {
+                opt.selected = true;
+              }
+              input.appendChild(opt);
+            });
+          } else if (field.type === "enum") {
+            input = document.createElement("select");
+            (field.options || []).forEach((value) => {
+              const opt = document.createElement("option");
+              opt.value = value;
+              opt.textContent = value;
+              if (field.default !== undefined && field.default === value) {
+                opt.selected = true;
+              }
+              input.appendChild(opt);
+            });
+          } else if (field.type === "inline_list" || field.type === "list" || field.type === "expr_list") {
+            input = document.createElement("textarea");
+            input.placeholder = "One item per line";
+          } else if (field.type === "inline_grid") {
+            input = document.createElement("textarea");
+            input.placeholder = "Row1,Row1\nRow2,Row2";
+          } else {
+            input = document.createElement("input");
+            input.type = "text";
+          }
+
+          input.dataset.fieldName = field.name;
+          input.dataset.fieldType = field.type;
+          if (field.required) {
+            input.dataset.required = "true";
+          }
+          if (field.default !== undefined && input.tagName !== "SELECT") {
+            if (field.default !== null && field.default !== undefined) {
+              input.value = String(field.default);
+            }
+          }
+          wrapper.appendChild(input);
+          container.appendChild(wrapper);
+        });
+      };
+
+      const openElementModal = (targetEditor) => {
+        elementModalState.target = targetEditor || activeEditor;
+        const typeSelect = el("element-type");
+        typeSelect.innerHTML = "";
+        const nodes = getInsertableNodes();
+        nodes.forEach(([key, spec]) => {
+          const opt = document.createElement("option");
+          opt.value = key;
+          opt.textContent = spec.title || key;
+          typeSelect.appendChild(opt);
+        });
+        if (nodes.length) {
+          typeSelect.value = nodes[0][0];
+        }
+        const preview = el("element-preview");
+        preview.textContent = nodes.length ? "" : "No insertable elements available.";
+        buildElementFields(typeSelect.value);
+        el("element-modal").classList.remove("hidden");
+      };
+
+      const closeElementModal = () => {
+        el("element-modal").classList.add("hidden");
+      };
+
+      const collectElementSpec = () => {
+        const nodeKey = el("element-type").value;
+        const spec = formSpec[nodeKey];
+        const fields = spec?.fields || [];
+        const nodeSpec = {};
+        fields.forEach((field) => {
+          if (!SUPPORTED_ELEMENT_FIELDS.has(field.type)) return;
+          const input = el("element-fields").querySelector(`[data-field-name="${field.name}"]`);
+          if (!input) return;
+          const raw = input.value ?? "";
+          if (!raw && field.required) {
+            return;
+          }
+          if (field.type === "bool") {
+            nodeSpec[field.name] = raw === "true";
+            return;
+          }
+          if (field.type === "enum") {
+            if (raw) nodeSpec[field.name] = raw;
+            return;
+          }
+          if (field.type === "inline_list" || field.type === "list" || field.type === "expr_list") {
+            const items = raw
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean);
+            if (items.length) {
+              if (field.name === "weights") {
+                nodeSpec[field.name] = items.map((item) => {
+                  const value = Number(item);
+                  return Number.isNaN(value) ? item : value;
+                });
+              } else {
+                nodeSpec[field.name] = items;
+              }
+            }
+            return;
+          }
+          if (field.type === "inline_grid") {
+            const rows = raw
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean)
+              .map((line) => {
+                const splitter = line.includes("|") ? "|" : ",";
+                return line.split(splitter).map((cell) => cell.trim()).filter(Boolean);
+              });
+            if (rows.length) nodeSpec[field.name] = rows;
+            return;
+          }
+          if (raw !== "") nodeSpec[field.name] = raw;
+        });
+        const node = {};
+        node[nodeKey] = nodeSpec;
+        return node;
+      };
+
+      const insertElementFromModal = () => {
+        const targetEditor = elementModalState.target || activeEditor || el("body-editor");
+        if (!targetEditor) return;
+        const node = collectElementSpec();
+        const nodeKey = Object.keys(node)[0];
+        insertTokenIntoEditor(targetEditor, createNodeToken(nodeKey, node));
+        markDirty("builder content");
+        schedulePreview();
+        closeElementModal();
       };
 
       const pickName = (entries, label) => {
@@ -2185,6 +2449,17 @@
               result.push({ answer: answerSpec });
               return;
             }
+            if (kind === "node") {
+              flush();
+              const raw = node.dataset.spec || "";
+              try {
+                const spec = JSON.parse(raw);
+                result.push({ __block: spec });
+              } catch (err) {
+                result.push(`{{ ${raw} }}`);
+              }
+              return;
+            }
           }
           buffer += normalizeText(node.textContent);
         });
@@ -2225,6 +2500,10 @@
         const paragraphs = [];
         blocks.forEach((inline) => {
           if (!inline.length) return;
+          if (inline.length === 1 && inline[0] && inline[0].__block) {
+            paragraphs.push(inline[0].__block);
+            return;
+          }
           paragraphs.push({ paragraph: { lines: inline } });
         });
 
@@ -3189,6 +3468,16 @@
           closeAddQuestionModal();
         }
       });
+      el("element-type").addEventListener("change", (e) => {
+        buildElementFields(e.target.value);
+      });
+      el("element-insert").addEventListener("click", insertElementFromModal);
+      el("element-cancel").addEventListener("click", closeElementModal);
+      el("element-modal").addEventListener("click", (e) => {
+        if (e.target.id === "element-modal") {
+          closeElementModal();
+        }
+      });
       el("generate-question").addEventListener("click", generateQuestionYaml);
       el("generate-quiz").addEventListener("click", generateQuizYaml);
       el("export-pdf").addEventListener("click", () => exportHint("pdf"));
@@ -3296,6 +3585,7 @@
         const choice = pickName(state.context.derived, "derived value");
         if (choice) insertDerived(choice, { targetEditor: el("body-editor"), preferInput: false });
       });
+      el("insert-element-body").addEventListener("click", () => openElementModal(el("body-editor")));
       el("insert-answer-body").addEventListener("click", () => openAnswerModal(el("body-editor")));
       el("insert-var-expl").addEventListener("click", () => {
         const choice = pickName(state.context.vars, "variable");
@@ -3305,6 +3595,7 @@
         const choice = pickName(state.context.derived, "derived value");
         if (choice) insertDerived(choice, { targetEditor: el("expl-editor"), preferInput: false });
       });
+      el("insert-element-expl").addEventListener("click", () => openElementModal(el("expl-editor")));
       el("insert-answer-expl").addEventListener("click", () => openAnswerModal(el("expl-editor")));
       el("answer-cancel").addEventListener("click", closeAnswerModal);
       el("answer-clear").addEventListener("click", clearAnswerModal);
