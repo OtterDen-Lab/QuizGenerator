@@ -61,6 +61,11 @@ Reference for the quiz YAML schema and configuration options, including list for
 
 **Audience:** Instructors and question authors
 
+#### [question_builder_ui.md](question_builder_ui.md)
+Local web UI for building YAML questions and assembling quizzes (beta).
+
+**Audience:** Question authors and instructors
+
 #### [PARAMETER_STANDARDS.md](PARAMETER_STANDARDS.md)
 Standards and conventions for question parameter naming and design.
 

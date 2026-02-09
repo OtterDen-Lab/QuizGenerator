@@ -1,0 +1,8 @@
+name: "YAML Question Demo"
+practice: true
+questions:
+  5:
+    yaml_binary_strict:
+      class: FromYaml
+      yaml_path: example_files/yaml_question_example.yaml
+      topic: MEMORY

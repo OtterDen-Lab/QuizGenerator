@@ -251,6 +251,26 @@ class QuestionRegistry:
     # Note: Don't build context here - instantiate() handles it
     # Calling it here would consume RNG calls and break QR code regeneration
     return new_question
+
+  @classmethod
+  def list_registered(cls, *, sort: bool = True) -> list[dict[str, str]]:
+    """Return metadata for registered question types."""
+    if not cls._scanned:
+      cls.load_premade_questions()
+
+    items: list[dict[str, str]] = []
+    for registered_name, question_cls in cls._registry.items():
+      doc = (question_cls.__doc__ or "").strip().splitlines()
+      items.append({
+        "registered_name": registered_name,
+        "class_name": question_cls.__name__,
+        "module": question_cls.__module__,
+        "doc": doc[0] if doc else ""
+      })
+
+    if sort:
+      items.sort(key=lambda item: (item["class_name"].lower(), item["registered_name"]))
+    return items
     
     
   @classmethod
@@ -753,6 +773,14 @@ class Question(abc.ABC):
     # Build body + explanation. Each may return just an Element or (Element, answers).
     body, body_answers = cls._normalize_build_output(cls._build_body(context))
     explanation, explanation_answers = cls._normalize_build_output(cls._build_explanation(context))
+
+    # Resolve any template AST elements against the context before collecting answers.
+    body = ca.resolve_template(body, context)
+    explanation = ca.resolve_template(explanation, context)
+    if body is None:
+      body = ca.Section()
+    if explanation is None:
+      explanation = ca.Section()
 
     # Collect inline answers from both body and explanation.
     inline_body_answers = cls._collect_answers_from_ast(body)

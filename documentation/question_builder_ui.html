@@ -1,0 +1,3352 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Quiz Question Builder</title>
+    <script>
+      window.MathJax = {
+        tex: {
+          inlineMath: [["\\(", "\\)"], ["$", "$"]],
+          displayMath: [["\\[", "\\]"], ["$$", "$$"]],
+        },
+        svg: { fontCache: "global" },
+      };
+    </script>
+    <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    <style>
+      :root {
+        --ink: #1e1d1b;
+        --muted: #5c5b57;
+        --paper: #f5f1ea;
+        --card: #ffffff;
+        --accent: #0f6b6b;
+        --accent-2: #c86c4e;
+        --line: #ded7cc;
+        --soft: #f0e9df;
+        --shadow: 0 14px 40px rgba(30, 29, 27, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "Space Grotesk", "Avenir Next", "Fira Sans", "Trebuchet MS", sans-serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 15% 10%, rgba(15, 107, 107, 0.12), transparent 40%),
+          radial-gradient(circle at 85% 20%, rgba(200, 108, 78, 0.14), transparent 45%),
+          linear-gradient(135deg, #f7f2ea 0%, #eef5f2 100%);
+        min-height: 100vh;
+      }
+
+      header {
+        padding: 36px 24px 12px;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 2.4rem;
+        letter-spacing: -0.02em;
+      }
+
+      .subtitle {
+        color: var(--muted);
+        max-width: 680px;
+      }
+
+      main {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 24px 80px;
+        display: grid;
+        gap: 24px;
+        grid-template-columns: minmax(280px, 1fr) minmax(360px, 2fr);
+        align-items: stretch;
+      }
+
+      .panel {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: var(--shadow);
+        animation: fadeUp 0.6s ease both;
+      }
+
+      .panel.full {
+        grid-column: 1 / -1;
+      }
+
+      .panel.equal {
+        min-height: 320px;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .panel.equal .editor {
+        flex: 1 1 auto;
+        min-height: 200px;
+      }
+
+      .view {
+        display: contents;
+      }
+
+      .view.hidden {
+        display: none;
+      }
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(12px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 1.25rem;
+      }
+
+      .panel h3 {
+        margin: 18px 0 10px;
+        font-size: 1.05rem;
+      }
+
+      .panel p {
+        margin: 0 0 12px;
+        color: var(--muted);
+      }
+
+      .grid {
+        display: grid;
+        gap: 16px;
+      }
+
+      .grid.two {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      }
+
+      label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      input[type="text"],
+      input[type="number"],
+      select,
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: var(--soft);
+        font-family: inherit;
+        font-size: 0.95rem;
+      }
+
+      textarea {
+        min-height: 72px;
+        resize: vertical;
+      }
+
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .row > * {
+        flex: 1 1 auto;
+      }
+
+      .btn {
+        border: none;
+        border-radius: 999px;
+        padding: 10px 18px;
+        font-weight: 600;
+        cursor: pointer;
+        background: var(--accent);
+        color: #fff;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+      }
+
+      .btn.secondary {
+        background: var(--accent-2);
+      }
+
+      .btn.ghost {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+      }
+
+      .btn.small {
+        padding: 6px 12px;
+        font-size: 0.85rem;
+      }
+
+      .btn:active {
+        transform: scale(0.98);
+      }
+
+      .node-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        background: #fffdf9;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .chip {
+        background: #e7f2f0;
+        color: #0f6b6b;
+        padding: 6px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        cursor: pointer;
+        border: 1px solid transparent;
+      }
+
+      .chip.derived {
+        background: #f4e6dd;
+        color: #a04527;
+      }
+
+      .chip:hover {
+        border-color: currentColor;
+      }
+
+      .editor {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        min-height: 160px;
+        background: #fffdf9;
+        font-size: 1rem;
+      }
+
+      .expr-editor {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+        background: var(--soft);
+        min-height: 42px;
+      }
+
+      .editor:focus,
+      .expr-editor:focus {
+        outline: 2px solid rgba(15, 107, 107, 0.4);
+      }
+
+      .token {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: #dfeff0;
+        color: #0f6b6b;
+        font-size: 0.85rem;
+        margin: 0 2px;
+      }
+
+      .token.answer {
+        background: #f7e4d9;
+        color: #a04527;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .output {
+        background: #131313;
+        color: #f5f1ea;
+        border-radius: 14px;
+        padding: 16px;
+        font-family: "JetBrains Mono", "Fira Code", "Menlo", monospace;
+        min-height: 200px;
+        white-space: pre;
+        overflow-x: auto;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .muted {
+        color: var(--muted);
+        font-size: 0.85rem;
+      }
+
+      .hint {
+        font-size: 0.8rem;
+        color: var(--muted);
+        margin-top: 6px;
+      }
+
+      .operator-bar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .operator-bar button {
+        border: 1px solid var(--line);
+        background: #fff;
+        border-radius: 8px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 0.85rem;
+      }
+
+      .question-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .question-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 12px;
+        background: #fffdf9;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .question-card.dragging {
+        opacity: 0.6;
+      }
+
+      .question-card.active {
+        border-color: rgba(15, 107, 107, 0.7);
+        box-shadow: 0 10px 24px rgba(15, 107, 107, 0.12);
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: var(--soft);
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .question-title {
+        font-weight: 600;
+      }
+
+      .question-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .question-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .drag-handle {
+        font-size: 0.75rem;
+        color: var(--muted);
+        border: 1px dashed var(--line);
+        padding: 4px 8px;
+        border-radius: 8px;
+        cursor: grab;
+        user-select: none;
+      }
+
+      .answer-builder h4 {
+        margin: 0 0 8px;
+      }
+
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(30, 29, 27, 0.4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 50;
+      }
+
+      .modal.hidden {
+        display: none;
+      }
+
+      .modal-card {
+        width: min(720px, 96%);
+        background: var(--card);
+        border-radius: 18px;
+        padding: 20px;
+        border: 1px solid var(--line);
+        box-shadow: var(--shadow);
+      }
+
+      .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+      }
+
+      .modal-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .preview-box {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        background: #fffdf9;
+      }
+
+      .quiz-preview-item {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        background: #fff;
+        margin-bottom: 12px;
+      }
+
+      .quiz-preview-item h4 {
+        margin: 0 0 6px;
+      }
+
+      .preview-box h3 {
+        margin: 0 0 10px;
+      }
+
+      .preview-section {
+        margin-bottom: 16px;
+      }
+
+      .preview-context {
+        color: var(--muted);
+        font-size: 0.85rem;
+        margin-bottom: 10px;
+      }
+
+      .validation-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 8px;
+      }
+
+      .validation-item {
+        background: #fff4ef;
+        border: 1px solid #f1d4c7;
+        color: #a04527;
+        padding: 8px 12px;
+        border-radius: 10px;
+        font-size: 0.9rem;
+      }
+
+      .validation-item.ok {
+        background: #e8f3ef;
+        border-color: #bcd7cf;
+        color: #236c5b;
+      }
+
+      .toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85rem;
+        color: var(--muted);
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      @media (max-width: 980px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="chips">
+        <span class="chip">Quick & dirty builder</span>
+      </div>
+      <h1>Quiz Question Builder</h1>
+      <p class="subtitle">
+        Build YAML questions and assemble full quizzes. Click chips to insert variables, or drag them into the editors.
+      </p>
+    </header>
+
+    <main>
+      <div id="overview-view" class="view">
+      <section class="panel full" id="quiz-meta-panel">
+        <div class="section-title">
+          <h2>Quiz Metadata</h2>
+          <span class="muted">Overall quiz settings</span>
+        </div>
+        <div class="grid two">
+          <div>
+            <label>Quiz Name</label>
+            <input type="text" id="quiz-name" placeholder="CST 334 Exam" />
+          </div>
+          <div>
+            <label>Practice</label>
+            <select id="quiz-practice">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <label>Description (optional)</label>
+            <textarea id="quiz-description" placeholder="Exam coverage: memory, scheduling."></textarea>
+          </div>
+        </div>
+        <div class="grid two" style="margin-top: 12px;">
+          <div>
+            <label>Sort Order (comma separated)</label>
+            <input type="text" id="quiz-sort-order" placeholder="memory, concurrency, io" />
+          </div>
+          <div>
+            <label>Custom Modules (one per line)</label>
+            <textarea id="quiz-custom-modules" placeholder="my_questions"></textarea>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel full" id="questions-panel">
+        <div class="section-title">
+          <h2>Questions</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <button class="btn" id="open-add-question">Add Question</button>
+          </div>
+        </div>
+        <p class="muted">Select a question below to edit its setup and content.</p>
+        <div id="question-list" class="question-list"></div>
+      </section>
+
+      <section class="panel full" id="quiz-preview-panel">
+        <div class="section-title">
+          <h2>Quiz Preview</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <label class="toggle">
+              Seed
+              <input type="number" id="quiz-preview-seed" placeholder="42" style="width: 90px;" />
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="quiz-preview-show-answers" />
+              Show answers
+            </label>
+            <button class="btn ghost" id="refresh-quiz-preview">Refresh</button>
+          </div>
+        </div>
+        <div id="quiz-preview-body" class="preview-box"></div>
+      </section>
+
+      <section class="panel full" id="export-panel">
+        <div class="section-title">
+          <h2>Export</h2>
+          <span class="muted" id="export-kind">No export yet.</span>
+          <div class="row" style="justify-content: flex-end;">
+            <button class="btn ghost" id="copy-yaml">Copy</button>
+            <button class="btn ghost" id="download-yaml">Download</button>
+            <button class="btn secondary" id="export-pdf">Export PDF</button>
+            <button class="btn secondary" id="export-canvas">Export Canvas</button>
+            <button class="btn" id="generate-quiz">Generate Quiz YAML</button>
+          </div>
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <button class="btn ghost" id="save-quiz-json">Save Quiz JSON</button>
+          <button class="btn ghost" id="load-quiz-json">Load Quiz JSON</button>
+          <button class="btn ghost" id="import-quiz-yaml">Import Quiz YAML</button>
+          <input type="file" id="load-quiz-json-input" class="hidden" accept=".json,application/json" />
+          <input type="file" id="import-quiz-yaml-input" class="hidden" accept=".yaml,.yml,text/yaml" />
+        </div>
+        <div class="row" style="margin-top: 12px;">
+          <div style="flex: 1 1 320px;">
+            <label>Save path</label>
+            <input type="text" id="save-path" value="out/quiz.yaml" />
+          </div>
+          <div style="flex: 0 0 160px;">
+            <label>PDF count</label>
+            <input type="number" id="pdf-count" min="1" value="1" />
+          </div>
+          <div style="flex: 0 0 auto; align-self: flex-end;">
+            <button class="btn secondary" id="save-yaml">Save File</button>
+          </div>
+        </div>
+        <div class="hint" id="import-status"></div>
+        <div class="hint" id="save-status"></div>
+        <div class="hint" id="save-meta"></div>
+        <div id="yaml-output" class="output"></div>
+      </section>
+
+      </div>
+
+      <div id="question-view" class="view hidden">
+      <section class="panel full" id="question-detail-header">
+        <div class="section-title">
+          <h2>Question Detail</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <span class="muted" id="question-detail-title">Select a question to edit.</span>
+            <button class="btn ghost" id="generate-question">Question YAML</button>
+            <button class="btn ghost" id="back-overview">Back to Overview</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel full" id="question-setup-panel">
+        <div class="section-title">
+          <h2>Question Setup</h2>
+          <span class="muted" id="question-kind-label">YAML question</span>
+        </div>
+        <div class="grid two">
+          <div>
+            <label>Question Name</label>
+            <input type="text" id="question-name" placeholder="Paging Question" />
+          </div>
+          <div>
+            <label>Points</label>
+            <input type="number" id="question-points" placeholder="5" />
+          </div>
+          <div>
+            <label>Topic</label>
+            <input type="text" id="question-topic" placeholder="memory" />
+          </div>
+          <div>
+            <label>Spacing</label>
+            <input type="text" id="question-spacing" placeholder="MEDIUM" />
+          </div>
+          <div>
+            <label>Num Subquestions</label>
+            <input type="number" id="question-num-sub" placeholder="2" />
+          </div>
+          <div>
+            <label>Kind</label>
+            <select id="question-kind">
+              <option value="yaml">YAML Builder</option>
+              <option value="premade">Premade Class</option>
+            </select>
+          </div>
+        </div>
+        <div id="premade-fields" class="grid" style="margin-top: 12px;">
+          <div>
+            <label>Premade Class</label>
+            <select id="premade-class-select"></select>
+            <div class="hint" id="premade-class-desc">Loading available classes…</div>
+          </div>
+          <div>
+            <label>Or type class</label>
+            <input type="text" id="premade-class" placeholder="Paging" />
+          </div>
+          <div>
+            <label>Premade Kwargs (YAML mapping)</label>
+            <textarea id="premade-kwargs" placeholder="spacing: MEDIUM"></textarea>
+          </div>
+          <div style="align-self: end;">
+            <button class="btn ghost" id="preview-premade">Preview Premade</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel full" id="vars-panel">
+        <div class="section-title">
+          <h2>Variables</h2>
+          <button class="btn" id="add-var">Add Variable</button>
+        </div>
+        <p>Create random inputs or fixed values. These become draggable chips.</p>
+        <div class="chips" id="var-chips"></div>
+        <div id="vars"></div>
+
+        <div class="section-title" style="margin-top: 18px;">
+          <h3>Derived Values</h3>
+          <button class="btn secondary" id="add-derived">Add Derived</button>
+        </div>
+        <p class="muted">Build formulas by clicking variable chips or using operators.</p>
+        <div class="chips" id="derived-chips"></div>
+        <div id="derived"></div>
+      </section>
+
+      <section class="panel full equal" id="body-panel">
+        <div class="section-title">
+          <h2>Question Body</h2>
+          <span class="muted">Type text, insert variables, or add answer fields.</span>
+        </div>
+        <div class="toolbar">
+          <button class="btn ghost small" id="insert-var-body">Insert Variable</button>
+          <button class="btn ghost small" id="insert-derived-body">Insert Derived</button>
+          <button class="btn secondary small" id="insert-answer-body">Insert Answer</button>
+        </div>
+        <div class="chips" id="body-var-chips"></div>
+        <div class="chips" id="body-derived-chips"></div>
+        <div id="body-editor" class="editor" contenteditable="true" data-editor="body"></div>
+        <div class="hint">Use “Insert Answer” to open the answer builder.</div>
+      </section>
+
+      <section class="panel full equal" id="expl-panel">
+        <div class="section-title">
+          <h2>Explanation</h2>
+          <span class="muted">Same tools as the question body.</span>
+        </div>
+        <div class="toolbar">
+          <button class="btn ghost small" id="insert-var-expl">Insert Variable</button>
+          <button class="btn ghost small" id="insert-derived-expl">Insert Derived</button>
+          <button class="btn secondary small" id="insert-answer-expl">Insert Answer</button>
+        </div>
+        <div class="chips" id="expl-var-chips"></div>
+        <div class="chips" id="expl-derived-chips"></div>
+        <div id="expl-editor" class="editor" contenteditable="true" data-editor="explanation"></div>
+      </section>
+
+      <section class="panel full" id="validation-panel">
+        <div class="section-title">
+          <h2>Validation</h2>
+          <span class="muted" id="validation-summary">No warnings yet.</span>
+        </div>
+        <ul id="validation-list" class="validation-list"></ul>
+      </section>
+
+      <section class="panel full" id="preview-panel">
+        <div class="section-title">
+          <h2>Live Preview</h2>
+          <div class="row" style="justify-content: flex-end;">
+            <label class="toggle">
+              Seed
+              <input type="number" id="question-preview-seed" placeholder="42" style="width: 90px;" />
+            </label>
+            <label class="toggle">
+              <input type="checkbox" id="preview-show-answers" />
+              Show answers
+            </label>
+            <button class="btn ghost" id="refresh-preview">Refresh</button>
+          </div>
+        </div>
+        <div id="preview-context" class="preview-context"></div>
+        <div class="preview-box">
+          <div class="preview-section">
+            <h3>Question</h3>
+            <div id="preview-body"></div>
+          </div>
+          <div class="preview-section">
+            <h3>Explanation</h3>
+            <div id="preview-expl"></div>
+          </div>
+        </div>
+      </section>
+      </div>
+    </main>
+
+    <div id="add-question-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Add Question</h3>
+          <button class="btn ghost small" id="add-question-cancel">Cancel</button>
+        </div>
+        <p class="muted">Choose what kind of question to add to the quiz.</p>
+        <div class="grid two" style="margin-top: 12px;">
+          <div class="node-card">
+            <h4>YAML Builder</h4>
+            <p class="muted">Build a new question with variables, derived values, and answers.</p>
+            <button class="btn" id="add-question-yaml">Add YAML Question</button>
+          </div>
+          <div class="node-card">
+            <h4>Premade Class</h4>
+            <p class="muted">Use an existing Python question class.</p>
+            <div style="margin-top: 10px;">
+              <label>Premade Class</label>
+              <select id="add-premade-select"></select>
+            </div>
+            <button class="btn secondary" id="add-question-premade" style="margin-top: 10px;">Add Premade</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="answer-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Insert Answer</h3>
+          <button class="btn ghost small" id="answer-cancel">Cancel</button>
+        </div>
+        <p class="muted">Choose where the answer value comes from and how it should be formatted.</p>
+        <div class="grid two">
+          <div>
+            <label>Type</label>
+            <select id="answer-type">
+              <option value="int">int</option>
+              <option value="float">float</option>
+              <option value="string">string</option>
+              <option value="binary">binary</option>
+              <option value="hex">hex</option>
+              <option value="decimal">decimal</option>
+              <option value="list">list</option>
+              <option value="vector">vector</option>
+              <option value="matrix">matrix</option>
+              <option value="open_ended">open_ended</option>
+              <option value="dropdown">dropdown</option>
+              <option value="multiple_choice">multiple_choice</option>
+            </select>
+          </div>
+          <div>
+            <label>Label (optional)</label>
+            <input type="text" id="answer-label" placeholder="Physical Address" />
+          </div>
+          <div>
+            <label>Value Source</label>
+            <select id="answer-source">
+              <option value="var">Variable</option>
+              <option value="derived">Derived</option>
+              <option value="expr">Expression</option>
+            </select>
+          </div>
+          <div>
+            <label>Value Name</label>
+            <select id="answer-source-name"></select>
+          </div>
+          <div id="answer-expr-row" class="hidden">
+            <label>Expression</label>
+            <input type="text" id="answer-expr" class="expr-input" placeholder="pfn * 2" />
+          </div>
+          <div id="answer-length-row">
+            <label>Length (optional)</label>
+            <input type="text" id="answer-length" class="expr-input" placeholder="4" />
+          </div>
+          <div id="answer-strict-row">
+            <label>Strict</label>
+            <select id="answer-strict">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+          <div id="answer-prefix-row">
+            <label>Require Prefix</label>
+            <select id="answer-require-prefix">
+              <option value="false">false</option>
+              <option value="true">true</option>
+            </select>
+          </div>
+        </div>
+        <div id="answer-baffles-row" class="hidden" style="margin-top: 12px;">
+          <label>Baffles (one per line)</label>
+          <textarea id="answer-baffles" placeholder="Incorrect choices"></textarea>
+        </div>
+        <div class="chips" id="answer-var-chips"></div>
+        <div class="chips" id="answer-derived-chips"></div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="answer-clear">Clear</button>
+          <button class="btn secondary" id="answer-insert">Insert Answer</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const state = {
+        version: 1,
+        context: { vars: [], derived: [] },
+      };
+
+      const quizState = {
+        meta: {
+          name: "",
+          description: "",
+          practice: false,
+          sort_order: [],
+          custom_modules: [],
+        },
+        questions: [],
+        activeQuestionId: null,
+        lastExport: "",
+        lastExportKind: "",
+        previewSeed: "",
+        isDirty: false,
+        lastSavedAt: null,
+        dirtyFlags: new Set(),
+      };
+
+      let questionCounter = 1;
+
+      let formSpec = {};
+      let premadeList = [];
+      let activeEditor = null;
+      let activeInput = null;
+      let activeExprEditor = null;
+      let currentAnswerTarget = null;
+      let previewTimer = null;
+      let quizPreviewTimer = null;
+      let quizPreviewToken = 0;
+      let currentView = "overview";
+      let suppressDirty = false;
+
+      const el = (id) => document.getElementById(id);
+
+      const inputQuizMeta = (mark = false) => {
+        quizState.meta.name = el("quiz-name").value.trim();
+        quizState.meta.description = el("quiz-description").value.trim();
+        quizState.meta.practice = el("quiz-practice").value === "true";
+        quizState.meta.sort_order = el("quiz-sort-order")
+          .value.split(",")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        quizState.meta.custom_modules = el("quiz-custom-modules")
+          .value.split("\n")
+          .map((item) => item.trim())
+          .filter(Boolean);
+        if (mark) {
+          markDirty("quiz meta");
+        }
+      };
+
+      const normalizeText = (text) => (text || "").replace(/\u00a0/g, " ");
+
+      document.querySelectorAll(
+        "#quiz-name, #quiz-description, #quiz-practice, #quiz-sort-order, #quiz-custom-modules"
+      ).forEach((input) => input.addEventListener("input", () => inputQuizMeta(true)));
+
+      const VAR_TYPES = [
+        { value: "int", label: "Random integer", fields: ["min", "max"] },
+        { value: "float", label: "Random decimal", fields: ["min", "max"] },
+        { value: "choice", label: "Pick from list", fields: ["options"] },
+        { value: "weighted_choice", label: "Pick from list (weighted)", fields: ["options", "weights"] },
+        { value: "bool", label: "Yes / No", fields: [] },
+        { value: "literal", label: "Fixed value", fields: ["value"] },
+      ];
+
+      const VALID_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+      const BUILTIN_NAMES = new Set([
+        "min", "max", "abs", "round", "int", "float", "str", "len",
+        "math", "ceil", "floor", "log2", "randint", "choice",
+        "weighted_choice", "uniform", "sample", "bin", "hex", "var",
+        "and", "or", "not", "True", "False", "None",
+      ]);
+
+      const defaultVar = () => ({ name: "", type: "int", min: "", max: "", options: [], weights: [], value: "" });
+      const defaultDerived = () => ({ name: "", expr: "" });
+
+      const formatExprName = (name) => {
+        const cleaned = (name || "").trim();
+        if (!cleaned) return "";
+        if (VALID_NAME_RE.test(cleaned)) return cleaned;
+        return `var(${JSON.stringify(cleaned)})`;
+      };
+
+      const wrapExpr = (expr) => {
+        const cleaned = (expr || "").trim();
+        if (!cleaned) return "";
+        if (cleaned.startsWith("{{") && cleaned.endsWith("}}")) return cleaned;
+        return `{{ ${cleaned} }}`;
+      };
+
+      const updateSaveMeta = () => {
+        const metaEl = el("save-meta");
+        if (!metaEl) return;
+        const status = quizState.isDirty ? "Unsaved changes" : "Saved";
+        const detail = quizState.isDirty && quizState.dirtyFlags.size
+          ? ` (${Array.from(quizState.dirtyFlags).join(", ")})`
+          : "";
+        const savedAt = quizState.lastSavedAt
+          ? `Last saved: ${quizState.lastSavedAt.toLocaleString()}`
+          : "Not saved yet";
+        metaEl.textContent = `${status}${detail} • ${savedAt}`;
+      };
+
+      const markDirty = (kind = null) => {
+        if (suppressDirty) return;
+        if (kind) {
+          quizState.dirtyFlags.add(kind);
+        }
+        if (!quizState.isDirty) {
+          quizState.isDirty = true;
+          updateSaveMeta();
+        }
+      };
+
+      const markSaved = () => {
+        quizState.isDirty = false;
+        quizState.lastSavedAt = new Date();
+        quizState.dirtyFlags.clear();
+        updateSaveMeta();
+      };
+
+      const resetDirtyState = () => {
+        quizState.isDirty = false;
+        quizState.lastSavedAt = null;
+        quizState.dirtyFlags.clear();
+        updateSaveMeta();
+      };
+
+      const syncPreviewSeedInputs = () => {
+        const value = quizState.previewSeed || "";
+        const quizSeedInput = el("quiz-preview-seed");
+        const questionSeedInput = el("question-preview-seed");
+        if (quizSeedInput && quizSeedInput.value !== value) {
+          quizSeedInput.value = value;
+        }
+        if (questionSeedInput && questionSeedInput.value !== value) {
+          questionSeedInput.value = value;
+        }
+      };
+
+      const setPreviewSeed = (value) => {
+        quizState.previewSeed = value;
+        syncPreviewSeedInputs();
+      };
+
+      const getPreviewSeedValue = () => {
+        if (quizState.previewSeed === "" || quizState.previewSeed === null || quizState.previewSeed === undefined) {
+          return null;
+        }
+        const value = Number(quizState.previewSeed);
+        return Number.isNaN(value) ? null : value;
+      };
+
+      const newQuestion = (kind = "yaml") => ({
+        id: `q_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        kind,
+        name: `Question ${questionCounter++}`,
+        points: "",
+        topic: "",
+        spacing: "",
+        num_subquestions: "",
+        yamlSpec: null,
+        premade: { class: "", kwargsText: "" },
+      });
+
+      const getActiveQuestion = () =>
+        quizState.questions.find((q) => q.id === quizState.activeQuestionId) || null;
+
+      const questionMetaFrom = (question) => ({
+        name: question.name,
+        topic: question.topic,
+        points: question.points,
+        spacing: question.spacing,
+      });
+
+      const resetBuilder = () => {
+        state.context.vars = [];
+        state.context.derived = [];
+        el("body-editor").innerHTML = "";
+        el("expl-editor").innerHTML = "";
+        render();
+      };
+
+      const resolvePremadeValue = (item) => {
+        if (!item) return "";
+        if (item.class_name && item.registered_name && item.class_name.toLowerCase() === item.registered_name) {
+          return item.class_name;
+        }
+        return item.registered_name || item.class_name || "";
+      };
+
+      const updatePremadeDescription = (item) => {
+        const desc = el("premade-class-desc");
+        if (!desc) return;
+        if (!item) {
+          desc.textContent = "Pick a premade class to see details.";
+          return;
+        }
+        const label = item.doc ? `${item.class_name}: ${item.doc}` : `${item.class_name} (${item.module})`;
+        desc.textContent = label;
+      };
+
+      const renderPremadeSelect = () => {
+        const select = el("premade-class-select");
+        if (!select) return;
+        select.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = premadeList.length ? `Select a class (${premadeList.length} available)` : "No premade classes found";
+        select.appendChild(placeholder);
+        premadeList.forEach((item) => {
+          const opt = document.createElement("option");
+          opt.value = resolvePremadeValue(item);
+          opt.textContent = `${item.class_name} (${item.registered_name})`;
+          select.appendChild(opt);
+        });
+      };
+
+      const renderAddPremadeSelect = () => {
+        const select = el("add-premade-select");
+        if (!select) return;
+        select.innerHTML = "";
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = premadeList.length ? `Select a class (${premadeList.length} available)` : "No premade classes found";
+        select.appendChild(placeholder);
+        premadeList.forEach((item) => {
+          const opt = document.createElement("option");
+          opt.value = resolvePremadeValue(item);
+          opt.textContent = `${item.class_name} (${item.registered_name})`;
+          select.appendChild(opt);
+        });
+      };
+
+      const syncPremadeSelect = () => {
+        const select = el("premade-class-select");
+        if (!select) return;
+        const current = (el("premade-class").value || "").trim();
+        if (!current) {
+          select.value = "";
+          updatePremadeDescription(null);
+          return;
+        }
+        const match = premadeList.find((item) => {
+          const value = resolvePremadeValue(item);
+          return value.toLowerCase() === current.toLowerCase() || item.class_name.toLowerCase() === current.toLowerCase();
+        });
+        if (match) {
+          select.value = resolvePremadeValue(match);
+          updatePremadeDescription(match);
+        } else {
+          select.value = "";
+          updatePremadeDescription(null);
+        }
+      };
+
+      const loadPremadeList = async () => {
+        try {
+          const res = await fetch("/premade_list");
+          const data = await res.json();
+          premadeList = data.items || [];
+        } catch (err) {
+          premadeList = [];
+        }
+        renderPremadeSelect();
+        renderAddPremadeSelect();
+        syncPremadeSelect();
+      };
+
+      const templateToTokens = (text, container) => {
+        const pattern = /\{\{(.*?)\}\}/g;
+        let lastIndex = 0;
+        let match;
+        while ((match = pattern.exec(text)) !== null) {
+          const before = text.slice(lastIndex, match.index);
+          if (before) container.appendChild(document.createTextNode(before));
+          const expr = match[1].trim();
+          let tokenName = null;
+          const varFunc = expr.match(/^var\((['"])(.*)\1\)$/);
+          if (varFunc) {
+            tokenName = varFunc[2];
+          } else if (VALID_NAME_RE.test(expr)) {
+            tokenName = expr;
+          }
+          if (tokenName) {
+            const isDerived = state.context.derived.some((entry) => entry.name === tokenName);
+            container.appendChild(createTokenSpan(isDerived ? "derived" : "var", tokenName));
+          } else {
+            container.appendChild(document.createTextNode(`{{ ${expr} }}`));
+          }
+          lastIndex = match.index + match[0].length;
+        }
+        const rest = text.slice(lastIndex);
+        if (rest) container.appendChild(document.createTextNode(rest));
+      };
+
+      const appendInlineItem = (item, container) => {
+        if (typeof item === "string") {
+          templateToTokens(item, container);
+          return;
+        }
+        if (typeof item === "number" || typeof item === "boolean") {
+          container.appendChild(document.createTextNode(String(item)));
+          return;
+        }
+        if (item && typeof item === "object") {
+          if (item.answer) {
+            const spec = item.answer;
+            const token = createTokenSpan("answer", spec.label || spec.type || "answer", {
+              label: spec.label || "",
+              type: spec.type || "string",
+              value: typeof spec.value === "string" ? spec.value : JSON.stringify(spec.value ?? ""),
+              length: spec.length ?? "",
+              strict: spec.strict ?? false,
+              require_prefix: spec.require_prefix ?? false,
+              baffles: Array.isArray(spec.baffles) ? spec.baffles.join("\n") : "",
+            });
+            container.appendChild(token);
+            return;
+          }
+          if (item.text) {
+            templateToTokens(String(item.text), container);
+            return;
+          }
+          if (item.equation) {
+            container.appendChild(document.createTextNode(`$${item.equation}$`));
+            return;
+          }
+        }
+        container.appendChild(document.createTextNode(String(item)));
+      };
+
+      const renderSectionFromSpec = (section, editor) => {
+        editor.innerHTML = "";
+        if (!section) return;
+        const nodes = Array.isArray(section) ? section : (section.children || section.nodes || []);
+        nodes.forEach((node) => {
+          if (node && typeof node === "object" && node.paragraph) {
+            const lines = node.paragraph.lines || [];
+            const block = document.createElement("div");
+            lines.forEach((line) => appendInlineItem(line, block));
+            editor.appendChild(block);
+            return;
+          }
+          if (typeof node === "string") {
+            const block = document.createElement("div");
+            appendInlineItem(node, block);
+            editor.appendChild(block);
+            return;
+          }
+        });
+      };
+
+      const loadSpecIntoBuilder = (spec, question) => {
+        resetBuilder();
+        if (!spec) {
+          schedulePreview();
+          return;
+        }
+        const context = spec.context || {};
+        const vars = context.vars || {};
+        const derived = context.derived || {};
+        state.context.vars = Object.entries(vars).map(([name, def]) => ({
+          name,
+          type: def?.type || "int",
+          min: def?.min ?? "",
+          max: def?.max ?? "",
+          options: def?.options || [],
+          weights: def?.weights || [],
+          value: def?.value ?? "",
+        }));
+        state.context.derived = Object.entries(derived).map(([name, expr]) => ({
+          name,
+          expr: expr ?? "",
+        }));
+        render();
+        renderSectionFromSpec(spec.body || [], el("body-editor"));
+        renderSectionFromSpec(spec.explanation || [], el("expl-editor"));
+        schedulePreview();
+      };
+
+      const updateBuilderVisibility = () => {
+        const question = getActiveQuestion();
+        const isYaml = question && question.kind === "yaml";
+        ["vars-panel", "body-panel", "expl-panel"].forEach((id) => {
+          el(id).classList.toggle("hidden", !isYaml);
+        });
+        el("premade-fields").classList.toggle("hidden", !question || isYaml);
+        if (!question) {
+          el("question-kind-label").textContent = "Select a question to edit";
+        } else {
+          el("question-kind-label").textContent = isYaml ? "YAML question" : "Premade question";
+        }
+      };
+
+      const updateQuestionDetailTitle = () => {
+        const question = getActiveQuestion();
+        const title = el("question-detail-title");
+        if (!title) return;
+        title.textContent = question ? (question.name || "Untitled question") : "Select a question to edit.";
+      };
+
+      const showOverview = () => {
+        el("overview-view").classList.remove("hidden");
+        el("question-view").classList.add("hidden");
+        currentView = "overview";
+        commitActiveQuestion();
+        updateQuestionDetailTitle();
+        scheduleQuizPreview();
+      };
+
+      const showQuestionView = () => {
+        if (!getActiveQuestion()) {
+          showOverview();
+          return;
+        }
+        el("overview-view").classList.add("hidden");
+        el("question-view").classList.remove("hidden");
+        currentView = "question";
+        updateQuestionDetailTitle();
+        schedulePreview();
+      };
+
+      const renderQuestionList = () => {
+        const list = el("question-list");
+        list.innerHTML = "";
+        if (quizState.questions.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "node-card";
+          empty.innerHTML = `
+            <h4>No questions yet</h4>
+            <p class="muted">Use “Add Question” to create your first question.</p>
+          `;
+          list.appendChild(empty);
+          return;
+        }
+        quizState.questions.forEach((question) => {
+          const card = document.createElement("div");
+          card.className = `question-card${question.id === quizState.activeQuestionId ? " active" : ""}`;
+          card.dataset.id = question.id;
+          card.addEventListener("click", () => openQuestionDetail(question.id));
+          card.addEventListener("dragover", (e) => {
+            e.preventDefault();
+          });
+          card.addEventListener("drop", (e) => {
+            e.preventDefault();
+            const draggedId = e.dataTransfer.getData("text/plain");
+            if (!draggedId || draggedId === question.id) return;
+            const fromIdx = quizState.questions.findIndex((q) => q.id === draggedId);
+            const toIdx = quizState.questions.findIndex((q) => q.id === question.id);
+            if (fromIdx === -1 || toIdx === -1) return;
+            const [moved] = quizState.questions.splice(fromIdx, 1);
+            quizState.questions.splice(toIdx, 0, moved);
+            markDirty("ordering");
+            renderQuestionList();
+            scheduleQuizPreview();
+          });
+          const title = document.createElement("div");
+          title.className = "question-title";
+          title.textContent = question.name || "Untitled question";
+          const meta = document.createElement("div");
+          meta.className = "question-meta";
+          const kindBadge = document.createElement("span");
+          kindBadge.className = "badge";
+          kindBadge.textContent = question.kind === "yaml" ? "YAML" : "Premade";
+          const pointsBadge = document.createElement("span");
+          pointsBadge.className = "badge";
+          pointsBadge.textContent = `${question.points || "?"} pts`;
+          meta.appendChild(kindBadge);
+          meta.appendChild(pointsBadge);
+          if (question.topic) {
+            const topicBadge = document.createElement("span");
+            topicBadge.className = "badge";
+            topicBadge.textContent = question.topic;
+            meta.appendChild(topicBadge);
+          }
+          if (question.kind === "premade") {
+            const classBadge = document.createElement("span");
+            classBadge.className = "badge";
+            classBadge.textContent = question.premade.class ? `Class: ${question.premade.class}` : "Class: (not set)";
+            meta.appendChild(classBadge);
+          }
+          const left = document.createElement("div");
+          left.appendChild(title);
+          left.appendChild(meta);
+          const actions = document.createElement("div");
+          actions.className = "question-actions";
+          const handle = document.createElement("div");
+          handle.className = "drag-handle";
+          handle.textContent = "Move";
+          handle.setAttribute("draggable", "true");
+          handle.addEventListener("dragstart", (e) => {
+            card.classList.add("dragging");
+            e.dataTransfer.setData("text/plain", question.id);
+          });
+          handle.addEventListener("dragend", () => {
+            card.classList.remove("dragging");
+          });
+          handle.addEventListener("click", (e) => {
+            e.stopPropagation();
+          });
+          const selectBtn = document.createElement("button");
+          selectBtn.className = "btn ghost small";
+          selectBtn.textContent = "Open";
+          selectBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openQuestionDetail(question.id);
+          });
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn ghost small";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            deleteQuestion(question.id);
+          });
+          actions.appendChild(handle);
+          actions.appendChild(selectBtn);
+          if (question.kind === "premade") {
+            const setClassBtn = document.createElement("button");
+            setClassBtn.className = "btn ghost small";
+            setClassBtn.textContent = "Set Class";
+            setClassBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              openQuestionDetail(question.id);
+              focusQuestionSetup("premade-class");
+            });
+            actions.appendChild(setClassBtn);
+          }
+          actions.appendChild(deleteBtn);
+          card.appendChild(left);
+          card.appendChild(actions);
+          list.appendChild(card);
+        });
+      };
+
+      const setActiveQuestion = (id) => {
+        const current = getActiveQuestion();
+        if (current && current.kind === "yaml") {
+          current.yamlSpec = buildSpec(questionMetaFrom(current));
+        }
+        quizState.activeQuestionId = id;
+        const next = getActiveQuestion();
+        if (!next) {
+          clearQuestionFields();
+          resetBuilder();
+          updateBuilderVisibility();
+          renderQuestionList();
+          schedulePreview();
+          updateQuestionDetailTitle();
+          showOverview();
+          return;
+        }
+        applyQuestionFields(next);
+        if (next.kind === "yaml") {
+          loadSpecIntoBuilder(next.yamlSpec, next);
+        } else {
+          resetBuilder();
+        }
+        updateBuilderVisibility();
+        renderQuestionList();
+        schedulePreview();
+        updateQuestionDetailTitle();
+      };
+
+      const openQuestionDetail = (id) => {
+        setActiveQuestion(id);
+        showQuestionView();
+      };
+
+      const focusQuestionSetup = (fieldId) => {
+        showQuestionView();
+        const panel = el("question-setup-panel");
+        if (panel) {
+          panel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+        if (fieldId) {
+          setTimeout(() => {
+            const field = el(fieldId);
+            if (field) field.focus();
+          }, 200);
+        }
+      };
+
+      const addQuestion = (kind) => {
+        const question = newQuestion(kind);
+        quizState.questions.push(question);
+        setActiveQuestion(question.id);
+        markDirty("questions");
+        scheduleQuizPreview();
+      };
+
+      const openAddQuestionModal = () => {
+        el("add-question-modal").classList.remove("hidden");
+      };
+
+      const closeAddQuestionModal = () => {
+        el("add-question-modal").classList.add("hidden");
+      };
+
+      const addYamlFromModal = () => {
+        addQuestion("yaml");
+        closeAddQuestionModal();
+        showQuestionView();
+      };
+
+      const addPremadeFromModal = () => {
+        const question = newQuestion("premade");
+        const selected = el("add-premade-select").value.trim();
+        if (selected) {
+          question.premade.class = selected;
+        }
+        quizState.questions.push(question);
+        setActiveQuestion(question.id);
+        closeAddQuestionModal();
+        showQuestionView();
+      };
+
+      const deleteQuestion = (id) => {
+        const index = quizState.questions.findIndex((q) => q.id === id);
+        if (index === -1) return;
+        quizState.questions.splice(index, 1);
+        markDirty("questions");
+        if (quizState.activeQuestionId === id) {
+          const next = quizState.questions[Math.max(0, index - 1)];
+          quizState.activeQuestionId = next?.id || null;
+        }
+        const active = getActiveQuestion();
+        if (active) {
+          applyQuestionFields(active);
+          updateBuilderVisibility();
+        }
+        renderQuestionList();
+        schedulePreview();
+        scheduleQuizPreview();
+      };
+
+      const applyQuestionFields = (question) => {
+        el("question-name").value = question.name || "";
+        el("question-points").value = question.points || "";
+        el("question-topic").value = question.topic || "";
+        el("question-spacing").value = question.spacing || "";
+        el("question-num-sub").value = question.num_subquestions || "";
+        el("question-kind").value = question.kind || "yaml";
+        el("premade-class").value = question.premade.class || "";
+        el("premade-kwargs").value = question.premade.kwargsText || "";
+        syncPremadeSelect();
+      };
+
+      const clearQuestionFields = () => {
+        el("question-name").value = "";
+        el("question-points").value = "";
+        el("question-topic").value = "";
+        el("question-spacing").value = "";
+        el("question-num-sub").value = "";
+        el("question-kind").value = "yaml";
+        el("premade-class").value = "";
+        el("premade-kwargs").value = "";
+        syncPremadeSelect();
+      };
+
+      const applyQuizMetaToInputs = () => {
+        el("quiz-name").value = quizState.meta.name || "";
+        el("quiz-description").value = quizState.meta.description || "";
+        el("quiz-practice").value = quizState.meta.practice ? "true" : "false";
+        el("quiz-sort-order").value = (quizState.meta.sort_order || []).join(", ");
+        el("quiz-custom-modules").value = (quizState.meta.custom_modules || []).join("\n");
+      };
+
+      const commitActiveQuestion = () => {
+        const question = getActiveQuestion();
+        if (!question) return;
+        updateQuestionFromInputs(false);
+        if (question.kind === "yaml") {
+          question.yamlSpec = buildSpec(questionMetaFrom(question));
+        }
+      };
+
+      const insertIntoInput = (input, text) => {
+        if (!input) return;
+        const start = input.selectionStart ?? input.value.length;
+        const end = input.selectionEnd ?? input.value.length;
+        const before = input.value.slice(0, start);
+        const after = input.value.slice(end);
+        input.value = before + text + after;
+        const pos = start + text.length;
+        input.setSelectionRange(pos, pos);
+        input.dispatchEvent(new Event("input"));
+      };
+
+      const createTokenSpan = (kind, name, extra = {}) => {
+        const span = document.createElement("span");
+        span.className = `token ${kind}`;
+        span.contentEditable = "false";
+        span.dataset.kind = kind;
+        span.dataset.name = name;
+        Object.entries(extra).forEach(([key, value]) => {
+          if (value !== "" && value !== null && value !== undefined) {
+            span.dataset[key] = String(value);
+          }
+        });
+        if (kind === "answer") {
+          span.textContent = `Answer: ${extra.label || name || ""}`.trim();
+        } else {
+          span.textContent = name;
+        }
+        return span;
+      };
+
+      const insertTokenIntoEditor = (editor, token) => {
+        if (!editor) return;
+        editor.focus();
+        const selection = window.getSelection();
+        if (!selection) return;
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(token);
+        range.setStartAfter(token);
+        range.setEndAfter(token);
+        selection.removeAllRanges();
+        selection.addRange(range);
+      };
+
+      const insertTokenIntoExprEditor = (editor, token) => {
+        if (!editor) return;
+        editor.focus();
+        const selection = window.getSelection();
+        if (!selection) return;
+        const range = selection.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(token);
+        range.setStartAfter(token);
+        range.setEndAfter(token);
+        selection.removeAllRanges();
+        selection.addRange(range);
+        editor.dispatchEvent(new Event("input"));
+      };
+
+      const insertVariable = (name, options = {}) => {
+        markDirty("builder content");
+        const exprName = formatExprName(name);
+        const targetEditor = options.targetEditor || null;
+        const preferInput = options.preferInput !== false;
+        if (targetEditor) {
+          insertTokenIntoEditor(targetEditor, createTokenSpan("var", name));
+          schedulePreview();
+          return;
+        }
+        if (activeExprEditor) {
+          insertTokenIntoExprEditor(activeExprEditor, createTokenSpan("var", name));
+          schedulePreview();
+          return;
+        }
+        if (preferInput && activeInput && activeInput.classList.contains("expr-input")) {
+          insertIntoInput(activeInput, exprName);
+          schedulePreview();
+          return;
+        }
+        if (activeEditor) {
+          insertTokenIntoEditor(activeEditor, createTokenSpan("var", name));
+          schedulePreview();
+          return;
+        }
+        if (activeInput) {
+          insertIntoInput(activeInput, `{{ ${exprName} }}`);
+          schedulePreview();
+        }
+      };
+
+      const insertDerived = (name, options = {}) => {
+        markDirty("builder content");
+        const exprName = formatExprName(name);
+        const targetEditor = options.targetEditor || null;
+        const preferInput = options.preferInput !== false;
+        if (targetEditor) {
+          insertTokenIntoEditor(targetEditor, createTokenSpan("derived", name));
+          schedulePreview();
+          return;
+        }
+        if (activeExprEditor) {
+          insertTokenIntoExprEditor(activeExprEditor, createTokenSpan("derived", name));
+          schedulePreview();
+          return;
+        }
+        if (preferInput && activeInput && activeInput.classList.contains("expr-input")) {
+          insertIntoInput(activeInput, exprName);
+          schedulePreview();
+          return;
+        }
+        if (activeEditor) {
+          insertTokenIntoEditor(activeEditor, createTokenSpan("derived", name));
+          schedulePreview();
+          return;
+        }
+        if (activeInput) {
+          insertIntoInput(activeInput, `{{ ${exprName} }}`);
+          schedulePreview();
+        }
+      };
+
+      const pickName = (entries, label) => {
+        const names = entries.map((entry) => entry.name).filter(Boolean);
+        if (names.length === 0) {
+          alert(`No ${label} available yet.`);
+          return null;
+        }
+        if (names.length === 1) {
+          return names[0];
+        }
+        const choice = window.prompt(`Choose ${label} (type exact name):\n${names.join(", ")}`, names[0]);
+        if (!choice) return null;
+        if (!names.includes(choice)) {
+          alert(`"${choice}" not found. Use one of: ${names.join(", ")}`);
+          return null;
+        }
+        return choice;
+      };
+
+      const openAnswerModal = (targetEditor, preset = {}) => {
+        currentAnswerTarget = targetEditor;
+        el("answer-modal").classList.remove("hidden");
+        if (preset.label !== undefined) {
+          el("answer-label").value = preset.label;
+        }
+        if (preset.type) {
+          el("answer-type").value = preset.type;
+        }
+        if (preset.source) {
+          el("answer-source").value = preset.source;
+        }
+        updateAnswerModalOptions();
+        if (preset.name) {
+          el("answer-source-name").value = preset.name;
+        }
+        updateAnswerModalVisibility();
+        renderAnswerChips();
+      };
+
+      const closeAnswerModal = () => {
+        el("answer-modal").classList.add("hidden");
+        currentAnswerTarget = null;
+      };
+
+      const clearAnswerModal = () => {
+        el("answer-label").value = "";
+        el("answer-type").value = "int";
+        el("answer-source").value = "var";
+        el("answer-expr").value = "";
+        el("answer-length").value = "";
+        el("answer-strict").value = "false";
+        el("answer-require-prefix").value = "false";
+        el("answer-baffles").value = "";
+        updateAnswerModalOptions();
+        updateAnswerModalVisibility();
+      };
+
+      const updateAnswerModalOptions = () => {
+        const source = el("answer-source").value;
+        const nameSelect = el("answer-source-name");
+        nameSelect.innerHTML = "";
+        let entries = [];
+        if (source === "var") {
+          entries = state.context.vars;
+        } else if (source === "derived") {
+          entries = state.context.derived;
+        }
+        const names = entries.map((entry) => entry.name).filter(Boolean);
+        if (names.length === 0) {
+          const opt = document.createElement("option");
+          opt.value = "";
+          opt.textContent = "No values yet";
+          nameSelect.appendChild(opt);
+        } else {
+          names.forEach((name) => {
+            const opt = document.createElement("option");
+            opt.value = name;
+            opt.textContent = name;
+            nameSelect.appendChild(opt);
+          });
+        }
+      };
+
+      const updateAnswerModalVisibility = () => {
+        const type = el("answer-type").value;
+        const source = el("answer-source").value;
+        const isBinary = type === "binary";
+        const isHex = type === "hex";
+        const isDecimal = type === "decimal";
+        const isStrictCapable = isBinary || isHex || isDecimal;
+        const isChoice = type === "dropdown" || type === "multiple_choice";
+
+        el("answer-length-row").classList.toggle("hidden", !(isBinary || isHex || isDecimal));
+        el("answer-strict-row").classList.toggle("hidden", !isStrictCapable);
+        el("answer-prefix-row").classList.toggle("hidden", !(isBinary || isHex));
+        el("answer-baffles-row").classList.toggle("hidden", !isChoice);
+
+        el("answer-expr-row").classList.toggle("hidden", source !== "expr");
+        el("answer-source-name").parentElement.classList.toggle("hidden", source === "expr");
+      };
+
+      const insertAnswerFromModal = () => {
+        const label = el("answer-label").value.trim();
+        const type = el("answer-type").value;
+        const source = el("answer-source").value;
+        const name = el("answer-source-name").value;
+        const expr = el("answer-expr").value.trim();
+        const length = el("answer-length").value.trim();
+        const strict = el("answer-strict").value === "true";
+        const requirePrefix = el("answer-require-prefix").value === "true";
+        const bafflesRaw = el("answer-baffles").value.trim();
+
+        let valueExpr = "";
+        if (source === "expr") {
+          valueExpr = wrapExpr(expr);
+        } else {
+          valueExpr = wrapExpr(formatExprName(name));
+        }
+
+        if (!valueExpr) {
+          alert("Choose a value source or enter an expression.");
+          return;
+        }
+
+        const token = createTokenSpan("answer", label || type, {
+          label,
+          type,
+          value: valueExpr,
+          length,
+          strict,
+          require_prefix: requirePrefix,
+          baffles: bafflesRaw,
+        });
+        insertTokenIntoEditor(currentAnswerTarget || activeEditor, token);
+        closeAnswerModal();
+        markDirty("builder content");
+        schedulePreview();
+      };
+
+      const renderChips = (containerId, entries, kind, onClick) => {
+        const container = el(containerId);
+        if (!container) return;
+        container.innerHTML = "";
+        entries
+          .filter((entry) => entry.name)
+          .forEach((entry) => {
+            const chip = document.createElement("span");
+            chip.className = kind === "derived" ? "chip derived" : "chip";
+            chip.textContent = entry.name;
+            chip.draggable = true;
+            chip.addEventListener("click", () => {
+              if (onClick) {
+                onClick(entry.name);
+              } else if (kind === "derived") {
+                insertDerived(entry.name);
+              } else {
+                insertVariable(entry.name);
+              }
+            });
+            chip.addEventListener("dragstart", (e) => {
+              e.dataTransfer.setData("application/x-quiz-token", JSON.stringify({ kind, name: entry.name }));
+              e.dataTransfer.setData("text/plain", entry.name);
+            });
+            container.appendChild(chip);
+          });
+      };
+
+      const renderVarChips = () => {
+        renderChips("var-chips", state.context.vars, "var");
+        renderChips("body-var-chips", state.context.vars, "var", (name) => {
+          insertVariable(name, { targetEditor: el("body-editor"), preferInput: false });
+        });
+        renderChips("expl-var-chips", state.context.vars, "var", (name) => {
+          insertVariable(name, { targetEditor: el("expl-editor"), preferInput: false });
+        });
+      };
+
+      const renderDerivedChips = () => {
+        renderChips("derived-chips", state.context.derived, "derived");
+        renderChips("body-derived-chips", state.context.derived, "derived", (name) => {
+          insertDerived(name, { targetEditor: el("body-editor"), preferInput: false });
+        });
+        renderChips("expl-derived-chips", state.context.derived, "derived", (name) => {
+          insertDerived(name, { targetEditor: el("expl-editor"), preferInput: false });
+        });
+      };
+
+      const renderAnswerChips = () => {
+        renderChips("answer-var-chips", state.context.vars, "var", (name) => {
+          el("answer-source").value = "var";
+          updateAnswerModalOptions();
+          el("answer-source-name").value = name;
+          updateAnswerModalVisibility();
+        });
+        renderChips("answer-derived-chips", state.context.derived, "derived", (name) => {
+          el("answer-source").value = "derived";
+          updateAnswerModalOptions();
+          el("answer-source-name").value = name;
+          updateAnswerModalVisibility();
+        });
+      };
+
+      const renderVarRow = (container, entry, index, list) => {
+        const row = document.createElement("div");
+        row.className = "node-card";
+
+        const typeOptions = VAR_TYPES.map(
+          (t) => `<option value="${t.value}">${t.label}</option>`
+        ).join("");
+
+        row.innerHTML = `
+          <div class="row">
+            <div>
+              <label>Name</label>
+              <input type="text" value="${entry.name || ""}" />
+            </div>
+            <div>
+              <label>Type</label>
+              <select>${typeOptions}</select>
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <button class="btn ghost">Remove</button>
+            </div>
+          </div>
+          <div class="grid two" style="margin-top:12px;">
+            <div class="field-min">
+              <label>Minimum</label>
+              <input type="text" value="${entry.min || ""}" class="expr-input" />
+            </div>
+            <div class="field-max">
+              <label>Maximum</label>
+              <input type="text" value="${entry.max || ""}" class="expr-input" />
+            </div>
+            <div class="field-options">
+              <label>Options (one per line)</label>
+              <textarea>${(entry.options || []).join("\n")}</textarea>
+            </div>
+            <div class="field-weights">
+              <label>Weights (same order)</label>
+              <textarea>${(entry.weights || []).join("\n")}</textarea>
+            </div>
+            <div class="field-value">
+              <label>Fixed value</label>
+              <input type="text" value="${entry.value || ""}" class="expr-input" />
+            </div>
+          </div>
+        `;
+
+        const nameInput = row.querySelectorAll("input")[0];
+        const typeSelect = row.querySelector("select");
+        const removeBtn = row.querySelector("button");
+        const minInput = row.querySelector(".field-min input");
+        const maxInput = row.querySelector(".field-max input");
+        const optionsArea = row.querySelector(".field-options textarea");
+        const weightsArea = row.querySelector(".field-weights textarea");
+        const valueInput = row.querySelector(".field-value input");
+
+        typeSelect.value = entry.type || "int";
+
+        const updateVisibility = () => {
+          const def = VAR_TYPES.find((t) => t.value === entry.type) || VAR_TYPES[0];
+          row.querySelector(".field-min").style.display = def.fields.includes("min") ? "block" : "none";
+          row.querySelector(".field-max").style.display = def.fields.includes("max") ? "block" : "none";
+          row.querySelector(".field-options").style.display = def.fields.includes("options") ? "block" : "none";
+          row.querySelector(".field-weights").style.display = def.fields.includes("weights") ? "block" : "none";
+          row.querySelector(".field-value").style.display = def.fields.includes("value") ? "block" : "none";
+        };
+
+        updateVisibility();
+
+        nameInput.addEventListener("input", (e) => {
+          entry.name = e.target.value;
+          renderVarChips();
+          renderDerivedChips();
+          markDirty("builder content");
+          schedulePreview();
+        });
+        typeSelect.addEventListener("change", (e) => {
+          entry.type = e.target.value;
+          updateVisibility();
+          markDirty("builder content");
+        });
+        minInput.addEventListener("input", (e) => {
+          entry.min = e.target.value;
+          markDirty("builder content");
+          schedulePreview();
+        });
+        maxInput.addEventListener("input", (e) => {
+          entry.max = e.target.value;
+          markDirty("builder content");
+          schedulePreview();
+        });
+        optionsArea.addEventListener("input", (e) => {
+          entry.options = e.target.value.split("\n").map((l) => l.trim()).filter(Boolean);
+          markDirty("builder content");
+          schedulePreview();
+        });
+        weightsArea.addEventListener("input", (e) => {
+          entry.weights = e.target.value.split("\n").map((l) => l.trim()).filter(Boolean);
+          markDirty("builder content");
+          schedulePreview();
+        });
+        valueInput.addEventListener("input", (e) => {
+          entry.value = e.target.value;
+          markDirty("builder content");
+          schedulePreview();
+        });
+        removeBtn.addEventListener("click", () => {
+          list.splice(index, 1);
+          markDirty("builder content");
+          render();
+        });
+
+        row.querySelectorAll("input, textarea").forEach((input) => {
+          input.addEventListener("focus", () => {
+            activeInput = input;
+            activeExprEditor = null;
+          });
+        });
+
+        container.appendChild(row);
+      };
+
+      const serializeExprEditor = (editor) => {
+        const parts = [];
+        Array.from(editor.childNodes).forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            parts.push(normalizeText(node.textContent));
+            return;
+          }
+          if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("token")) {
+            parts.push(formatExprName(node.dataset.name || ""));
+            return;
+          }
+          parts.push(normalizeText(node.textContent));
+        });
+        return parts.join("").replace(/\s+/g, " ").trim();
+      };
+
+      const renderDerivedRow = (container, entry, index, list) => {
+        const row = document.createElement("div");
+        row.className = "node-card";
+        row.innerHTML = `
+          <div class="row">
+            <div>
+              <label>Name</label>
+              <input type="text" value="${entry.name || ""}" />
+            </div>
+            <div>
+              <label>Expression</label>
+              <div class="expr-editor" contenteditable="true"></div>
+            </div>
+            <div>
+              <label>&nbsp;</label>
+              <div class="row" style="gap:8px; justify-content:flex-end;">
+                <button class="btn ghost small" data-action="answer">Make Answer</button>
+                <button class="btn ghost small" data-action="remove">Remove</button>
+              </div>
+            </div>
+          </div>
+          <div class="operator-bar">
+            <button data-op="+">+</button>
+            <button data-op="-">-</button>
+            <button data-op="*">*</button>
+            <button data-op="/">/</button>
+            <button data-op="//">//</button>
+            <button data-op="%">%</button>
+            <button data-op="**">**</button>
+            <button data-op="(">(</button>
+            <button data-op=")">)</button>
+          </div>
+        `;
+        const inputs = row.querySelectorAll("input");
+        const exprEditor = row.querySelector(".expr-editor");
+        exprEditor.textContent = entry.expr || "";
+        inputs[0].addEventListener("input", (e) => {
+          entry.name = e.target.value;
+          renderDerivedChips();
+          markDirty("builder content");
+          schedulePreview();
+        });
+        exprEditor.addEventListener("input", () => {
+          entry.expr = serializeExprEditor(exprEditor);
+          markDirty("builder content");
+          schedulePreview();
+        });
+        exprEditor.addEventListener("focus", () => {
+          activeExprEditor = exprEditor;
+          activeInput = null;
+          activeEditor = null;
+        });
+        exprEditor.addEventListener("dragover", (e) => {
+          e.preventDefault();
+        });
+        exprEditor.addEventListener("drop", (e) => {
+          e.preventDefault();
+          const tokenData = e.dataTransfer.getData("application/x-quiz-token");
+          if (!tokenData) return;
+          try {
+            const data = JSON.parse(tokenData);
+            if (data.kind === "var") {
+              insertTokenIntoExprEditor(exprEditor, createTokenSpan("var", data.name));
+            } else if (data.kind === "derived") {
+              insertTokenIntoExprEditor(exprEditor, createTokenSpan("derived", data.name));
+            }
+          } catch (err) {
+            // ignore
+          }
+        });
+        const answerBtn = row.querySelector("[data-action='answer']");
+        const removeBtn = row.querySelector("[data-action='remove']");
+        answerBtn.addEventListener("click", () => {
+          if (!entry.name) {
+            alert("Give this derived value a name first.");
+            return;
+          }
+          const target = activeEditor || el("body-editor");
+          openAnswerModal(target, { source: "derived", name: entry.name, label: entry.name });
+        });
+        removeBtn.addEventListener("click", () => {
+          list.splice(index, 1);
+          markDirty("builder content");
+          render();
+        });
+        row.querySelectorAll(".operator-bar button").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            exprEditor.focus();
+            const token = document.createTextNode(btn.dataset.op);
+            insertTokenIntoExprEditor(exprEditor, token);
+          });
+        });
+        container.appendChild(row);
+      };
+
+      const render = () => {
+        const varsContainer = el("vars");
+        varsContainer.innerHTML = "";
+        state.context.vars.forEach((entry, idx) => renderVarRow(varsContainer, entry, idx, state.context.vars));
+
+        const derivedContainer = el("derived");
+        derivedContainer.innerHTML = "";
+        state.context.derived.forEach((entry, idx) => renderDerivedRow(derivedContainer, entry, idx, state.context.derived));
+
+        renderVarChips();
+        renderDerivedChips();
+        updateAnswerModalOptions();
+        schedulePreview();
+      };
+
+      const addVar = () => {
+        state.context.vars.push(defaultVar());
+        markDirty("builder content");
+        render();
+      };
+
+      const addDerived = () => {
+        state.context.derived.push(defaultDerived());
+        markDirty("builder content");
+        render();
+      };
+
+      const serializeInline = (nodes) => {
+        const result = [];
+        let buffer = "";
+
+        const flush = () => {
+          if (buffer !== "") {
+            result.push(buffer);
+            buffer = "";
+          }
+        };
+
+        nodes.forEach((node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            buffer += normalizeText(node.textContent);
+            return;
+          }
+          if (node.nodeType === Node.ELEMENT_NODE && node.classList.contains("token")) {
+            const kind = node.dataset.kind;
+            if (kind === "var" || kind === "derived") {
+              buffer += `{{ ${formatExprName(node.dataset.name)} }}`;
+              return;
+            }
+            if (kind === "answer") {
+              flush();
+              const answerSpec = {
+                type: node.dataset.type,
+                value: node.dataset.value,
+              };
+              if (node.dataset.label) answerSpec.label = node.dataset.label;
+              if (node.dataset.length) answerSpec.length = node.dataset.length;
+              if (node.dataset.strict) answerSpec.strict = node.dataset.strict === "true";
+              if (node.dataset.require_prefix) answerSpec.require_prefix = node.dataset.require_prefix === "true";
+              if (node.dataset.baffles) {
+                answerSpec.baffles = node.dataset.baffles.split("\n").map((line) => line.trim()).filter(Boolean);
+              }
+              result.push({ answer: answerSpec });
+              return;
+            }
+          }
+          buffer += normalizeText(node.textContent);
+        });
+
+        flush();
+        return result.filter((item) => item !== "" && item !== null && item !== undefined);
+      };
+
+      const serializeEditor = (editor) => {
+        const blocks = [];
+        let current = [];
+
+        const flush = () => {
+          if (current.length) {
+            const inline = serializeInline(current);
+            if (inline.length) blocks.push(inline);
+            current = [];
+          }
+        };
+
+        const handleNode = (node) => {
+          if (node.nodeType === Node.ELEMENT_NODE && (node.tagName === "DIV" || node.tagName === "P")) {
+            flush();
+            const inline = serializeInline(Array.from(node.childNodes));
+            if (inline.length) blocks.push(inline);
+            return;
+          }
+          if (node.nodeType === Node.ELEMENT_NODE && node.tagName === "BR") {
+            flush();
+            return;
+          }
+          current.push(node);
+        };
+
+        Array.from(editor.childNodes).forEach(handleNode);
+        flush();
+
+        const paragraphs = [];
+        blocks.forEach((inline) => {
+          if (!inline.length) return;
+          paragraphs.push({ paragraph: { lines: inline } });
+        });
+
+        return paragraphs;
+      };
+
+      const extractExprNames = (expr) => {
+        if (!expr) return [];
+        const matches = expr.match(/[A-Za-z_][A-Za-z0-9_]*/g);
+        return matches || [];
+      };
+
+      const collectWarnings = () => {
+        inputQuizMeta();
+        const warnings = [];
+        const push = (msg) => warnings.push(msg);
+
+        if (currentView === "overview") {
+          if (!quizState.meta.name) {
+            push("Quiz name is empty.");
+          }
+          if (quizState.questions.length === 0) {
+            push("No questions in the quiz yet.");
+          }
+
+          quizState.questions.forEach((question, idx) => {
+            const label = question.name || `Question ${idx + 1}`;
+            if (!question.name) {
+              push(`${label} is missing a name.`);
+            }
+            if (question.points === "" || question.points === null || question.points === undefined) {
+              push(`${label} is missing a points value.`);
+            }
+            if (question.kind === "premade" && !question.premade.class) {
+              push(`${label} is missing a premade class name.`);
+            }
+            if (question.kind === "yaml" && !question.yamlSpec && question.id !== quizState.activeQuestionId) {
+              push(`${label} has no YAML content saved yet.`);
+            }
+          });
+        }
+
+        if (quizState.isDirty && quizState.dirtyFlags.size) {
+          const details = Array.from(quizState.dirtyFlags).join(", ");
+          push(`Unsaved changes: ${details}.`);
+        }
+
+        const activeQuestion = getActiveQuestion();
+        if (!activeQuestion || activeQuestion.kind !== "yaml") {
+          return warnings;
+        }
+
+        const varNames = state.context.vars.map((entry) => (entry.name || "").trim()).filter(Boolean);
+        const derivedNames = state.context.derived.map((entry) => (entry.name || "").trim()).filter(Boolean);
+        const allNames = new Set([...varNames, ...derivedNames]);
+
+        const nameCounts = {};
+        [...varNames, ...derivedNames].forEach((name) => {
+          nameCounts[name] = (nameCounts[name] || 0) + 1;
+        });
+        Object.entries(nameCounts).forEach(([name, count]) => {
+          if (count > 1) push(`Name "${name}" is defined multiple times.`);
+        });
+
+        varNames.forEach((name) => {
+          if (!VALID_NAME_RE.test(name)) {
+            push(`Variable "${name}" contains spaces or symbols. Use letters, numbers, and underscores for expressions.`);
+          }
+        });
+        derivedNames.forEach((name) => {
+          if (!VALID_NAME_RE.test(name)) {
+            push(`Derived "${name}" contains spaces or symbols. Use letters, numbers, and underscores for expressions.`);
+          }
+        });
+
+        state.context.vars.forEach((entry) => {
+          if (!entry.name) return;
+          if ((entry.type === "int" || entry.type === "float") && (entry.min === "" || entry.max === "")) {
+            push(`Variable "${entry.name}" is missing a min or max.`);
+          }
+          if ((entry.type === "choice" || entry.type === "weighted_choice") && (!entry.options || entry.options.length === 0)) {
+            push(`Variable "${entry.name}" needs at least one option.`);
+          }
+          if (entry.type === "weighted_choice") {
+            const optionCount = entry.options ? entry.options.length : 0;
+            const weightCount = entry.weights ? entry.weights.length : 0;
+            if (optionCount && weightCount && optionCount !== weightCount) {
+              push(`Variable "${entry.name}" has ${optionCount} options but ${weightCount} weights.`);
+            }
+          }
+          if (entry.type === "literal" && entry.value === "") {
+            push(`Variable "${entry.name}" is a literal but has no value.`);
+          }
+        });
+
+        state.context.derived.forEach((entry) => {
+          if (!entry.name && entry.expr) {
+            push("A derived value is missing a name.");
+            return;
+          }
+          if (entry.name && !entry.expr) {
+            push(`Derived "${entry.name}" is missing an expression.`);
+            return;
+          }
+          if (!entry.expr) return;
+          const exprNames = extractExprNames(entry.expr);
+          exprNames.forEach((name) => {
+            if (BUILTIN_NAMES.has(name)) return;
+            if (!allNames.has(name)) {
+              push(`Derived "${entry.name}" references unknown name "${name}".`);
+            }
+          });
+        });
+
+        const answerTokens = Array.from(document.querySelectorAll(".token.answer"));
+        if (answerTokens.length === 0) {
+          push("No answers inserted yet.");
+        }
+        answerTokens.forEach((token, idx) => {
+          const type = token.dataset.type || "string";
+          const value = token.dataset.value || "";
+          const label = token.dataset.label || `answer ${idx + 1}`;
+          if (!value) {
+            push(`Answer "${label}" is missing a value.`);
+          } else if (!value.includes("{{") && /[A-Za-z_]/.test(value)) {
+            push(`Answer "${label}" looks like an expression. Wrap it in {{ }} to evaluate.`);
+          }
+          if ((type === "dropdown" || type === "multiple_choice") && !token.dataset.baffles) {
+            push(`Answer "${label}" is missing distractors (baffles).`);
+          }
+          if (token.dataset.require_prefix === "true" && !(type === "binary" || type === "hex")) {
+            push(`Answer "${label}" uses require_prefix but is not binary or hex.`);
+          }
+          if (token.dataset.strict === "true" && !(type === "binary" || type === "hex" || type === "decimal")) {
+            push(`Answer "${label}" uses strict but is not binary, hex, or decimal.`);
+          }
+        });
+
+        const bodyHasContent = el("body-editor").textContent.trim() !== "" || el("body-editor").querySelector(".token");
+        if (!bodyHasContent) {
+          push("Question body is empty.");
+        }
+
+        return warnings;
+      };
+
+      const renderWarnings = () => {
+        const warnings = collectWarnings();
+        const list = el("validation-list");
+        const summary = el("validation-summary");
+        list.innerHTML = "";
+        if (!warnings.length) {
+          summary.textContent = "All clear.";
+          const li = document.createElement("li");
+          li.className = "validation-item ok";
+          li.textContent = "No issues found.";
+          list.appendChild(li);
+          return;
+        }
+        summary.textContent = `${warnings.length} warning${warnings.length === 1 ? "" : "s"}`;
+        warnings.forEach((warning) => {
+          const li = document.createElement("li");
+          li.className = "validation-item";
+          li.textContent = warning;
+          list.appendChild(li);
+        });
+      };
+
+      const buildSpec = (metaOverride = {}) => {
+        const spec = { version: state.version };
+
+        const meta = {};
+        if (metaOverride.name) meta.name = metaOverride.name;
+        if (metaOverride.topic) meta.topic = metaOverride.topic;
+        if (metaOverride.points !== undefined && metaOverride.points !== "") {
+          meta.points = Number(metaOverride.points);
+        }
+        if (metaOverride.spacing) meta.spacing = metaOverride.spacing;
+        if (Object.keys(meta).length) spec.meta = meta;
+
+        const vars = {};
+        state.context.vars.forEach((entry) => {
+          if (!entry.name) return;
+          const def = { type: entry.type };
+          if (entry.type === "int" || entry.type === "float") {
+            if (entry.min) def.min = entry.min;
+            if (entry.max) def.max = entry.max;
+          }
+          if (entry.type === "choice" || entry.type === "weighted_choice") {
+            if (entry.options && entry.options.length) def.options = entry.options;
+            if (entry.type === "weighted_choice" && entry.weights && entry.weights.length) {
+              def.weights = entry.weights;
+            }
+          }
+          if (entry.type === "literal" && entry.value !== "") {
+            def.value = entry.value;
+          }
+          vars[entry.name] = def;
+        });
+
+        const derived = {};
+        state.context.derived.forEach((entry) => {
+          if (!entry.name || !entry.expr) return;
+          derived[entry.name] = entry.expr;
+        });
+
+        if (Object.keys(vars).length || Object.keys(derived).length) {
+          spec.context = {};
+          if (Object.keys(vars).length) spec.context.vars = vars;
+          if (Object.keys(derived).length) spec.context.derived = derived;
+        }
+
+        spec.body = serializeEditor(el("body-editor"));
+        spec.explanation = serializeEditor(el("expl-editor"));
+        return spec;
+      };
+
+      const setExportOutput = (yamlText, label) => {
+        quizState.lastExport = yamlText || "";
+        quizState.lastExportKind = label || "";
+        el("yaml-output").textContent = yamlText || "No output.";
+        el("export-kind").textContent = label || "No export yet.";
+      };
+
+      const quizExportErrors = () => {
+        const errors = [];
+        if (!quizState.meta.name) {
+          errors.push("Quiz name is required for export.");
+        }
+        if (quizState.questions.length === 0) {
+          errors.push("Add at least one question before exporting.");
+        }
+        quizState.questions.forEach((question, idx) => {
+          const label = question.name || `Question ${idx + 1}`;
+          if (question.points === "" || question.points === null || question.points === undefined) {
+            errors.push(`${label}: points are required.`);
+          } else if (Number.isNaN(Number(question.points))) {
+            errors.push(`${label}: points must be numeric.`);
+          }
+          if (question.kind === "premade" && !question.premade.class) {
+            errors.push(`${label}: premade class is required.`);
+          }
+          if (question.kind === "yaml" && !question.yamlSpec && question.id !== quizState.activeQuestionId) {
+            errors.push(`${label}: YAML content is missing.`);
+          }
+        });
+        return errors;
+      };
+
+      const generateQuestionYaml = async () => {
+        const question = getActiveQuestion();
+        if (!question) {
+          setExportOutput("No active question.", "Error");
+          return "";
+        }
+        if (question.kind !== "yaml") {
+          setExportOutput("Active question is premade. Generate Quiz YAML instead.", "Error");
+          return "";
+        }
+        commitActiveQuestion();
+        const spec = buildSpec(questionMetaFrom(question));
+        question.yamlSpec = spec;
+        const response = await fetch("/to_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec }),
+        });
+        const data = await response.json();
+        const yamlText = data.yaml || data.error || "No output.";
+        setExportOutput(yamlText, "Question YAML");
+        if (!data.yaml) return "";
+        return data.yaml;
+      };
+
+      const parseYamlMapping = async (yamlText) => {
+        if (!yamlText.trim()) return {};
+        const response = await fetch("/from_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ yaml: yamlText }),
+        });
+        const data = await response.json();
+        if (data.error) {
+          throw new Error(data.error);
+        }
+        return data.spec || {};
+      };
+
+      const stringifyYamlMapping = async (mapping) => {
+        if (!mapping || typeof mapping !== "object" || Array.isArray(mapping)) {
+          return "";
+        }
+        const response = await fetch("/to_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec: mapping }),
+        });
+        const data = await response.json();
+        return (data.yaml || "").trim();
+      };
+
+      const serializeQuizState = () => {
+        commitActiveQuestion();
+        return {
+          version: 1,
+          meta: quizState.meta,
+          questions: quizState.questions,
+          activeQuestionId: quizState.activeQuestionId,
+          previewSeed: quizState.previewSeed,
+        };
+      };
+
+      const setImportStatus = (message, isError = false) => {
+        const status = el("import-status");
+        if (!status) return;
+        status.textContent = message;
+        status.style.color = isError ? "#a04527" : "var(--muted)";
+      };
+
+      const loadQuizState = (stateObj, { markClean = true } = {}) => {
+        suppressDirty = true;
+        quizState.meta = {
+          name: stateObj?.meta?.name || "",
+          description: stateObj?.meta?.description || "",
+          practice: Boolean(stateObj?.meta?.practice),
+          sort_order: Array.isArray(stateObj?.meta?.sort_order) ? stateObj.meta.sort_order : [],
+          custom_modules: Array.isArray(stateObj?.meta?.custom_modules) ? stateObj.meta.custom_modules : [],
+        };
+        quizState.questions = Array.isArray(stateObj?.questions)
+          ? stateObj.questions.map((q) => ({
+            id: q.id || `q_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            kind: q.kind || "premade",
+            name: q.name || "",
+            points: q.points ?? "",
+            topic: q.topic || "",
+            spacing: q.spacing || "",
+            num_subquestions: q.num_subquestions || "",
+            yamlSpec: q.yamlSpec || null,
+            premade: {
+              class: q.premade?.class || "",
+              kwargsText: q.premade?.kwargsText || "",
+            },
+          }))
+          : [];
+        quizState.activeQuestionId = stateObj?.activeQuestionId || null;
+        if (!quizState.questions.find((q) => q.id === quizState.activeQuestionId)) {
+          quizState.activeQuestionId = null;
+        }
+        quizState.previewSeed = stateObj?.previewSeed || "";
+        quizState.lastExport = "";
+        quizState.lastExportKind = "";
+
+        questionCounter = Math.max(quizState.questions.length + 1, questionCounter);
+
+        applyQuizMetaToInputs();
+        syncPreviewSeedInputs();
+        renderQuestionList();
+
+        const active = getActiveQuestion();
+        if (active) {
+          applyQuestionFields(active);
+          if (active.kind === "yaml") {
+            loadSpecIntoBuilder(active.yamlSpec, active);
+          } else {
+            resetBuilder();
+          }
+        } else {
+          clearQuestionFields();
+          resetBuilder();
+        }
+        updateBuilderVisibility();
+        renderWarnings();
+        if (markClean) {
+          resetDirtyState();
+        }
+        suppressDirty = false;
+        showOverview();
+      };
+
+      const parseQuestionKwargs = (qData) => {
+        const kwargs = { ...(qData.kwargs || {}) };
+        Object.entries(qData || {}).forEach(([key, value]) => {
+          if (["class", "topic", "spacing", "kwargs", "num_subquestions", "_config"].includes(key)) {
+            return;
+          }
+          kwargs[key] = value;
+        });
+        return kwargs;
+      };
+
+      const extractYamlSpec = async (qData) => {
+        const directSpec = qData?.yaml_spec || qData?.kwargs?.yaml_spec;
+        if (directSpec && typeof directSpec === "object") {
+          return directSpec;
+        }
+        const yamlText = qData?.yaml_text || qData?.kwargs?.yaml_text;
+        if (typeof yamlText === "string" && yamlText.trim()) {
+          try {
+            return await parseYamlMapping(yamlText);
+          } catch (err) {
+            return null;
+          }
+        }
+        return null;
+      };
+
+      const importQuizFromSpec = async (spec) => {
+        const warnings = [];
+        const questions = [];
+        const questionBlocks = spec?.questions || [];
+
+        if (Array.isArray(questionBlocks)) {
+          for (const qData of questionBlocks) {
+            if (!qData || typeof qData !== "object") continue;
+            if (!qData.name) {
+              warnings.push("A question entry is missing a name.");
+            }
+            if (qData._config) {
+              warnings.push(`Question "${qData.name || "Unnamed"}" has _config which is not yet editable here.`);
+            }
+            const question = newQuestion("premade");
+            question.name = qData.name || "";
+            question.points = qData.points !== undefined && qData.points !== null ? String(qData.points) : "";
+            question.topic = qData.topic || "";
+            question.spacing = qData.spacing || "";
+            question.num_subquestions = qData.num_subquestions || "";
+            const className = qData.class || "FromText";
+            if (className.toLowerCase() === "fromyaml") {
+              const yamlSpec = await extractYamlSpec(qData);
+              if (yamlSpec) {
+                question.kind = "yaml";
+                question.yamlSpec = yamlSpec;
+              } else {
+                question.kind = "premade";
+                question.premade.class = className;
+                const kwargs = parseQuestionKwargs(qData);
+                question.premade.kwargsText = await stringifyYamlMapping(kwargs);
+                warnings.push(`Question "${qData.name || "Unnamed"}" uses FromYaml without inline spec; kept as premade.`);
+              }
+            } else {
+              question.kind = "premade";
+              question.premade.class = className;
+              const kwargs = parseQuestionKwargs(qData);
+              question.premade.kwargsText = await stringifyYamlMapping(kwargs);
+            }
+            questions.push(question);
+          }
+        } else {
+          for (const [pointsKey, block] of Object.entries(questionBlocks)) {
+            if (!block || typeof block !== "object") continue;
+            if (block._config) {
+              warnings.push(`Point group ${pointsKey} has _config which is not yet editable here.`);
+            }
+            for (const [name, qData] of Object.entries(block)) {
+              if (name === "_config") continue;
+              if (!qData || typeof qData !== "object") continue;
+              if (qData._config) {
+                warnings.push(`Question "${name}" has _config which is not yet editable here.`);
+              }
+              const question = newQuestion("premade");
+              question.name = name;
+              question.points = pointsKey;
+              question.topic = qData.topic || "";
+              question.spacing = qData.spacing || "";
+              question.num_subquestions = qData.num_subquestions || "";
+              const className = qData.class || "FromText";
+              if (className.toLowerCase() === "fromyaml") {
+                const yamlSpec = await extractYamlSpec(qData);
+                if (yamlSpec) {
+                  question.kind = "yaml";
+                  question.yamlSpec = yamlSpec;
+                } else {
+                  question.kind = "premade";
+                  question.premade.class = className;
+                  const kwargs = parseQuestionKwargs(qData);
+                  question.premade.kwargsText = await stringifyYamlMapping(kwargs);
+                  warnings.push(`Question "${name}" uses FromYaml without inline spec; kept as premade.`);
+                }
+              } else {
+                question.kind = "premade";
+                question.premade.class = className;
+                const kwargs = parseQuestionKwargs(qData);
+                question.premade.kwargsText = await stringifyYamlMapping(kwargs);
+              }
+              questions.push(question);
+            }
+          }
+        }
+
+        const importedState = {
+          meta: {
+            name: spec?.name || "",
+            description: spec?.description || "",
+            practice: Boolean(spec?.practice),
+            sort_order: Array.isArray(spec?.["sort order"]) ? spec["sort order"] : [],
+            custom_modules: Array.isArray(spec?.custom_modules) ? spec.custom_modules : [],
+          },
+          questions,
+          activeQuestionId: null,
+          previewSeed: "",
+        };
+
+        loadQuizState(importedState, { markClean: false });
+        resetDirtyState();
+        if (warnings.length) {
+          setImportStatus(warnings.join(" "), true);
+        } else {
+          setImportStatus("Quiz imported successfully.");
+        }
+      };
+
+      const saveQuizJson = () => {
+        const stateObj = serializeQuizState();
+        const blob = new Blob([JSON.stringify(stateObj, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "quiz_state.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        setImportStatus("Quiz JSON downloaded.");
+        markSaved();
+      };
+
+      const loadQuizJsonFile = async (file) => {
+        try {
+          const text = await file.text();
+          const data = JSON.parse(text);
+          loadQuizState(data);
+          setImportStatus("Quiz JSON loaded.");
+        } catch (err) {
+          setImportStatus(`Failed to load JSON: ${err}`, true);
+        }
+      };
+
+      const loadQuizYamlFile = async (file) => {
+        try {
+          const text = await file.text();
+          const spec = await parseYamlMapping(text);
+          await importQuizFromSpec(spec);
+        } catch (err) {
+          setImportStatus(`Failed to import YAML: ${err}`, true);
+        }
+      };
+
+      const generateQuizYaml = async () => {
+        const quiz = {};
+        inputQuizMeta();
+        commitActiveQuestion();
+        const errors = quizExportErrors();
+        if (errors.length) {
+          const message = errors.join("\n");
+          const confirmExport = window.confirm(`Export has issues:\n${message}\n\nExport anyway?`);
+          if (!confirmExport) {
+            setExportOutput(message, "Error");
+            setSaveStatus("Fix export errors before generating quiz YAML.", true);
+            return "";
+          }
+          setSaveStatus("Exporting despite warnings.", false);
+        }
+        if (quizState.meta.name) quiz.name = quizState.meta.name;
+        if (quizState.meta.description) quiz.description = quizState.meta.description;
+        if (quizState.meta.practice) quiz.practice = true;
+        if (quizState.meta.sort_order.length) quiz["sort order"] = quizState.meta.sort_order;
+        if (quizState.meta.custom_modules.length) quiz.custom_modules = quizState.meta.custom_modules;
+
+        const questionsList = [];
+        const active = getActiveQuestion();
+        if (active && active.kind === "yaml") {
+          active.yamlSpec = buildSpec(questionMetaFrom(active));
+        }
+
+        for (let i = 0; i < quizState.questions.length; i += 1) {
+          const question = quizState.questions[i];
+          const name = question.name || `Question ${i + 1}`;
+          const config = {};
+          config.name = name;
+          if (question.points !== "" && question.points !== null && question.points !== undefined) {
+            config.points = Number(question.points);
+          }
+          if (question.kind === "yaml") {
+            const spec = question.yamlSpec || buildSpec(questionMetaFrom(question));
+            config.class = "FromYaml";
+            config.kwargs = { yaml_spec: spec };
+          } else {
+            config.class = question.premade.class || "";
+            const kwargsText = question.premade.kwargsText || "";
+            if (kwargsText.trim()) {
+              try {
+                config.kwargs = await parseYamlMapping(kwargsText);
+              } catch (err) {
+                setExportOutput(`Failed to parse kwargs for "${question.name || "premade question"}": ${err}`, "Error");
+                return "";
+              }
+            }
+          }
+          if (question.topic) config.topic = question.topic;
+          if (question.spacing) config.spacing = question.spacing;
+          if (question.num_subquestions) config.num_subquestions = Number(question.num_subquestions);
+          questionsList.push(config);
+        }
+
+        quiz.questions = questionsList;
+        const response = await fetch("/to_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec: quiz }),
+        });
+        const data = await response.json();
+        const yamlText = data.yaml || data.error || "No output.";
+        setExportOutput(yamlText, "Quiz YAML");
+        if (!data.yaml) return "";
+        return data.yaml;
+      };
+
+      const defaultExport = async () => {
+        if (currentView === "overview") {
+          return generateQuizYaml();
+        }
+        return generateQuestionYaml();
+      };
+
+      const exportPdf = async () => {
+        const yamlText = await generateQuizYaml();
+        if (!yamlText) return;
+        const path = el("save-path").value.trim() || "out/quiz.yaml";
+        const countRaw = el("pdf-count")?.value ?? "1";
+        const numPdfs = Math.max(1, Number.parseInt(countRaw, 10) || 1);
+        setSaveStatus("Generating PDF...", false);
+        const response = await fetch("/export_pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            yaml: yamlText,
+            path,
+            num_pdfs: numPdfs,
+            use_typst: true,
+          }),
+        });
+        const contentType = response.headers.get("Content-Type") || "";
+        if (!response.ok || contentType.includes("application/json")) {
+          const data = await response.json().catch(() => ({}));
+          const message = data.error || `PDF export failed (${response.status})`;
+          setSaveStatus(message, true);
+          return;
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename=\"?([^\";]+)\"?/i);
+        const filename = match ? match[1] : "quiz.pdf";
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(url);
+        const label = numPdfs === 1 ? "PDF downloaded." : `PDFs generated: ${numPdfs}.`;
+        setSaveStatus(label, false);
+        markSaved();
+      };
+
+      const exportHint = async (kind) => {
+        if (kind === "pdf") {
+          await exportPdf();
+          return;
+        }
+        const yamlText = await generateQuizYaml();
+        if (!yamlText) return;
+        const path = el("save-path").value.trim() || "out/quiz.yaml";
+        if (kind === "canvas") {
+          setSaveStatus(`Run: quizgen --yaml ${path} --num_canvas 1 --course_id <ID>`, false);
+        }
+      };
+
+      const setSaveStatus = (message, isError = false) => {
+        const status = el("save-status");
+        status.textContent = message;
+        status.style.color = isError ? "#a04527" : "var(--muted)";
+      };
+
+      const saveYamlToFile = async () => {
+        const path = el("save-path").value.trim();
+        const payload = { path };
+        if (!quizState.lastExport) {
+          await defaultExport();
+        }
+        if (quizState.lastExport) {
+          payload.yaml = quizState.lastExport;
+        } else {
+          payload.spec = buildSpec();
+        }
+        const response = await fetch("/save_yaml", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (data.error) {
+          setSaveStatus(data.error, true);
+          return;
+        }
+        setSaveStatus(`Saved to ${data.path}`);
+        markSaved();
+      };
+
+      const buildPremadePayload = async (question, { useInputs = false } = {}) => {
+        const className = useInputs ? el("premade-class").value.trim() : (question.premade.class || "");
+        if (!className) {
+          return { error: "Choose a premade class to preview." };
+        }
+        let kwargs = {};
+        const kwargsText = useInputs ? (el("premade-kwargs").value || "") : (question.premade.kwargsText || "");
+        if (kwargsText.trim()) {
+          try {
+            kwargs = await parseYamlMapping(kwargsText);
+            if (!kwargs || typeof kwargs !== "object" || Array.isArray(kwargs)) {
+              return { error: "Premade kwargs must be a mapping." };
+            }
+          } catch (err) {
+            return { error: String(err) };
+          }
+        }
+        kwargs = {
+          ...kwargs,
+          name: question.name || "Premade Preview",
+          points_value: Number(question.points || 1),
+        };
+        if (question.topic) kwargs.topic = question.topic;
+        if (question.spacing) kwargs.spacing = question.spacing;
+        if (question.num_subquestions) kwargs.num_subquestions = Number(question.num_subquestions);
+        return { className, kwargs };
+      };
+
+      const updatePreview = async () => {
+        const question = getActiveQuestion();
+        if (!question) {
+          el("preview-body").innerHTML = "<p class=\"muted\">Select a question to preview.</p>";
+          el("preview-expl").innerHTML = "";
+          el("preview-context").textContent = "";
+          return;
+        }
+
+        const showAnswers = el("preview-show-answers").checked;
+        const seed = getPreviewSeedValue();
+
+        if (question.kind === "premade") {
+          const payload = await buildPremadePayload(question, { useInputs: true });
+          if (payload.error) {
+            el("preview-body").innerHTML = `<p style=\"color:#a04527;\">${payload.error}</p>`;
+            el("preview-expl").innerHTML = "";
+            el("preview-context").textContent = "";
+            return;
+          }
+          const response = await fetch("/preview_premade", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ class: payload.className, kwargs: payload.kwargs, show_answers: showAnswers, seed }),
+          });
+          const data = await response.json();
+          if (data.error) {
+            el("preview-body").innerHTML = `<p style=\"color:#a04527;\">${data.error}</p>`;
+            el("preview-expl").innerHTML = "";
+            el("preview-context").textContent = "";
+            return;
+          }
+          el("preview-body").innerHTML = data.body_html || "";
+          el("preview-expl").innerHTML = data.explanation_html || "";
+          el("preview-context").textContent = "";
+          if (window.MathJax?.typesetPromise) {
+            window.MathJax.typesetPromise([el("preview-body"), el("preview-expl")]);
+          }
+          return;
+        }
+
+        const spec = buildSpec(questionMetaFrom(question));
+        const response = await fetch("/preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ spec, show_answers: showAnswers, seed }),
+        });
+        const data = await response.json();
+        if (data.error) {
+          el("preview-body").innerHTML = `<p style=\"color:#a04527;\">${data.error}</p>`;
+          el("preview-expl").innerHTML = "";
+          el("preview-context").textContent = "";
+          return;
+        }
+        el("preview-body").innerHTML = data.body_html || "";
+        el("preview-expl").innerHTML = data.explanation_html || "";
+        if (data.context) {
+          const contextEntries = Object.entries(data.context)
+            .map(([k, v]) => `${k}=${v}`)
+            .join(", ");
+          el("preview-context").textContent = contextEntries ? `Context: ${contextEntries}` : "";
+        } else {
+          el("preview-context").textContent = "";
+        }
+        if (window.MathJax?.typesetPromise) {
+          window.MathJax.typesetPromise([el("preview-body"), el("preview-expl")]);
+        }
+      };
+
+      const updateQuizPreview = async () => {
+        if (currentView !== "overview") {
+          return;
+        }
+        const runToken = ++quizPreviewToken;
+        const container = el("quiz-preview-body");
+        if (!container) return;
+        container.innerHTML = "";
+        if (quizState.questions.length === 0) {
+          container.innerHTML = "<p class=\"muted\">No questions yet.</p>";
+          return;
+        }
+
+        const active = getActiveQuestion();
+        if (active) {
+          updateQuestionFromInputs();
+          if (active.kind === "yaml") {
+            active.yamlSpec = buildSpec(questionMetaFrom(active));
+          }
+        }
+
+        const showAnswers = el("quiz-preview-show-answers").checked;
+        const seed = getPreviewSeedValue();
+
+        for (let i = 0; i < quizState.questions.length; i += 1) {
+          if (runToken !== quizPreviewToken) {
+            return;
+          }
+          const question = quizState.questions[i];
+          const item = document.createElement("div");
+          item.className = "quiz-preview-item";
+          const title = document.createElement("h4");
+          const label = question.name || `Question ${i + 1}`;
+          title.textContent = `${i + 1}. ${label}`;
+          const meta = document.createElement("div");
+          meta.className = "muted";
+          const metaParts = [];
+          if (question.points) metaParts.push(`${question.points} pts`);
+          if (question.topic) metaParts.push(`topic: ${question.topic}`);
+          meta.textContent = metaParts.join(" · ");
+          const body = document.createElement("div");
+          body.innerHTML = "<p class=\"muted\">Loading preview…</p>";
+          item.appendChild(title);
+          if (meta.textContent) item.appendChild(meta);
+          item.appendChild(body);
+          container.appendChild(item);
+
+          try {
+            if (question.kind === "yaml") {
+              const spec = question.yamlSpec || (question === active ? buildSpec(questionMetaFrom(question)) : null);
+              if (!spec) {
+                body.innerHTML = "<p class=\"muted\">No YAML content yet.</p>";
+                continue;
+              }
+              const response = await fetch("/preview", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ spec, show_answers: showAnswers, seed }),
+              });
+              const data = await response.json();
+              if (data.error) {
+                body.innerHTML = `<p style=\"color:#a04527;\">${data.error}</p>`;
+              } else {
+                body.innerHTML = data.body_html || "";
+              }
+            } else {
+              const payload = await buildPremadePayload(question, { useInputs: question === active });
+              if (payload.error) {
+                body.innerHTML = `<p style=\"color:#a04527;\">${payload.error}</p>`;
+                continue;
+              }
+              const response = await fetch("/preview_premade", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ class: payload.className, kwargs: payload.kwargs, show_answers: showAnswers, seed }),
+              });
+              const data = await response.json();
+              if (data.error) {
+                body.innerHTML = `<p style=\"color:#a04527;\">${data.error}</p>`;
+              } else {
+                body.innerHTML = data.body_html || "";
+              }
+            }
+          } catch (err) {
+            body.innerHTML = `<p style=\"color:#a04527;\">${err}</p>`;
+          }
+        }
+        if (window.MathJax?.typesetPromise) {
+          window.MathJax.typesetPromise([container]);
+        }
+      };
+
+      const schedulePreview = () => {
+        renderWarnings();
+        if (previewTimer) {
+          clearTimeout(previewTimer);
+        }
+        previewTimer = setTimeout(updatePreview, 400);
+      };
+
+      const scheduleQuizPreview = () => {
+        // Manual refresh only.
+      };
+
+      const setupEditor = (editor) => {
+        editor.addEventListener("focus", () => {
+          activeEditor = editor;
+          activeInput = null;
+          activeExprEditor = null;
+        });
+        editor.addEventListener("input", () => {
+          markDirty("builder content");
+          schedulePreview();
+        });
+        editor.addEventListener("dragover", (e) => {
+          e.preventDefault();
+        });
+        editor.addEventListener("drop", (e) => {
+          e.preventDefault();
+          const tokenData = e.dataTransfer.getData("application/x-quiz-token");
+          if (!tokenData) return;
+          try {
+            const data = JSON.parse(tokenData);
+            if (data.kind === "var") {
+              insertTokenIntoEditor(editor, createTokenSpan("var", data.name));
+            } else if (data.kind === "derived") {
+              insertTokenIntoEditor(editor, createTokenSpan("derived", data.name));
+            }
+          } catch (err) {
+            // ignore
+          }
+        });
+      };
+
+      const boot = async () => {
+        const res = await fetch("/form_spec");
+        const data = await res.json();
+        formSpec = data.nodes || {};
+        setupEditor(el("body-editor"));
+        setupEditor(el("expl-editor"));
+        render();
+        await loadPremadeList();
+        inputQuizMeta();
+        updateBuilderVisibility();
+        renderQuestionList();
+        renderWarnings();
+        syncPreviewSeedInputs();
+        updateSaveMeta();
+        showOverview();
+      };
+
+      el("add-var").addEventListener("click", addVar);
+      el("add-derived").addEventListener("click", addDerived);
+      el("open-add-question").addEventListener("click", openAddQuestionModal);
+      el("add-question-cancel").addEventListener("click", closeAddQuestionModal);
+      el("add-question-yaml").addEventListener("click", addYamlFromModal);
+      el("add-question-premade").addEventListener("click", addPremadeFromModal);
+      el("add-question-modal").addEventListener("click", (e) => {
+        if (e.target.id === "add-question-modal") {
+          closeAddQuestionModal();
+        }
+      });
+      el("generate-question").addEventListener("click", generateQuestionYaml);
+      el("generate-quiz").addEventListener("click", generateQuizYaml);
+      el("export-pdf").addEventListener("click", () => exportHint("pdf"));
+      el("export-canvas").addEventListener("click", () => exportHint("canvas"));
+      el("refresh-quiz-preview").addEventListener("click", updateQuizPreview);
+      el("quiz-preview-show-answers").addEventListener("change", updateQuizPreview);
+      el("quiz-preview-seed").addEventListener("input", (e) => setPreviewSeed(e.target.value.trim()));
+      el("question-preview-seed").addEventListener("input", (e) => setPreviewSeed(e.target.value.trim()));
+      el("back-overview").addEventListener("click", showOverview);
+      el("refresh-preview").addEventListener("click", updatePreview);
+      el("preview-show-answers").addEventListener("change", updatePreview);
+      el("save-quiz-json").addEventListener("click", saveQuizJson);
+      el("load-quiz-json").addEventListener("click", () => el("load-quiz-json-input").click());
+      el("load-quiz-json-input").addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (file) loadQuizJsonFile(file);
+        e.target.value = "";
+      });
+      el("import-quiz-yaml").addEventListener("click", () => el("import-quiz-yaml-input").click());
+      el("import-quiz-yaml-input").addEventListener("change", (e) => {
+        const file = e.target.files?.[0];
+        if (file) loadQuizYamlFile(file);
+        e.target.value = "";
+      });
+
+      el("copy-yaml").addEventListener("click", async () => {
+        const yamlText = quizState.lastExport || (await defaultExport());
+        if (!yamlText) return;
+        await navigator.clipboard.writeText(yamlText);
+      });
+
+      el("download-yaml").addEventListener("click", async () => {
+        const yamlText = quizState.lastExport || (await defaultExport());
+        if (!yamlText) return;
+        const blob = new Blob([yamlText], { type: "text/yaml" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = quizState.lastExportKind === "Quiz YAML" ? "quiz.yaml" : "question.yaml";
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+
+      el("save-yaml").addEventListener("click", saveYamlToFile);
+      el("preview-premade").addEventListener("click", updatePreview);
+
+      const updateQuestionFromInputs = (mark = true) => {
+        const question = getActiveQuestion();
+        if (!question) return;
+        question.name = el("question-name").value.trim();
+        question.points = el("question-points").value.trim();
+        question.topic = el("question-topic").value.trim();
+        question.spacing = el("question-spacing").value.trim();
+        question.num_subquestions = el("question-num-sub").value.trim();
+        question.premade.class = el("premade-class").value.trim();
+        question.premade.kwargsText = el("premade-kwargs").value;
+        syncPremadeSelect();
+        renderQuestionList();
+        renderWarnings();
+        if (mark) {
+          markDirty("question setup");
+        }
+        scheduleQuizPreview();
+      };
+
+      ["question-name", "question-points", "question-topic", "question-spacing", "question-num-sub",
+       "premade-class", "premade-kwargs"].forEach((id) => {
+        const field = el(id);
+        if (field) {
+          field.addEventListener("input", updateQuestionFromInputs);
+        }
+      });
+
+      el("premade-class-select").addEventListener("change", (e) => {
+        const value = e.target.value;
+        if (value) {
+          el("premade-class").value = value;
+        }
+        updateQuestionFromInputs();
+      });
+
+      el("question-kind").addEventListener("change", (e) => {
+        const question = getActiveQuestion();
+        if (!question) return;
+        if (question.kind === "yaml") {
+          question.yamlSpec = buildSpec(questionMetaFrom(question));
+        }
+        question.kind = e.target.value;
+        markDirty("question setup");
+        if (question.kind === "yaml") {
+          loadSpecIntoBuilder(question.yamlSpec, question);
+        } else {
+          resetBuilder();
+        }
+        updateBuilderVisibility();
+        renderQuestionList();
+        renderWarnings();
+      });
+
+      el("insert-var-body").addEventListener("click", () => {
+        const choice = pickName(state.context.vars, "variable");
+        if (choice) insertVariable(choice, { targetEditor: el("body-editor"), preferInput: false });
+      });
+      el("insert-derived-body").addEventListener("click", () => {
+        const choice = pickName(state.context.derived, "derived value");
+        if (choice) insertDerived(choice, { targetEditor: el("body-editor"), preferInput: false });
+      });
+      el("insert-answer-body").addEventListener("click", () => openAnswerModal(el("body-editor")));
+      el("insert-var-expl").addEventListener("click", () => {
+        const choice = pickName(state.context.vars, "variable");
+        if (choice) insertVariable(choice, { targetEditor: el("expl-editor"), preferInput: false });
+      });
+      el("insert-derived-expl").addEventListener("click", () => {
+        const choice = pickName(state.context.derived, "derived value");
+        if (choice) insertDerived(choice, { targetEditor: el("expl-editor"), preferInput: false });
+      });
+      el("insert-answer-expl").addEventListener("click", () => openAnswerModal(el("expl-editor")));
+      el("answer-cancel").addEventListener("click", closeAnswerModal);
+      el("answer-clear").addEventListener("click", clearAnswerModal);
+      el("answer-insert").addEventListener("click", insertAnswerFromModal);
+      el("answer-source").addEventListener("change", () => {
+        updateAnswerModalOptions();
+        updateAnswerModalVisibility();
+      });
+      el("answer-type").addEventListener("change", updateAnswerModalVisibility);
+      el("answer-modal").addEventListener("click", (e) => {
+        if (e.target.id === "answer-modal") {
+          closeAnswerModal();
+        }
+      });
+
+      document.querySelectorAll("input, textarea").forEach((input) => {
+        input.addEventListener("focus", () => {
+          activeInput = input;
+          activeExprEditor = null;
+        });
+        input.addEventListener("dragover", (e) => {
+          if (input.classList.contains("expr-input")) {
+            e.preventDefault();
+          }
+        });
+        input.addEventListener("drop", (e) => {
+          if (!input.classList.contains("expr-input")) return;
+          e.preventDefault();
+          const tokenData = e.dataTransfer.getData("application/x-quiz-token");
+          if (!tokenData) return;
+          try {
+            const data = JSON.parse(tokenData);
+            if (data.kind === "var" || data.kind === "derived") {
+              insertIntoInput(input, formatExprName(data.name));
+            }
+          } catch (err) {
+            // ignore
+          }
+        });
+      });
+
+      boot();
+    </script>
+  </body>
+</html>
