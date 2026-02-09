@@ -427,8 +427,10 @@ def _parse_table_group(spec: Any) -> ca.Element:
       table_spec = entry.get("table")
     if isinstance(table_spec, dict) and "table" in table_spec:
       table = _parse_node(table_spec)
-    else:
+    elif isinstance(table_spec, dict):
       table = _parse_table(table_spec)
+    else:
+      table = _parse_node(table_spec)
     if table is None:
       continue
     label_element = _parse_inline(label) if label is not None else None
