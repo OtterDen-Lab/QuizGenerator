@@ -280,6 +280,58 @@
         color: #3c448c;
       }
 
+      .blocks-tree {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .block-item {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+        background: #fffdf9;
+      }
+
+      .block-item.selected {
+        border-color: #0f6b6b;
+        box-shadow: 0 0 0 2px rgba(15, 107, 107, 0.15);
+      }
+
+      .block-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .block-title {
+        font-weight: 600;
+        font-size: 0.95rem;
+      }
+
+      .block-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .block-children {
+        margin-top: 8px;
+        margin-left: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .block-editor {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 10px;
+        min-height: 44px;
+        background: #fff;
+      }
+
       .toolbar {
         display: flex;
         flex-wrap: wrap;
@@ -784,6 +836,42 @@
         </div>
       </section>
       </div>
+
+      <div id="blocks-view" class="view hidden">
+        <section class="panel full">
+          <div class="section-title">
+            <h2>Block Editor (beta)</h2>
+            <div class="row" style="justify-content: flex-end;">
+              <button class="btn ghost" id="blocks-back">Back to Builder</button>
+            </div>
+          </div>
+          <p class="muted">Drag to reorder blocks, indent to nest, and collapse sections.</p>
+        </section>
+
+        <section class="panel full">
+          <div class="section-title">
+            <h2>Questions</h2>
+            <span class="muted">Select a YAML question to edit blocks.</span>
+          </div>
+          <div id="blocks-question-list" class="question-list"></div>
+        </section>
+
+        <section class="panel full">
+          <div class="section-title">
+            <h2>Blocks</h2>
+            <div class="row" style="justify-content: flex-end;">
+              <select id="blocks-target">
+                <option value="body">Body</option>
+                <option value="explanation">Explanation</option>
+              </select>
+              <button class="btn ghost" id="blocks-sync">Sync from YAML</button>
+              <button class="btn" id="blocks-add">Add Block</button>
+            </div>
+          </div>
+          <div id="blocks-empty" class="hint">Select a YAML question to edit.</div>
+          <div id="blocks-tree" class="blocks-tree"></div>
+        </section>
+      </div>
     </main>
 
     <div id="add-question-modal" class="modal hidden">
@@ -965,6 +1053,11 @@
       const rawYamlModalState = {
         target: null,
       };
+      const blocksState = {
+        body: [],
+        explanation: [],
+      };
+      let activeBlockId = null;
       let previewTimer = null;
       let quizPreviewTimer = null;
       let quizPreviewToken = 0;
@@ -1353,10 +1446,16 @@
       };
 
       const showOverview = () => {
+        const prevView = currentView;
         el("overview-view").classList.remove("hidden");
         el("question-view").classList.add("hidden");
+        el("blocks-view").classList.add("hidden");
         currentView = "overview";
-        commitActiveQuestion();
+        if (prevView === "blocks") {
+          syncBlocksToQuestion();
+        } else {
+          commitActiveQuestion();
+        }
         updateQuestionDetailTitle();
         scheduleQuizPreview();
       };
@@ -1368,9 +1467,19 @@
         }
         el("overview-view").classList.add("hidden");
         el("question-view").classList.remove("hidden");
+        el("blocks-view").classList.add("hidden");
         currentView = "question";
         updateQuestionDetailTitle();
         schedulePreview();
+      };
+
+      const showBlocksView = () => {
+        el("overview-view").classList.add("hidden");
+        el("question-view").classList.add("hidden");
+        el("blocks-view").classList.remove("hidden");
+        currentView = "blocks";
+        renderBlocksQuestionList();
+        loadBlocksFromActiveQuestion();
       };
 
       const renderQuestionList = () => {
@@ -1485,10 +1594,91 @@
         });
       };
 
+      const renderBlocksQuestionList = () => {
+        const list = el("blocks-question-list");
+        list.innerHTML = "";
+        if (quizState.questions.length === 0) {
+          const empty = document.createElement("div");
+          empty.className = "node-card";
+          empty.innerHTML = `
+            <h4>No questions yet</h4>
+            <p class="muted">Use the main builder to add a YAML question first.</p>
+          `;
+          list.appendChild(empty);
+          return;
+        }
+        quizState.questions.forEach((question) => {
+          const card = document.createElement("div");
+          card.className = `question-card${question.id === quizState.activeQuestionId ? " active" : ""}`;
+          const title = document.createElement("div");
+          title.className = "question-title";
+          title.textContent = question.name || "Untitled question";
+          const meta = document.createElement("div");
+          meta.className = "question-meta";
+          const kindBadge = document.createElement("span");
+          kindBadge.className = "badge";
+          kindBadge.textContent = question.kind === "yaml" ? "YAML" : "Premade";
+          meta.appendChild(kindBadge);
+          const pointsBadge = document.createElement("span");
+          pointsBadge.className = "badge";
+          pointsBadge.textContent = `${question.points || "?"} pts`;
+          meta.appendChild(pointsBadge);
+          const left = document.createElement("div");
+          left.appendChild(title);
+          left.appendChild(meta);
+          const actions = document.createElement("div");
+          actions.className = "question-actions";
+          const selectBtn = document.createElement("button");
+          selectBtn.className = "btn ghost small";
+          selectBtn.textContent = "Select";
+          selectBtn.addEventListener("click", () => {
+            setActiveQuestion(question.id);
+            loadBlocksFromActiveQuestion();
+          });
+          actions.appendChild(selectBtn);
+          card.appendChild(left);
+          card.appendChild(actions);
+          list.appendChild(card);
+        });
+      };
+
+      const loadBlocksFromActiveQuestion = () => {
+        const question = getActiveQuestion();
+        if (!question || question.kind !== "yaml") {
+          el("blocks-empty").textContent = "Select a YAML question to edit.";
+          blocksState.body = [];
+          blocksState.explanation = [];
+          activeBlockId = null;
+          renderBlocksTree();
+          return;
+        }
+        if (!question.yamlSpec) {
+          question.yamlSpec = buildSpec(questionMetaFrom(question));
+        }
+        const spec = question.yamlSpec || {};
+        blocksState.body = blocksFromNodes(spec.body || []);
+        blocksState.explanation = blocksFromNodes(spec.explanation || []);
+        activeBlockId = null;
+        renderBlocksTree();
+      };
+
+      const syncBlocksToQuestion = () => {
+        const question = getActiveQuestion();
+        if (!question || question.kind !== "yaml") return;
+        const spec = question.yamlSpec || buildSpec(questionMetaFrom(question));
+        spec.body = blocksToNodes(blocksState.body || []);
+        spec.explanation = blocksToNodes(blocksState.explanation || []);
+        question.yamlSpec = spec;
+      };
+
       const setActiveQuestion = (id) => {
         const current = getActiveQuestion();
         if (current && current.kind === "yaml") {
-          current.yamlSpec = buildSpec(questionMetaFrom(current));
+          if (currentView === "blocks") {
+            syncBlocksToQuestion();
+          } else {
+            current.yamlSpec = buildSpec(questionMetaFrom(current));
+          }
         }
         quizState.activeQuestionId = id;
         const next = getActiveQuestion();
@@ -1974,7 +2164,7 @@
       };
 
       const openElementModal = (targetEditor) => {
-        elementModalState.target = targetEditor || activeEditor;
+        elementModalState.target = targetEditor || null;
         const typeSelect = el("element-type");
         typeSelect.innerHTML = "";
         const nodes = getInsertableNodes();
@@ -1993,7 +2183,14 @@
         el("element-modal").classList.remove("hidden");
       };
 
+      const openElementModalForBlock = () => {
+        elementModalState.target = null;
+        elementModalState.mode = "block";
+        openElementModal(null);
+      };
+
       const closeElementModal = () => {
+        elementModalState.mode = null;
         el("element-modal").classList.add("hidden");
       };
 
@@ -2056,8 +2253,17 @@
 
       const insertElementFromModal = () => {
         const targetEditor = elementModalState.target || activeEditor || el("body-editor");
-        if (!targetEditor) return;
         const nodeKey = el("element-type").value;
+        if (elementModalState.mode === "block") {
+          const node = collectElementSpec();
+          const block = blockFromNode(node);
+          insertBlockAfter(blocksState[el("blocks-target").value], block, activeBlockId);
+          renderBlocksTree();
+          closeElementModal();
+          markDirty("builder content");
+          return;
+        }
+        if (!targetEditor) return;
         if (nodeKey === "equation") {
           const latexInput = el("element-fields").querySelector("[data-field-name=\"latex\"]");
           const inlineInput = el("element-fields").querySelector("[data-field-name=\"inline\"]");
@@ -2677,6 +2883,274 @@
         });
 
         return paragraphs;
+      };
+
+      const createBlock = (type, data = {}, children = []) => ({
+        id: `blk_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        type,
+        data,
+        children,
+        collapsed: false,
+      });
+
+      const blockFromNode = (node) => {
+        if (node == null) return null;
+        if (typeof node === "string") {
+          return createBlock("paragraph", { lines: [node] }, []);
+        }
+        if (Array.isArray(node)) {
+          return createBlock("section", {}, node.map(blockFromNode).filter(Boolean));
+        }
+        if (typeof node !== "object") {
+          return createBlock("paragraph", { lines: [String(node)] }, []);
+        }
+        const keys = Object.keys(node);
+        if (keys.length !== 1) {
+          return createBlock("raw", { node }, []);
+        }
+        const key = keys[0];
+        const value = node[key];
+        if (key === "paragraph") {
+          const lines = value?.lines || value?.value || [];
+          const lineArray = Array.isArray(lines) ? lines : [lines];
+          return createBlock("paragraph", { lines: lineArray }, []);
+        }
+        if (["section", "only_html", "only_latex"].includes(key)) {
+          const childrenNodes = value?.children || value?.nodes || [];
+          const childBlocks = (Array.isArray(childrenNodes) ? childrenNodes : [childrenNodes])
+            .map(blockFromNode)
+            .filter(Boolean);
+          return createBlock(key, {}, childBlocks);
+        }
+        return createBlock(key, { node }, []);
+      };
+
+      const blocksFromNodes = (nodes) => {
+        const list = Array.isArray(nodes) ? nodes : (nodes ? [nodes] : []);
+        return list.map(blockFromNode).filter(Boolean);
+      };
+
+      const nodeFromBlock = (block) => {
+        if (block.type === "paragraph") {
+          return { paragraph: { lines: block.data.lines || [] } };
+        }
+        if (block.type === "section" || block.type === "only_html" || block.type === "only_latex") {
+          return { [block.type]: { children: blocksToNodes(block.children || []) } };
+        }
+        if (block.type === "raw") {
+          return block.data.node;
+        }
+        if (block.data?.node) {
+          return block.data.node;
+        }
+        return { [block.type]: block.data || {} };
+      };
+
+      const blocksToNodes = (blocks) => blocks.map(nodeFromBlock);
+
+      const findBlockById = (blocks, id, parent = null) => {
+        for (let i = 0; i < blocks.length; i += 1) {
+          const block = blocks[i];
+          if (block.id === id) {
+            return { block, parent, index: i, siblings: blocks };
+          }
+          const childResult = findBlockById(block.children || [], id, block);
+          if (childResult) return childResult;
+        }
+        return null;
+      };
+
+      const removeBlockById = (blocks, id) => {
+        const found = findBlockById(blocks, id);
+        if (!found) return null;
+        found.siblings.splice(found.index, 1);
+        return found.block;
+      };
+
+      const insertBlockAfter = (blocks, block, afterId = null) => {
+        if (!afterId) {
+          blocks.push(block);
+          return;
+        }
+        const found = findBlockById(blocks, afterId);
+        if (!found) {
+          blocks.push(block);
+          return;
+        }
+        found.siblings.splice(found.index + 1, 0, block);
+      };
+
+      const indentBlock = (blocks, id) => {
+        const found = findBlockById(blocks, id);
+        if (!found) return;
+        if (found.index === 0) return;
+        const newParent = found.siblings[found.index - 1];
+        if (!newParent.children) newParent.children = [];
+        found.siblings.splice(found.index, 1);
+        newParent.children.push(found.block);
+      };
+
+      const outdentBlock = (blocks, id) => {
+        const found = findBlockById(blocks, id);
+        if (!found || !found.parent) return;
+        const parentInfo = findBlockById(blocks, found.parent.id);
+        if (!parentInfo) return;
+        found.siblings.splice(found.index, 1);
+        parentInfo.siblings.splice(parentInfo.index + 1, 0, found.block);
+      };
+
+      const updateBlocksFromEditor = (block, editor) => {
+        block.data.lines = serializeInline(Array.from(editor.childNodes));
+        syncBlocksToQuestion();
+        markDirty("builder content");
+      };
+
+      const renderBlocksTree = () => {
+        const container = el("blocks-tree");
+        container.innerHTML = "";
+        const target = el("blocks-target").value;
+        const blocks = blocksState[target] || [];
+        if (!blocks.length) {
+          el("blocks-empty").textContent = "No blocks yet. Add one to get started.";
+          return;
+        }
+        el("blocks-empty").textContent = "";
+
+        const renderBlock = (block, parentEl) => {
+          const item = document.createElement("div");
+          item.className = `block-item${block.id === activeBlockId ? " selected" : ""}`;
+          item.dataset.id = block.id;
+          item.addEventListener("click", (e) => {
+            e.stopPropagation();
+            activeBlockId = block.id;
+            renderBlocksTree();
+          });
+          item.addEventListener("dragover", (e) => {
+            e.preventDefault();
+          });
+          item.addEventListener("drop", (e) => {
+            e.preventDefault();
+            const draggedId = e.dataTransfer.getData("text/plain");
+            if (!draggedId || draggedId === block.id) return;
+            const dragged = removeBlockById(blocksState[target], draggedId);
+            if (!dragged) return;
+            const targetInfo = findBlockById(blocksState[target], block.id);
+            if (!targetInfo) return;
+            targetInfo.siblings.splice(targetInfo.index + 1, 0, dragged);
+            renderBlocksTree();
+            syncBlocksToQuestion();
+          });
+
+          const header = document.createElement("div");
+          header.className = "block-header";
+          const title = document.createElement("div");
+          title.className = "block-title";
+          title.textContent = block.type;
+          const actions = document.createElement("div");
+          actions.className = "block-actions";
+
+          const collapseBtn = document.createElement("button");
+          collapseBtn.className = "btn ghost small";
+          collapseBtn.textContent = block.collapsed ? "Expand" : "Collapse";
+          collapseBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            block.collapsed = !block.collapsed;
+            renderBlocksTree();
+          });
+
+          const indentBtn = document.createElement("button");
+          indentBtn.className = "btn ghost small";
+          indentBtn.textContent = "Indent";
+          indentBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            indentBlock(blocksState[target], block.id);
+            renderBlocksTree();
+          });
+
+          const outdentBtn = document.createElement("button");
+          outdentBtn.className = "btn ghost small";
+          outdentBtn.textContent = "Outdent";
+          outdentBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            outdentBlock(blocksState[target], block.id);
+            renderBlocksTree();
+          });
+
+          const deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn ghost small";
+          deleteBtn.textContent = "Delete";
+          deleteBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            removeBlockById(blocksState[target], block.id);
+            renderBlocksTree();
+            syncBlocksToQuestion();
+          });
+
+          const handle = document.createElement("span");
+          handle.className = "drag-handle";
+          handle.textContent = "Drag";
+          handle.setAttribute("draggable", "true");
+          handle.addEventListener("dragstart", (e) => {
+            e.dataTransfer.setData("text/plain", block.id);
+          });
+
+          header.appendChild(title);
+          actions.appendChild(handle);
+          actions.appendChild(collapseBtn);
+          actions.appendChild(indentBtn);
+          actions.appendChild(outdentBtn);
+          actions.appendChild(deleteBtn);
+          header.appendChild(actions);
+          item.appendChild(header);
+
+          if (!block.collapsed) {
+            if (block.type === "paragraph") {
+              const editor = document.createElement("div");
+              editor.className = "block-editor";
+              editor.contentEditable = "true";
+              (block.data.lines || []).forEach((line) => appendInlineItem(line, editor));
+              editor.addEventListener("input", () => updateBlocksFromEditor(block, editor));
+              editor.addEventListener("focus", () => {
+                activeEditor = editor;
+                activeInput = null;
+                activeExprEditor = null;
+              });
+              item.appendChild(editor);
+            } else if (block.data?.node) {
+              const raw = document.createElement("textarea");
+              raw.rows = 4;
+              raw.value = JSON.stringify(block.data.node, null, 2);
+              raw.addEventListener("change", async () => {
+                const response = await fetch("/parse_yaml_node", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ yaml: raw.value }),
+                });
+                const data = await response.json();
+                if (data.error) {
+                  raw.value = `# ${data.error}\n` + raw.value;
+                  return;
+                }
+                block.data.node = data.node;
+                syncBlocksToQuestion();
+                markDirty("builder content");
+              });
+              item.appendChild(raw);
+            }
+          }
+
+          parentEl.appendChild(item);
+          if (block.children && block.children.length) {
+            const childrenWrap = document.createElement("div");
+            childrenWrap.className = "block-children";
+            if (!block.collapsed) {
+              block.children.forEach((child) => renderBlock(child, childrenWrap));
+            }
+            item.appendChild(childrenWrap);
+          }
+        };
+
+        blocks.forEach((block) => renderBlock(block, container));
       };
 
       const extractExprNames = (expr) => {
@@ -3623,7 +4097,11 @@
         renderWarnings();
         syncPreviewSeedInputs();
         updateSaveMeta();
-        showOverview();
+        if (window.location.pathname.startsWith("/blocks")) {
+          showBlocksView();
+        } else {
+          showOverview();
+        }
       };
 
       el("add-var").addEventListener("click", addVar);
@@ -3647,6 +4125,12 @@
           closeElementModal();
         }
       });
+      el("blocks-back").addEventListener("click", () => {
+        window.location.href = "/";
+      });
+      el("blocks-target").addEventListener("change", renderBlocksTree);
+      el("blocks-add").addEventListener("click", openElementModalForBlock);
+      el("blocks-sync").addEventListener("click", loadBlocksFromActiveQuestion);
       el("raw-yaml-insert").addEventListener("click", insertRawYamlFromModal);
       el("raw-yaml-cancel").addEventListener("click", closeRawYamlModal);
       el("raw-yaml-modal").addEventListener("click", (e) => {

@@ -90,7 +90,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
     return path
 
   def do_GET(self) -> None:
-    if self.path == "/" or self.path.startswith("/index"):
+    if self.path == "/" or self.path.startswith("/index") or self.path.startswith("/blocks"):
       html = self._load_html()
       if html is None:
         self._send_text("question_builder_ui.html not found.", status=HTTPStatus.NOT_FOUND)
