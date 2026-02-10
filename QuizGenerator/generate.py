@@ -58,6 +58,8 @@ def parse_args():
   )
   parser.add_argument("--seed", type=int, default=None,
                      help="Random seed for quiz generation (default: None for random)")
+  parser.add_argument("--quiet", action="store_true",
+                     help="Disable progress bars for variation prep and uploads")
 
   # Canvas flags
   parser.add_argument("--num_canvas", default=0, type=int, help="How many variations of each question to try to upload to canvas.")
@@ -450,7 +452,10 @@ def _build_canvas_payloads(
     num_variations,
     seed_base,
     max_attempts=1000,
-    max_backoff_attempts=None
+    max_backoff_attempts=None,
+    show_progress_bar: bool = False,
+    progress_label: str | None = None,
+    generation_callback=None
 ):
   max_variations = num_variations
   possible_variations = getattr(question, "possible_variations", None)
@@ -462,6 +467,15 @@ def _build_canvas_payloads(
 
   payloads = []
   seen = set()
+  progress = None
+  if show_progress_bar:
+    try:
+      from tqdm import tqdm
+    except Exception as exc:
+      log.warning(f"Progress bar requested but tqdm is unavailable: {exc}")
+    else:
+      desc = progress_label or f"Preparing {question.name}"
+      progress = tqdm(total=max_variations, desc=desc, unit="var", leave=True)
   for attempt in range(max_attempts):
     rng_seed = seed_base + (attempt * 1000)
     payload = question.get__canvas(
@@ -475,8 +489,20 @@ def _build_canvas_payloads(
       continue
     seen.add(fingerprint)
     payloads.append(payload)
+    if generation_callback is not None:
+      generation_callback({"event": "success"})
+    if progress is not None:
+      progress.update(1)
     if len(payloads) >= max_variations:
       break
+  if generation_callback is not None:
+    generation_callback({
+      "event": "complete",
+      "generated": len(payloads),
+      "expected": max_variations
+    })
+  if progress is not None:
+    progress.close()
 
   if len(payloads) < max_variations:
     log.warning(
@@ -495,7 +521,8 @@ def upload_quiz_to_canvas(
     is_practice=False,
     assignment_group=None,
     optimize_layout=False,
-    max_backoff_attempts=None
+    max_backoff_attempts=None,
+    quiet: bool = False
 ):
   if assignment_group is None:
     assignment_group = canvas_course.create_assignment_group()
@@ -511,9 +538,56 @@ def upload_quiz_to_canvas(
   total_questions = len(ordered_questions)
   log.info(f"Starting to push quiz '{title or canvas_quiz.title}' with {total_questions} questions to Canvas")
   log.info(f"Target: {num_variations} variations per question")
+  show_progress_bar = not quiet
+  overall_bar = None
+  if show_progress_bar:
+    try:
+      from tqdm import tqdm
+    except Exception as exc:
+      log.warning(f"Progress bar requested but tqdm is unavailable: {exc}")
+    else:
+      overall_total_expected = 0
+      for question_i, question in enumerate(ordered_questions):
+        seed_base = question_i * 100_000
+        if isinstance(question, QuestionGroup):
+          if question.pick_once:
+            selected = question._select_questions(seed_base)
+          else:
+            selected = list(question.questions)
+          expected = num_variations * len(selected)
+        else:
+          expected = num_variations
+        overall_total_expected += expected * 2
+
+      overall_bar = tqdm(
+        total=overall_total_expected,
+        desc="Overall (gen+upload)",
+        unit="var",
+        leave=True
+      )
+
+  def make_overall_callback(expected_total: int):
+    if overall_bar is None:
+      return None
+    completed_local = 0
+
+    def _callback(event):
+      nonlocal completed_local
+      event_type = event.get("event")
+      if event_type in {"success", "failed"}:
+        overall_bar.update(1)
+        completed_local += 1
+      if event_type == "complete":
+        expected = event.get("expected", expected_total)
+        if expected > completed_local:
+          overall_bar.update(expected - completed_local)
+          completed_local = expected
+
+    return _callback
 
   for question_i, question in enumerate(ordered_questions):
-    log.info(f"Uploading question {question_i + 1}/{total_questions}: '{question.name}'")
+    label = f"[{question_i + 1}/{total_questions}] {question.name}"
+    log.info(f"Preparing question {label}")
     seed_base = question_i * 100_000
 
     if isinstance(question, QuestionGroup):
@@ -522,26 +596,41 @@ def upload_quiz_to_canvas(
       else:
         selected = list(question.questions)
 
+      expected = num_variations * len(selected)
+      generation_callback = make_overall_callback(expected)
+      upload_callback = make_overall_callback(expected)
+
       group_payloads = []
       for idx, sub_question in enumerate(selected):
         sub_seed_base = seed_base + (idx * 10_000)
-      group_payloads.extend(_build_canvas_payloads(
-          sub_question,
-          canvas_course.course,
-          canvas_quiz,
-          num_variations,
-          sub_seed_base,
-          max_backoff_attempts=max_backoff_attempts
-      ))
+        group_payloads.extend(_build_canvas_payloads(
+            sub_question,
+            canvas_course.course,
+            canvas_quiz,
+            num_variations,
+            sub_seed_base,
+            max_backoff_attempts=max_backoff_attempts,
+            show_progress_bar=show_progress_bar,
+            progress_label=f"Preparing {label}",
+            generation_callback=generation_callback
+        ))
 
+      log.info(f"Uploading group {label} with {len(group_payloads)} variations")
       canvas_course.create_question(
         canvas_quiz,
         group_payloads,
         group_name=question.name,
         question_points=question.points_value,
-        pick_count=question.num_to_pick
+        pick_count=question.num_to_pick,
+        show_progress_bar=show_progress_bar,
+        progress_label=f"Uploading {label}",
+        progress_callback=upload_callback
       )
       continue
+
+    expected = num_variations
+    generation_callback = make_overall_callback(expected)
+    upload_callback = make_overall_callback(expected)
 
     payloads = _build_canvas_payloads(
       question,
@@ -549,16 +638,25 @@ def upload_quiz_to_canvas(
       canvas_quiz,
       num_variations,
       seed_base,
-      max_backoff_attempts=max_backoff_attempts
+      max_backoff_attempts=max_backoff_attempts,
+      show_progress_bar=show_progress_bar,
+      progress_label=f"Preparing {label}",
+      generation_callback=generation_callback
     )
+    log.info(f"Uploading question {label} with {len(payloads)} variations")
     canvas_course.create_question(
       canvas_quiz,
       payloads,
       group_name=question.name,
       question_points=question.points_value,
-      pick_count=1
+      pick_count=1,
+      show_progress_bar=show_progress_bar,
+      progress_label=f"Uploading {label}",
+      progress_callback=upload_callback
     )
 
+  if overall_bar is not None:
+    overall_bar.close()
   log.info(f"Canvas quiz URL: {canvas_quiz.html_url}")
 
 
@@ -639,7 +737,8 @@ def generate_quiz(
     layout_safety_factor=1.1,
     embed_images_typst=True,
     optimize_layout=False,
-    max_backoff_attempts=None
+    max_backoff_attempts=None,
+    quiet: bool = False
 ):
 
   quizzes = Quiz.from_yaml(path_to_quiz_yaml)
@@ -713,7 +812,8 @@ def generate_quiz(
         is_practice=quiz.practice,
         assignment_group=assignment_group,
         optimize_layout=optimize_layout,
-        max_backoff_attempts=max_backoff_attempts
+        max_backoff_attempts=max_backoff_attempts,
+        quiet=quiet
       )
     
     quiz.describe()
@@ -814,7 +914,8 @@ def main():
     layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1),
     embed_images_typst=getattr(args, 'embed_images_typst', True),
     optimize_layout=getattr(args, 'optimize_space', False),
-    max_backoff_attempts=getattr(args, "max_backoff_attempts", None)
+    max_backoff_attempts=getattr(args, "max_backoff_attempts", None),
+    quiet=getattr(args, "quiet", False)
   )
 
 
