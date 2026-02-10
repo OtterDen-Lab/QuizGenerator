@@ -722,6 +722,7 @@
           <button class="btn ghost small" id="insert-var-body">Insert Variable</button>
           <button class="btn ghost small" id="insert-derived-body">Insert Derived</button>
           <button class="btn ghost small" id="insert-element-body">Insert Element</button>
+          <button class="btn ghost small" id="insert-raw-body">Insert Raw YAML</button>
           <button class="btn secondary small" id="insert-answer-body">Insert Answer</button>
         </div>
         <div class="chips" id="body-var-chips"></div>
@@ -739,6 +740,7 @@
           <button class="btn ghost small" id="insert-var-expl">Insert Variable</button>
           <button class="btn ghost small" id="insert-derived-expl">Insert Derived</button>
           <button class="btn ghost small" id="insert-element-expl">Insert Element</button>
+          <button class="btn ghost small" id="insert-raw-expl">Insert Raw YAML</button>
           <button class="btn secondary small" id="insert-answer-expl">Insert Answer</button>
         </div>
         <div class="chips" id="expl-var-chips"></div>
@@ -911,6 +913,20 @@
       </div>
     </div>
 
+    <div id="raw-yaml-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Insert Raw YAML</h3>
+          <button class="btn ghost small" id="raw-yaml-cancel">Cancel</button>
+        </div>
+        <p class="muted">Paste a single YAML node (mapping). This will be inserted as-is.</p>
+        <textarea id="raw-yaml-input" class="expr-input" rows="8" placeholder="paragraph:\n  lines:\n    - Hello"></textarea>
+        <div class="row" style="justify-content: flex-end; margin-top: 12px;">
+          <button class="btn secondary" id="raw-yaml-insert">Insert YAML</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       const state = {
         version: 1,
@@ -944,6 +960,9 @@
       let activeExprEditor = null;
       let currentAnswerTarget = null;
       const elementModalState = {
+        target: null,
+      };
+      const rawYamlModalState = {
         target: null,
       };
       let previewTimer = null;
@@ -1648,6 +1667,14 @@
         });
       };
 
+      const createRawYamlToken = (nodeSpec) => {
+        return createTokenSpan("node", "Raw YAML", {
+          node: "raw",
+          label: "Raw YAML",
+          spec: JSON.stringify(nodeSpec),
+        });
+      };
+
       const insertTokenIntoEditor = (editor, token) => {
         if (!editor) return;
         editor.focus();
@@ -1798,6 +1825,94 @@
         const preview = el("element-preview");
         preview.textContent = spec.title ? `${spec.title} (${nodeKey})` : nodeKey;
         const fields = spec.fields || [];
+        if (nodeKey === "equation") {
+          const modeWrap = document.createElement("div");
+          const modeLabel = document.createElement("label");
+          modeLabel.textContent = "Input mode";
+          const modeSelect = document.createElement("select");
+          modeSelect.id = "equation-input-mode";
+          ["latex", "sympy"].forEach((mode) => {
+            const opt = document.createElement("option");
+            opt.value = mode;
+            opt.textContent = mode.toUpperCase();
+            modeSelect.appendChild(opt);
+          });
+          modeWrap.appendChild(modeLabel);
+          modeWrap.appendChild(modeSelect);
+          container.appendChild(modeWrap);
+
+          const latexWrap = document.createElement("div");
+          const latexLabel = document.createElement("label");
+          latexLabel.textContent = "LaTeX";
+          const latexInput = document.createElement("textarea");
+          latexInput.dataset.fieldName = "latex";
+          latexInput.dataset.fieldType = "templated_string";
+          latexInput.rows = 3;
+          latexWrap.appendChild(latexLabel);
+          latexWrap.appendChild(latexInput);
+          container.appendChild(latexWrap);
+
+          const sympyWrap = document.createElement("div");
+          sympyWrap.id = "equation-sympy-wrap";
+          sympyWrap.classList.add("hidden");
+          const sympyLabel = document.createElement("label");
+          sympyLabel.textContent = "SymPy";
+          const sympyInput = document.createElement("textarea");
+          sympyInput.id = "equation-sympy-input";
+          sympyInput.rows = 3;
+          const sympyButton = document.createElement("button");
+          sympyButton.type = "button";
+          sympyButton.className = "btn ghost small";
+          sympyButton.id = "equation-sympy-convert";
+          sympyButton.textContent = "Convert to LaTeX";
+          sympyWrap.appendChild(sympyLabel);
+          sympyWrap.appendChild(sympyInput);
+          sympyWrap.appendChild(sympyButton);
+          container.appendChild(sympyWrap);
+
+          const inlineWrap = document.createElement("div");
+          const inlineLabel = document.createElement("label");
+          inlineLabel.textContent = "Inline";
+          const inlineSelect = document.createElement("select");
+          inlineSelect.dataset.fieldName = "inline";
+          inlineSelect.dataset.fieldType = "bool";
+          ["false", "true"].forEach((value) => {
+            const opt = document.createElement("option");
+            opt.value = value;
+            opt.textContent = value;
+            inlineSelect.appendChild(opt);
+          });
+          inlineWrap.appendChild(inlineLabel);
+          inlineWrap.appendChild(inlineSelect);
+          container.appendChild(inlineWrap);
+
+          modeSelect.addEventListener("change", () => {
+            sympyWrap.classList.toggle("hidden", modeSelect.value !== "sympy");
+            latexWrap.classList.toggle("hidden", modeSelect.value === "sympy");
+          });
+
+          sympyButton.addEventListener("click", async () => {
+            const expr = sympyInput.value.trim();
+            if (!expr) {
+              preview.textContent = "Enter a SymPy expression to convert.";
+              return;
+            }
+            preview.textContent = "Converting SymPy...";
+            const response = await fetch("/sympy_to_latex", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ expr }),
+            });
+            const data = await response.json();
+            if (data.error) {
+              preview.textContent = data.error;
+              return;
+            }
+            latexInput.value = data.latex || "";
+            preview.textContent = "Converted to LaTeX.";
+          });
+          return;
+        }
         if (!fields.length) {
           container.innerHTML = "<div class=\"hint\">No fields required for this element.</div>";
           return;
@@ -1942,12 +2057,66 @@
       const insertElementFromModal = () => {
         const targetEditor = elementModalState.target || activeEditor || el("body-editor");
         if (!targetEditor) return;
+        const nodeKey = el("element-type").value;
+        if (nodeKey === "equation") {
+          const latexInput = el("element-fields").querySelector("[data-field-name=\"latex\"]");
+          const inlineInput = el("element-fields").querySelector("[data-field-name=\"inline\"]");
+          const latexValue = latexInput?.value?.trim();
+          if (!latexValue) {
+            el("element-preview").textContent = "Provide LaTeX (convert from SymPy first if needed).";
+            return;
+          }
+          const inlineValue = inlineInput?.value === "true";
+          const spec = { equation: { latex: latexValue, inline: inlineValue } };
+          insertTokenIntoEditor(targetEditor, createNodeToken("equation", spec));
+          markDirty("builder content");
+          schedulePreview();
+          closeElementModal();
+          return;
+        }
         const node = collectElementSpec();
         const nodeKey = Object.keys(node)[0];
         insertTokenIntoEditor(targetEditor, createNodeToken(nodeKey, node));
         markDirty("builder content");
         schedulePreview();
         closeElementModal();
+      };
+
+      const openRawYamlModal = (targetEditor) => {
+        rawYamlModalState.target = targetEditor || activeEditor;
+        el("raw-yaml-input").value = "";
+        el("raw-yaml-modal").classList.remove("hidden");
+      };
+
+      const closeRawYamlModal = () => {
+        el("raw-yaml-modal").classList.add("hidden");
+      };
+
+      const insertRawYamlFromModal = async () => {
+        const targetEditor = rawYamlModalState.target || activeEditor || el("body-editor");
+        if (!targetEditor) return;
+        const yamlText = el("raw-yaml-input").value;
+        if (!yamlText.trim()) {
+          return;
+        }
+        const response = await fetch("/parse_yaml_node", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ yaml: yamlText }),
+        });
+        const data = await response.json();
+        if (data.error) {
+          el("raw-yaml-input").value = `# ${data.error}\n` + yamlText;
+          return;
+        }
+        if (!data.node || typeof data.node !== "object" || Array.isArray(data.node)) {
+          el("raw-yaml-input").value = "# YAML must be a single mapping node.\n" + yamlText;
+          return;
+        }
+        insertTokenIntoEditor(targetEditor, createRawYamlToken(data.node));
+        markDirty("builder content");
+        schedulePreview();
+        closeRawYamlModal();
       };
 
       const pickName = (entries, label) => {
@@ -3478,6 +3647,13 @@
           closeElementModal();
         }
       });
+      el("raw-yaml-insert").addEventListener("click", insertRawYamlFromModal);
+      el("raw-yaml-cancel").addEventListener("click", closeRawYamlModal);
+      el("raw-yaml-modal").addEventListener("click", (e) => {
+        if (e.target.id === "raw-yaml-modal") {
+          closeRawYamlModal();
+        }
+      });
       el("generate-question").addEventListener("click", generateQuestionYaml);
       el("generate-quiz").addEventListener("click", generateQuizYaml);
       el("export-pdf").addEventListener("click", () => exportHint("pdf"));
@@ -3586,6 +3762,7 @@
         if (choice) insertDerived(choice, { targetEditor: el("body-editor"), preferInput: false });
       });
       el("insert-element-body").addEventListener("click", () => openElementModal(el("body-editor")));
+      el("insert-raw-body").addEventListener("click", () => openRawYamlModal(el("body-editor")));
       el("insert-answer-body").addEventListener("click", () => openAnswerModal(el("body-editor")));
       el("insert-var-expl").addEventListener("click", () => {
         const choice = pickName(state.context.vars, "variable");
@@ -3596,6 +3773,7 @@
         if (choice) insertDerived(choice, { targetEditor: el("expl-editor"), preferInput: false });
       });
       el("insert-element-expl").addEventListener("click", () => openElementModal(el("expl-editor")));
+      el("insert-raw-expl").addEventListener("click", () => openRawYamlModal(el("expl-editor")));
       el("insert-answer-expl").addEventListener("click", () => openAnswerModal(el("expl-editor")));
       el("answer-cancel").addEventListener("click", closeAnswerModal);
       el("answer-clear").addEventListener("click", clearAnswerModal);

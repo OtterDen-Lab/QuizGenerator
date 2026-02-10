@@ -111,7 +111,16 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
     return super().do_GET()
 
   def do_POST(self) -> None:
-    if self.path not in {"/to_yaml", "/from_yaml", "/preview", "/save_yaml", "/preview_premade", "/export_pdf"}:
+    if self.path not in {
+      "/to_yaml",
+      "/from_yaml",
+      "/preview",
+      "/save_yaml",
+      "/preview_premade",
+      "/export_pdf",
+      "/parse_yaml_node",
+      "/sympy_to_latex",
+    }:
       self._send_text("Not found.", status=HTTPStatus.NOT_FOUND)
       return
 
@@ -147,6 +156,19 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         self._send_json({"error": "YAML must define a mapping at the root."}, status=HTTPStatus.BAD_REQUEST)
         return
       self._send_json({"spec": spec})
+      return
+
+    if self.path == "/parse_yaml_node":
+      yaml_text = payload.get("yaml")
+      if not isinstance(yaml_text, str):
+        self._send_json({"error": "Payload must include a 'yaml' string."}, status=HTTPStatus.BAD_REQUEST)
+        return
+      try:
+        node = yaml.safe_load(yaml_text)
+      except yaml.YAMLError as exc:
+        self._send_json({"error": f"Invalid YAML: {exc}"}, status=HTTPStatus.BAD_REQUEST)
+        return
+      self._send_json({"node": node})
       return
 
     if self.path == "/preview":
@@ -226,6 +248,25 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         "body_html": body_html,
         "explanation_html": explanation_html,
       })
+      return
+
+    if self.path == "/sympy_to_latex":
+      expr = payload.get("expr")
+      if not isinstance(expr, str) or not expr.strip():
+        self._send_json({"error": "Provide a non-empty 'expr'."}, status=HTTPStatus.BAD_REQUEST)
+        return
+      try:
+        import sympy
+      except ImportError:
+        self._send_json({"error": "SymPy is not installed. Install sympy to convert expressions."}, status=HTTPStatus.BAD_REQUEST)
+        return
+      try:
+        parsed = sympy.sympify(expr)
+        latex = sympy.latex(parsed)
+      except Exception as exc:
+        self._send_json({"error": f"SymPy conversion failed: {type(exc).__name__}: {exc}"}, status=HTTPStatus.BAD_REQUEST)
+        return
+      self._send_json({"latex": latex})
       return
 
     if self.path == "/save_yaml":
