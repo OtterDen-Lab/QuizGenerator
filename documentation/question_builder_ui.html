@@ -2281,8 +2281,8 @@
           return;
         }
         const node = collectElementSpec();
-        const nodeKey = Object.keys(node)[0];
-        insertTokenIntoEditor(targetEditor, createNodeToken(nodeKey, node));
+        const nodeKeyFromSpec = Object.keys(node)[0];
+        insertTokenIntoEditor(targetEditor, createNodeToken(nodeKeyFromSpec, node));
         markDirty("builder content");
         schedulePreview();
         closeElementModal();
