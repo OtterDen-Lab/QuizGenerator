@@ -789,7 +789,13 @@ class Question(Container):
           
           # Build extra_data dict with regeneration metadata if available
           extra_data = {}
-          if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed'):
+          if hasattr(self, 'question_id') and self.question_id and hasattr(self, 'generation_seed'):
+            if self.generation_seed is not None:
+              extra_data['question_id'] = self.question_id
+              extra_data['seed'] = self.generation_seed
+              if hasattr(self, 'yaml_id') and self.yaml_id:
+                extra_data['yaml_id'] = self.yaml_id
+          elif hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed'):
             if self.question_class_name and self.generation_seed is not None:
               extra_data['question_type'] = self.question_class_name
               extra_data['seed'] = self.generation_seed
@@ -860,7 +866,13 @@ class Question(Container):
         
         # Build extra_data dict with regeneration metadata if available
         extra_data = {}
-        if hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed'):
+        if hasattr(self, 'question_id') and self.question_id and hasattr(self, 'generation_seed'):
+          if self.generation_seed is not None:
+            extra_data['question_id'] = self.question_id
+            extra_data['seed'] = self.generation_seed
+            if hasattr(self, 'yaml_id') and self.yaml_id:
+              extra_data['yaml_id'] = self.yaml_id
+        elif hasattr(self, 'question_class_name') and hasattr(self, 'generation_seed'):
           if self.question_class_name and self.generation_seed is not None:
             extra_data['question_type'] = self.question_class_name
             extra_data['seed'] = self.generation_seed

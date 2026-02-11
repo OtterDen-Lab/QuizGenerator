@@ -32,11 +32,13 @@ class Quiz:
   practice: bool
   preserve_order_point_values: set[float]
   preserve_yaml_order: bool
+  yaml_id: str | None
 
   def __init__(self, name: str, questions: list[Question | QuestionGroup], practice: bool, *args, **kwargs):
     self.name = name
     self.questions = questions
     self.instructions = kwargs.get("instructions", "")
+    self.yaml_id = kwargs.get("yaml_id", None)
 
     # Parse description with content AST if provided
     raw_description = kwargs.get("description", None)
@@ -60,11 +62,13 @@ class Quiz:
   
   @classmethod
   def from_yaml(cls, path_to_yaml) -> list[Quiz]:
-
-    quizes_loaded : list[Quiz] = []
-
     with open(path_to_yaml) as fid:
       list_of_exam_dicts = list(yaml.safe_load_all(fid))
+    return cls.from_exam_dicts(list_of_exam_dicts, source_path=path_to_yaml)
+
+  @classmethod
+  def from_exam_dicts(cls, list_of_exam_dicts: list[dict], *, source_path: str | None = None) -> list[Quiz]:
+    quizes_loaded : list[Quiz] = []
 
     def _require_type(value, expected, label: str):
       if not isinstance(value, expected):
@@ -107,6 +111,8 @@ class Quiz:
             _require_type(entry["_config"], dict, "_config")
           if "kwargs" in entry:
             _require_type(entry["kwargs"], dict, "kwargs")
+          if "question_id" in entry:
+            _require_type(entry["question_id"], str, "question_id")
         return
 
       # Mapping format
@@ -129,6 +135,21 @@ class Quiz:
             _require_type(q_data["_config"], dict, f"questions[{points_value}]['{q_name}']._config")
           if "kwargs" in q_data:
             _require_type(q_data["kwargs"], dict, f"questions[{points_value}]['{q_name}'].kwargs")
+          if "question_id" in q_data:
+            _require_type(q_data["question_id"], str, f"questions[{points_value}]['{q_name}'].question_id")
+
+          group_config = q_data.get("_config", {}) or {}
+          if group_config.get("group", False):
+            for group_name, group_data in q_data.items():
+              if group_name == "_config":
+                continue
+              _require_type(group_data, dict, f"questions[{points_value}]['{q_name}']['{group_name}']")
+              if "question_id" in group_data:
+                _require_type(
+                  group_data["question_id"],
+                  str,
+                  f"questions[{points_value}]['{q_name}']['{group_name}'].question_id"
+                )
 
     for exam_dict in list_of_exam_dicts:
       _validate_exam_dict(exam_dict)
@@ -154,6 +175,7 @@ class Quiz:
 
       # Get general quiz information from the dictionary
       name = exam_dict.get("name", f"Unnamed Exam ({datetime.now().strftime('%a %b %d %I:%M %p')})")
+      yaml_id = exam_dict.get("yaml_id")
       if isinstance(name, str):
         def replace_time(match: re.Match) -> str:
           fmt = match.group(1) or "%b %d %I:%M%p"
@@ -369,7 +391,8 @@ class Quiz:
         questions_for_exam,
         practice,
         description=description,
-        preserve_yaml_order=preserve_yaml_order
+        preserve_yaml_order=preserve_yaml_order,
+        yaml_id=yaml_id
       )
       quiz_from_yaml.set_sort_order(sort_order)
       quiz_from_yaml.preserve_order_point_values = preserve_order_point_values
@@ -680,6 +703,8 @@ class Quiz:
       for item in instances:
         question_ast = question._build_question_ast(item)
         question_ast.question_number = question_number
+        if getattr(self, "yaml_id", None):
+          question_ast.yaml_id = self.yaml_id
         quiz.add_element(question_ast)
         question_number += 1
 

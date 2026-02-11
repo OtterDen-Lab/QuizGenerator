@@ -22,6 +22,7 @@ from typing import Any
 
 import segno
 from cryptography.fernet import Fernet
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 log = logging.getLogger(__name__)
@@ -122,11 +123,13 @@ class QuestionQRCode:
         return json.loads(json_bytes.decode("utf-8"))
 
     @classmethod
-    def encrypt_question_data(cls, question_type: str, seed: int, version: str | None = None,
+    def encrypt_question_data(cls, question_type: str | None, seed: int, version: str | None = None,
                               config: dict[str, Any] | None = None,
                               context: dict[str, Any] | None = None,
                               points_value: float | None = None,
-                              key: bytes | None = None) -> str:
+                              key: bytes | None = None,
+                              question_id: str | None = None,
+                              yaml_id: str | None = None) -> str:
         """
         Encode question regeneration data for QR embedding.
 
@@ -138,6 +141,8 @@ class QuestionQRCode:
             context: Optional dictionary of context extras
             points_value: Optional points value (for redundancy)
             key: Encryption key (uses environment key if None)
+            question_id: Optional question identifier (YAML-based regeneration)
+            yaml_id: Optional YAML identifier (for mismatch warnings)
 
         Returns:
             str: Base64-encoded encrypted payload with v2 prefix
@@ -147,10 +152,18 @@ class QuestionQRCode:
             >>> print(encrypted)
             'VmVjdG9yRG90OjEyMzQ1OjEuMA=='
         """
+        if question_type is None and question_id is None:
+            raise ValueError("Must provide question_type or question_id for QR regeneration data.")
+
         payload: dict[str, Any] = {
-            "t": question_type,
             "s": seed,
         }
+        if question_type is not None:
+            payload["t"] = question_type
+        if question_id is not None:
+            payload["qid"] = question_id
+        if yaml_id is not None:
+            payload["y"] = yaml_id
         if points_value is not None:
             payload["p"] = points_value
         if config:
@@ -161,7 +174,8 @@ class QuestionQRCode:
             payload["v"] = version
 
         encoded = cls._encrypt_v2(payload, key=key)
-        log.debug(f"Encoded question data v2: {question_type} seed={seed} ({len(encoded)} chars)")
+        label = question_type or question_id or "unknown"
+        log.debug(f"Encoded question data v2: {label} seed={seed} ({len(encoded)} chars)")
         return encoded
 
     @classmethod
@@ -175,7 +189,14 @@ class QuestionQRCode:
             key: Encryption key (uses environment key if None)
 
         Returns:
-            dict: {"question_type": str, "seed": int, "version": str, "config": dict (optional)}
+            dict: {
+              "question_type": str,
+              "seed": int,
+              "version": str,
+              "config": dict (optional),
+              "question_id": str (optional),
+              "yaml_id": str (optional)
+            }
 
         Raises:
             ValueError: If decoding fails or data is malformed
@@ -190,7 +211,10 @@ class QuestionQRCode:
 
         try:
             if encrypted_data.startswith(cls.V2_PREFIX):
-                payload = cls._decrypt_v2(encrypted_data, key=key)
+                try:
+                    payload = cls._decrypt_v2(encrypted_data, key=key)
+                except InvalidTag as exc:
+                    raise ValueError("Decryption failed (bad key or corrupted data).") from exc
                 result = {
                     "question_type": payload.get("t"),
                     "seed": int(payload.get("s")),
@@ -203,6 +227,10 @@ class QuestionQRCode:
                     result["context"] = payload.get("x")
                 if "p" in payload:
                     result["points"] = payload.get("p")
+                if "qid" in payload:
+                    result["question_id"] = payload.get("qid")
+                if "y" in payload:
+                    result["yaml_id"] = payload.get("y")
                 return result
 
             # V1 fallback (XOR obfuscation)
@@ -251,6 +279,8 @@ class QuestionQRCode:
             points_value: Point value of the question
             **extra_data: Additional metadata to include
                 - question_type (str): Question class name for regeneration
+                - question_id (str): YAML question identifier (alternative to question_type)
+                - yaml_id (str): YAML identifier for mismatch warnings
                 - seed (int): Random seed used for this question
                 - version (str): Question class version
                 - config (dict): Question-specific configuration parameters
@@ -277,22 +307,27 @@ class QuestionQRCode:
         }
 
         # If question regeneration data provided, encrypt it
-        if all(k in extra_data for k in ['question_type', 'seed']):
+        has_seed = 'seed' in extra_data
+        has_question_type = 'question_type' in extra_data
+        has_question_id = 'question_id' in extra_data
+        if has_seed and (has_question_type or has_question_id):
             config = extra_data.get('config', {})
             context = extra_data.get('context', {})
             encrypted = cls.encrypt_question_data(
-                extra_data['question_type'],
+                extra_data.get('question_type'),
                 extra_data['seed'],
                 extra_data.get('version'),
                 config=config,
                 context=context,
-                points_value=points_value
+                points_value=points_value,
+                question_id=extra_data.get('question_id'),
+                yaml_id=extra_data.get('yaml_id')
             )
             data['s'] = encrypted
 
             extra_data = {
                 k: v for k, v in extra_data.items()
-                if k not in ['question_type', 'seed', 'version', 'config', 'context']
+                if k not in ['question_type', 'seed', 'version', 'config', 'context', 'question_id', 'yaml_id']
             }
 
         # Add any remaining extra metadata

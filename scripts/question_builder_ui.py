@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -14,6 +15,10 @@ from socketserver import TCPServer
 from typing import Any
 
 import yaml
+try:
+  from dotenv import load_dotenv
+except ImportError:  # pragma: no cover - optional dependency
+  load_dotenv = None
 
 
 BASE_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -28,6 +33,29 @@ from QuizGenerator.question import QuestionContext, QuestionRegistry, Question
 
 
 HTML_PATH = BASE_DIR / "documentation" / "question_builder_ui.html"
+
+def _load_env() -> None:
+  if load_dotenv is None:
+    return
+  repo_env = BASE_DIR / ".env"
+  loaded = False
+  source = None
+  if repo_env.exists():
+    loaded = load_dotenv(repo_env)
+    source = str(repo_env)
+  else:
+    source = os.path.join(os.path.expanduser("~"), ".env")
+    loaded = load_dotenv(source)
+  key = os.environ.get("QUIZ_ENCRYPTION_KEY")
+  if key:
+    fingerprint = hashlib.sha256(key.encode("utf-8")).hexdigest()[:12]
+    origin = source if loaded else "environment"
+    print(f"QUIZ_ENCRYPTION_KEY loaded from {origin} (sha256:{fingerprint})")
+  else:
+    if loaded:
+      print(f"Loaded {source} (QUIZ_ENCRYPTION_KEY not set)")
+    else:
+      print("QUIZ_ENCRYPTION_KEY not set; using environment variables")
 
 
 def _coerce_quiz_spec(spec: dict[str, Any]) -> dict[str, Any]:
@@ -337,21 +365,12 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
       if not pdfs:
         self._send_json({"error": "PDF export succeeded but no PDF was found."}, status=HTTPStatus.BAD_REQUEST)
         return
-
-      if len(pdfs) == 1:
-        pdf_path = pdfs[0]
-        try:
-          pdf_bytes = pdf_path.read_bytes()
-        except OSError as exc:
-          self._send_json({"error": f"Failed to read PDF: {exc}"}, status=HTTPStatus.BAD_REQUEST)
-          return
-
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "application/pdf")
-        self.send_header("Content-Disposition", f'attachment; filename="{pdf_path.name}"')
-        self.send_header("Content-Length", str(len(pdf_bytes)))
-        self.end_headers()
-        self.wfile.write(pdf_bytes)
+      replay_yaml = pathlib.Path(quiz_generate._replay_yaml_path(str(save_path)))
+      if not replay_yaml.exists() or replay_yaml.stat().st_mtime < start_time - 1:
+        candidates = sorted(output_dir.glob("*_replay.yaml"), key=lambda p: p.stat().st_mtime, reverse=True)
+        replay_yaml = candidates[0] if candidates else replay_yaml
+      if not replay_yaml.exists():
+        self._send_json({"error": "Replay YAML not found. PDF export cannot be bundled."}, status=HTTPStatus.BAD_REQUEST)
         return
 
       archive_bytes = io.BytesIO()
@@ -361,6 +380,10 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
             archive.write(pdf_path, arcname=pdf_path.name)
           except OSError:
             continue
+        try:
+          archive.write(replay_yaml, arcname=replay_yaml.name)
+        except OSError:
+          pass
       archive_bytes.seek(0)
       zip_payload = archive_bytes.read()
 
@@ -379,6 +402,7 @@ def main() -> None:
   parser.add_argument("--port", default=8787, type=int, help="Port to bind (default: 8787)")
   args = parser.parse_args()
 
+  _load_env()
   os.chdir(BASE_DIR)
   with TCPServer((args.host, args.port), QuestionBuilderHandler) as httpd:
     print(f"Question Builder UI running at http://{args.host}:{args.port}")

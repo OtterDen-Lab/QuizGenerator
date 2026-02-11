@@ -40,12 +40,15 @@ the exact question and answer without needing the original exam file.
 
 import argparse
 import base64
+import copy
 import json
 import logging
 import os
 import sys
 from pathlib import Path
 from typing import Any, Callable
+
+import yaml
 
 # Load environment variables from .env file
 try:
@@ -61,7 +64,8 @@ except ImportError:
 
 # Quiz generator imports (always available)
 from QuizGenerator.qrcode_generator import QuestionQRCode
-from QuizGenerator.question import QuestionRegistry
+from QuizGenerator.question import QuestionGroup, QuestionRegistry
+from QuizGenerator.quiz import Quiz
 
 # QR code reading (optional - only needed for CLI usage with --image)
 # Your web UI should use its own QR decoding library
@@ -168,11 +172,140 @@ def _render_html(element, upload_func=None, **kwargs) -> str:
   return element.render("html", upload_func=upload_func, **kwargs)
 
 
+def _load_yaml_docs(
+  *,
+  yaml_path: str | None = None,
+  yaml_text: str | None = None,
+  yaml_docs: list[dict] | None = None
+) -> list[dict]:
+  if yaml_docs is not None:
+    return yaml_docs
+  if yaml_path is not None:
+    with open(yaml_path, "r", encoding="utf-8") as handle:
+      return list(yaml.safe_load_all(handle))
+  if yaml_text is not None:
+    return list(yaml.safe_load_all(yaml_text))
+  raise ValueError("Must provide yaml_path, yaml_text, or yaml_docs.")
+
+
+def _find_questions_by_id(quizzes: list[Quiz], question_id: str) -> list:
+  matches = []
+  for quiz in quizzes:
+    for item in quiz.questions:
+      if isinstance(item, QuestionGroup):
+        for question in item.questions:
+          if getattr(question, "question_id", None) == question_id:
+            matches.append(question)
+      else:
+        if getattr(item, "question_id", None) == question_id:
+          matches.append(item)
+  return matches
+
+
+def regenerate_from_yaml_metadata(
+  *,
+  question_id: str,
+  seed: int,
+  points: float = 1.0,
+  yaml_id: str | None = None,
+  yaml_path: str | None = None,
+  yaml_text: str | None = None,
+  yaml_docs: list[dict] | None = None,
+  image_mode: str = "inline",
+  upload_func: Callable | None = None
+) -> dict[str, Any]:
+  """
+  Regenerate question answers using YAML + question_id + seed.
+
+  Args:
+      question_id: Question identifier from QR payload
+      seed: Random seed used to generate the question
+      points: Point value for the question (default: 1.0)
+      yaml_id: Optional YAML identifier from QR payload (used for warnings)
+      yaml_path/yaml_text/yaml_docs: YAML source defining the questions
+      image_mode: "inline", "upload", or "none" for HTML image handling
+      upload_func: Optional upload function used when image_mode="upload"
+  """
+  docs = _load_yaml_docs(yaml_path=yaml_path, yaml_text=yaml_text, yaml_docs=yaml_docs)
+  quizzes = Quiz.from_exam_dicts(copy.deepcopy(docs), source_path=yaml_path)
+
+  matches = _find_questions_by_id(quizzes, question_id)
+  if not matches:
+    raise ValueError(f"Question ID '{question_id}' not found in provided YAML.")
+  if len(matches) > 1:
+    raise ValueError(f"Question ID '{question_id}' is not unique in provided YAML.")
+
+  question = matches[0]
+
+  warnings: list[str] = []
+  yaml_ids = {
+    doc.get("yaml_id") for doc in docs
+    if isinstance(doc, dict) and doc.get("yaml_id")
+  }
+  if yaml_id and yaml_ids and yaml_id not in yaml_ids:
+    warnings.append(f"YAML id mismatch: QR has {yaml_id}, YAML has {sorted(yaml_ids)}")
+
+  if points is not None and getattr(question, "points_value", None) != points:
+    warnings.append(
+      f"Points mismatch: QR has {points}, YAML has {getattr(question, 'points_value', None)}"
+    )
+
+  instance = question.instantiate(rng_seed=seed)
+  question_ast = question._build_question_ast(instance)
+
+  answer_kind, canvas_answers = question._answers_for_canvas(
+    instance.answers,
+    instance.can_be_numerical
+  )
+
+  resolved_upload_func = _resolve_upload_func(image_mode, upload_func)
+
+  question_html = _render_html(
+    question_ast.body,
+    show_answers=True,
+    upload_func=resolved_upload_func
+  )
+
+  explanation_markdown = question_ast.explanation.render("markdown")
+  if not explanation_markdown or "[Please reach out to your professor for clarification]" in explanation_markdown:
+    explanation_markdown = None
+
+  explanation_html = _render_html(
+    question_ast.explanation,
+    upload_func=resolved_upload_func
+  )
+  if not explanation_html or "[Please reach out to your professor for clarification]" in explanation_html:
+    explanation_html = None
+
+  result = {
+    "question_id": question_id,
+    "yaml_id": yaml_id,
+    "question_type": question._get_registered_name(),
+    "version": getattr(question, "VERSION", None),
+    "seed": seed,
+    "points": points,
+    "answers": {
+      "kind": answer_kind.value,
+      "data": canvas_answers
+    },
+    "answer_objects": instance.answers,
+    "answer_key_html": question_html,
+    "explanation_markdown": explanation_markdown,
+    "explanation_html": explanation_html
+  }
+  if warnings:
+    result["warnings"] = warnings
+  return result
+
+
 def regenerate_question_answer(
   qr_data: dict[str, Any],
   *,
   image_mode: str = "inline",
-  upload_func: Callable | None = None
+  upload_func: Callable | None = None,
+  yaml_path: str | None = None,
+  yaml_text: str | None = None,
+  yaml_docs: list[dict] | None = None
 ) -> dict[str, Any]:
   """
   Regenerate question and extract answer using QR code metadata.
@@ -218,26 +351,52 @@ def regenerate_question_answer(
   try:
     # Decrypt the regeneration data
     regen_data = QuestionQRCode.decrypt_question_data(encrypted_data)
-    
+
+    question_id = regen_data.get('question_id')
+    seed = regen_data.get('seed')
+
+    if question_id:
+      yaml_id = regen_data.get('yaml_id')
+      result['question_id'] = question_id
+      result['yaml_id'] = yaml_id
+      result['seed'] = seed
+
+      if not (yaml_path or yaml_text or yaml_docs):
+        log.warning(f"Question {question_num}: YAML is required to regenerate question_id '{question_id}'.")
+        return result
+
+      regen_result = regenerate_from_yaml_metadata(
+        question_id=question_id,
+        seed=seed,
+        points=points,
+        yaml_id=yaml_id,
+        yaml_path=yaml_path,
+        yaml_text=yaml_text,
+        yaml_docs=yaml_docs,
+        image_mode=image_mode,
+        upload_func=upload_func
+      )
+      regen_result["question_number"] = question_num
+      return regen_result
+
     question_type = regen_data['question_type']
-    seed = regen_data['seed']
     version = regen_data.get('version')
     config = regen_data.get('config', {})
     context_extras = regen_data.get('context', {})
-    
+
     result['question_type'] = question_type
     result['seed'] = seed
     result['version'] = version
     if config:
       result['config'] = config
-    
+
     if version:
       log.info(f"Question {question_num}: {question_type} (seed={seed}, version={version})")
     else:
       log.info(f"Question {question_num}: {question_type} (seed={seed})")
     if config:
       log.debug(f"  Config params: {config}")
-    
+
     # Regenerate the question using the registry, passing through config params
     question = QuestionRegistry.create(
       question_type,
@@ -245,25 +404,25 @@ def regenerate_question_answer(
       points_value=points,
       **config
     )
-    
+
     # Generate question with the specific seed
     instance = question.instantiate(rng_seed=seed, **context_extras)
     question_ast = question._build_question_ast(instance)
-    
+
     # Extract answers
     answer_kind, canvas_answers = question._answers_for_canvas(
       instance.answers,
       instance.can_be_numerical
     )
-    
+
     result['answers'] = {
       'kind': answer_kind.value,
       'data': canvas_answers
     }
-    
+
     # Also store the raw answer objects for easier access
     result['answer_objects'] = instance.answers
-    
+
     resolved_upload_func = _resolve_upload_func(image_mode, upload_func)
 
     # Generate HTML answer key for grading
@@ -293,7 +452,7 @@ def regenerate_question_answer(
       result["explanation_html"] = explanation_html
 
     log.info(f"  Successfully regenerated question with {len(canvas_answers)} answer(s)")
-    
+
     return result
   
   except Exception as e:
@@ -308,7 +467,10 @@ def regenerate_from_encrypted(
   points: float = 1.0,
   *,
   image_mode: str = "inline",
-  upload_func: Callable | None = None
+  upload_func: Callable | None = None,
+  yaml_path: str | None = None,
+  yaml_text: str | None = None,
+  yaml_docs: list[dict] | None = None
 ) -> dict[str, Any]:
   """
   Regenerate question answers from encrypted QR code data (RECOMMENDED API).
@@ -321,6 +483,7 @@ def regenerate_from_encrypted(
       points: Point value for the question (default: 1.0)
       image_mode: "inline", "upload", or "none" for HTML image handling
       upload_func: Optional upload function used when image_mode="upload"
+      yaml_path/yaml_text/yaml_docs: Required when QR payload uses question_id (YAML-based regeneration)
 
   Returns:
       Dictionary with regenerated answers:
@@ -349,12 +512,27 @@ def regenerate_from_encrypted(
   # Decrypt the data
   decrypted = QuestionQRCode.decrypt_question_data(encrypted_data)
   
-  # Extract fields
+  question_id = decrypted.get("question_id")
+  seed = decrypted.get("seed")
+
+  if question_id:
+    return regenerate_from_yaml_metadata(
+      question_id=question_id,
+      seed=seed,
+      points=points,
+      yaml_id=decrypted.get("yaml_id"),
+      yaml_path=yaml_path,
+      yaml_text=yaml_text,
+      yaml_docs=yaml_docs,
+      image_mode=image_mode,
+      upload_func=upload_func
+    )
+
+  # Extract fields for legacy regeneration
   question_type = decrypted['question_type']
-  seed = decrypted['seed']
   version = decrypted['version']
   kwargs = decrypted.get('config', {})
-  
+
   # Use the existing regeneration logic
   return regenerate_from_metadata(
     question_type,
@@ -534,6 +712,11 @@ def main():
     help='Encrypted string from QR code to decode directly'
   )
   parser.add_argument(
+    '--yaml',
+    type=str,
+    help='Path to replay YAML (required for question_id-based regeneration)'
+  )
+  parser.add_argument(
     '--points',
     type=float,
     default=1.0,
@@ -585,16 +768,21 @@ def main():
       result = regenerate_from_encrypted(
         args.encrypted_str,
         args.points,
-        image_mode=args.image_mode
+        image_mode=args.image_mode,
+        yaml_path=args.yaml
       )
 
       # Format result similar to regenerate_question_answer output
+      if "answers" not in result:
+        print("ERROR: This QR payload requires a replay YAML. Pass --yaml <replay.yaml>.")
+        sys.exit(1)
+
       question_data = {
         "question_number": "N/A",
         "points": args.points,
         "question_type": result["question_type"],
         "seed": result["seed"],
-        "version": result["version"],
+        "version": result.get("version"),
         "answers": result["answers"],
         "answer_objects": result["answer_objects"],
         "answer_key_html": result["answer_key_html"],
@@ -639,10 +827,14 @@ def main():
       # Regenerate question and answer
       question_data = regenerate_question_answer(
         qr_data,
-        image_mode=args.image_mode
+        image_mode=args.image_mode,
+        yaml_path=args.yaml
       )
 
       if question_data:
+        if "answers" not in question_data:
+          print("ERROR: This QR payload requires a replay YAML. Pass --yaml <replay.yaml>.")
+          sys.exit(1)
         results.append(question_data)
         display_answer_summary(question_data)
   

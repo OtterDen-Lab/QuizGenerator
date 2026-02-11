@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 import argparse
+import copy
 import logging
 import os
 import random
@@ -7,9 +8,14 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 import traceback
+import uuid
+import zipfile
 from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 from dotenv import load_dotenv
 
@@ -410,6 +416,107 @@ def sanitize_filename(name):
   return sanitized
 
 
+def _generate_short_id(length: int = 12) -> str:
+  return uuid.uuid4().hex[:length]
+
+
+def _iter_question_entries(exam_dict: dict):
+  questions = exam_dict.get("questions")
+  if isinstance(questions, list):
+    for entry in questions:
+      if isinstance(entry, dict):
+        yield entry
+    return
+  if not isinstance(questions, dict):
+    return
+  for question_definitions in questions.values():
+    if not isinstance(question_definitions, dict):
+      continue
+    for q_name, q_data in question_definitions.items():
+      if q_name == "_config":
+        continue
+      if not isinstance(q_data, dict):
+        continue
+      group_config = q_data.get("_config", {}) or {}
+      if group_config.get("group", False):
+        for group_name, group_data in q_data.items():
+          if group_name == "_config":
+            continue
+          if isinstance(group_data, dict):
+            yield group_data
+      else:
+        yield q_data
+
+
+def _annotate_exam_dicts_for_replay(exam_dicts: list[dict]) -> None:
+  for exam_dict in exam_dicts:
+    if not isinstance(exam_dict, dict):
+      continue
+    if not exam_dict.get("yaml_id"):
+      exam_dict["yaml_id"] = _generate_short_id(8)
+
+    seen_ids: set[str] = set()
+    for entry in _iter_question_entries(exam_dict):
+      existing = entry.get("question_id")
+      if existing:
+        entry["question_id"] = str(existing)
+        seen_ids.add(entry["question_id"])
+
+    for entry in _iter_question_entries(exam_dict):
+      if entry.get("question_id"):
+        continue
+      new_id = _generate_short_id(12)
+      while new_id in seen_ids:
+        new_id = _generate_short_id(12)
+      entry["question_id"] = new_id
+      seen_ids.add(new_id)
+
+
+def _replay_yaml_path(path_to_quiz_yaml: str) -> str:
+  base = os.path.splitext(os.path.basename(path_to_quiz_yaml))[0]
+  sanitized = sanitize_filename(base) or "quiz"
+  return os.path.join("out", f"{sanitized}_replay.yaml")
+
+
+def _collect_recent_pdfs(start_time: float, *, out_dir: str = "out") -> list[str]:
+  if not os.path.isdir(out_dir):
+    return []
+  pdfs: list[str] = []
+  for name in os.listdir(out_dir):
+    if not name.lower().endswith(".pdf"):
+      continue
+    path = os.path.join(out_dir, name)
+    try:
+      if os.path.getmtime(path) >= start_time - 1:
+        pdfs.append(path)
+    except OSError:
+      continue
+  return sorted(pdfs)
+
+
+def _bundle_outputs(
+  replay_path: str | None,
+  *,
+  bundle_label: str,
+  pdf_paths: list[str] | None = None
+) -> str | None:
+  out_dir = "out"
+  if not os.path.isdir(out_dir):
+    return None
+  bundle_name = f"{sanitize_filename(bundle_label)}_bundle.zip"
+  bundle_path = os.path.join(out_dir, bundle_name)
+  pdfs = pdf_paths or []
+  if not pdfs and not replay_path:
+    return None
+  with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+    for pdf_path in pdfs:
+      if os.path.exists(pdf_path):
+        bundle.write(pdf_path, arcname=os.path.basename(pdf_path))
+    if replay_path and os.path.exists(replay_path):
+      bundle.write(replay_path, arcname=os.path.basename(replay_path))
+  return bundle_path
+
+
 def _canvas_payload_fingerprint(payload):
   fingerprint = _normalize_canvas_html(payload.get("question_text", ""))
   answers = payload.get("answers", [])
@@ -741,7 +848,19 @@ def generate_quiz(
     quiet: bool = False
 ):
 
-  quizzes = Quiz.from_yaml(path_to_quiz_yaml)
+  start_time = time.time()
+  with open(path_to_quiz_yaml) as fid:
+    raw_exam_dicts = list(yaml.safe_load_all(fid))
+
+  replay_exam_dicts = None
+  if num_pdfs > 0:
+    replay_exam_dicts = copy.deepcopy(raw_exam_dicts)
+    _annotate_exam_dicts_for_replay(replay_exam_dicts)
+    exam_dicts_for_parsing = copy.deepcopy(replay_exam_dicts)
+  else:
+    exam_dicts_for_parsing = raw_exam_dicts
+
+  quizzes = Quiz.from_exam_dicts(exam_dicts_for_parsing, source_path=path_to_quiz_yaml)
 
   # Handle Canvas uploads with shared assignment group
   if num_canvas > 0:
@@ -817,6 +936,21 @@ def generate_quiz(
       )
     
     quiz.describe()
+
+  if replay_exam_dicts is not None:
+    os.makedirs('out', exist_ok=True)
+    replay_path = _replay_yaml_path(path_to_quiz_yaml)
+    with open(replay_path, "w", encoding="utf-8") as handle:
+      yaml.safe_dump_all(replay_exam_dicts, handle, sort_keys=False)
+    log.info(f"Wrote replay YAML to {replay_path}")
+    pdf_paths = _collect_recent_pdfs(start_time)
+    bundle_path = _bundle_outputs(
+      replay_path,
+      bundle_label=os.path.splitext(os.path.basename(path_to_quiz_yaml))[0],
+      pdf_paths=pdf_paths
+    )
+    if bundle_path:
+      log.info(f"Wrote output bundle to {bundle_path}")
 
 def main():
 

@@ -616,6 +616,7 @@ class Question(abc.ABC):
     if name is None:
       name = self.__class__.__name__
     self.name = name
+    self.question_id = kwargs.pop("question_id", None)
     self.points_value = points_value
     self.topic = topic
     self.spacing = parse_spacing(kwargs.get("spacing", 0))
@@ -634,10 +635,11 @@ class Question(abc.ABC):
     self.rng = random.Random()
 
     # Track question-specific configuration parameters (excluding framework parameters)
-    # These will be included in QR codes for exam regeneration
+    # These may be included in legacy QR regeneration payloads.
     framework_params = {
       'name', 'points_value', 'topic', 'spacing', 'num_subquestions',
-      'rng_seed_offset', 'rng_seed', 'class', 'kwargs', 'kind'
+      'rng_seed_offset', 'rng_seed', 'class', 'kwargs', 'kind',
+      'question_id'
     }
     self.config_params = {k: v for k, v in kwargs.items() if k not in framework_params}
   
@@ -979,6 +981,8 @@ class Question(abc.ABC):
     question_ast.question_version = instance.flags.question_version
     question_ast.config_params = dict(instance.flags.config_params)
     question_ast.qr_context_extras = dict(instance.flags.context_extras)
+    if getattr(self, "question_id", None):
+      question_ast.question_id = self.question_id
     if hasattr(self, "layout_reserved_height"):
       question_ast.reserve_height_cm = self.layout_reserved_height
 
