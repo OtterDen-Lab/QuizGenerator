@@ -803,6 +803,53 @@
       </div>
     </div>
 
+    <div id="canvas-modal" class="modal hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Export to Canvas</h3>
+          <button class="btn ghost small" id="canvas-cancel">Cancel</button>
+        </div>
+        <p class="muted">Pick a course and upload this quiz as a new Canvas assignment.</p>
+        <div class="grid two" style="margin-top: 12px;">
+          <div>
+            <label>Environment</label>
+            <select id="canvas-env-select">
+              <option value="false">Dev / Beta</option>
+              <option value="true">Production</option>
+            </select>
+          </div>
+          <div>
+            <label>Course</label>
+            <select id="canvas-course-select"></select>
+          </div>
+          <div>
+            <label>Quiz Title</label>
+            <input type="text" id="canvas-quiz-title" placeholder="Use quiz name" />
+          </div>
+          <div>
+            <label>Num Variations</label>
+            <input type="number" id="canvas-num-variations" min="1" value="1" />
+          </div>
+          <div>
+            <label>Practice</label>
+            <select id="canvas-practice">
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+          </div>
+        </div>
+        <div class="preview-box" style="margin-top: 12px;">
+          <h3>Upload Summary</h3>
+          <div id="canvas-summary" class="muted"></div>
+        </div>
+        <div class="hint" id="canvas-status"></div>
+        <div class="modal-footer">
+          <button class="btn ghost" id="canvas-refresh-courses">Refresh Courses</button>
+          <button class="btn secondary" id="canvas-upload">Upload to Canvas</button>
+        </div>
+      </div>
+    </div>
+
     <div id="answer-modal" class="modal hidden">
       <div class="modal-card">
         <div class="modal-header">
@@ -2891,18 +2938,200 @@
           await exportPdf();
           return;
         }
-        const yamlText = await generateQuizYaml();
-        if (!yamlText) return;
-        const path = el("save-path").value.trim() || "out/quiz.yaml";
-        if (kind === "canvas") {
-          setSaveStatus(`Run: quizgen --yaml ${path} --num_canvas 1 --course_id <ID>`, false);
-        }
+        await defaultExport();
       };
 
       const setSaveStatus = (message, isError = false) => {
         const status = el("save-status");
         status.textContent = message;
         status.style.color = isError ? "#a04527" : "var(--muted)";
+      };
+
+      const setCanvasStatus = (message, isError = false) => {
+        const status = el("canvas-status");
+        if (!status) return;
+        status.innerHTML = message || "";
+        status.style.color = isError ? "#a04527" : "var(--muted)";
+      };
+
+      const setCanvasUploading = (isUploading) => {
+        const uploadBtn = el("canvas-upload");
+        const refreshBtn = el("canvas-refresh-courses");
+        const envSelect = el("canvas-env-select");
+        const courseSelect = el("canvas-course-select");
+        const titleInput = el("canvas-quiz-title");
+        const variationsInput = el("canvas-num-variations");
+        const practiceSelect = el("canvas-practice");
+        if (uploadBtn) {
+          if (!uploadBtn.dataset.label) {
+            uploadBtn.dataset.label = uploadBtn.textContent;
+          }
+          uploadBtn.textContent = isUploading ? "Uploading..." : uploadBtn.dataset.label;
+          uploadBtn.disabled = isUploading;
+        }
+        [refreshBtn, envSelect, courseSelect, titleInput, variationsInput, practiceSelect].forEach((item) => {
+          if (!item) return;
+          item.disabled = isUploading;
+        });
+      };
+
+      const updateCanvasSummary = () => {
+        const summary = el("canvas-summary");
+        if (!summary) return;
+        const useProd = el("canvas-env-select").value === "true";
+        const courseSelect = el("canvas-course-select");
+        const courseName = courseSelect?.selectedOptions?.[0]?.textContent || "(No course selected)";
+        const title = el("canvas-quiz-title").value.trim() || quizState.meta.name || "(Untitled quiz)";
+        const variations = Math.max(1, Number.parseInt(el("canvas-num-variations").value, 10) || 1);
+        const practice = el("canvas-practice").value === "true";
+        summary.innerHTML = "";
+        const rows = [
+          ["Environment", useProd ? "PROD" : "DEV"],
+          ["Course", courseName],
+          ["Quiz", title],
+          ["Practice", practice ? "true" : "false"],
+          ["Variations per question", String(variations)],
+        ];
+        rows.forEach(([label, value]) => {
+          const row = document.createElement("div");
+          const labelSpan = document.createElement("span");
+          labelSpan.textContent = `${label}: `;
+          const valueStrong = document.createElement("strong");
+          valueStrong.textContent = value;
+          row.appendChild(labelSpan);
+          row.appendChild(valueStrong);
+          summary.appendChild(row);
+        });
+      };
+
+      const openCanvasModal = async () => {
+        const modal = el("canvas-modal");
+        if (!modal) return;
+        inputQuizMeta();
+        el("canvas-quiz-title").value = quizState.meta.name || "";
+        el("canvas-practice").value = quizState.meta.practice ? "true" : "false";
+        const variations = Number.parseInt(el("canvas-num-variations").value, 10);
+        if (!variations || variations < 1) {
+          el("canvas-num-variations").value = "1";
+        }
+        setCanvasStatus("");
+        setCanvasUploading(false);
+        modal.classList.remove("hidden");
+        await loadCanvasCourses();
+        updateCanvasSummary();
+      };
+
+      const closeCanvasModal = () => {
+        const modal = el("canvas-modal");
+        if (!modal) return;
+        modal.classList.add("hidden");
+      };
+
+      const loadCanvasCourses = async () => {
+        const envSelect = el("canvas-env-select");
+        const courseSelect = el("canvas-course-select");
+        if (!envSelect || !courseSelect) return;
+        const useProd = envSelect.value === "true";
+        courseSelect.innerHTML = "<option value=\"\">Loading courses...</option>";
+        courseSelect.disabled = true;
+        try {
+          const response = await fetch(`/canvas/courses?use_prod=${useProd}`);
+          const data = await response.json();
+          if (!response.ok || data.error) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+          }
+          courseSelect.innerHTML = "<option value=\"\">-- Select a Course --</option>";
+          const favorites = (data.courses || []).filter((course) => course.is_favorite);
+          const others = (data.courses || []).filter((course) => !course.is_favorite);
+          const appendGroup = (label, courses) => {
+            if (!courses.length) return;
+            const group = document.createElement("optgroup");
+            group.label = label;
+            courses.forEach((course) => {
+              const option = document.createElement("option");
+              option.value = course.id;
+              option.textContent = course.name;
+              group.appendChild(option);
+            });
+            courseSelect.appendChild(group);
+          };
+          appendGroup("Favorites", favorites);
+          appendGroup("Other Courses", others);
+          courseSelect.disabled = false;
+          if (!data.courses || data.courses.length === 0) {
+            setCanvasStatus("No courses found for this account.", false);
+          } else {
+            const env = data.environment ? ` (${data.environment})` : "";
+            setCanvasStatus(`Loaded ${data.courses.length} courses${env}.`);
+          }
+          updateCanvasSummary();
+        } catch (err) {
+          setCanvasStatus(`Failed to load courses: ${err}`, true);
+          courseSelect.innerHTML = "<option value=\"\">Failed to load courses</option>";
+        }
+      };
+
+      const uploadCanvasQuiz = async () => {
+        const courseId = el("canvas-course-select").value;
+        if (!courseId) {
+          setCanvasStatus("Select a course before uploading.", true);
+          return;
+        }
+        const yamlText = await generateQuizYaml();
+        if (!yamlText) return;
+        const numVariations = Math.max(1, Number.parseInt(el("canvas-num-variations").value, 10) || 1);
+        const practice = el("canvas-practice").value === "true";
+        const useProd = el("canvas-env-select").value === "true";
+        const title = el("canvas-quiz-title").value.trim();
+        const path = el("save-path").value.trim() || "out/quiz.yaml";
+        if (useProd) {
+          const courseName = el("canvas-course-select")?.selectedOptions?.[0]?.textContent || "selected course";
+          const confirmProd = window.confirm(
+            `You're about to upload to PRODUCTION Canvas.\n\nCourse: ${courseName}\nQuiz: ${title || quizState.meta.name || "Untitled"}\nVariations: ${numVariations}\n\nContinue?`
+          );
+          if (!confirmProd) {
+            setCanvasStatus("Upload canceled.", false);
+            return;
+          }
+        }
+        setCanvasUploading(true);
+        setCanvasStatus("Uploading to Canvas...", false);
+        try {
+          const response = await fetch("/canvas/upload", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              yaml: yamlText,
+              course_id: Number(courseId),
+              num_variations: numVariations,
+              practice,
+              use_prod: useProd,
+              title: title || null,
+              path,
+            }),
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || data.error) {
+            throw new Error(data.error || `Canvas upload failed (${response.status})`);
+          }
+          const uploaded = data.uploaded || [];
+          if (uploaded.length) {
+            const links = uploaded.map((quiz) => {
+              if (quiz.url) {
+                return `<a href="${quiz.url}" target="_blank" rel="noopener">${quiz.title || "Canvas quiz"}</a>`;
+              }
+              return quiz.title || "Canvas quiz";
+            }).join("<br />");
+            setCanvasStatus(`Uploaded ${uploaded.length} quiz${uploaded.length === 1 ? "" : "zes"}.<br />${links}`);
+          } else {
+            setCanvasStatus("Upload complete.", false);
+          }
+          updateCanvasSummary();
+        } catch (err) {
+          setCanvasStatus(`${err}`, true);
+        } finally {
+          setCanvasUploading(false);
+        }
       };
 
       const saveYamlToFile = async () => {
@@ -3192,7 +3421,7 @@
       el("generate-question").addEventListener("click", generateQuestionYaml);
       el("generate-quiz").addEventListener("click", generateQuizYaml);
       el("export-pdf").addEventListener("click", () => exportHint("pdf"));
-      el("export-canvas").addEventListener("click", () => exportHint("canvas"));
+      el("export-canvas").addEventListener("click", openCanvasModal);
       el("refresh-quiz-preview").addEventListener("click", updateQuizPreview);
       el("quiz-preview-show-answers").addEventListener("change", updateQuizPreview);
       el("quiz-preview-seed").addEventListener("input", (e) => setPreviewSeed(e.target.value.trim()));
@@ -3306,6 +3535,19 @@
         if (choice) insertDerived(choice, { targetEditor: el("expl-editor"), preferInput: false });
       });
       el("insert-answer-expl").addEventListener("click", () => openAnswerModal(el("expl-editor")));
+      el("canvas-cancel").addEventListener("click", closeCanvasModal);
+      el("canvas-refresh-courses").addEventListener("click", loadCanvasCourses);
+      el("canvas-env-select").addEventListener("change", loadCanvasCourses);
+      el("canvas-course-select").addEventListener("change", updateCanvasSummary);
+      el("canvas-quiz-title").addEventListener("input", updateCanvasSummary);
+      el("canvas-num-variations").addEventListener("input", updateCanvasSummary);
+      el("canvas-practice").addEventListener("change", updateCanvasSummary);
+      el("canvas-upload").addEventListener("click", uploadCanvasQuiz);
+      el("canvas-modal").addEventListener("click", (e) => {
+        if (e.target.id === "canvas-modal") {
+          closeCanvasModal();
+        }
+      });
       el("answer-cancel").addEventListener("click", closeAnswerModal);
       el("answer-clear").addEventListener("click", clearAnswerModal);
       el("answer-insert").addEventListener("click", insertAnswerFromModal);

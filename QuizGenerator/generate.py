@@ -765,6 +765,7 @@ def upload_quiz_to_canvas(
   if overall_bar is not None:
     overall_bar.close()
   log.info(f"Canvas quiz URL: {canvas_quiz.html_url}")
+  return canvas_quiz
 
 
 def generate_typst(typst_text, remove_previous=False, name_prefix=None) -> bool:
