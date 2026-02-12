@@ -67,6 +67,26 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
   ROUNDING_DIGITS = 2
   IMAGE_DPI = 140
   IMAGE_FIGSIZE = (9.5, 5.5)
+
+  @classmethod
+  def _average_fraction_denominators(cls, context) -> list[int]:
+    num_jobs = int(context.get("num_jobs", 0))
+    denominators = set(ca.Answer.DEFAULT_EQUIVALENT_FRACTION_DENOMINATORS)
+    if num_jobs > 1:
+      denominators.add(num_jobs)
+    return sorted(denominators)
+
+  @classmethod
+  def _round_robin_tat_fraction_denominators(cls, context) -> list[int]:
+    num_jobs = int(context.get("num_jobs", 0))
+    denominators = set(ca.Answer.DEFAULT_EQUIVALENT_FRACTION_DENOMINATORS)
+    if num_jobs <= 1:
+      return sorted(denominators)
+
+    # For RR, per-job TAT values can naturally show a wider set of denominators.
+    denominators.update(range(2, num_jobs + 1))
+    denominators.update(num_jobs * multiplier for multiplier in range(2, num_jobs))
+    return sorted(denominators)
   
   @dataclasses.dataclass
   class Job:
@@ -389,12 +409,22 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
         Tuple of (body_ast, answers_list)
     """
     answers: list[ca.Answer] = []
+    scheduler_algorithm = context["scheduler_algorithm"]
+    average_fraction_denominators = cls._average_fraction_denominators(context)
+    rr_tat_fraction_denominators = (
+      cls._round_robin_tat_fraction_denominators(context)
+      if scheduler_algorithm == cls.Kind.RoundRobin
+      else None
+    )
 
     # Create table data for scheduling results
     table_rows = []
     for job_id in sorted(context["job_stats"].keys()):
       response_answer = ca.AnswerTypes.Float(context["job_stats"][job_id]["Response"])
-      tat_answer = ca.AnswerTypes.Float(context["job_stats"][job_id]["TAT"])
+      tat_answer = ca.AnswerTypes.Float(
+        context["job_stats"][job_id]["TAT"],
+        allowed_fraction_denominators=rr_tat_fraction_denominators
+      )
       answers.append(response_answer)
       answers.append(tat_answer)
       table_rows.append({
@@ -415,11 +445,13 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     # Collect average answers
     avg_response_answer = ca.AnswerTypes.Float(
       context["overall_stats"]["Response"],
-      label="Overall average response time"
+      label="Overall average response time",
+      allowed_fraction_denominators=average_fraction_denominators
     )
     avg_tat_answer = ca.AnswerTypes.Float(
       context["overall_stats"]["TAT"],
-      label="Overall average TAT"
+      label="Overall average TAT",
+      allowed_fraction_denominators=average_fraction_denominators
     )
     answers.append(avg_response_answer)
     answers.append(avg_tat_answer)
