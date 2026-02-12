@@ -612,7 +612,9 @@ class Document(Container):
         align: top,
       )[
         #content
-        #v(spacing)
+        #if spacing < 99cm {
+          v(spacing)
+        }
       ][
         #if qr_code != none {
           image(qr_code, width: 2cm, format: "svg")
@@ -633,12 +635,15 @@ class Document(Container):
         }
       }
     }
-      // Check if spacing >= 199cm (EXTRA_PAGE preset)
-      // If so, add both spacing and a pagebreak for a full blank page
+      // PAGE and EXTRA_PAGE spacing presets should page-break after the
+      // question body renders so first-page header space doesn't push
+      // the whole question to page 2.
       if spacing >= 199cm {
         
         pagebreak()
         pagebreak()
+      } else if spacing >= 99cm {
+        pagebreak(weak: true)
       }
   }
 

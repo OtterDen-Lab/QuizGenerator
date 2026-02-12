@@ -77,3 +77,11 @@ def test_typst_question_reserve_height_uses_context():
     header = ca.Document.TYPST_HEADER
     assert "context {" in header
     assert "measure(body).height" in header
+
+
+def test_typst_page_spacing_breaks_after_question_body():
+    header = ca.Document.TYPST_HEADER
+    assert "#if spacing < 99cm {" in header
+    assert "v(spacing)" in header
+    assert "pagebreak(weak: true)" in header
+    assert "#v(spacing)" not in header
