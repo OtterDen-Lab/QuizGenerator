@@ -25,6 +25,7 @@ List format: each item is a question entry with `name` and `points`. This preser
 - `topic` (string, optional): Topic name (e.g., `memory`, `concurrency`).
 - `spacing` (number or preset, optional): Vertical space after question.
   Presets: `NONE`, `SHORT`, `MEDIUM`, `LONG`, `PAGE`, `EXTRA_PAGE`.
+- `seed_group` (string, optional): Questions with the same `seed_group` share one RNG seed per generated PDF.
 - `num_subquestions` (int, optional): Used for multipart questions.
 
 ### Per-Question `_config`

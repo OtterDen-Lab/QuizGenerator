@@ -617,6 +617,7 @@ class Question(abc.ABC):
       name = self.__class__.__name__
     self.name = name
     self.question_id = kwargs.pop("question_id", None)
+    self.seed_group = kwargs.pop("seed_group", None)
     self.points_value = points_value
     self.topic = topic
     self.spacing = parse_spacing(kwargs.get("spacing", 0))
@@ -639,7 +640,7 @@ class Question(abc.ABC):
     framework_params = {
       'name', 'points_value', 'topic', 'spacing', 'num_subquestions',
       'rng_seed_offset', 'rng_seed', 'class', 'kwargs', 'kind',
-      'question_id'
+      'question_id', 'seed_group'
     }
     self.config_params = {k: v for k, v in kwargs.items() if k not in framework_params}
   

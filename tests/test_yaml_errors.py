@@ -72,3 +72,20 @@ questions:
     path.write_text(yaml_text)
     with pytest.raises(ValueError, match="FromGenerator is disabled by default"):
         Quiz.from_yaml(str(path))
+
+
+def test_yaml_seed_group_must_be_string(tmp_path):
+    yaml_text = """
+name: "Bad seed group"
+questions:
+  5:
+    "Q1":
+      class: FromText
+      seed_group: 123
+      kwargs:
+        text: "hi"
+"""
+    path = tmp_path / "bad-seed-group.yaml"
+    path.write_text(yaml_text)
+    with pytest.raises(ValueError, match="seed_group"):
+        Quiz.from_yaml(str(path))

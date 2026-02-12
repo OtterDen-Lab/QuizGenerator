@@ -113,6 +113,8 @@ class Quiz:
             _require_type(entry["kwargs"], dict, "kwargs")
           if "question_id" in entry:
             _require_type(entry["question_id"], str, "question_id")
+          if "seed_group" in entry:
+            _require_type(entry["seed_group"], str, "seed_group")
         return
 
       # Mapping format
@@ -137,6 +139,8 @@ class Quiz:
             _require_type(q_data["kwargs"], dict, f"questions[{points_value}]['{q_name}'].kwargs")
           if "question_id" in q_data:
             _require_type(q_data["question_id"], str, f"questions[{points_value}]['{q_name}'].question_id")
+          if "seed_group" in q_data:
+            _require_type(q_data["seed_group"], str, f"questions[{points_value}]['{q_name}'].seed_group")
 
           group_config = q_data.get("_config", {}) or {}
           if group_config.get("group", False):
@@ -149,6 +153,12 @@ class Quiz:
                   group_data["question_id"],
                   str,
                   f"questions[{points_value}]['{q_name}']['{group_name}'].question_id"
+                )
+              if "seed_group" in group_data:
+                _require_type(
+                  group_data["seed_group"],
+                  str,
+                  f"questions[{points_value}]['{q_name}']['{group_name}'].seed_group"
                 )
 
     for exam_dict in list_of_exam_dicts:
@@ -683,16 +693,32 @@ class Quiz:
     )
 
     # Generate questions with sequential numbering for QR codes
-    # Use master seed to generate unique per-question seeds
-    if master_seed is not None:
-      # Create RNG from master seed to generate per-question seeds
-      master_rng = random.Random(master_seed)
+    # Use the master seed when provided. seed_group allows selected questions
+    # to share the same seed (and therefore the same workload/context).
+    seed_rng = random.Random(master_seed) if master_seed is not None else random.Random()
+    seed_groups: dict[str, int] = {}
+
+    def get_seed_group(question) -> str | None:
+      seed_group = getattr(question, "seed_group", None)
+      if seed_group is None:
+        return None
+      if isinstance(seed_group, str):
+        normalized = seed_group.strip()
+        return normalized if normalized else None
+      return str(seed_group)
 
     question_number = 1
     for question in ordered_questions:
-      # Generate a unique seed for this question from the master seed
-      if master_seed is not None:
-        question_seed = master_rng.randint(0, 2**31 - 1)
+      seed_group = get_seed_group(question)
+      should_seed = master_seed is not None or seed_group is not None
+
+      if should_seed:
+        if seed_group is not None:
+          if seed_group not in seed_groups:
+            seed_groups[seed_group] = seed_rng.randint(0, 2**31 - 1)
+          question_seed = seed_groups[seed_group]
+        else:
+          question_seed = seed_rng.randint(0, 2**31 - 1)
         instance = question.instantiate(rng_seed=question_seed, **kwargs)
         instances = instance if isinstance(instance, list) else [instance]
       else:

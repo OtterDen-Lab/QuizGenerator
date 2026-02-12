@@ -486,6 +486,36 @@ questions:
         # Same seed should produce same content
         assert doc1.render("html") == doc2.render("html")
 
+    def test_get_quiz_seed_group_reuses_seed(self, temp_yaml_file):
+        yaml_content = """
+name: "Seed Group Quiz"
+question_order: yaml
+questions:
+  - name: "Q1"
+    points: 1
+    class: FromText
+    seed_group: "sched_compare"
+    kwargs:
+      text: "Question 1"
+  - name: "Q2"
+    points: 1
+    class: FromText
+    seed_group: "sched_compare"
+    kwargs:
+      text: "Question 2"
+  - name: "Q3"
+    points: 1
+    class: FromText
+    kwargs:
+      text: "Question 3"
+"""
+        path = temp_yaml_file(yaml_content)
+        quiz = Quiz.from_yaml(path)[0]
+        document = quiz.get_quiz(rng_seed=42)
+
+        question_seeds = [question.generation_seed for question in document.elements]
+        assert question_seeds == [478163327, 478163327, 107420369]
+
     def test_describe_does_not_crash(self, temp_yaml_file, capsys):
         yaml_content = """
 name: "Describable Quiz"
