@@ -1,6 +1,7 @@
 __pycache__/
 exam.pdf
 out/
+records/
 .idea/
 .DS_Store
 *.zip

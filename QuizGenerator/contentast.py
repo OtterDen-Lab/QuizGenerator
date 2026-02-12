@@ -2463,6 +2463,7 @@ class Answer(Leaf):
 
   DEFAULT_ROUNDING_DIGITS = 4
   DEFAULT_FLOAT_TOLERANCE = 0.01
+  DEFAULT_EQUIVALENT_FRACTION_DENOMINATORS = (4, 6, 12)
 
   class CanvasAnswerKind(enum.Enum):
     BLANK = "fill_in_multiple_blanks_question"
@@ -2652,7 +2653,30 @@ class Answer(Leaf):
     return fractions.Fraction(decimal.Decimal(str(x)))
 
   @staticmethod
-  def accepted_strings(value, max_denominator=720):
+  def _normalize_denominators(denominators) -> list[int]:
+    if denominators is None:
+      return []
+
+    if isinstance(denominators, (str, int, float, decimal.Decimal)):
+      raw_denominators = [denominators]
+    else:
+      try:
+        raw_denominators = list(denominators)
+      except TypeError:
+        raw_denominators = [denominators]
+
+    normalized = set()
+    for denominator in raw_denominators:
+      try:
+        denominator_int = int(denominator)
+      except (TypeError, ValueError):
+        continue
+      if denominator_int > 1:
+        normalized.add(denominator_int)
+    return sorted(normalized)
+
+  @staticmethod
+  def accepted_strings(value, max_denominator=720, allowed_fraction_denominators=None):
     """
     Return a sorted list of acceptable answer strings for Canvas.
 
@@ -2661,6 +2685,7 @@ class Answer(Leaf):
     - Fixed decimal with DEFAULT_ROUNDING_DIGITS (e.g., "1.0000")
     - Trimmed decimal without trailing zeros (e.g., "1.25")
     - Simple fraction if exactly representable (e.g., "5/4")
+    - Optional equivalent unsimplified fractions for allowed denominators
 
     Examples:
       1 → ["1", "1.0000"]
@@ -2701,6 +2726,17 @@ class Answer(Leaf):
     fr = f.limit_denominator(max_denominator)
     if fr == f and fr.denominator > 1:
       outs.add(f"{fr.numerator}/{fr.denominator}")
+      denominators = (
+        Answer.DEFAULT_EQUIVALENT_FRACTION_DENOMINATORS
+        if allowed_fraction_denominators is None
+        else allowed_fraction_denominators
+      )
+      for denominator in Answer._normalize_denominators(denominators):
+        if denominator % fr.denominator != 0:
+          continue
+        multiplier = denominator // fr.denominator
+        unsimplified_numerator = fr.numerator * multiplier
+        outs.add(f"{unsimplified_numerator}/{denominator}")
 
     return sorted(outs, key=lambda s: (len(s), s))
   
@@ -2863,6 +2899,10 @@ class AnswerTypes:
 
   # Concrete type answers
   class Float(Answer):
+    def __init__(self, *args, allowed_fraction_denominators=None, **kwargs):
+      super().__init__(*args, **kwargs)
+      self.allowed_fraction_denominators = allowed_fraction_denominators
+
     @classmethod
     def get_entry_warning(cls) -> list[str] | None:
       digits = Answer.DEFAULT_ROUNDING_DIGITS
@@ -2892,7 +2932,8 @@ class AnswerTypes:
         # Use the accepted_strings helper
         answer_strings = Answer.accepted_strings(
           self.value,
-          max_denominator=60
+          max_denominator=60,
+          allowed_fraction_denominators=self.allowed_fraction_denominators
         )
       
         canvas_answers = [
@@ -2906,7 +2947,10 @@ class AnswerTypes:
       return canvas_answers
 
     def get_display_string(self) -> str:
-      answer_strings = Answer.accepted_strings(self.value)
+      answer_strings = Answer.accepted_strings(
+        self.value,
+        allowed_fraction_denominators=self.allowed_fraction_denominators
+      )
       return answer_strings[0] if len(answer_strings) > 0 else f"{self.value}"
 
   class Int(Answer):

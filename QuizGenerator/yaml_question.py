@@ -12,7 +12,6 @@ import yaml
 import QuizGenerator.contentast as ca
 from QuizGenerator.question import QuestionContext
 
-
 _TEMPLATE_RE = re.compile(r"\{\{(.*?)\}\}")
 _EXPR_ONLY_RE = re.compile(r"^\s*\{\{(.*?)\}\}\s*$")
 _SPEC_CACHE: dict[str, dict[str, Any]] = {}
@@ -268,6 +267,10 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
     baffles = _eval_field(spec.get("baffles"), ctx)
     pdf_only = bool(_eval_field(spec.get("pdf_only", False), ctx))
     order_matters = bool(_eval_field(spec.get("order_matters", True), ctx))
+    allowed_fraction_denominators = _eval_field(
+      spec.get("allowed_fraction_denominators", spec.get("fraction_denominators")),
+      ctx
+    )
 
     if answer_type in {"binary", "hex", "decimal"} and strict:
       strict_map = {
@@ -327,7 +330,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        allowed_fraction_denominators=allowed_fraction_denominators
       )
     if answer_type == "string":
       return ca.AnswerTypes.String(

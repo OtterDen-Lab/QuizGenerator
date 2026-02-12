@@ -931,10 +931,9 @@ class Question(abc.ABC):
 
   @classmethod
   def _can_be_numerical_from_answers(cls, answers: list[ca.Answer]) -> bool:
-    return (
-      len(answers) == 1
-      and isinstance(answers[0], ca.AnswerTypes.Float)
-    )
+    # Keep float handling consistent with fill-in-the-blank answer matching so
+    # equivalent fraction forms can be accepted uniformly.
+    return False
 
   @classmethod
   def _normalize_build_output(
@@ -953,12 +952,6 @@ class Question(abc.ABC):
   ) -> tuple[ca.Answer.CanvasAnswerKind, list[dict[str, Any]]]:
     if len(answers) == 0:
       return (ca.Answer.CanvasAnswerKind.ESSAY, [])
-
-    if can_be_numerical:
-      return (
-        ca.Answer.CanvasAnswerKind.NUMERICAL_QUESTION,
-        list(itertools.chain(*[a.get_for_canvas(single_answer=True) for a in answers]))
-      )
 
     return (
       self.answer_kind,
