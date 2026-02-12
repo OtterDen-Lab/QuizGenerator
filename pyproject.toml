@@ -67,7 +67,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "lms_interface/tests"]
 addopts = "-q"
 
 [tool.hatch.build.targets.wheel]

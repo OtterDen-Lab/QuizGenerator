@@ -571,7 +571,7 @@ class CanvasCourse(LMSWrapper):
     return self.course.get_user(user_id).name
   
   def get_students(self, *, include_names: bool = False) -> list[Student]:
-    if self.canvas_interface.privacy_mode == "id_only":
+    if getattr(self.canvas_interface, "privacy_mode", None) == "id_only":
       include_names = False
     students = [Student(s.name, s.id, s) for s in self.course.get_users(enrollment_type=["student"])]
     if include_names:
@@ -733,7 +733,7 @@ class CanvasAssignment(LMSWrapper):
       
       # Get the student object for the submission
       include_names = kwargs.get("include_names", False)
-      if self.canvas_course.canvas_interface.privacy_mode == "id_only":
+      if getattr(self.canvas_course.canvas_interface, "privacy_mode", None) == "id_only":
         include_names = False
 
       if include_names:
@@ -839,7 +839,7 @@ class CanvasQuiz(LMSWrapper):
       # Get the student object for the submission
       try:
         include_names = kwargs.get("include_names", False)
-        if self.canvas_course.canvas_interface.privacy_mode == "id_only":
+        if getattr(self.canvas_course.canvas_interface, "privacy_mode", None) == "id_only":
           include_names = False
 
         if include_names:

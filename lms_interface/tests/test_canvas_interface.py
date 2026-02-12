@@ -221,7 +221,7 @@ class TestCanvasCourse:
 
         mock_canvas_course.course.get_users.return_value = [mock_user1, mock_user2]
 
-        students = mock_canvas_course.get_students()
+        students = mock_canvas_course.get_students(include_names=True)
 
         assert len(students) == 2
         assert all(isinstance(s, Student) for s in students)
