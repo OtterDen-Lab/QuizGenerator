@@ -70,11 +70,28 @@ class Quiz:
   def from_exam_dicts(cls, list_of_exam_dicts: list[dict], *, source_path: str | None = None) -> list[Quiz]:
     quizes_loaded : list[Quiz] = []
 
+    def _combined_tags(*sources) -> list[str] | None:
+      merged: set[str] = set()
+      for source in sources:
+        merged.update(Question.normalize_tags(source))
+      if not merged:
+        return None
+      return sorted(merged)
+
     def _require_type(value, expected, label: str):
       if not isinstance(value, expected):
         raise ValueError(f"Invalid type for {label}: expected {expected}, got {type(value)}")
 
     def _validate_exam_dict(exam_dict: dict):
+      def _validate_tags(value, label: str):
+        if isinstance(value, str):
+          return
+        if isinstance(value, (list, tuple, set)):
+          for item in value:
+            _require_type(item, str, f"{label} tag")
+          return
+        raise ValueError(f"Invalid type for {label}: expected string or list of strings, got {type(value)}")
+
       if not isinstance(exam_dict, dict):
         raise ValueError("Each YAML document must be a mapping.")
 
@@ -109,8 +126,12 @@ class Quiz:
             _require_type(entry["class"], str, "class")
           if "_config" in entry:
             _require_type(entry["_config"], dict, "_config")
+            if "tags" in entry["_config"]:
+              _validate_tags(entry["_config"]["tags"], "_config.tags")
           if "kwargs" in entry:
             _require_type(entry["kwargs"], dict, "kwargs")
+          if "tags" in entry:
+            _validate_tags(entry["tags"], "tags")
           if "question_id" in entry:
             _require_type(entry["question_id"], str, "question_id")
           if "seed_group" in entry:
@@ -135,8 +156,15 @@ class Quiz:
             _require_type(q_data["class"], str, f"questions[{points_value}]['{q_name}'].class")
           if "_config" in q_data:
             _require_type(q_data["_config"], dict, f"questions[{points_value}]['{q_name}']._config")
+            if "tags" in q_data["_config"]:
+              _validate_tags(
+                q_data["_config"]["tags"],
+                f"questions[{points_value}]['{q_name}']._config.tags"
+              )
           if "kwargs" in q_data:
             _require_type(q_data["kwargs"], dict, f"questions[{points_value}]['{q_name}'].kwargs")
+          if "tags" in q_data:
+            _validate_tags(q_data["tags"], f"questions[{points_value}]['{q_name}'].tags")
           if "question_id" in q_data:
             _require_type(q_data["question_id"], str, f"questions[{points_value}]['{q_name}'].question_id")
           if "seed_group" in q_data:
@@ -148,6 +176,11 @@ class Quiz:
               if group_name == "_config":
                 continue
               _require_type(group_data, dict, f"questions[{points_value}]['{q_name}']['{group_name}']")
+              if "tags" in group_data:
+                _validate_tags(
+                  group_data["tags"],
+                  f"questions[{points_value}]['{q_name}']['{group_name}'].tags"
+                )
               if "question_id" in group_data:
                 _require_type(
                   group_data["question_id"],
@@ -259,7 +292,8 @@ class Quiz:
           q_data.pop("points", None)
           question_config = {
             "repeat": 1,
-            "topic": "MISC"
+            "topic": "MISC",
+            "tags": []
           }
           question_config.update(q_data.get("_config", {}))
           q_data.pop("_config", None)
@@ -274,6 +308,11 @@ class Quiz:
             }
             if "topic" in q_data:
               kwargs["topic"] = Question.Topic.from_string(q_data.get("topic", "Misc"))
+            elif "topic" in question_config:
+              kwargs["topic"] = Question.Topic.from_string(question_config.get("topic", "Misc"))
+            merged_tags = _combined_tags(question_config.get("tags"), q_data.get("tags"), kwargs.get("tags"))
+            if merged_tags:
+              kwargs["tags"] = merged_tags
             question_class = q_data.get("class", "FromText")
             try:
               if not _is_known_question_type(question_class):
@@ -349,7 +388,8 @@ class Quiz:
               "num_to_pick" : 1,
               "random_per_student" : False,
               "repeat": 1,
-              "topic": "MISC"
+              "topic": "MISC",
+              "tags": []
             }
             
             # Update config if it exists
@@ -369,16 +409,23 @@ class Quiz:
               )
             
             # Check if it is a question group
+            merged_tags = _combined_tags(question_config.get("tags"), q_data.get("tags"))
             if question_config["group"]:
               
               # todo: Find a way to allow for "num_to_pick" to ensure lack of duplicates when using duplicates.
               #    It's probably going to be somewhere in the instantiate and get_attr fields, with "_current_questions"
               #    But will require changing how we add concrete questions (but that'll just be everything returns a list
+              group_questions = []
+              for name, data in q_data.items():
+                merged_group_data = data | {"topic": question_config["topic"]}
+                child_tags = _combined_tags(merged_tags, data.get("tags"))
+                if child_tags:
+                  merged_group_data["tags"] = child_tags
+                group_questions.append(make_question(name, merged_group_data))
+
               questions_for_exam.append(
                 QuestionGroup(
-                  questions_in_group=[
-                    make_question(name, data | {"topic" : question_config["topic"]}) for name, data in q_data.items()
-                  ],
+                  questions_in_group=group_questions,
                   pick_once=(not question_config["random_per_student"]),
                   name=q_name,
                   num_to_pick=question_config.get("num_to_pick", 1),
@@ -391,7 +438,8 @@ class Quiz:
                 make_question(
                   q_name,
                   q_data,
-                  rng_seed_offset=repeat_number
+                  rng_seed_offset=repeat_number,
+                  **({"tags": merged_tags} if merged_tags else {})
                 )
                 for repeat_number in range(question_config["repeat"])
               ])
@@ -786,6 +834,25 @@ class Quiz:
     for topic in sort_order:
       topic_strings = topic_information[topic]
       print(f"{topic_strings['name']:{paddings['name']}} : {topic_strings['count_str']:{paddings['count_str']}} : {topic_strings['points_str']:{paddings['points_str']}}")
+
+    tag_counter = collections.Counter()
+    tag_points: dict[str, float] = collections.defaultdict(float)
+    for question in self.questions:
+      for tag in sorted(getattr(question, "tags", set())):
+        tag_counter[tag] += 1
+        tag_points[tag] += question.points_value
+
+    if tag_counter:
+      print("Tags:")
+      tag_name_padding = max(len(tag) for tag in tag_counter.keys())
+      count_padding = max(len(str(count)) for count in tag_counter.values())
+      for tag in sorted(tag_counter.keys()):
+        count = tag_counter[tag]
+        points = tag_points[tag]
+        print(
+          f"{tag:{tag_name_padding}} : {count:{count_padding}} questions "
+          f"({100 * count / total_questions:0.1f}%) : {points:0.1f} points"
+        )
     
   def set_sort_order(self, sort_order):
     self.question_sort_order = sort_order

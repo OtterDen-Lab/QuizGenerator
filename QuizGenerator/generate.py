@@ -16,13 +16,12 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
-
 from dotenv import load_dotenv
 
 from lms_interface.canvas_interface import CanvasInterface
 from QuizGenerator.contentast import Answer
 from QuizGenerator.performance import PerformanceTracker
-from QuizGenerator.question import QuestionGroup, QuestionRegistry
+from QuizGenerator.question import Question, QuestionGroup, QuestionRegistry
 from QuizGenerator.quiz import Quiz
 
 log = logging.getLogger(__name__)
@@ -73,6 +72,53 @@ def parse_args():
   parser.add_argument("--course_id", type=int)
   parser.add_argument("--delete-assignment-group", action="store_true",
                      help="Delete existing assignment group before uploading new quizzes")
+  parser.add_argument(
+    "--generate_practice",
+    nargs="+",
+    metavar="TAG",
+    help=(
+      "Generate one practice quiz assignment per matching registered question type. "
+      "Accepts one or more tags (comma or space separated), e.g. --generate_practice cst334 memory"
+    )
+  )
+  parser.add_argument(
+    "--practice_match",
+    choices=["any", "all"],
+    default="any",
+    help="With --generate_practice, match any tag (default) or require all tags."
+  )
+  parser.add_argument(
+    "--practice_variations",
+    type=int,
+    default=5,
+    help="With --generate_practice, number of Canvas variations per question (default: 5)."
+  )
+  parser.add_argument(
+    "--practice_question_groups",
+    type=int,
+    default=5,
+    help=(
+      "With --generate_practice, repeat each selected question this many times "
+      "(each repetition gets its own variation pool)."
+    )
+  )
+  parser.add_argument(
+    "--practice_repeats",
+    dest="practice_question_groups",
+    type=int,
+    help=argparse.SUPPRESS  # Backwards-compatible alias
+  )
+  parser.add_argument(
+    "--practice_points",
+    type=float,
+    default=1.0,
+    help="With --generate_practice, point value per practice question (default: 1.0)."
+  )
+  parser.add_argument(
+    "--practice_assignment_group",
+    default="practice",
+    help="With --generate_practice, assignment group name for created quizzes (default: practice)."
+  )
   
   # PDF Flags
   parser.add_argument("--num_pdfs", default=0, type=int, help="How many PDF quizzes to create")
@@ -119,7 +165,19 @@ def parse_args():
   if args.num_canvas > 0 and args.course_id is None:
     parser.error("Missing --course_id for Canvas upload. Example: --course_id 12345")
 
-  if args.test_all <= 0 and not args.quiz_yaml:
+  if args.generate_practice and args.course_id is None:
+    parser.error("Missing --course_id for --generate_practice. Example: --course_id 12345")
+
+  if args.generate_practice and args.practice_variations < 1:
+    parser.error("--practice_variations must be >= 1")
+
+  if args.generate_practice and args.practice_question_groups < 1:
+    parser.error("--practice_question_groups must be >= 1")
+
+  if args.generate_practice and args.practice_points < 0:
+    parser.error("--practice_points must be non-negative")
+
+  if args.test_all <= 0 and not args.quiz_yaml and not args.generate_practice:
     parser.error("Missing --yaml. Example: quizgen --yaml example_files/example_exam.yaml --num_pdfs 1")
 
   return args
@@ -340,6 +398,145 @@ def test_all_questions(
       print(f"Quiz '{quiz_title}' pushed to Canvas")
 
   return len(failed_questions) == 0
+
+
+def _practice_question_defaults(registered_name: str) -> dict:
+  defaults = {
+    "fromtext": {"text": "Practice placeholder question."},
+    "fromgenerator": {"generator": "return 'Practice placeholder question.'"},
+    "fromyaml": {"yaml_spec": {"body": ["Practice placeholder question."], "explanation": []}},
+  }
+  return defaults.get(registered_name.lower(), {})
+
+
+def _tags_match(candidate_tags: set[str], requested_tags: set[str], *, match_all: bool) -> bool:
+  if not requested_tags:
+    return True
+  if match_all:
+    return requested_tags.issubset(candidate_tags)
+  return bool(candidate_tags & requested_tags)
+
+
+def _build_practice_question(registered_name: str, question_cls, *, points_value: float):
+  pretty_name = question_cls.__name__.replace("Question", "") or question_cls.__name__
+  try:
+    question = QuestionRegistry.create(
+      registered_name,
+      name=pretty_name,
+      points_value=points_value,
+      **_practice_question_defaults(registered_name)
+    )
+    return question, None
+  except Exception as exc:
+    return None, str(exc)
+
+
+def generate_practice_quizzes(
+    *,
+    tag_filters: list[str],
+    course_id: int,
+    use_prod: bool = False,
+    env_path: str | None = None,
+    num_variations: int = 5,
+    question_groups: int = 1,
+    points_value: float = 1.0,
+    delete_assignment_group: bool = False,
+    assignment_group_name: str = "practice",
+    match_all: bool = False,
+    quiet: bool = False,
+    max_backoff_attempts=None
+):
+  requested_tags = Question.normalize_tags(tag_filters)
+  if not requested_tags:
+    raise QuizGenError("No valid tags supplied for --generate_practice.")
+
+  QuestionRegistry.load_premade_questions()
+  selected: list[tuple[str, object, set[str]]] = []
+  skipped: list[tuple[str, str]] = []
+  available_tags: set[str] = set()
+
+  for registered_name, question_cls in sorted(QuestionRegistry._registry.items()):
+    question, error = _build_practice_question(
+      registered_name,
+      question_cls,
+      points_value=points_value
+    )
+    if question is None:
+      skipped.append((registered_name, error or "unknown error"))
+      continue
+
+    question_tags = set(getattr(question, "tags", set()))
+    question_tags.update(Question.infer_course_tags(registered_name, question_cls.__module__))
+    available_tags.update(question_tags)
+    if _tags_match(question_tags, requested_tags, match_all=match_all):
+      selected.append((registered_name, question, question_tags))
+
+  if not selected:
+    available = ", ".join(sorted(available_tags)) if available_tags else "<none>"
+    match_mode = "all" if match_all else "any"
+    raise QuizGenError(
+      f"No practice questions matched tags {sorted(requested_tags)} with match mode '{match_mode}'. "
+      f"Available tags: {available}"
+    )
+
+  canvas_interface = CanvasInterface(prod=use_prod, env_path=env_path)
+  canvas_course = canvas_interface.get_course(course_id=course_id)
+  assignment_group = canvas_course.create_assignment_group(
+    name=assignment_group_name,
+    delete_existing=delete_assignment_group
+  )
+
+  selected.sort(key=lambda item: item[1].name.lower())
+  for registered_name, question, question_tags in selected:
+    title = f"(Practice) {question.name}"
+    tag_text = ", ".join(sorted(question_tags))
+    repeated_questions = [question]
+    for _ in range(max(0, question_groups - 1)):
+      clone, error = _build_practice_question(
+        registered_name,
+        question.__class__,
+        points_value=points_value
+      )
+      if clone is None:
+        raise QuizGenError(
+          f"Failed to create repeated practice question for '{registered_name}': {error}"
+        )
+      repeated_questions.append(clone)
+
+    quiz = Quiz(
+      name=title,
+      questions=repeated_questions,
+      practice=False,
+      description=(
+        f"Auto-generated practice quiz for '{registered_name}'. "
+        f"Tags: {tag_text}. "
+        f"{question_groups} question group(s), {num_variations} variation(s) per group."
+      )
+    )
+    upload_quiz_to_canvas(
+      canvas_course,
+      quiz,
+      num_variations,
+      title=title,
+      is_practice=False,
+      assignment_group=assignment_group,
+      max_backoff_attempts=max_backoff_attempts,
+      quiet=quiet
+    )
+
+  if skipped:
+    log.info(
+      f"Skipped {len(skipped)} question type(s) that could not be instantiated for practice generation."
+    )
+    for name, reason in skipped[:10]:
+      log.info(f"  - {name}: {reason}")
+    if len(skipped) > 10:
+      log.info(f"  ... and {len(skipped) - 10} more.")
+
+  log.info(
+    f"Generated {len(selected)} practice quizzes matching tags {sorted(requested_tags)} "
+    f"({'all' if match_all else 'any'} mode)."
+  )
 
 
 def generate_latex(latex_text, remove_previous=False, name_prefix=None) -> bool:
@@ -1028,6 +1225,23 @@ def main():
     )
     if not success:
       raise QuizGenError("One or more questions failed during --test_all.")
+    return
+
+  if args.generate_practice:
+    generate_practice_quizzes(
+      tag_filters=args.generate_practice,
+      course_id=args.course_id,
+      use_prod=args.prod,
+      env_path=args.env,
+      num_variations=args.num_canvas if args.num_canvas > 0 else args.practice_variations,
+      question_groups=args.practice_question_groups,
+      points_value=args.practice_points,
+      delete_assignment_group=getattr(args, 'delete_assignment_group', False),
+      assignment_group_name=args.practice_assignment_group,
+      match_all=(args.practice_match == "all"),
+      quiet=getattr(args, "quiet", False),
+      max_backoff_attempts=getattr(args, "max_backoff_attempts", None)
+    )
     return
 
   # Clear any previous metrics

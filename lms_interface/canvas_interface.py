@@ -8,7 +8,7 @@ import queue
 import tempfile
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 
 import canvasapi
 import canvasapi.assignment
@@ -25,7 +25,6 @@ from .classes import (
   QuizSubmission,
   Student,
   Submission,
-  Submission__Canvas,
   TextSubmission__Canvas,
 )
 
@@ -153,6 +152,27 @@ class CanvasCourse(LMSWrapper):
     self.course = canvasapi_course
     super().__init__(_inner=self.course)
   
+  @staticmethod
+  def _ensure_zero_weight_assignment_group(assignment_group) -> None:
+    """
+    Best-effort normalization so practice groups stay excluded from overall grade.
+    Handles common CanvasAPI edit signatures defensively.
+    """
+    edit_payloads = [
+      {"group_weight": 0.0, "position": 0},
+      {"assignment_group": {"group_weight": 0.0, "position": 0}},
+    ]
+    for payload in edit_payloads:
+      try:
+        assignment_group.edit(**payload)
+        return
+      except TypeError:
+        # Try alternate payload shape.
+        continue
+      except Exception as exc:
+        log.warning(f"Could not update assignment group weight to 0: {exc}")
+        return
+
   def create_assignment_group(self, name="dev", delete_existing=False) -> canvasapi.course.AssignmentGroup:
     env_name = os.environ.get("QUIZGEN_ASSIGNMENT_GROUP")
     if env_name:
@@ -167,6 +187,7 @@ class CanvasCourse(LMSWrapper):
         if delete_existing:
           assignment_group.delete()
           break
+        self._ensure_zero_weight_assignment_group(assignment_group)
         log.info("Found group existing, returning")
         return assignment_group
     assignment_group = self.course.create_assignment_group(
@@ -174,6 +195,7 @@ class CanvasCourse(LMSWrapper):
       group_weight=0.0,
       position=0,
     )
+    self._ensure_zero_weight_assignment_group(assignment_group)
     return assignment_group
   
   def add_quiz(
