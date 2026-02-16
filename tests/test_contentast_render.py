@@ -123,5 +123,6 @@ def test_pdf_aid_is_passed_as_question_parameter_in_typst():
 
 def test_typst_header_renders_pdf_aid_for_page_spacing():
     header = ca.Document.TYPST_HEADER
-    assert "] else if pdf_aid != none [" in header
-    assert "height: 10cm" in header
+    assert "#if spacing >= 99cm and pdf_aid != none [" in header
+    assert "#v(1fr)" in header
+    assert "#align(bottom + left)" in header

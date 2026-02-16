@@ -615,20 +615,24 @@ class Document(Container):
         #if spacing < 99cm [
           #if pdf_aid != none [
             #box(width: 100%, height: spacing, inset: 0pt)[
-              #pdf_aid
+              #align(bottom + left)[
+                #pdf_aid
+              ]
             ]
           ] else [
             #v(spacing)
-          ]
-        ] else if pdf_aid != none [
-          #box(width: 100%, height: 10cm, inset: 0pt)[
-            #pdf_aid
           ]
         ]
       ][
         #if qr_code != none {
           image(qr_code, width: 2cm, format: "svg")
         }
+      ]
+      #if spacing >= 99cm and pdf_aid != none [
+        #v(1fr)
+        #align(bottom + left)[
+          #pdf_aid
+        ]
       ]
       #if spacing >= 199cm {
       

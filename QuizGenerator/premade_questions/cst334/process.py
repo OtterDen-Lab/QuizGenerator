@@ -655,6 +655,9 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   IMAGE_DPI = 140
   IMAGE_FIGSIZE = (9.5, 6.5)
   AID_IMAGE_FIGSIZE = (9.5, 3.4)
+  AID_TIME_BLOCK = 5
+  AID_BUFFER_BLOCKS = (1, 2)
+  AID_NOTE_TEXT = "Scratch workspace below is optional and not graded."
 
   @dataclasses.dataclass
   class Job:
@@ -975,6 +978,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     body.add_element(ca.Paragraph([instructions]))
     body.add_element(scheduling_table)
     body.add_element(ca.PDFAid([
+      ca.Paragraph([cls.AID_NOTE_TEXT]),
       ca.Picture(
         img_data=cls.make_pdf_aid_image(context),
         width="100%"
@@ -1143,14 +1147,16 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     lanes_per_queue = num_jobs
     total_lanes = context["num_queues"] * lanes_per_queue
 
-    completion_times = [
-      job_stats[job_id]["arrival_time"] + job_stats[job_id]["TAT"]
-      for job_id in job_stats.keys()
-    ]
-    max_time = max(1, int(math.ceil(max(completion_times) if completion_times else 1)))
+    max_time = cls._get_pdf_aid_time_horizon(context)
 
     for t in range(max_time + 1):
-      ax.axvline(t, color='0.88', linewidth=0.7, zorder=0)
+      is_major = (t % cls.AID_TIME_BLOCK) == 0
+      ax.axvline(
+        t,
+        color='0.84' if is_major else '0.9',
+        linewidth=0.85 if is_major else 0.55,
+        zorder=0
+      )
 
     for lane_boundary in range(total_lanes + 1):
       y = lane_boundary - 0.5
@@ -1168,7 +1174,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ax.set_yticklabels([f"Q{i}" for i in range(context["num_queues"])])
     ax.set_ylim(-0.5, total_lanes - 0.5)
     ax.set_xlim(0, max_time)
-    ax.set_xticks(range(max_time + 1))
+    ax.set_xticks(range(0, max_time + 1, cls.AID_TIME_BLOCK))
     ax.set_xlabel("Time")
     ax.tick_params(axis='both', which='both', length=0)
 
@@ -1178,3 +1184,17 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     plt.close(fig)
     buffer.seek(0)
     return buffer
+
+  @classmethod
+  def _get_pdf_aid_time_horizon(cls, context) -> int:
+    completion_times = [
+      context["job_stats"][job_id]["arrival_time"] + context["job_stats"][job_id]["TAT"]
+      for job_id in context["job_stats"].keys()
+    ]
+    true_horizon = max(1, int(math.ceil(max(completion_times) if completion_times else 1)))
+    rounded_horizon = int(math.ceil(true_horizon / cls.AID_TIME_BLOCK) * cls.AID_TIME_BLOCK)
+
+    seed = int(context.get("rng_seed") or 0)
+    buffer_rng = random.Random(seed ^ 0x5EED5A1D)
+    buffer_blocks = buffer_rng.randint(*cls.AID_BUFFER_BLOCKS)
+    return rounded_horizon + (buffer_blocks * cls.AID_TIME_BLOCK)
