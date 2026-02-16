@@ -118,6 +118,7 @@ quizgen \
 ```
 
 These are uploaded as regular graded quiz assignments into the `practice` assignment group, which is configured with `0.0` group weight.
+Tag filters accept either namespaced tags (for example `course:cst334`, `topic:memory`) or legacy bare forms (`cst334`, `memory`).
 
 ## Creating Custom Questions
 

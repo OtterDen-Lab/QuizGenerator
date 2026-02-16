@@ -85,12 +85,17 @@ class Quiz:
     def _validate_exam_dict(exam_dict: dict):
       def _validate_tags(value, label: str):
         if isinstance(value, str):
-          return
-        if isinstance(value, (list, tuple, set)):
+          candidates = [value]
+        elif isinstance(value, (list, tuple, set)):
           for item in value:
             _require_type(item, str, f"{label} tag")
-          return
-        raise ValueError(f"Invalid type for {label}: expected string or list of strings, got {type(value)}")
+          candidates = list(value)
+        else:
+          raise ValueError(f"Invalid type for {label}: expected string or list of strings, got {type(value)}")
+
+        source_label = label if source_path is None else f"{source_path}:{label}"
+        for warning in Question.validate_explicit_tags(candidates, context=source_label):
+          log.warning(warning)
 
       if not isinstance(exam_dict, dict):
         raise ValueError("Each YAML document must be a mapping.")

@@ -130,7 +130,7 @@ questions:
         quiz = Quiz.from_yaml(_write_tmp_yaml(yaml_text))[0]
         question = quiz.get_ordered_questions()[0]
 
-        assert "cst334" in question.tags
+        assert "course:cst334" in question.tags
         assert "practice" in question.tags
 
     def test_list_format_with_spacing(self):

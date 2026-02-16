@@ -43,6 +43,15 @@ List format: each item is a question entry with `name` and `points`. This preser
 - `seed_group` (string, optional): Questions with the same `seed_group` share one RNG seed per generated PDF.
 - `num_subquestions` (int, optional): Used for multipart questions.
 
+Recommended core facets:
+
+- `course:<code>` (for example `course:cst334`)
+- `topic:<name>` (for example `topic:memory`)
+- `skill:<name>` (for example `skill:round_robin`)
+
+Bare legacy forms (for example `cst334`, `memory`) are still accepted and are normalized automatically.
+Free-form tags are allowed.
+
 ### Per-Question `_config`
 
 Used to enable grouping and repeats:
@@ -78,7 +87,7 @@ questions:
       preserve_order: true
     "Scheduling":
       class: SchedulingQuestion
-      tags: [cst334, processes]
+      tags: [course:cst334, topic:processes, practice]
       kwargs:
         spacing: MEDIUM
 

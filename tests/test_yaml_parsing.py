@@ -208,9 +208,9 @@ questions:
         quizzes = Quiz.from_yaml(path)
 
         question = quizzes[0].questions[0]
-        assert "cst334" in question.tags
+        assert "course:cst334" in question.tags
         assert "practice" in question.tags
-        assert "memory" in question.tags
+        assert "topic:memory" in question.tags
 
     def test_legacy_kind_bootstraps_tag(self, temp_yaml_file):
         yaml_content = """
@@ -227,7 +227,7 @@ questions:
         quizzes = Quiz.from_yaml(path)
 
         question = quizzes[0].questions[0]
-        assert "programming" in question.tags
+        assert "topic:programming" in question.tags
 
     def test_question_spacing_preset(self, temp_yaml_file):
         yaml_content = """
@@ -335,9 +335,16 @@ questions:
 
         group = quizzes[0].questions[0]
         assert isinstance(group, QuestionGroup)
-        assert "cst334" in group.tags
-        assert "memory" in group.tags
+        assert "course:cst334" in group.tags
+        assert "topic:memory" in group.tags
         assert "fifo" in group.tags
+
+    def test_unknown_namespaced_topic_tag_warns(self):
+        warnings = Question.validate_explicit_tags(
+            ["topic:not_a_real_topic"],
+            context="questions[1]['Q1'].tags"
+        )
+        assert any("Unknown topic tag" in warning for warning in warnings)
 
     def test_preserve_order_config(self, temp_yaml_file):
         yaml_content = """

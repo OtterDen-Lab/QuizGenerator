@@ -613,6 +613,88 @@ class Question(abc.ABC):
         return mappings.get(string.lower())
       return cls.MISC
 
+  COURSE_TAG_PATTERN = re.compile(r"[a-z]{2,}\d{2,}[a-z]?$")
+  CORE_TAG_FACETS = frozenset({"course", "topic", "skill"})
+  TOPIC_TAG_ALIASES = {
+    "process": "processes",
+    "processes": "processes",
+    "system_processes": "processes",
+    "concurrency": "concurrency",
+    "threads": "concurrency",
+    "threading": "concurrency",
+    "io": "io",
+    "persistence": "io",
+    "persistance": "io",
+    "memory": "memory",
+    "security": "security",
+    "math": "math",
+    "mathematics": "math",
+    "optimization": "optimization",
+    "gradient_descent": "optimization",
+    "linear_algebra": "linear_algebra",
+    "matrix": "linear_algebra",
+    "statistics": "statistics",
+    "stats": "statistics",
+    "ml": "machine_learning",
+    "machine_learning": "machine_learning",
+    "algorithms": "machine_learning",
+    "data": "data",
+    "programming": "programming",
+    "languages": "languages",
+    "misc": "misc",
+  }
+  TOPIC_TAGS = frozenset(TOPIC_TAG_ALIASES.values())
+
+  @classmethod
+  def _clean_tag_token(cls, token: str) -> str:
+    cleaned = re.sub(r"[^a-z0-9:._-]+", "_", token.lower())
+    cleaned = re.sub(r":{2,}", ":", cleaned)
+    return cleaned.strip("._-:")
+
+  @classmethod
+  def _iter_tag_tokens(cls, raw_tags):
+    if isinstance(raw_tags, str):
+      for piece in re.split(r"[,\s]+", raw_tags.strip()):
+        if piece:
+          yield piece
+      return
+
+    if isinstance(raw_tags, enum.Enum):
+      yield raw_tags.name
+      return
+
+    if isinstance(raw_tags, (list, tuple, set)):
+      for item in raw_tags:
+        yield from cls._iter_tag_tokens(item)
+      return
+
+    if raw_tags is not None:
+      yield str(raw_tags)
+
+  @classmethod
+  def _normalize_tag_token(cls, token: str) -> set[str]:
+    cleaned = cls._clean_tag_token(token)
+    if not cleaned:
+      return set()
+
+    if ":" in cleaned:
+      facet, value = cleaned.split(":", 1)
+      facet = facet.strip()
+      value = cls._clean_tag_token(value)
+      if not facet or not value:
+        return set()
+      if facet == "topic":
+        value = cls.TOPIC_TAG_ALIASES.get(value, value)
+      return {f"{facet}:{value}"}
+
+    if cls.COURSE_TAG_PATTERN.fullmatch(cleaned):
+      return {f"course:{cleaned}"}
+
+    if cleaned in cls.TOPIC_TAG_ALIASES:
+      return {f"topic:{cls.TOPIC_TAG_ALIASES[cleaned]}"}
+
+    return {cleaned}
+
   @classmethod
   def normalize_tags(cls, raw_tags) -> set[str]:
     normalized: set[str] = set()
@@ -621,29 +703,46 @@ class Question(abc.ABC):
       if value is None:
         return
 
-      if isinstance(value, enum.Enum):
-        _consume(value.name)
-        return
-
-      if isinstance(value, str):
-        pieces = re.split(r"[,\s]+", value.strip())
-        for piece in pieces:
-          if not piece:
-            continue
-          cleaned = re.sub(r"[^a-z0-9._-]+", "_", piece.lower()).strip("._-")
-          if cleaned:
-            normalized.add(cleaned)
-        return
-
-      if isinstance(value, (list, tuple, set)):
-        for item in value:
-          _consume(item)
-        return
-
-      _consume(str(value))
+      for token in cls._iter_tag_tokens(value):
+        normalized.update(cls._normalize_tag_token(token))
 
     _consume(raw_tags)
     return normalized
+
+  @classmethod
+  def validate_explicit_tags(cls, raw_tags, *, context: str | None = None) -> list[str]:
+    warnings: list[str] = []
+    for token in cls._iter_tag_tokens(raw_tags):
+      cleaned = cls._clean_tag_token(token)
+      if ":" not in cleaned:
+        continue
+      facet, value = cleaned.split(":", 1)
+      facet = facet.strip()
+      value = cls._clean_tag_token(value)
+      if not facet or not value:
+        continue
+
+      message = None
+      if facet == "course" and not cls.COURSE_TAG_PATTERN.fullmatch(value):
+        message = (
+          f"Course tag '{cleaned}' does not match expected pattern "
+          f"(for example 'course:cst334')."
+        )
+      elif facet == "topic":
+        canonical_topic = cls.TOPIC_TAG_ALIASES.get(value, value)
+        if canonical_topic not in cls.TOPIC_TAGS:
+          message = (
+            f"Unknown topic tag '{cleaned}'. "
+            f"Known topic tags include: {', '.join(sorted(cls.TOPIC_TAGS))}."
+          )
+
+      if message:
+        if context:
+          message = f"{context}: {message}"
+        warnings.append(message)
+
+    # Keep warnings stable and de-duplicated.
+    return sorted(set(warnings))
 
   @classmethod
   def infer_course_tags(cls, *sources) -> set[str]:
@@ -652,8 +751,8 @@ class Question(abc.ABC):
       if not source:
         continue
       for token in re.split(r"[^a-z0-9]+", str(source).lower()):
-        if re.fullmatch(r"[a-z]{2,}\d{2,}[a-z]?", token):
-          tags.add(token)
+        if cls.COURSE_TAG_PATTERN.fullmatch(token):
+          tags.update(cls.normalize_tags(token))
     return tags
 
   @classmethod
@@ -679,12 +778,11 @@ class Question(abc.ABC):
       cls.Topic.LANGUAGES: "languages",
       cls.Topic.MISC: "misc",
     }
-    return mapping.get(topic, str(getattr(topic, "name", "misc")).lower())
+    canonical_topic = mapping.get(topic, str(getattr(topic, "name", "misc")).lower())
+    return f"topic:{canonical_topic}"
 
-  def _derive_tags(self, *, explicit_tags, raw_kwargs: dict[str, Any]) -> set[str]:
+  def _derive_tags(self, *, raw_kwargs: dict[str, Any]) -> set[str]:
     tags: set[str] = set()
-    tags.update(self.normalize_tags(getattr(self.__class__, "TAGS", None)))
-    tags.update(self.normalize_tags(explicit_tags))
 
     topic_tag = self.topic_to_tag(self.topic)
     if topic_tag:
@@ -736,7 +834,10 @@ class Question(abc.ABC):
       'question_id', 'seed_group', 'tags'
     }
     self.config_params = {k: v for k, v in kwargs.items() if k not in framework_params}
-    self.tags = self._derive_tags(explicit_tags=explicit_tags, raw_kwargs=kwargs)
+    self.explicit_tags = self.normalize_tags(getattr(self.__class__, "TAGS", None))
+    self.explicit_tags.update(self.normalize_tags(explicit_tags))
+    self.derived_tags = self._derive_tags(raw_kwargs=kwargs)
+    self.tags = self.explicit_tags | self.derived_tags
   
   def instantiate(self, **kwargs) -> QuestionInstance:
     """
@@ -1180,12 +1281,16 @@ class QuestionGroup():
     first_question = questions_in_group[0] if questions_in_group else None
     self.points_value = getattr(first_question, "points_value", 0)
     self.topic = getattr(first_question, "topic", Question.Topic.MISC)
-    self.tags: set[str] = set()
+    self.explicit_tags: set[str] = set()
+    self.derived_tags: set[str] = set()
     for question in questions_in_group:
-      self.tags.update(getattr(question, "tags", set()))
+      self.explicit_tags.update(getattr(question, "explicit_tags", set()))
+      self.derived_tags.update(getattr(question, "derived_tags", set()))
+    self.tags: set[str] = self.explicit_tags | self.derived_tags
     if not self.tags:
       topic_tag = Question.topic_to_tag(self.topic)
       if topic_tag:
+        self.derived_tags.add(topic_tag)
         self.tags.add(topic_tag)
     self.spacing = max((q.spacing for q in questions_in_group), default=0)
     self.possible_variations = float("inf")
