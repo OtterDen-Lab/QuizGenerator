@@ -77,7 +77,7 @@ def parse_args():
     nargs="+",
     metavar="TAG",
     help=(
-      "Generate one ungraded practice quiz per matching registered question type. "
+      "Generate one practice quiz assignment per matching registered question type. "
       "Accepts one or more tags (comma or space separated), e.g. --generate_practice cst334 memory"
     )
   )
@@ -92,6 +92,21 @@ def parse_args():
     type=int,
     default=5,
     help="With --generate_practice, number of Canvas variations per question (default: 5)."
+  )
+  parser.add_argument(
+    "--practice_question_groups",
+    type=int,
+    default=5,
+    help=(
+      "With --generate_practice, repeat each selected question this many times "
+      "(each repetition gets its own variation pool)."
+    )
+  )
+  parser.add_argument(
+    "--practice_repeats",
+    dest="practice_question_groups",
+    type=int,
+    help=argparse.SUPPRESS  # Backwards-compatible alias
   )
   parser.add_argument(
     "--practice_points",
@@ -155,6 +170,9 @@ def parse_args():
 
   if args.generate_practice and args.practice_variations < 1:
     parser.error("--practice_variations must be >= 1")
+
+  if args.generate_practice and args.practice_question_groups < 1:
+    parser.error("--practice_question_groups must be >= 1")
 
   if args.generate_practice and args.practice_points < 0:
     parser.error("--practice_points must be non-negative")
@@ -420,6 +438,7 @@ def generate_practice_quizzes(
     use_prod: bool = False,
     env_path: str | None = None,
     num_variations: int = 5,
+    question_groups: int = 1,
     points_value: float = 1.0,
     delete_assignment_group: bool = False,
     assignment_group_name: str = "practice",
@@ -469,20 +488,37 @@ def generate_practice_quizzes(
 
   selected.sort(key=lambda item: item[1].name.lower())
   for registered_name, question, question_tags in selected:
-    title = f"(Ungraded Practice) {question.name}"
+    title = f"(Practice) {question.name}"
     tag_text = ", ".join(sorted(question_tags))
+    repeated_questions = [question]
+    for _ in range(max(0, question_groups - 1)):
+      clone, error = _build_practice_question(
+        registered_name,
+        question.__class__,
+        points_value=points_value
+      )
+      if clone is None:
+        raise QuizGenError(
+          f"Failed to create repeated practice question for '{registered_name}': {error}"
+        )
+      repeated_questions.append(clone)
+
     quiz = Quiz(
       name=title,
-      questions=[question],
-      practice=True,
-      description=f"Auto-generated practice quiz for '{registered_name}'. Tags: {tag_text}"
+      questions=repeated_questions,
+      practice=False,
+      description=(
+        f"Auto-generated practice quiz for '{registered_name}'. "
+        f"Tags: {tag_text}. "
+        f"{question_groups} question group(s), {num_variations} variation(s) per group."
+      )
     )
     upload_quiz_to_canvas(
       canvas_course,
       quiz,
       num_variations,
       title=title,
-      is_practice=True,
+      is_practice=False,
       assignment_group=assignment_group,
       max_backoff_attempts=max_backoff_attempts,
       quiet=quiet
@@ -1198,6 +1234,7 @@ def main():
       use_prod=args.prod,
       env_path=args.env,
       num_variations=args.num_canvas if args.num_canvas > 0 else args.practice_variations,
+      question_groups=args.practice_question_groups,
       points_value=args.practice_points,
       delete_assignment_group=getattr(args, 'delete_assignment_group', False),
       assignment_group_name=args.practice_assignment_group,

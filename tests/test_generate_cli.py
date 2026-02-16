@@ -16,6 +16,7 @@ def test_parse_args_generate_practice_allows_missing_yaml(monkeypatch):
     assert args.quiz_yaml is None
     assert args.generate_practice == ["cst334"]
     assert args.practice_variations == 5
+    assert args.practice_question_groups == 5
 
 
 def test_parse_args_generate_practice_requires_course_id(monkeypatch):
@@ -26,6 +27,36 @@ def test_parse_args_generate_practice_requires_course_id(monkeypatch):
 def test_parse_args_requires_yaml_without_generate_practice(monkeypatch):
     with pytest.raises(SystemExit):
         _parse(monkeypatch, [])
+
+
+def test_parse_args_generate_practice_question_groups(monkeypatch):
+    args = _parse(
+        monkeypatch,
+        [
+            "--generate_practice",
+            "cst334",
+            "--course_id",
+            "12345",
+            "--practice_question_groups",
+            "5",
+        ],
+    )
+    assert args.practice_question_groups == 5
+
+
+def test_parse_args_generate_practice_question_groups_must_be_positive(monkeypatch):
+    with pytest.raises(SystemExit):
+        _parse(
+            monkeypatch,
+            [
+                "--generate_practice",
+                "cst334",
+                "--course_id",
+                "12345",
+                "--practice_question_groups",
+                "0",
+            ],
+        )
 
 
 def test_tags_match_any_and_all_modes():

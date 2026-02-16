@@ -151,6 +151,7 @@ class TestCanvasCourse:
 
         assert result == existing_group
         mock_canvas_course.course.create_assignment_group.assert_not_called()
+        existing_group.edit.assert_called()
 
     def test_create_assignment_group_delete_existing(self, mock_canvas_course):
         """Should delete and recreate when delete_existing=True."""

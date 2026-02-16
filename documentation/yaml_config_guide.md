@@ -12,6 +12,20 @@ This guide documents the minimal YAML schema used by `quizgen`.
 - `questions` (mapping or list): Required. Point values mapped to question blocks, or an ordered list of questions.
 - `question_order` (string, optional): Ordering mode. `yaml` preserves YAML order, `points` groups by point value.
 
+## Practice Generation (CLI)
+
+Tag-filtered practice upload can generate one quiz per matching question type:
+
+```bash
+quizgen --generate_practice cst334 memory --course_id 12345
+```
+
+Useful knobs:
+
+- `--practice_match any|all`: tag matching mode.
+- `--practice_variations N`: variation count per question group (default `5`).
+- `--practice_question_groups N`: repeat each selected question N times per quiz (default `5`).
+
 ## Questions Block
 
 Mapping format: each key is a point value (number). Each value is a mapping of question names to configs.
