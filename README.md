@@ -125,6 +125,19 @@ Tag filters accept either namespaced tags (for example `course:cst334`, `topic:m
 Use `--practice_tag_source explicit` if you want strict explicit-only tag matching.
 Legacy flat flags still work, but subcommands are the recommended interface.
 
+### 5. Audit Tags
+
+```bash
+# Tag summary
+quizgen tags list
+
+# Show only question types missing explicit tags
+quizgen tags list --only_missing_explicit --include_questions
+
+# Explain tags for matching question types
+quizgen tags explain sched
+```
+
 ## Creating Custom Questions
 
 QuizGenerator supports two approaches for adding custom question types:

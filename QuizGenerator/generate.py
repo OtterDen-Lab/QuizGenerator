@@ -224,6 +224,46 @@ def _build_parser() -> argparse.ArgumentParser:
   deps_parser.add_argument("--num_pdfs", default=0, type=int, help=argparse.SUPPRESS)
   deps_parser.add_argument("--test_all", type=int, default=0, metavar="N", help=argparse.SUPPRESS)
 
+  tags_parser = subparsers.add_parser("tags", help="Inspect tag coverage and classification for registered questions.")
+  _add_common_options(tags_parser)
+  tags_subparsers = tags_parser.add_subparsers(dest="tags_command")
+
+  tags_list_parser = tags_subparsers.add_parser("list", help="List known tags and coverage stats.")
+  tags_list_parser.add_argument(
+    "--tag_source",
+    choices=["explicit", "merged", "derived"],
+    default="merged",
+    help="Tag source to summarize: explicit, derived, or merged (default)."
+  )
+  tags_list_parser.add_argument(
+    "--include_questions",
+    action="store_true",
+    help="Include per-question tag lines in output."
+  )
+  tags_list_parser.add_argument(
+    "--only_missing_explicit",
+    action="store_true",
+    help="Show only question types that do not yet define explicit tags."
+  )
+  tags_list_parser.add_argument(
+    "--filter",
+    nargs="+",
+    metavar="TAG",
+    help="Optional tag filter applied to the chosen tag source."
+  )
+
+  tags_explain_parser = tags_subparsers.add_parser("explain", help="Show explicit/derived/merged tags for matching question types.")
+  tags_explain_parser.add_argument(
+    "query",
+    help="Substring to match against registered question names or class names."
+  )
+  tags_explain_parser.add_argument(
+    "--limit",
+    type=int,
+    default=20,
+    help="Maximum number of matching question types to print (default: 20)."
+  )
+
   smoke_parser = subparsers.add_parser("TEST", help=argparse.SUPPRESS)
   _add_common_options(smoke_parser)
 
@@ -234,7 +274,7 @@ def parse_args(argv: list[str] | None = None):
   parser = _build_parser()
   raw_argv = list(sys.argv[1:] if argv is None else argv)
 
-  known_commands = {"generate", "practice", "test", "deps", "TEST"}
+  known_commands = {"generate", "practice", "test", "deps", "tags", "TEST"}
   uses_subcommand = bool(raw_argv) and raw_argv[0] in known_commands
   legacy_mode = not uses_subcommand
   inferred_command = None
@@ -262,6 +302,7 @@ def parse_args(argv: list[str] | None = None):
     "practice_match": "any",
     "practice_tag_source": "merged",
     "practice_assignment_group": "practice",
+    "tags_command": None,
   }
   for field, default_value in compatibility_defaults.items():
     if not hasattr(args, field):
@@ -303,6 +344,17 @@ def parse_args(argv: list[str] | None = None):
 
   if args.command == "deps":
     args.check_deps = True
+    return args
+
+  if args.command == "tags":
+    if args.tags_command is None:
+      args.tags_command = "list"
+      args.tag_source = "merged"
+      args.include_questions = False
+      args.only_missing_explicit = False
+      args.filter = None
+    if getattr(args, "limit", None) is not None and args.limit < 1:
+      parser.error("--limit must be >= 1")
     return args
 
   return args
@@ -671,6 +723,124 @@ def generate_practice_quizzes(
     f"Generated {len(selected)} practice quizzes matching tags {sorted(requested_tags)} "
     f"({'all' if match_all else 'any'} mode, tag source='{tag_source}')."
   )
+
+
+def _collect_registered_question_tag_rows(*, points_value: float = 1.0):
+  QuestionRegistry.load_premade_questions()
+  rows = []
+  skipped: list[tuple[str, str, str]] = []
+  for registered_name, question_cls in sorted(QuestionRegistry._registry.items()):
+    question, error = _build_practice_question(
+      registered_name,
+      question_cls,
+      points_value=points_value
+    )
+    if question is None:
+      skipped.append((registered_name, question_cls.__name__, error or "unknown error"))
+      continue
+    rows.append({
+      "registered_name": registered_name,
+      "class_name": question_cls.__name__,
+      "explicit_tags": set(getattr(question, "explicit_tags", set())),
+      "derived_tags": set(getattr(question, "derived_tags", set())),
+      "merged_tags": set(getattr(question, "tags", set())),
+    })
+  return rows, skipped
+
+
+def _row_tags_for_source(row: dict, tag_source: str) -> set[str]:
+  if tag_source == "explicit":
+    return set(row.get("explicit_tags", set()))
+  if tag_source == "derived":
+    return set(row.get("derived_tags", set()))
+  return set(row.get("merged_tags", set()))
+
+
+def list_registered_tags(
+    *,
+    tag_source: str = "merged",
+    include_questions: bool = False,
+    only_missing_explicit: bool = False,
+    tag_filter: list[str] | None = None,
+):
+  rows, skipped = _collect_registered_question_tag_rows()
+  analyzed_total = len(rows)
+  explicit_coverage = sum(1 for row in rows if row.get("explicit_tags"))
+
+  if only_missing_explicit:
+    rows = [row for row in rows if not row.get("explicit_tags")]
+
+  normalized_filter = Question.normalize_tags(tag_filter) if tag_filter else set()
+  if normalized_filter:
+    rows = [
+      row for row in rows
+      if _row_tags_for_source(row, tag_source) & normalized_filter
+    ]
+
+  print(f"Analyzed question types: {analyzed_total}")
+  print(f"Explicit tag coverage: {explicit_coverage}/{analyzed_total}")
+  print(f"Skipped (could not instantiate): {len(skipped)}")
+  print(f"View tag source: {tag_source}")
+  if normalized_filter:
+    print(f"Filter: {', '.join(sorted(normalized_filter))}")
+
+  if not rows:
+    print("No question types matched the current tag query.")
+    return
+
+  from collections import Counter
+  tag_counter = Counter()
+  for row in rows:
+    for tag in sorted(_row_tags_for_source(row, tag_source)):
+      tag_counter[tag] += 1
+
+  print(f"Matching question types: {len(rows)}")
+  print("Tags:")
+  for tag, count in sorted(tag_counter.items(), key=lambda item: (-item[1], item[0])):
+    print(f"  {tag}: {count}")
+
+  if only_missing_explicit or include_questions:
+    print("Questions:")
+    for row in sorted(rows, key=lambda item: item["registered_name"]):
+      tags_text = ", ".join(sorted(_row_tags_for_source(row, tag_source))) or "--"
+      print(f"  {row['registered_name']} ({row['class_name']}): {tags_text}")
+
+  if skipped:
+    print("Skipped question types:")
+    for name, class_name, reason in skipped[:20]:
+      print(f"  {name} ({class_name}): {reason}")
+    if len(skipped) > 20:
+      print(f"  ... and {len(skipped) - 20} more")
+
+
+def explain_registered_tags(query: str, *, limit: int = 20):
+  rows, skipped = _collect_registered_question_tag_rows()
+  query_lower = query.strip().lower()
+  if not query_lower:
+    raise QuizGenError("Query for `tags explain` cannot be empty.")
+
+  matches = [
+    row for row in rows
+    if query_lower in row["registered_name"].lower() or query_lower in row["class_name"].lower()
+  ]
+  if not matches:
+    raise QuizGenError(f"No question types matched query '{query}'.")
+
+  print(f"Matches: {len(matches)}")
+  for row in sorted(matches, key=lambda item: item["registered_name"])[:limit]:
+    explicit = ", ".join(sorted(row["explicit_tags"])) or "--"
+    derived = ", ".join(sorted(row["derived_tags"])) or "--"
+    merged = ", ".join(sorted(row["merged_tags"])) or "--"
+    print(f"{row['registered_name']} ({row['class_name']})")
+    print(f"  explicit: {explicit}")
+    print(f"  derived : {derived}")
+    print(f"  merged  : {merged}")
+
+  if len(matches) > limit:
+    print(f"... {len(matches) - limit} additional match(es) omitted (use --limit to increase).")
+
+  if skipped:
+    print(f"Skipped question types during analysis: {len(skipped)}")
 
 
 def generate_latex(latex_text, remove_previous=False, name_prefix=None) -> bool:
@@ -1391,6 +1561,20 @@ def main():
       max_backoff_attempts=getattr(args, "max_backoff_attempts", None)
     )
     return
+
+  if args.command == "tags":
+    if args.tags_command == "list":
+      list_registered_tags(
+        tag_source=getattr(args, "tag_source", "merged"),
+        include_questions=getattr(args, "include_questions", False),
+        only_missing_explicit=getattr(args, "only_missing_explicit", False),
+        tag_filter=getattr(args, "filter", None),
+      )
+      return
+    if args.tags_command == "explain":
+      explain_registered_tags(args.query, limit=getattr(args, "limit", 20))
+      return
+    raise QuizGenError(f"Unsupported tags subcommand: {args.tags_command}")
 
   if args.command == "generate":
     require_typst = bool(getattr(args, "typst", True))

@@ -27,6 +27,14 @@ Useful knobs:
 - `--practice_question_groups N`: repeat each selected question N times per quiz (default `5`).
 - `--practice_tag_source explicit|merged|derived`: choose whether matching uses only explicit tags, merged tags (default), or only derived tags.
 
+Tag audit helpers:
+
+```bash
+quizgen tags list
+quizgen tags list --only_missing_explicit --include_questions
+quizgen tags explain sched
+```
+
 ## Questions Block
 
 Mapping format: each key is a point value (number). Each value is a mapping of question names to configs.

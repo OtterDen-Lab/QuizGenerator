@@ -108,6 +108,13 @@ Skip questions that require optional extras:
 quizgen test 5 --skip_missing_extras
 ```
 
+## Tag Audit (Optional)
+
+```bash
+quizgen tags list
+quizgen tags list --only_missing_explicit --include_questions
+```
+
 ## Running Tests
 
 ```bash

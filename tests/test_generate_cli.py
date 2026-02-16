@@ -52,6 +52,20 @@ def test_parse_args_subcommand_test_positional_variations(monkeypatch):
     assert args.test_all == 7
 
 
+def test_parse_args_subcommand_tags_defaults_to_list(monkeypatch):
+    args = _parse(monkeypatch, ["tags"])
+    assert args.command == "tags"
+    assert args.tags_command == "list"
+    assert args.tag_source == "merged"
+
+
+def test_parse_args_subcommand_tags_explain(monkeypatch):
+    args = _parse(monkeypatch, ["tags", "explain", "sched"])
+    assert args.command == "tags"
+    assert args.tags_command == "explain"
+    assert args.query == "sched"
+
+
 def test_parse_args_legacy_check_deps_routes_to_deps(monkeypatch):
     args = _parse(monkeypatch, ["--check-deps", "--yaml", "example_files/example_exam.yaml", "--num_pdfs", "1"])
     assert args.command == "deps"
