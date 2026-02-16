@@ -31,7 +31,7 @@ This list format preserves the order you write.
 ## 3. Generate a PDF
 
 ```bash
-quizgen --yaml my_quiz.yaml --num_pdfs 1
+quizgen generate --yaml my_quiz.yaml --num_pdfs 1
 ```
 
 Your PDF is written to `out/`.
@@ -41,7 +41,7 @@ Your PDF is written to `out/`.
 To reorder questions and reduce page count:
 
 ```bash
-quizgen --yaml my_quiz.yaml --num_pdfs 1 --optimize_space
+quizgen generate --yaml my_quiz.yaml --num_pdfs 1 --optimize_space
 ```
 
 This also changes Canvas order if you upload.

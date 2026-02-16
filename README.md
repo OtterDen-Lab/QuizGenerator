@@ -86,7 +86,7 @@ questions:
 ### 2. Generate PDFs
 
 ```bash
-quizgen --yaml my_quiz.yaml --num_pdfs 3
+quizgen generate --yaml my_quiz.yaml --num_pdfs 3
 ```
 
 PDFs will be created in the `out/` directory.
@@ -99,6 +99,7 @@ PDFs will be created in the `out/` directory.
 # CANVAS_API_KEY=your_api_key_here
 
 quizgen \
+  generate \
   --yaml my_quiz.yaml \
   --num_canvas 5 \
   --course_id 12345
@@ -110,6 +111,7 @@ Create one practice quiz assignment per matching registered question type:
 
 ```bash
 quizgen \
+  practice \
   --generate_practice cst334 memory \
   --practice_match any \
   --practice_tag_source merged \
@@ -121,6 +123,7 @@ quizgen \
 These are uploaded as regular graded quiz assignments into the `practice` assignment group, which is configured with `0.0` group weight.
 Tag filters accept either namespaced tags (for example `course:cst334`, `topic:memory`) or legacy bare forms (`cst334`, `memory`).
 Use `--practice_tag_source explicit` if you want strict explicit-only tag matching.
+Legacy flat flags still work, but subcommands are the recommended interface.
 
 ## Creating Custom Questions
 
@@ -226,7 +229,7 @@ CANVAS_API_KEY_prod=your_prod_api_key
 2. Use `--prod` flag for production Canvas instance:
 
 ```bash
-quizgen --prod --num_canvas 5 --course_id 12345
+quizgen generate --prod --num_canvas 5 --course_id 12345 --yaml my_quiz.yaml
 ```
 
 ## Advanced Features
@@ -236,7 +239,7 @@ quizgen --prod --num_canvas 5 --course_id 12345
 Typst is the default for faster compilation. Use `--latex` to force LaTeX:
 
 ```bash
-quizgen --latex --num_pdfs 3
+quizgen generate --latex --num_pdfs 3 --yaml my_quiz.yaml
 ```
 
 Experimental: `--typst_measurement` uses Typst to measure question height for tighter layout.
@@ -252,7 +255,7 @@ Use `--optimize_space` to reorder questions to reduce PDF page count. This also 
 Use seeds for reproducible quizzes:
 
 ```bash
-quizgen --seed 42 --num_pdfs 3
+quizgen generate --seed 42 --num_pdfs 3 --yaml my_quiz.yaml
 ```
 
 ### Generation Controls
@@ -260,13 +263,13 @@ quizgen --seed 42 --num_pdfs 3
 Limit backoff attempts for questions that retry until they are "interesting":
 
 ```bash
-quizgen --yaml my_quiz.yaml --num_pdfs 1 --max_backoff_attempts 50
+quizgen generate --yaml my_quiz.yaml --num_pdfs 1 --max_backoff_attempts 50
 ```
 
 Set a default numeric tolerance for float answers (overridable per question):
 
 ```bash
-quizgen --yaml my_quiz.yaml --num_pdfs 1 --float_tolerance 0.01
+quizgen generate --yaml my_quiz.yaml --num_pdfs 1 --float_tolerance 0.01
 ```
 
 Per-answer override in custom questions:
@@ -296,9 +299,9 @@ The `FromGenerator` question type executes **arbitrary Python code** from your Y
 
 `FromGenerator` is disabled by default. To enable it, use one of:
 ```bash
-quizgen --allow_generator --yaml my_quiz.yaml
+quizgen generate --allow_generator --yaml my_quiz.yaml
 # or
-QUIZGEN_ALLOW_GENERATOR=1 quizgen --yaml my_quiz.yaml
+QUIZGEN_ALLOW_GENERATOR=1 quizgen generate --yaml my_quiz.yaml
 ```
 
 If you need dynamic question generation with untrusted inputs, consider writing a proper `Question` subclass instead, which provides better control and validation.

@@ -7,6 +7,7 @@ import random
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import traceback
@@ -31,8 +32,40 @@ class QuizGenError(Exception):
   """User-facing error for CLI operations."""
 
 
+def _infer_legacy_subcommand(argv: list[str]) -> str:
+  if "--generate_practice" in argv:
+    return "practice"
+  if "--test_all" in argv or "--test_questions" in argv or "--strict" in argv:
+    return "test"
+  if "--check-deps" in argv:
+    return "deps"
+  return "generate"
 
-def parse_args():
+
+def _add_common_options(parser: argparse.ArgumentParser) -> None:
+  parser.add_argument(
+    "--env",
+    default=os.path.join(Path.home(), ".env"),
+    help="Path to .env file specifying canvas details"
+  )
+  parser.add_argument("--debug", action="store_true", help="Set logging level to debug")
+
+
+def _add_typst_latex_flags(parser: argparse.ArgumentParser) -> None:
+  parser.add_argument("--latex", action="store_false", dest="typst", help="Use LaTeX instead of Typst for PDF generation")
+  parser.set_defaults(typst=True)
+
+
+def _add_canvas_options(parser: argparse.ArgumentParser) -> None:
+  parser.add_argument("--prod", action="store_true")
+  parser.add_argument("--course_id", type=int)
+  parser.add_argument("--delete-assignment-group", action="store_true",
+                      help="Delete existing assignment group before uploading new quizzes")
+  parser.add_argument("--quiet", action="store_true",
+                      help="Disable progress bars for variation prep and uploads")
+
+
+def _build_parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(
     epilog=(
       "Generation controls:\n"
@@ -41,159 +74,236 @@ def parse_args():
     )
   )
 
-  parser.add_argument(
-    "--env",
-    default=os.path.join(Path.home(), '.env'),
-    help="Path to .env file specifying canvas details"
-  )
-  
-  parser.add_argument("--debug", action="store_true", help="Set logging level to debug")
+  subparsers = parser.add_subparsers(dest="command", required=True)
 
-  parser.add_argument(
+  generate_parser = subparsers.add_parser("generate", help="Generate quizzes from YAML and upload/render outputs.")
+  _add_common_options(generate_parser)
+  _add_canvas_options(generate_parser)
+  generate_parser.add_argument(
     "--yaml",
     dest="quiz_yaml",
     default=None,
     help="Path to quiz YAML configuration"
   )
-  parser.add_argument(
+  generate_parser.add_argument(
     "--quiz_yaml",
     dest="quiz_yaml",
     default=None,
     help=argparse.SUPPRESS  # Backwards-compatible alias for --yaml
   )
-  parser.add_argument("--seed", type=int, default=None,
-                     help="Random seed for quiz generation (default: None for random)")
-  parser.add_argument("--quiet", action="store_true",
-                     help="Disable progress bars for variation prep and uploads")
+  generate_parser.add_argument("--seed", type=int, default=None,
+                              help="Random seed for quiz generation (default: None for random)")
+  generate_parser.add_argument("--num_canvas", default=0, type=int, help="How many variations of each question to try to upload to canvas.")
+  generate_parser.add_argument("--num_pdfs", default=0, type=int, help="How many PDF quizzes to create")
+  _add_typst_latex_flags(generate_parser)
+  generate_parser.add_argument("--typst_measurement", action="store_true",
+                              help="Use Typst measurement for layout optimization (experimental)")
+  generate_parser.add_argument("--consistent_pages", action="store_true",
+                              help="Reserve question heights to keep pagination consistent across versions (auto-enabled when --num_pdfs > 1)")
+  generate_parser.add_argument("--layout_samples", type=int, default=10,
+                              help="Number of deterministic samples per question to estimate height")
+  generate_parser.add_argument("--layout_safety_factor", type=float, default=1.1,
+                              help="Multiplier applied to max sampled height for safety")
+  generate_parser.add_argument("--optimize_space", action="store_true",
+                              help="Optimize question order to reduce PDF page count (affects Canvas order too)")
+  generate_parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
+                              help="Disable embedding images in Typst output")
+  generate_parser.set_defaults(embed_images_typst=True)
+  generate_parser.add_argument("--allow_generator", action="store_true",
+                              help="Enable FromGenerator questions (executes Python from YAML)")
+  generate_parser.add_argument("--check-deps", action="store_true",
+                              help=argparse.SUPPRESS)  # Prefer `quizgen deps`
+  generate_parser.add_argument("--max_backoff_attempts", type=int, default=None,
+                              help="Max attempts for question generation backoff (default: 200)")
+  generate_parser.add_argument("--float_tolerance", type=float, default=None,
+                              help="Default numeric tolerance for float answers (default: 0.01)")
 
-  # Canvas flags
-  parser.add_argument("--num_canvas", default=0, type=int, help="How many variations of each question to try to upload to canvas.")
-  parser.add_argument("--prod", action="store_true")
-  parser.add_argument("--course_id", type=int)
-  parser.add_argument("--delete-assignment-group", action="store_true",
-                     help="Delete existing assignment group before uploading new quizzes")
-  parser.add_argument(
+  practice_parser = subparsers.add_parser("practice", help="Generate tag-filtered practice quiz assignments in Canvas.")
+  _add_common_options(practice_parser)
+  _add_canvas_options(practice_parser)
+  practice_parser.add_argument("tags", nargs="*", metavar="TAG",
+                              help="Tag filters, e.g. course:cst334 topic:memory")
+  practice_parser.add_argument(
     "--generate_practice",
     nargs="+",
     metavar="TAG",
-    help=(
-      "Generate one practice quiz assignment per matching registered question type. "
-      "Accepts one or more tags (comma or space separated), e.g. --generate_practice cst334 memory"
-    )
+    help=argparse.SUPPRESS  # Backwards-compatible legacy flag
   )
-  parser.add_argument(
+  practice_parser.add_argument(
     "--practice_match",
     choices=["any", "all"],
     default="any",
-    help="With --generate_practice, match any tag (default) or require all tags."
+    help="Match any tag (default) or require all tags."
   )
-  parser.add_argument(
+  practice_parser.add_argument(
     "--practice_variations",
     type=int,
     default=5,
-    help="With --generate_practice, number of Canvas variations per question (default: 5)."
+    help="Number of Canvas variations per question group (default: 5)."
   )
-  parser.add_argument(
+  practice_parser.add_argument(
+    "--num_canvas",
+    default=0,
+    type=int,
+    help=argparse.SUPPRESS  # Legacy alias for variations
+  )
+  practice_parser.add_argument(
     "--practice_question_groups",
     type=int,
     default=5,
     help=(
-      "With --generate_practice, repeat each selected question this many times "
+      "Repeat each selected question this many times "
       "(each repetition gets its own variation pool)."
     )
   )
-  parser.add_argument(
+  practice_parser.add_argument(
     "--practice_repeats",
     dest="practice_question_groups",
     type=int,
     help=argparse.SUPPRESS  # Backwards-compatible alias
   )
-  parser.add_argument(
+  practice_parser.add_argument(
     "--practice_points",
     type=float,
     default=1.0,
-    help="With --generate_practice, point value per practice question (default: 1.0)."
+    help="Point value per practice question (default: 1.0)."
   )
-  parser.add_argument(
+  practice_parser.add_argument(
     "--practice_tag_source",
     choices=["explicit", "merged", "derived"],
     default="merged",
-    help=(
-      "With --generate_practice, which tag set to match against: "
-      "explicit tags only, derived tags only, or merged (default)."
-    )
+    help="Which tag set to match against: explicit, derived, or merged (default)."
   )
-  parser.add_argument(
+  practice_parser.add_argument(
     "--tag_source",
     dest="practice_tag_source",
     choices=["explicit", "merged", "derived"],
-    help=argparse.SUPPRESS  # Backwards-compatible shorthand alias
+    help=argparse.SUPPRESS
   )
-  parser.add_argument(
+  practice_parser.add_argument(
     "--practice_assignment_group",
     default="practice",
-    help="With --generate_practice, assignment group name for created quizzes (default: practice)."
+    help="Assignment group name for created quizzes (default: practice)."
   )
-  
-  # PDF Flags
-  parser.add_argument("--num_pdfs", default=0, type=int, help="How many PDF quizzes to create")
-  parser.add_argument("--latex", action="store_false", dest="typst", help="Use LaTeX instead of Typst for PDF generation")
-  parser.set_defaults(typst=True)
-  parser.add_argument("--typst_measurement", action="store_true",
-                     help="Use Typst measurement for layout optimization (experimental)")
-  parser.add_argument("--consistent_pages", action="store_true",
-                     help="Reserve question heights to keep pagination consistent across versions (auto-enabled when --num_pdfs > 1)")
-  parser.add_argument("--layout_samples", type=int, default=10,
-                     help="Number of deterministic samples per question to estimate height")
-  parser.add_argument("--layout_safety_factor", type=float, default=1.1,
-                     help="Multiplier applied to max sampled height for safety")
-  parser.add_argument("--optimize_space", action="store_true",
-                     help="Optimize question order to reduce PDF page count (affects Canvas order too)")
-  parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
-                     help="Disable embedding images in Typst output")
-  parser.set_defaults(embed_images_typst=True)
+  practice_parser.add_argument("--allow_generator", action="store_true",
+                              help="Enable FromGenerator questions (executes Python from YAML)")
+  practice_parser.add_argument("--max_backoff_attempts", type=int, default=None,
+                              help="Max attempts for question generation backoff (default: 200)")
+  practice_parser.add_argument("--float_tolerance", type=float, default=None,
+                              help="Default numeric tolerance for float answers (default: 0.01)")
 
-  # Testing flags
-  parser.add_argument("--test_all", type=int, default=0, metavar="N",
-                     help="Generate N variations of ALL registered questions to test they work correctly")
-  parser.add_argument("--test_questions", nargs='+', metavar="NAME",
-                     help="Only test specific question types by name (use with --test_all)")
-  parser.add_argument("--strict", action="store_true",
-                     help="With --test_all, skip PDF/Canvas generation if any questions fail")
-  parser.add_argument("--skip_missing_extras", action="store_true",
-                     help="With --test_all, skip questions that fail due to missing optional dependencies")
-  parser.add_argument("--allow_generator", action="store_true",
-                     help="Enable FromGenerator questions (executes Python from YAML)")
-  parser.add_argument("--check-deps", action="store_true",
-                     help="Check external dependencies (Typst/LaTeX/Pandoc) and exit")
-  parser.add_argument("--max_backoff_attempts", type=int, default=None,
-                     help="Max attempts for question generation backoff (default: 200)")
-  parser.add_argument("--float_tolerance", type=float, default=None,
-                     help="Default numeric tolerance for float answers (default: 0.01)")
+  test_parser = subparsers.add_parser("test", help="Run question-bank validation by generating many variations.")
+  _add_common_options(test_parser)
+  _add_canvas_options(test_parser)
+  _add_typst_latex_flags(test_parser)
+  test_parser.add_argument("num_variations", nargs="?", type=int, metavar="N",
+                          help="Number of variations to generate for each registered question type.")
+  test_parser.add_argument("--test_all", type=int, default=None, metavar="N",
+                          help=argparse.SUPPRESS)  # Legacy alias
+  test_parser.add_argument("--test_questions", nargs='+', metavar="NAME",
+                          help="Only test specific question types by name")
+  test_parser.add_argument("--strict", action="store_true",
+                          help="Skip Canvas upload if any question type fails")
+  test_parser.add_argument("--skip_missing_extras", action="store_true",
+                          help="Skip questions that fail due to missing optional dependencies")
+  test_parser.add_argument("--allow_generator", action="store_true",
+                          help="Enable FromGenerator questions (executes Python from YAML)")
+  test_parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
+                          help="Disable embedding images in Typst output")
+  test_parser.set_defaults(embed_images_typst=True)
+  test_parser.add_argument("--float_tolerance", type=float, default=None,
+                          help="Default numeric tolerance for float answers (default: 0.01)")
 
-  subparsers = parser.add_subparsers(dest='command')
-  test_parser = subparsers.add_parser("TEST")
+  deps_parser = subparsers.add_parser("deps", help="Check external dependencies and exit.")
+  _add_common_options(deps_parser)
+  _add_typst_latex_flags(deps_parser)
+  deps_parser.add_argument("--check-deps", action="store_true", help=argparse.SUPPRESS)
+  # Legacy compatibility with historical docs/examples.
+  deps_parser.add_argument("--yaml", dest="quiz_yaml", default=None, help=argparse.SUPPRESS)
+  deps_parser.add_argument("--quiz_yaml", dest="quiz_yaml", default=None, help=argparse.SUPPRESS)
+  deps_parser.add_argument("--num_pdfs", default=0, type=int, help=argparse.SUPPRESS)
+  deps_parser.add_argument("--test_all", type=int, default=0, metavar="N", help=argparse.SUPPRESS)
+
+  smoke_parser = subparsers.add_parser("TEST", help=argparse.SUPPRESS)
+  _add_common_options(smoke_parser)
+
+  return parser
 
 
-  args = parser.parse_args()
+def parse_args(argv: list[str] | None = None):
+  parser = _build_parser()
+  raw_argv = list(sys.argv[1:] if argv is None else argv)
 
-  if args.num_canvas > 0 and args.course_id is None:
-    parser.error("Missing --course_id for Canvas upload. Example: --course_id 12345")
+  known_commands = {"generate", "practice", "test", "deps", "TEST"}
+  uses_subcommand = bool(raw_argv) and raw_argv[0] in known_commands
+  legacy_mode = not uses_subcommand
+  inferred_command = None
+  if legacy_mode:
+    inferred_command = _infer_legacy_subcommand(raw_argv)
+    raw_argv = [inferred_command, *raw_argv]
 
-  if args.generate_practice and args.course_id is None:
-    parser.error("Missing --course_id for --generate_practice. Example: --course_id 12345")
+  args = parser.parse_args(raw_argv)
+  args._legacy_mode = legacy_mode
+  args._legacy_inferred_command = inferred_command
 
-  if args.generate_practice and args.practice_variations < 1:
-    parser.error("--practice_variations must be >= 1")
+  compatibility_defaults = {
+    "quiz_yaml": None,
+    "num_canvas": 0,
+    "num_pdfs": 0,
+    "test_all": 0,
+    "generate_practice": None,
+    "check_deps": False,
+    "allow_generator": False,
+    "float_tolerance": None,
+    "max_backoff_attempts": None,
+    "practice_variations": 5,
+    "practice_question_groups": 5,
+    "practice_points": 1.0,
+    "practice_match": "any",
+    "practice_tag_source": "merged",
+    "practice_assignment_group": "practice",
+  }
+  for field, default_value in compatibility_defaults.items():
+    if not hasattr(args, field):
+      setattr(args, field, default_value)
 
-  if args.generate_practice and args.practice_question_groups < 1:
-    parser.error("--practice_question_groups must be >= 1")
+  if args.command == "practice":
+    legacy_tags = list(getattr(args, "generate_practice", []) or [])
+    positional_tags = list(getattr(args, "tags", []) or [])
+    args.generate_practice = positional_tags if positional_tags else legacy_tags
 
-  if args.generate_practice and args.practice_points < 0:
-    parser.error("--practice_points must be non-negative")
+    if not args.generate_practice:
+      parser.error("Missing tags. Example: quizgen practice course:cst334 topic:memory --course_id 12345")
+    if args.course_id is None:
+      parser.error("Missing --course_id for practice uploads. Example: --course_id 12345")
+    if args.practice_variations < 1:
+      parser.error("--practice_variations must be >= 1")
+    if args.practice_question_groups < 1:
+      parser.error("--practice_question_groups must be >= 1")
+    if args.practice_points < 0:
+      parser.error("--practice_points must be non-negative")
+    return args
 
-  if args.test_all <= 0 and not args.quiz_yaml and not args.generate_practice:
-    parser.error("Missing --yaml. Example: quizgen --yaml example_files/example_exam.yaml --num_pdfs 1")
+  if args.command == "generate":
+    if args.num_canvas > 0 and args.course_id is None:
+      parser.error("Missing --course_id for Canvas upload. Example: --course_id 12345")
+    if not args.quiz_yaml and not args.check_deps:
+      parser.error("Missing --yaml. Example: quizgen generate --yaml example_files/example_exam.yaml --num_pdfs 1")
+    return args
+
+  if args.command == "test":
+    positional_n = args.num_variations
+    legacy_n = args.test_all
+    if positional_n is not None and legacy_n is not None and positional_n != legacy_n:
+      parser.error("Conflicting values provided for test variations (positional N vs --test_all).")
+    args.test_all = positional_n if positional_n is not None else legacy_n
+    if args.test_all is None or args.test_all <= 0:
+      parser.error("Missing test variation count. Example: quizgen test 20")
+    return args
+
+  if args.command == "deps":
+    args.check_deps = True
+    return args
 
   return args
 
@@ -1200,10 +1310,29 @@ def main():
     test()
     return
 
-  # Dependency checks
-  require_typst = bool(getattr(args, "typst", True))
-  require_latex = not require_typst
-  if args.num_pdfs > 0 or args.test_all > 0 or args.check_deps:
+  if getattr(args, "_legacy_mode", False):
+    inferred = getattr(args, "_legacy_inferred_command", "generate")
+    log.warning(
+      f"Legacy CLI mode detected; interpreted arguments as '{inferred}'. "
+      "Consider using subcommands (generate/practice/test/deps)."
+    )
+
+  if getattr(args, "allow_generator", False):
+    os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
+
+  float_tolerance = getattr(args, "float_tolerance", None)
+  if float_tolerance is not None:
+    if float_tolerance < 0:
+      raise QuizGenError("float_tolerance must be non-negative.")
+    Answer.DEFAULT_FLOAT_TOLERANCE = float_tolerance
+
+  max_backoff_attempts = getattr(args, "max_backoff_attempts", None)
+  if max_backoff_attempts is not None and max_backoff_attempts < 1:
+    raise QuizGenError("max_backoff_attempts must be >= 1.")
+
+  if args.command == "deps":
+    require_typst = bool(getattr(args, "typst", True))
+    require_latex = not require_typst
     ok, missing = _check_dependencies(
       require_typst=require_typst,
       require_latex=require_latex
@@ -1211,26 +1340,20 @@ def main():
     if not ok:
       message = "\n".join(missing)
       raise QuizGenError(message)
-    if args.check_deps:
-      print("Dependency check passed.")
-      return
+    print("Dependency check passed.")
+    return
 
-  if args.allow_generator:
-    os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
+  if args.command == "test":
+    require_typst = bool(getattr(args, "typst", True))
+    require_latex = not require_typst
+    ok, missing = _check_dependencies(
+      require_typst=require_typst,
+      require_latex=require_latex
+    )
+    if not ok:
+      message = "\n".join(missing)
+      raise QuizGenError(message)
 
-  if args.float_tolerance is not None:
-    if args.float_tolerance < 0:
-      raise QuizGenError("float_tolerance must be non-negative.")
-    Answer.DEFAULT_FLOAT_TOLERANCE = args.float_tolerance
-
-  if args.max_backoff_attempts is not None:
-    if args.max_backoff_attempts < 1:
-      raise QuizGenError("max_backoff_attempts must be >= 1.")
-
-  if args.num_pdfs and args.num_pdfs > 1:
-    args.consistent_pages = True
-
-  if args.test_all > 0:
     # Set up Canvas course if course_id provided
     canvas_course = None
     if args.course_id:
@@ -1251,7 +1374,7 @@ def main():
       raise QuizGenError("One or more questions failed during --test_all.")
     return
 
-  if args.generate_practice:
+  if args.command == "practice":
     generate_practice_quizzes(
       tag_filters=args.generate_practice,
       course_id=args.course_id,
@@ -1269,28 +1392,49 @@ def main():
     )
     return
 
-  # Clear any previous metrics
-  PerformanceTracker.clear_metrics()
+  if args.command == "generate":
+    require_typst = bool(getattr(args, "typst", True))
+    require_latex = not require_typst
+    if args.num_pdfs > 0 or args.check_deps:
+      ok, missing = _check_dependencies(
+        require_typst=require_typst,
+        require_latex=require_latex
+      )
+      if not ok:
+        message = "\n".join(missing)
+        raise QuizGenError(message)
+      if args.check_deps:
+        print("Dependency check passed.")
+        return
 
-  generate_quiz(
-    args.quiz_yaml,
-    num_pdfs=args.num_pdfs,
-    num_canvas=args.num_canvas,
-    use_prod=args.prod,
-    course_id=args.course_id,
-    delete_assignment_group=getattr(args, 'delete_assignment_group', False),
-    use_typst=getattr(args, 'typst', True),
-    use_typst_measurement=getattr(args, 'typst_measurement', False),
-    base_seed=getattr(args, 'seed', None),
-    env_path=args.env,
-    consistent_pages=getattr(args, 'consistent_pages', False),
-    layout_samples=getattr(args, 'layout_samples', 10),
-    layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1),
-    embed_images_typst=getattr(args, 'embed_images_typst', True),
-    optimize_layout=getattr(args, 'optimize_space', False),
-    max_backoff_attempts=getattr(args, "max_backoff_attempts", None),
-    quiet=getattr(args, "quiet", False)
-  )
+    if args.num_pdfs and args.num_pdfs > 1:
+      args.consistent_pages = True
+
+    # Clear any previous metrics
+    PerformanceTracker.clear_metrics()
+
+    generate_quiz(
+      args.quiz_yaml,
+      num_pdfs=args.num_pdfs,
+      num_canvas=args.num_canvas,
+      use_prod=args.prod,
+      course_id=args.course_id,
+      delete_assignment_group=getattr(args, 'delete_assignment_group', False),
+      use_typst=getattr(args, 'typst', True),
+      use_typst_measurement=getattr(args, 'typst_measurement', False),
+      base_seed=getattr(args, 'seed', None),
+      env_path=args.env,
+      consistent_pages=getattr(args, 'consistent_pages', False),
+      layout_samples=getattr(args, 'layout_samples', 10),
+      layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1),
+      embed_images_typst=getattr(args, 'embed_images_typst', True),
+      optimize_layout=getattr(args, 'optimize_space', False),
+      max_backoff_attempts=getattr(args, "max_backoff_attempts", None),
+      quiet=getattr(args, "quiet", False)
+    )
+    return
+
+  raise QuizGenError(f"Unsupported command: {args.command}")
 
 
 if __name__ == "__main__":

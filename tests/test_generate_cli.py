@@ -25,6 +25,12 @@ def test_parse_args_generate_practice_allows_missing_yaml(monkeypatch):
     assert args.practice_tag_source == "merged"
 
 
+def test_parse_args_subcommand_practice_positional_tags(monkeypatch):
+    args = _parse(monkeypatch, ["practice", "course:cst334", "topic:memory", "--course_id", "12345"])
+    assert args.command == "practice"
+    assert args.generate_practice == ["course:cst334", "topic:memory"]
+
+
 def test_parse_args_generate_practice_requires_course_id(monkeypatch):
     with pytest.raises(SystemExit):
         _parse(monkeypatch, ["--generate_practice", "cst334"])
@@ -33,6 +39,23 @@ def test_parse_args_generate_practice_requires_course_id(monkeypatch):
 def test_parse_args_requires_yaml_without_generate_practice(monkeypatch):
     with pytest.raises(SystemExit):
         _parse(monkeypatch, [])
+
+
+def test_parse_args_subcommand_generate_requires_yaml(monkeypatch):
+    with pytest.raises(SystemExit):
+        _parse(monkeypatch, ["generate", "--num_pdfs", "1"])
+
+
+def test_parse_args_subcommand_test_positional_variations(monkeypatch):
+    args = _parse(monkeypatch, ["test", "7"])
+    assert args.command == "test"
+    assert args.test_all == 7
+
+
+def test_parse_args_legacy_check_deps_routes_to_deps(monkeypatch):
+    args = _parse(monkeypatch, ["--check-deps", "--yaml", "example_files/example_exam.yaml", "--num_pdfs", "1"])
+    assert args.command == "deps"
+    assert args.check_deps is True
 
 
 def test_parse_args_generate_practice_question_groups(monkeypatch):

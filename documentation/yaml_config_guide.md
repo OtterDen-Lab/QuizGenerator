@@ -17,7 +17,7 @@ This guide documents the minimal YAML schema used by `quizgen`.
 Tag-filtered practice upload can generate one quiz per matching question type:
 
 ```bash
-quizgen --generate_practice cst334 memory --course_id 12345
+quizgen practice cst334 memory --course_id 12345
 ```
 
 Useful knobs:
