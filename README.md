@@ -112,6 +112,7 @@ Create one practice quiz assignment per matching registered question type:
 quizgen \
   --generate_practice cst334 memory \
   --practice_match any \
+  --practice_tag_source merged \
   --practice_question_groups 5 \
   --practice_variations 5 \
   --course_id 12345
@@ -119,6 +120,7 @@ quizgen \
 
 These are uploaded as regular graded quiz assignments into the `practice` assignment group, which is configured with `0.0` group weight.
 Tag filters accept either namespaced tags (for example `course:cst334`, `topic:memory`) or legacy bare forms (`cst334`, `memory`).
+Use `--practice_tag_source explicit` if you want strict explicit-only tag matching.
 
 ## Creating Custom Questions
 

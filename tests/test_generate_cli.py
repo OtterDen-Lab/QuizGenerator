@@ -2,7 +2,12 @@ import sys
 
 import pytest
 
-from QuizGenerator.generate import _build_practice_question, _tags_match, parse_args
+from QuizGenerator.generate import (
+    _build_practice_question,
+    _question_tags_for_source,
+    _tags_match,
+    parse_args,
+)
 from QuizGenerator.question import QuestionRegistry
 
 
@@ -17,6 +22,7 @@ def test_parse_args_generate_practice_allows_missing_yaml(monkeypatch):
     assert args.generate_practice == ["cst334"]
     assert args.practice_variations == 5
     assert args.practice_question_groups == 5
+    assert args.practice_tag_source == "merged"
 
 
 def test_parse_args_generate_practice_requires_course_id(monkeypatch):
@@ -59,6 +65,21 @@ def test_parse_args_generate_practice_question_groups_must_be_positive(monkeypat
         )
 
 
+def test_parse_args_generate_practice_tag_source(monkeypatch):
+    args = _parse(
+        monkeypatch,
+        [
+            "--generate_practice",
+            "course:cst334",
+            "--course_id",
+            "12345",
+            "--practice_tag_source",
+            "explicit",
+        ],
+    )
+    assert args.practice_tag_source == "explicit"
+
+
 def test_tags_match_any_and_all_modes():
     candidate = {"cst334", "memory", "practice"}
     requested = {"cst334", "memory"}
@@ -76,3 +97,15 @@ def test_build_practice_question_uses_defaults_for_fromtext():
     assert error is None
     assert question is not None
     assert question.points_value == 1.0
+
+
+def test_question_tags_for_source_selects_expected_set():
+    class _Dummy:
+        explicit_tags = {"course:cst334"}
+        derived_tags = {"topic:memory"}
+        tags = {"course:cst334", "topic:memory", "practice"}
+
+    question = _Dummy()
+    assert _question_tags_for_source(question, "explicit") == {"course:cst334"}
+    assert _question_tags_for_source(question, "derived") == {"topic:memory"}
+    assert _question_tags_for_source(question, "merged") == {"course:cst334", "topic:memory", "practice"}

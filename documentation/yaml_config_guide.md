@@ -25,6 +25,7 @@ Useful knobs:
 - `--practice_match any|all`: tag matching mode.
 - `--practice_variations N`: variation count per question group (default `5`).
 - `--practice_question_groups N`: repeat each selected question N times per quiz (default `5`).
+- `--practice_tag_source explicit|merged|derived`: choose whether matching uses only explicit tags, merged tags (default), or only derived tags.
 
 ## Questions Block
 

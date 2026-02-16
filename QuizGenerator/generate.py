@@ -115,6 +115,21 @@ def parse_args():
     help="With --generate_practice, point value per practice question (default: 1.0)."
   )
   parser.add_argument(
+    "--practice_tag_source",
+    choices=["explicit", "merged", "derived"],
+    default="merged",
+    help=(
+      "With --generate_practice, which tag set to match against: "
+      "explicit tags only, derived tags only, or merged (default)."
+    )
+  )
+  parser.add_argument(
+    "--tag_source",
+    dest="practice_tag_source",
+    choices=["explicit", "merged", "derived"],
+    help=argparse.SUPPRESS  # Backwards-compatible shorthand alias
+  )
+  parser.add_argument(
     "--practice_assignment_group",
     default="practice",
     help="With --generate_practice, assignment group name for created quizzes (default: practice)."
@@ -431,6 +446,14 @@ def _build_practice_question(registered_name: str, question_cls, *, points_value
     return None, str(exc)
 
 
+def _question_tags_for_source(question, tag_source: str) -> set[str]:
+  if tag_source == "explicit":
+    return set(getattr(question, "explicit_tags", set()))
+  if tag_source == "derived":
+    return set(getattr(question, "derived_tags", set()))
+  return set(getattr(question, "tags", set()))
+
+
 def generate_practice_quizzes(
     *,
     tag_filters: list[str],
@@ -443,6 +466,7 @@ def generate_practice_quizzes(
     delete_assignment_group: bool = False,
     assignment_group_name: str = "practice",
     match_all: bool = False,
+    tag_source: str = "merged",
     quiet: bool = False,
     max_backoff_attempts=None
 ):
@@ -465,8 +489,7 @@ def generate_practice_quizzes(
       skipped.append((registered_name, error or "unknown error"))
       continue
 
-    question_tags = set(getattr(question, "tags", set()))
-    question_tags.update(Question.infer_course_tags(registered_name, question_cls.__module__))
+    question_tags = _question_tags_for_source(question, tag_source)
     available_tags.update(question_tags)
     if _tags_match(question_tags, requested_tags, match_all=match_all):
       selected.append((registered_name, question, question_tags))
@@ -475,7 +498,8 @@ def generate_practice_quizzes(
     available = ", ".join(sorted(available_tags)) if available_tags else "<none>"
     match_mode = "all" if match_all else "any"
     raise QuizGenError(
-      f"No practice questions matched tags {sorted(requested_tags)} with match mode '{match_mode}'. "
+      f"No practice questions matched tags {sorted(requested_tags)} with match mode '{match_mode}' "
+      f"using tag source '{tag_source}'. "
       f"Available tags: {available}"
     )
 
@@ -535,7 +559,7 @@ def generate_practice_quizzes(
 
   log.info(
     f"Generated {len(selected)} practice quizzes matching tags {sorted(requested_tags)} "
-    f"({'all' if match_all else 'any'} mode)."
+    f"({'all' if match_all else 'any'} mode, tag source='{tag_source}')."
   )
 
 
@@ -1239,6 +1263,7 @@ def main():
       delete_assignment_group=getattr(args, 'delete_assignment_group', False),
       assignment_group_name=args.practice_assignment_group,
       match_all=(args.practice_match == "all"),
+      tag_source=args.practice_tag_source,
       quiet=getattr(args, "quiet", False),
       max_backoff_attempts=getattr(args, "max_backoff_attempts", None)
     )
