@@ -367,6 +367,22 @@ class TestOnlyFormats:
         assert "Print content" in element.render("latex")
 
 
+class TestPDFAid:
+    """Tests for PDF aid container behavior."""
+
+    def test_pdf_aid_renders_only_in_typst(self):
+        element = ca.PDFAid([ca.Text("Aid content")])
+
+        assert element.render("html") == ""
+        assert element.render("latex") == ""
+        assert element.render("markdown") == ""
+        assert "Aid content" in element.render("typst")
+
+    def test_pdf_aid_respects_global_toggle(self):
+        element = ca.PDFAid([ca.Text("Aid content")])
+        assert element.render("typst", show_pdf_aids=False) == ""
+
+
 class TestMathExpression:
     """Tests for the MathExpression element (composite math)."""
 

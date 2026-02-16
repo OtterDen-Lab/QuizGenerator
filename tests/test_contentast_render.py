@@ -51,6 +51,25 @@ class _TableQuestion(Question):
         return explanation
 
 
+class _PdfAidQuestion(Question):
+    VERSION = "1.0"
+
+    @classmethod
+    def _build_context(cls, *, rng_seed=None, **kwargs):
+        return super()._build_context(rng_seed=rng_seed, **kwargs)
+
+    @classmethod
+    def _build_body(cls, context):
+        body = ca.Section()
+        body.add_element(ca.Paragraph(["Main content"]))
+        body.add_element(ca.PDFAid([ca.Text("Aid overlay")]))
+        return body
+
+    @classmethod
+    def _build_explanation(cls, context):
+        return ca.Section()
+
+
 def test_contentast_renders_html_and_typst():
     q = _MatrixQuestion(name="M", points_value=1.0)
     instance = q.instantiate(rng_seed=123)
@@ -81,7 +100,28 @@ def test_typst_question_reserve_height_uses_context():
 
 def test_typst_page_spacing_breaks_after_question_body():
     header = ca.Document.TYPST_HEADER
-    assert "#if spacing < 99cm {" in header
-    assert "v(spacing)" in header
+    assert "#if spacing < 99cm [" in header
+    assert "height: spacing" in header
     assert "pagebreak(weak: true)" in header
-    assert "#v(spacing)" not in header
+
+
+def test_pdf_aid_is_passed_as_question_parameter_in_typst():
+    q = _PdfAidQuestion(name="Aid", points_value=1.0, spacing=4)
+    instance = q.instantiate(rng_seed=123)
+    ast = q._build_question_ast(instance)
+
+    html = ast.render("html")
+    assert "Aid overlay" not in html
+
+    typst = ast.render("typst")
+    assert "pdf_aid:" in typst
+    assert "Aid overlay" in typst
+
+    typst_without_aid = ast.render("typst", show_pdf_aids=False)
+    assert "pdf_aid:" not in typst_without_aid
+
+
+def test_typst_header_renders_pdf_aid_for_page_spacing():
+    header = ca.Document.TYPST_HEADER
+    assert "] else if pdf_aid != none [" in header
+    assert "height: 10cm" in header

@@ -584,7 +584,7 @@ class Document(Container):
   // Question counter and command
   #let question_num = counter("question")
 
-  #let question(points, content, spacing: 3cm, qr_code: none, reserve_height: none) = {
+  #let question(points, content, spacing: 3cm, qr_code: none, reserve_height: none, pdf_aid: none) = {
     let body = block(breakable: false)[
       #line(length: 100%, stroke: 1pt)
       #v(0cm)
@@ -612,9 +612,19 @@ class Document(Container):
         align: top,
       )[
         #content
-        #if spacing < 99cm {
-          v(spacing)
-        }
+        #if spacing < 99cm [
+          #if pdf_aid != none [
+            #box(width: 100%, height: spacing, inset: 0pt)[
+              #pdf_aid
+            ]
+          ] else [
+            #v(spacing)
+          ]
+        ] else if pdf_aid != none [
+          #box(width: 100%, height: 10cm, inset: 0pt)[
+            #pdf_aid
+          ]
+        ]
       ][
         #if qr_code != none {
           image(qr_code, width: 2cm, format: "svg")
@@ -859,8 +869,24 @@ class Question(Container):
   
   def render_typst(self, **kwargs):
     """Render question in Typst format with proper formatting"""
+    body = self.body
+    aid_content = ""
+    if isinstance(self.body, Container):
+      regular_elements = []
+      aid_elements = []
+      for element in self.body.elements:
+        if isinstance(element, PDFAid):
+          aid_elements.append(element)
+        else:
+          regular_elements.append(element)
+      body = copy.copy(self.body)
+      body.elements = regular_elements
+      if aid_elements:
+        aid_container = Section(aid_elements)
+        aid_content = aid_container.render(OutputFormat.TYPST, **kwargs).strip()
+
     # Render question body
-    content = self.body.render(OutputFormat.TYPST, **kwargs)
+    content = body.render(OutputFormat.TYPST, **kwargs)
     
     # Generate QR code if question number is available
     embed_images = kwargs.get("embed_images_typst")
@@ -916,13 +942,23 @@ class Question(Container):
     if hasattr(self, "reserve_height_cm") and self.reserve_height_cm is not None:
       reserve_param = f"reserve_height: {self.reserve_height_cm}cm"
     
+    params = [
+      f"{int(self.value)}",
+      f"spacing: {self.spacing}cm",
+    ]
+    if qr_param:
+      params.append(qr_param)
+    if reserve_param:
+      params.append(reserve_param)
+    if aid_content:
+      params.append(f"pdf_aid: [{aid_content}]")
+
+    params_text = ",\n        ".join(params)
+
     # Use the question function which handles all formatting including non-breaking
     return textwrap.dedent(f"""
     #question(
-        {int(self.value)},
-        spacing: {self.spacing}cm{'' if not qr_param else ", "}
-        {qr_param}{'' if not reserve_param else ", "}
-        {reserve_param}
+        {params_text}
       )[
     """) + content + "\n]\n\n"
 
@@ -2419,6 +2455,35 @@ class OnlyLatex(Container):
     if output_format not in ("latex", "typst"):
       return ""
     return super().render(output_format=output_format, **kwargs)
+
+
+class PDFAid(Container):
+  """
+  Container for optional PDF-only scaffolding aids.
+
+  PDFAids only render in Typst output and are hidden in HTML/Markdown/LaTeX.
+  The aid can be globally toggled at render time via `show_pdf_aids`.
+  """
+
+  def __init__(self, elements=None, enabled: bool = True, **kwargs):
+    super().__init__(elements=elements, **kwargs)
+    self.enabled = enabled
+
+  def render_markdown(self, **kwargs):
+    return ""
+
+  def render_html(self, **kwargs):
+    return ""
+
+  def render_latex(self, **kwargs):
+    return ""
+
+  def render_typst(self, **kwargs):
+    if not self.enabled:
+      return ""
+    if not kwargs.get("show_pdf_aids", True):
+      return ""
+    return super().render_typst(**kwargs)
 
 class OnlyHtml(Container):
   """

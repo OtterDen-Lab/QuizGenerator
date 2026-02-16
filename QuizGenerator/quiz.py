@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import collections
+import copy
 import hashlib
 import logging
 import random
@@ -499,7 +500,10 @@ class Quiz:
         try:
           from QuizGenerator.typst_utils import measure_typst_content
           instance = question.instantiate(rng_seed=seed, **kwargs)
-          typst_body = instance.body.render("typst", **kwargs)
+          body_without_aids = self._strip_pdf_aids(instance.body)
+          if body_without_aids is None:
+            body_without_aids = ca.Section()
+          typst_body = body_without_aids.render("typst", **kwargs)
           measured_height = measure_typst_content(typst_body, page_width_cm=18.0)
           if measured_height is not None:
             total_height = 1.5 + measured_height + question.spacing
@@ -536,6 +540,27 @@ class Quiz:
 
     heights = [estimate_for_seed(seed) for seed in deterministic_seeds(sample_count)]
     return max(heights) * safety_factor
+
+  @staticmethod
+  def _strip_pdf_aids(element):
+    if element is None:
+      return None
+    if isinstance(element, ca.PDFAid):
+      return None
+    if isinstance(element, ca.Table):
+      return element
+    if isinstance(element, ca.TableGroup):
+      return element
+    if isinstance(element, ca.Container):
+      new_element = copy.copy(element)
+      new_elements = []
+      for child in element.elements:
+        stripped = Quiz._strip_pdf_aids(child)
+        if stripped is not None:
+          new_elements.append(stripped)
+      new_element.elements = new_elements
+      return new_element
+    return element
 
   def _optimize_question_order(self, questions, **kwargs) -> list[Question]:
     """

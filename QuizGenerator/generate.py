@@ -109,6 +109,9 @@ def _build_parser() -> argparse.ArgumentParser:
   generate_parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
                               help="Disable embedding images in Typst output")
   generate_parser.set_defaults(embed_images_typst=True)
+  generate_parser.add_argument("--no_pdf_aids", action="store_false", dest="show_pdf_aids",
+                              help="Disable optional PDF scaffolding aids in Typst output")
+  generate_parser.set_defaults(show_pdf_aids=True)
   generate_parser.add_argument("--allow_generator", action="store_true",
                               help="Enable FromGenerator questions (executes Python from YAML)")
   generate_parser.add_argument("--check-deps", action="store_true",
@@ -211,6 +214,9 @@ def _build_parser() -> argparse.ArgumentParser:
   test_parser.add_argument("--no_embed_images_typst", action="store_false", dest="embed_images_typst",
                           help="Disable embedding images in Typst output")
   test_parser.set_defaults(embed_images_typst=True)
+  test_parser.add_argument("--no_pdf_aids", action="store_false", dest="show_pdf_aids",
+                          help="Disable optional PDF scaffolding aids in Typst output")
+  test_parser.set_defaults(show_pdf_aids=True)
   test_parser.add_argument("--float_tolerance", type=float, default=None,
                           help="Default numeric tolerance for float answers (default: 0.01)")
 
@@ -303,6 +309,7 @@ def parse_args(argv: list[str] | None = None):
     "practice_tag_source": "merged",
     "practice_assignment_group": "practice",
     "tags_command": None,
+    "show_pdf_aids": True,
   }
   for field, default_value in compatibility_defaults.items():
     if not hasattr(args, field):
@@ -392,7 +399,8 @@ def test_all_questions(
     strict: bool = False,
     question_filter: list = None,
     skip_missing_extras: bool = False,
-    embed_images_typst: bool = False
+    embed_images_typst: bool = False,
+    show_pdf_aids: bool = True
 ):
   """
   Test all registered questions by generating N variations of each.
@@ -478,7 +486,7 @@ def test_all_questions(
           continue
 
         try:
-          question_ast.render("typst")
+          question_ast.render("typst", show_pdf_aids=show_pdf_aids)
         except Exception as e:
           tb = traceback.format_exc()
           question_failures.append(f"  Variation {variation+1}: Typst render failed - {e}\n{tb}")
@@ -550,7 +558,8 @@ def test_all_questions(
       if use_typst:
         typst_text = test_quiz.get_quiz(rng_seed=pdf_seed).render(
           "typst",
-          embed_images_typst=embed_images_typst
+          embed_images_typst=embed_images_typst,
+          show_pdf_aids=show_pdf_aids
         )
         if not generate_typst(typst_text, remove_previous=True, name_prefix="test_all_questions"):
           log.error("Test PDF generation failed (Typst).")
@@ -1345,6 +1354,7 @@ def generate_quiz(
     layout_samples=10,
     layout_safety_factor=1.1,
     embed_images_typst=True,
+    show_pdf_aids=True,
     optimize_layout=False,
     max_backoff_attempts=None,
     quiet: bool = False
@@ -1404,7 +1414,8 @@ def generate_quiz(
           quiz_kwargs["layout_safety_factor"] = layout_safety_factor
         typst_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render(
           "typst",
-          embed_images_typst=embed_images_typst
+          embed_images_typst=embed_images_typst,
+          show_pdf_aids=show_pdf_aids
         )
         if not generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name):
           raise QuizGenError("PDF generation failed (Typst).")
@@ -1538,7 +1549,8 @@ def main():
       strict=args.strict,
       question_filter=args.test_questions,
       skip_missing_extras=args.skip_missing_extras,
-      embed_images_typst=getattr(args, "embed_images_typst", False)
+      embed_images_typst=getattr(args, "embed_images_typst", False),
+      show_pdf_aids=getattr(args, "show_pdf_aids", True)
     )
     if not success:
       raise QuizGenError("One or more questions failed during --test_all.")
@@ -1612,6 +1624,7 @@ def main():
       layout_samples=getattr(args, 'layout_samples', 10),
       layout_safety_factor=getattr(args, 'layout_safety_factor', 1.1),
       embed_images_typst=getattr(args, 'embed_images_typst', True),
+      show_pdf_aids=getattr(args, "show_pdf_aids", True),
       optimize_layout=getattr(args, 'optimize_space', False),
       max_backoff_attempts=getattr(args, "max_backoff_attempts", None),
       quiet=getattr(args, "quiet", False)

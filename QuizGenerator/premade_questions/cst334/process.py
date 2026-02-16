@@ -7,6 +7,7 @@ import dataclasses
 import enum
 import io
 import logging
+import math
 import random
 
 import matplotlib.pyplot as plt
@@ -653,6 +654,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   ROUNDING_DIGITS = 2
   IMAGE_DPI = 140
   IMAGE_FIGSIZE = (9.5, 6.5)
+  AID_IMAGE_FIGSIZE = (9.5, 3.4)
 
   @dataclasses.dataclass
   class Job:
@@ -972,6 +974,12 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ]))
     body.add_element(ca.Paragraph([instructions]))
     body.add_element(scheduling_table)
+    body.add_element(ca.PDFAid([
+      ca.Picture(
+        img_data=cls.make_pdf_aid_image(context),
+        width="100%"
+      )
+    ]))
     return body
 
   @classmethod
@@ -1122,6 +1130,51 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
     buffer = io.BytesIO()
     plt.tight_layout()
     plt.savefig(buffer, format='png', dpi=cls.IMAGE_DPI, bbox_inches='tight')
+    plt.close(fig)
+    buffer.seek(0)
+    return buffer
+
+  @classmethod
+  def make_pdf_aid_image(cls, context):
+    fig, ax = plt.subplots(1, 1, figsize=cls.AID_IMAGE_FIGSIZE, dpi=cls.IMAGE_DPI)
+
+    job_stats = context["job_stats"]
+    num_jobs = max(1, len(job_stats))
+    lanes_per_queue = num_jobs
+    total_lanes = context["num_queues"] * lanes_per_queue
+
+    completion_times = [
+      job_stats[job_id]["arrival_time"] + job_stats[job_id]["TAT"]
+      for job_id in job_stats.keys()
+    ]
+    max_time = max(1, int(math.ceil(max(completion_times) if completion_times else 1)))
+
+    for t in range(max_time + 1):
+      ax.axvline(t, color='0.88', linewidth=0.7, zorder=0)
+
+    for lane_boundary in range(total_lanes + 1):
+      y = lane_boundary - 0.5
+      ax.axhline(y, color='0.9', linewidth=0.6, zorder=0)
+
+    for queue_boundary in range(context["num_queues"] + 1):
+      y = queue_boundary * lanes_per_queue - 0.5
+      ax.axhline(y, color='0.45', linewidth=1.4, zorder=1)
+
+    tick_positions = [
+      q * lanes_per_queue + (lanes_per_queue - 1) / 2
+      for q in range(context["num_queues"])
+    ]
+    ax.set_yticks(tick_positions)
+    ax.set_yticklabels([f"Q{i}" for i in range(context["num_queues"])])
+    ax.set_ylim(-0.5, total_lanes - 0.5)
+    ax.set_xlim(0, max_time)
+    ax.set_xticks(range(max_time + 1))
+    ax.set_xlabel("Time")
+    ax.tick_params(axis='both', which='both', length=0)
+
+    buffer = io.BytesIO()
+    plt.tight_layout()
+    plt.savefig(buffer, format='png', dpi=cls.IMAGE_DPI, bbox_inches='tight', pad_inches=0.05)
     plt.close(fig)
     buffer.seek(0)
     return buffer

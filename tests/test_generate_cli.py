@@ -46,6 +46,22 @@ def test_parse_args_subcommand_generate_requires_yaml(monkeypatch):
         _parse(monkeypatch, ["generate", "--num_pdfs", "1"])
 
 
+def test_parse_args_generate_pdf_aids_default_true(monkeypatch):
+    args = _parse(
+        monkeypatch,
+        ["generate", "--yaml", "example_files/example_exam.yaml", "--num_pdfs", "1"],
+    )
+    assert args.show_pdf_aids is True
+
+
+def test_parse_args_generate_no_pdf_aids(monkeypatch):
+    args = _parse(
+        monkeypatch,
+        ["generate", "--yaml", "example_files/example_exam.yaml", "--num_pdfs", "1", "--no_pdf_aids"],
+    )
+    assert args.show_pdf_aids is False
+
+
 def test_parse_args_subcommand_test_positional_variations(monkeypatch):
     args = _parse(monkeypatch, ["test", "7"])
     assert args.command == "test"
