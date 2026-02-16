@@ -104,6 +104,18 @@ quizgen \
   --course_id 12345
 ```
 
+### 4. Generate Tag-Filtered Practice Quizzes
+
+Create one ungraded practice quiz per matching registered question type:
+
+```bash
+quizgen \
+  --generate_practice cst334 memory \
+  --practice_match any \
+  --practice_variations 5 \
+  --course_id 12345
+```
+
 ## Creating Custom Questions
 
 QuizGenerator supports two approaches for adding custom question types:

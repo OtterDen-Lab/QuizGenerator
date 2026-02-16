@@ -115,6 +115,24 @@ questions:
         assert questions[0].topic == Question.Topic.SYSTEM_MEMORY
         assert questions[1].topic == Question.Topic.SYSTEM_PROCESSES
 
+    def test_list_format_with_tags(self):
+        """Questions in list format should support explicit tags."""
+        yaml_text = """
+name: "Tag Quiz"
+questions:
+  - name: "Tagged Q"
+    points: 5
+    class: FromText
+    tags: [cst334, practice]
+    kwargs:
+      text: "Tag me"
+"""
+        quiz = Quiz.from_yaml(_write_tmp_yaml(yaml_text))[0]
+        question = quiz.get_ordered_questions()[0]
+
+        assert "cst334" in question.tags
+        assert "practice" in question.tags
+
     def test_list_format_with_spacing(self):
         """Questions in list format should support spacing configuration."""
         yaml_text = """

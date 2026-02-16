@@ -23,6 +23,7 @@ List format: each item is a question entry with `name` and `points`. This preser
 - `class` (string): Question class name (registered).
 - `kwargs` (mapping, optional): Question-specific parameters.
 - `topic` (string, optional): Topic name (e.g., `memory`, `concurrency`).
+- `tags` (string or list of strings, optional): Metadata tags used for filtering/reporting (e.g., `cst334`, `memory`, `practice`).
 - `spacing` (number or preset, optional): Vertical space after question.
   Presets: `NONE`, `SHORT`, `MEDIUM`, `LONG`, `PAGE`, `EXTRA_PAGE`.
 - `seed_group` (string, optional): Questions with the same `seed_group` share one RNG seed per generated PDF.
@@ -37,6 +38,7 @@ Used to enable grouping and repeats:
 - `random_per_student` (bool): If true, group selection varies per student.
 - `repeat` (int): Repeat a question N times (with seed offsets).
 - `topic` (string): Topic for all grouped questions.
+- `tags` (string or list of strings): Tags applied to grouped questions.
 
 **Note:** Legacy keys `pick` and `repeat` at the question level are no longer supported. Use `_config` instead.
 
@@ -62,6 +64,7 @@ questions:
       preserve_order: true
     "Scheduling":
       class: SchedulingQuestion
+      tags: [cst334, processes]
       kwargs:
         spacing: MEDIUM
 

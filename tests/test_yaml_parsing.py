@@ -192,6 +192,43 @@ questions:
         question = quizzes[0].questions[0]
         assert question.topic == Question.Topic.SYSTEM_MEMORY
 
+    def test_question_tags_parsing(self, temp_yaml_file):
+        yaml_content = """
+name: "Tag Quiz"
+questions:
+  1:
+    "Tagged Question":
+      class: FromText
+      topic: memory
+      tags: [cst334, practice]
+      kwargs:
+        text: "Tagged question"
+"""
+        path = temp_yaml_file(yaml_content)
+        quizzes = Quiz.from_yaml(path)
+
+        question = quizzes[0].questions[0]
+        assert "cst334" in question.tags
+        assert "practice" in question.tags
+        assert "memory" in question.tags
+
+    def test_legacy_kind_bootstraps_tag(self, temp_yaml_file):
+        yaml_content = """
+name: "Kind Tag Quiz"
+questions:
+  1:
+    "Legacy Kind Question":
+      class: FromText
+      kind: programming
+      kwargs:
+        text: "Question with legacy kind metadata"
+"""
+        path = temp_yaml_file(yaml_content)
+        quizzes = Quiz.from_yaml(path)
+
+        question = quizzes[0].questions[0]
+        assert "programming" in question.tags
+
     def test_question_spacing_preset(self, temp_yaml_file):
         yaml_content = """
 name: "Spacing Quiz"
@@ -272,6 +309,35 @@ questions:
         assert len(quizzes[0].questions) == 1
         assert isinstance(quizzes[0].questions[0], QuestionGroup)
         assert len(quizzes[0].questions[0].questions) == 2
+
+    def test_group_tags_apply_to_children(self, temp_yaml_file):
+        yaml_content = """
+name: "Tagged Group Quiz"
+questions:
+  1:
+    "Question Group":
+      _config:
+        group: true
+        topic: memory
+        tags: [cst334, memory]
+      "Option A":
+        class: FromText
+        tags: [fifo]
+        kwargs:
+          text: "Option A content"
+      "Option B":
+        class: FromText
+        kwargs:
+          text: "Option B content"
+"""
+        path = temp_yaml_file(yaml_content)
+        quizzes = Quiz.from_yaml(path)
+
+        group = quizzes[0].questions[0]
+        assert isinstance(group, QuestionGroup)
+        assert "cst334" in group.tags
+        assert "memory" in group.tags
+        assert "fifo" in group.tags
 
     def test_preserve_order_config(self, temp_yaml_file):
         yaml_content = """
@@ -395,6 +461,23 @@ name: "No Questions Quiz"
         path = temp_yaml_file(yaml_content)
 
         with pytest.raises((KeyError, TypeError)):
+            Quiz.from_yaml(path)
+
+    def test_invalid_tags_type_raises_error(self, temp_yaml_file):
+        yaml_content = """
+name: "Bad Tags Quiz"
+questions:
+  1:
+    "Q1":
+      class: FromText
+      tags:
+        bad: shape
+      kwargs:
+        text: "Question"
+"""
+        path = temp_yaml_file(yaml_content)
+
+        with pytest.raises(ValueError, match="tags"):
             Quiz.from_yaml(path)
 
 

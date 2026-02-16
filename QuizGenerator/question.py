@@ -13,6 +13,7 @@ import os
 import pathlib
 import pkgutil
 import random
+import re
 import tempfile
 import types
 from types import MappingProxyType
@@ -611,10 +612,102 @@ class Question(abc.ABC):
       if string.lower() in mappings:
         return mappings.get(string.lower())
       return cls.MISC
+
+  @classmethod
+  def normalize_tags(cls, raw_tags) -> set[str]:
+    normalized: set[str] = set()
+
+    def _consume(value) -> None:
+      if value is None:
+        return
+
+      if isinstance(value, enum.Enum):
+        _consume(value.name)
+        return
+
+      if isinstance(value, str):
+        pieces = re.split(r"[,\s]+", value.strip())
+        for piece in pieces:
+          if not piece:
+            continue
+          cleaned = re.sub(r"[^a-z0-9._-]+", "_", piece.lower()).strip("._-")
+          if cleaned:
+            normalized.add(cleaned)
+        return
+
+      if isinstance(value, (list, tuple, set)):
+        for item in value:
+          _consume(item)
+        return
+
+      _consume(str(value))
+
+    _consume(raw_tags)
+    return normalized
+
+  @classmethod
+  def infer_course_tags(cls, *sources) -> set[str]:
+    tags: set[str] = set()
+    for source in sources:
+      if not source:
+        continue
+      for token in re.split(r"[^a-z0-9]+", str(source).lower()):
+        if re.fullmatch(r"[a-z]{2,}\d{2,}[a-z]?", token):
+          tags.add(token)
+    return tags
+
+  @classmethod
+  def topic_to_tag(cls, topic: Question.Topic | str | None) -> str | None:
+    if topic is None:
+      return None
+    if isinstance(topic, str):
+      topic = cls.Topic.from_string(topic)
+
+    mapping = {
+      cls.Topic.SYSTEM_MEMORY: "memory",
+      cls.Topic.SYSTEM_PROCESSES: "processes",
+      cls.Topic.SYSTEM_CONCURRENCY: "concurrency",
+      cls.Topic.SYSTEM_IO: "io",
+      cls.Topic.SYSTEM_SECURITY: "security",
+      cls.Topic.ML_OPTIMIZATION: "optimization",
+      cls.Topic.ML_LINEAR_ALGEBRA: "linear_algebra",
+      cls.Topic.ML_STATISTICS: "statistics",
+      cls.Topic.ML_ALGORITHMS: "machine_learning",
+      cls.Topic.DATA_PREPROCESSING: "data",
+      cls.Topic.MATH_GENERAL: "math",
+      cls.Topic.PROGRAMMING: "programming",
+      cls.Topic.LANGUAGES: "languages",
+      cls.Topic.MISC: "misc",
+    }
+    return mapping.get(topic, str(getattr(topic, "name", "misc")).lower())
+
+  def _derive_tags(self, *, explicit_tags, raw_kwargs: dict[str, Any]) -> set[str]:
+    tags: set[str] = set()
+    tags.update(self.normalize_tags(getattr(self.__class__, "TAGS", None)))
+    tags.update(self.normalize_tags(explicit_tags))
+
+    topic_tag = self.topic_to_tag(self.topic)
+    if topic_tag:
+      tags.add(topic_tag)
+
+    for key in ("kind", "policy", "algo", "scheduler_kind"):
+      if key in raw_kwargs:
+        tags.update(self.normalize_tags(raw_kwargs.get(key)))
+
+    tags.update(self.infer_course_tags(self.__class__.__module__))
+
+    registered_name = QuestionRegistry._class_name_to_registered_name.get(
+      self.__class__.__name__.lower()
+    )
+    if registered_name:
+      tags.update(self.infer_course_tags(registered_name))
+
+    return tags
   
   def __init__(self, name: str, points_value: float, topic: Question.Topic = Topic.MISC, *args, **kwargs):
     if name is None:
       name = self.__class__.__name__
+    explicit_tags = kwargs.pop("tags", None)
     self.name = name
     self.question_id = kwargs.pop("question_id", None)
     self.seed_group = kwargs.pop("seed_group", None)
@@ -640,9 +733,10 @@ class Question(abc.ABC):
     framework_params = {
       'name', 'points_value', 'topic', 'spacing', 'num_subquestions',
       'rng_seed_offset', 'rng_seed', 'class', 'kwargs', 'kind',
-      'question_id', 'seed_group'
+      'question_id', 'seed_group', 'tags'
     }
     self.config_params = {k: v for k, v in kwargs.items() if k not in framework_params}
+    self.tags = self._derive_tags(explicit_tags=explicit_tags, raw_kwargs=kwargs)
   
   def instantiate(self, **kwargs) -> QuestionInstance:
     """
@@ -1086,6 +1180,13 @@ class QuestionGroup():
     first_question = questions_in_group[0] if questions_in_group else None
     self.points_value = getattr(first_question, "points_value", 0)
     self.topic = getattr(first_question, "topic", Question.Topic.MISC)
+    self.tags: set[str] = set()
+    for question in questions_in_group:
+      self.tags.update(getattr(question, "tags", set()))
+    if not self.tags:
+      topic_tag = Question.topic_to_tag(self.topic)
+      if topic_tag:
+        self.tags.add(topic_tag)
     self.spacing = max((q.spacing for q in questions_in_group), default=0)
     self.possible_variations = float("inf")
 
