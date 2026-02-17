@@ -5,6 +5,7 @@ These tests use mocking to avoid hitting real Canvas APIs.
 They verify the logic of the canvas_interface module without network calls.
 """
 
+import io
 import os
 from unittest.mock import MagicMock, Mock, patch
 
@@ -51,6 +52,28 @@ class TestCanvasInterfaceCredentials:
                 assert interface.canvas_url == "https://dev.canvas.com"
                 assert interface.canvas_key == "dev_key_456"
                 assert interface.prod is False
+
+    def test_default_privacy_mode_is_id_only(self):
+        from lms_interface.canvas_interface import CanvasInterface
+
+        with patch.dict(os.environ, {
+            "CANVAS_API_URL": "https://dev.canvas.com",
+            "CANVAS_API_KEY": "dev_key_456"
+        }, clear=True):
+            with patch("lms_interface.canvas_interface.canvasapi.Canvas"):
+                interface = CanvasInterface()
+                assert interface.privacy_mode == "id_only"
+
+    def test_invalid_privacy_mode_raises_valueerror(self):
+        from lms_interface.canvas_interface import CanvasInterface
+
+        with patch.dict(os.environ, {
+            "CANVAS_API_URL": "https://dev.canvas.com",
+            "CANVAS_API_KEY": "dev_key_456"
+        }, clear=True):
+            with patch("lms_interface.canvas_interface.canvasapi.Canvas"):
+                with pytest.raises(ValueError, match="privacy_mode must be one of"):
+                    CanvasInterface(privacy_mode="pseudonymous")
 
 
 class TestCanvasExceptionHandling:
@@ -108,6 +131,22 @@ class TestCanvasExceptionHandling:
         exc = Exception("Network error")
         assert _is_retryable_canvas_exception(exc) is True
 
+    def test_compute_retry_delay_without_jitter(self):
+        from lms_interface.canvas_interface import _compute_retry_delay_seconds
+
+        assert _compute_retry_delay_seconds(
+            1,
+            retry_backoff_base=1.0,
+            retry_backoff_max=10.0,
+            retry_backoff_jitter_ratio=0.0,
+        ) == 1.0
+        assert _compute_retry_delay_seconds(
+            4,
+            retry_backoff_base=1.0,
+            retry_backoff_max=10.0,
+            retry_backoff_jitter_ratio=0.0,
+        ) == 8.0
+
 
 class TestCanvasCourse:
     """Tests for CanvasCourse class."""
@@ -118,6 +157,12 @@ class TestCanvasCourse:
         from lms_interface.canvas_interface import CanvasCourse, CanvasInterface
 
         mock_interface = Mock(spec=CanvasInterface)
+        mock_interface.privacy_mode = "none"
+        mock_interface.reveal_identity = False
+        mock_interface.blind_id_map_path = None
+        mock_interface.resolve_student_name.side_effect = (
+            lambda user_id, raw_name=None: raw_name or f"Student {user_id}"
+        )
         mock_canvasapi_course = MagicMock()
         mock_canvasapi_course.name = "Test Course"
         mock_canvasapi_course.id = 12345
@@ -150,8 +195,8 @@ class TestCanvasCourse:
         result = mock_canvas_course.create_assignment_group(name="existing_group")
 
         assert result == existing_group
-        mock_canvas_course.course.create_assignment_group.assert_not_called()
         existing_group.edit.assert_called()
+        mock_canvas_course.course.create_assignment_group.assert_not_called()
 
     def test_create_assignment_group_delete_existing(self, mock_canvas_course):
         """Should delete and recreate when delete_existing=True."""
@@ -297,6 +342,78 @@ class TestQuestionUpload:
         result = mock_canvas_course.create_question(mock_quiz, [])
 
         assert result is None
+
+
+class TestFileSubmissionSecurity:
+    class _FakeHeaders:
+        def __init__(self, content_type):
+            self._content_type = content_type
+
+        def get_content_type(self):
+            return self._content_type
+
+        def get(self, key, default=None):
+            if key.lower() == "content-type":
+                return self._content_type
+            return default
+
+    class _FakeResponse:
+        def __init__(self, payload: bytes, content_type: str):
+            self._stream = io.BytesIO(payload)
+            self._headers = TestFileSubmissionSecurity._FakeHeaders(content_type)
+
+        def read(self, size=-1):
+            return self._stream.read(size)
+
+        def info(self):
+            return self._headers
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def test_validate_url_rejects_unsupported_scheme(self):
+        from lms_interface.classes import FileSubmission__Canvas
+
+        with pytest.raises(ValueError, match="unsupported URL scheme"):
+            FileSubmission__Canvas._validate_url("file:///tmp/submission.py", "submission.py")
+
+    def test_files_reject_unexpected_content_type(self):
+        from lms_interface.classes import FileSubmission__Canvas
+
+        submission = FileSubmission__Canvas(attachments=[{
+            "filename": "answer.py",
+            "url": "https://example.com/answer.py",
+            "content-type": "application/pdf",
+        }])
+
+        with patch(
+            "lms_interface.classes.urllib.request.urlopen",
+            return_value=self._FakeResponse(b"print('hello')", "application/pdf"),
+        ):
+            with pytest.raises(ValueError, match="content-type"):
+                _ = submission.files
+
+    def test_files_download_and_sanitize_filename(self):
+        from lms_interface.classes import FileSubmission__Canvas
+
+        submission = FileSubmission__Canvas(attachments=[{
+            "filename": "../unsafe name.py",
+            "url": "https://example.com/answer.py",
+            "content-type": "text/plain",
+        }])
+
+        with patch(
+            "lms_interface.classes.urllib.request.urlopen",
+            return_value=self._FakeResponse(b"print('ok')", "text/plain"),
+        ):
+            files = submission.files
+
+        assert len(files) == 1
+        assert files[0].name == "unsafe name.py"
+        assert files[0].read() == b"print('ok')"
 
 
 class TestSubmissionClasses:

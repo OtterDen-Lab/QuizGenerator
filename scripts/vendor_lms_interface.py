@@ -8,6 +8,7 @@ Usage:
 
 import argparse
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,32 @@ def _extract_version(log_text: str) -> str | None:
     if match:
         return match.group(1)
     return None
+
+
+def _sync_vendored_tests(
+    *,
+    source_repo: Path,
+    target_repo: Path,
+    dry_run: bool,
+    quiet: bool,
+) -> None:
+    source_tests = source_repo / "lms_interface" / "tests"
+    target_tests = target_repo / "lms_interface" / "tests"
+    if not source_tests.exists():
+        if not quiet:
+            print("No lms_interface/tests directory found in source; skipping test sync.")
+        return
+
+    if dry_run:
+        if not quiet:
+            print(f"  [DRY RUN] Would sync tests: {source_tests} -> {target_tests}")
+        return
+
+    if target_tests.exists():
+        shutil.rmtree(target_tests)
+    shutil.copytree(source_tests, target_tests)
+    if not quiet:
+        print(f"Synced vendored tests: {target_tests}")
 
 
 def main() -> int:
@@ -94,7 +121,15 @@ def main() -> int:
     if not args.quiet:
         print("Running:", " ".join(cmd))
         result = subprocess.run(cmd, check=False)
-        return result.returncode
+        if result.returncode != 0:
+            return result.returncode
+        _sync_vendored_tests(
+            source_repo=lms_repo,
+            target_repo=repo_root,
+            dry_run=args.dry_run,
+            quiet=args.quiet,
+        )
+        return 0
 
     result = subprocess.run(cmd, check=False, capture_output=True, text=True)
     combined = f"{result.stdout}\n{result.stderr}".strip()
@@ -107,6 +142,12 @@ def main() -> int:
             )
         else:
             print(f"Vendored LMSInterface from {lms_repo}{dry_run_note}.")
+        _sync_vendored_tests(
+            source_repo=lms_repo,
+            target_repo=repo_root,
+            dry_run=args.dry_run,
+            quiet=args.quiet,
+        )
         return 0
 
     print("Vendoring failed.")
