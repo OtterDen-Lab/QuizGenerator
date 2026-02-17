@@ -328,6 +328,23 @@ Guidance:
 - Prefer Typst (default) when possible.
 - If you need LaTeX but want to reduce risk, avoid raw LaTeX content and keep custom questions constrained to ContentAST elements.
 
+## Local Release Helper (Recommended)
+
+Install repository-managed git hooks and alias:
+
+```bash
+bash scripts/install_git_hooks.sh
+```
+
+This installs a pre-commit hook that checks version-bump vendoring and a local alias:
+
+```bash
+git bump patch
+```
+
+`git bump` bumps `pyproject.toml` via `uv version`, vendors `lms_interface`, stages `pyproject.toml`/`uv.lock`/`lms_interface`, and commits.
+Use `git bump patch --verbose` for full vendoring logs (default output is a short summary).
+
 ## Project Structure
 
 ```
