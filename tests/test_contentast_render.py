@@ -100,8 +100,9 @@ def test_typst_question_reserve_height_uses_context():
 
 def test_typst_page_spacing_breaks_after_question_body():
     header = ca.Document.TYPST_HEADER
-    assert "#if spacing < 99cm [" in header
-    assert "height: spacing" in header
+    assert "#if spacing < 99cm and pdf_aid == none [" in header
+    assert "if spacing < 99cm and pdf_aid != none {" in header
+    assert "measure(aid_block).height >= 7cm" in header
     assert "pagebreak(weak: true)" in header
 
 
