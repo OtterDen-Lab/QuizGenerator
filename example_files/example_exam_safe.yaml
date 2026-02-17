@@ -1,0 +1,45 @@
+name: "CST 334 Exam 3 (Fall 2024)"
+sort order:
+  - memory
+  - concurrency
+  - io
+  - processes
+  - programming
+  - misc
+questions:
+  8:
+    process scheduling calculations:
+      class: SchedulingQuestion
+      kwargs:
+        spacing: 5
+    persistence group 1:
+      _config:
+        group: true
+        num_to_pick: 1
+        random_per_student: false
+        topic: io
+      vsfs changes:
+        class: VSFS_states
+        kwargs:
+          spacing: 1
+      inode access calculations:
+        class: INodeAccesses
+
+    paging table question:
+      class: Paging
+      kind: programming
+
+    memory access:
+      class: CachingQuestion
+
+  4:
+    text based question:
+      class: FromText
+      kwargs:
+        text: |
+          This is a question I can ask.
+    second text question:
+      class: FromText
+      kwargs:
+        text: |
+          This is a second non-generator question for quickstart smoke tests.

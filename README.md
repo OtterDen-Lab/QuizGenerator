@@ -121,9 +121,8 @@ quizgen \
 ```
 
 These are uploaded as regular graded quiz assignments into the `practice` assignment group, which is configured with `0.0` group weight.
-Tag filters accept either namespaced tags (for example `course:cst334`, `topic:memory`) or legacy bare forms (`cst334`, `memory`).
+Tag filters accept either namespaced tags (for example `course:cst334`, `topic:memory`) or bare forms (`cst334`, `memory`).
 Use `--practice_tag_source explicit` if you want strict explicit-only tag matching.
-Legacy flat flags still work, but subcommands are the recommended interface.
 
 ### 5. Audit Tags
 

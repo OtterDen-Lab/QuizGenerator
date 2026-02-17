@@ -16,10 +16,10 @@ def _parse(monkeypatch, argv):
     return parse_args()
 
 
-def test_parse_args_generate_practice_allows_missing_yaml(monkeypatch):
-    args = _parse(monkeypatch, ["--generate_practice", "cst334", "--course_id", "12345"])
-    assert args.quiz_yaml is None
-    assert args.generate_practice == ["cst334"]
+def test_parse_args_subcommand_practice_allows_missing_yaml(monkeypatch):
+    args = _parse(monkeypatch, ["practice", "cst334", "--course_id", "12345"])
+    assert args.command == "practice"
+    assert args.tags == ["cst334"]
     assert args.practice_variations == 5
     assert args.practice_question_groups == 5
     assert args.practice_tag_source == "merged"
@@ -28,15 +28,15 @@ def test_parse_args_generate_practice_allows_missing_yaml(monkeypatch):
 def test_parse_args_subcommand_practice_positional_tags(monkeypatch):
     args = _parse(monkeypatch, ["practice", "course:cst334", "topic:memory", "--course_id", "12345"])
     assert args.command == "practice"
-    assert args.generate_practice == ["course:cst334", "topic:memory"]
+    assert args.tags == ["course:cst334", "topic:memory"]
 
 
-def test_parse_args_generate_practice_requires_course_id(monkeypatch):
+def test_parse_args_subcommand_practice_requires_course_id(monkeypatch):
     with pytest.raises(SystemExit):
-        _parse(monkeypatch, ["--generate_practice", "cst334"])
+        _parse(monkeypatch, ["practice", "cst334"])
 
 
-def test_parse_args_requires_yaml_without_generate_practice(monkeypatch):
+def test_parse_args_requires_subcommand(monkeypatch):
     with pytest.raises(SystemExit):
         _parse(monkeypatch, [])
 
@@ -65,7 +65,7 @@ def test_parse_args_generate_no_pdf_aids(monkeypatch):
 def test_parse_args_subcommand_test_positional_variations(monkeypatch):
     args = _parse(monkeypatch, ["test", "7"])
     assert args.command == "test"
-    assert args.test_all == 7
+    assert args.num_variations == 7
 
 
 def test_parse_args_subcommand_tags_defaults_to_list(monkeypatch):
@@ -82,17 +82,16 @@ def test_parse_args_subcommand_tags_explain(monkeypatch):
     assert args.query == "sched"
 
 
-def test_parse_args_legacy_check_deps_routes_to_deps(monkeypatch):
-    args = _parse(monkeypatch, ["--check-deps", "--yaml", "example_files/example_exam.yaml", "--num_pdfs", "1"])
+def test_parse_args_subcommand_deps(monkeypatch):
+    args = _parse(monkeypatch, ["deps"])
     assert args.command == "deps"
-    assert args.check_deps is True
 
 
-def test_parse_args_generate_practice_question_groups(monkeypatch):
+def test_parse_args_subcommand_practice_question_groups(monkeypatch):
     args = _parse(
         monkeypatch,
         [
-            "--generate_practice",
+            "practice",
             "cst334",
             "--course_id",
             "12345",
@@ -108,7 +107,7 @@ def test_parse_args_generate_practice_question_groups_must_be_positive(monkeypat
         _parse(
             monkeypatch,
             [
-                "--generate_practice",
+                "practice",
                 "cst334",
                 "--course_id",
                 "12345",
@@ -118,11 +117,11 @@ def test_parse_args_generate_practice_question_groups_must_be_positive(monkeypat
         )
 
 
-def test_parse_args_generate_practice_tag_source(monkeypatch):
+def test_parse_args_subcommand_practice_tag_source(monkeypatch):
     args = _parse(
         monkeypatch,
         [
-            "--generate_practice",
+            "practice",
             "course:cst334",
             "--course_id",
             "12345",
@@ -131,6 +130,11 @@ def test_parse_args_generate_practice_tag_source(monkeypatch):
         ],
     )
     assert args.practice_tag_source == "explicit"
+
+
+def test_parse_args_subcommand_test_requires_positive_num_variations(monkeypatch):
+    with pytest.raises(SystemExit):
+        _parse(monkeypatch, ["test", "0"])
 
 
 def test_tags_match_any_and_all_modes():
