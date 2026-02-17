@@ -612,16 +612,8 @@ class Document(Container):
         align: top,
       )[
         #content
-        #if spacing < 99cm [
-          #if pdf_aid != none [
-            #box(width: 100%, height: spacing, inset: 0pt)[
-              #align(bottom + left)[
-                #pdf_aid
-              ]
-            ]
-          ] else [
-            #v(spacing)
-          ]
+        #if spacing < 99cm and pdf_aid == none [
+          #v(spacing)
         ]
       ][
         #if qr_code != none {
@@ -649,6 +641,21 @@ class Document(Container):
         }
       }
     }
+      if spacing < 99cm and pdf_aid != none {
+        context {
+          let aid_block = block(breakable: false)[
+            #box(width: 100%, inset: 0pt)[
+              #pdf_aid
+            ]
+          ]
+          // If the aid itself is large, move it to a fresh page.
+          if measure(aid_block).height >= 7cm {
+            pagebreak()
+          }
+          aid_block
+          v(spacing)
+        }
+      }
       // PAGE and EXTRA_PAGE spacing presets should page-break after the
       // question body renders so first-page header space doesn't push
       // the whole question to page 2.

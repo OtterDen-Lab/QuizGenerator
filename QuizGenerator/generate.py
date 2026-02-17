@@ -116,6 +116,12 @@ def _build_parser() -> argparse.ArgumentParser:
                               help="Enable FromGenerator questions (executes Python from YAML)")
   generate_parser.add_argument("--check-deps", action="store_true",
                               help=argparse.SUPPRESS)  # Prefer `quizgen deps`
+  generate_parser.add_argument("--test_all", type=int, default=None, metavar="N",
+                              help=argparse.SUPPRESS)  # Better guidance when test flags are misrouted to generate
+  generate_parser.add_argument("--test_questions", nargs='+', metavar="NAME",
+                              help=argparse.SUPPRESS)  # Better guidance when test flags are misrouted to generate
+  generate_parser.add_argument("--strict", action="store_true",
+                              help=argparse.SUPPRESS)  # Better guidance when test flags are misrouted to generate
   generate_parser.add_argument("--max_backoff_attempts", type=int, default=None,
                               help="Max attempts for question generation backoff (default: 200)")
   generate_parser.add_argument("--float_tolerance", type=float, default=None,
@@ -204,9 +210,11 @@ def _build_parser() -> argparse.ArgumentParser:
   test_parser.add_argument("--test_all", type=int, default=None, metavar="N",
                           help=argparse.SUPPRESS)  # Legacy alias
   test_parser.add_argument("--test_questions", nargs='+', metavar="NAME",
-                          help="Only test specific question types by name")
+                          help="Only test specific question types by name (legacy order also accepts a trailing count)")
   test_parser.add_argument("--strict", action="store_true",
                           help="Skip Canvas upload if any question type fails")
+  test_parser.add_argument("--seed", type=int, default=None,
+                          help="Base random seed for test generation (default: random each run)")
   test_parser.add_argument("--skip_missing_extras", action="store_true",
                           help="Skip questions that fail due to missing optional dependencies")
   test_parser.add_argument("--allow_generator", action="store_true",
@@ -333,6 +341,15 @@ def parse_args(argv: list[str] | None = None):
     return args
 
   if args.command == "generate":
+    if (
+      getattr(args, "test_questions", None)
+      or getattr(args, "test_all", None) is not None
+      or getattr(args, "strict", False)
+    ):
+      parser.error(
+        "Test flags were provided with 'generate'. "
+        "Use `quizgen test`, for example: quizgen test 1 --test_questions MLFQQuestion"
+      )
     if args.num_canvas > 0 and args.course_id is None:
       parser.error("Missing --course_id for Canvas upload. Example: --course_id 12345")
     if not args.quiz_yaml and not args.check_deps:
@@ -340,13 +357,25 @@ def parse_args(argv: list[str] | None = None):
     return args
 
   if args.command == "test":
+    if args.num_variations is None and args.test_all is None and args.test_questions:
+      # Legacy input occasionally used: `quizgen test --test_questions Name 1`.
+      # `argparse` consumes that trailing `1` into `--test_questions`; recover it as N.
+      trailing_token = args.test_questions[-1]
+      if len(args.test_questions) >= 2 and re.fullmatch(r"\d+", trailing_token):
+        args.num_variations = int(trailing_token)
+        args.test_questions = args.test_questions[:-1]
+
     positional_n = args.num_variations
     legacy_n = args.test_all
     if positional_n is not None and legacy_n is not None and positional_n != legacy_n:
       parser.error("Conflicting values provided for test variations (positional N vs --test_all).")
     args.test_all = positional_n if positional_n is not None else legacy_n
     if args.test_all is None or args.test_all <= 0:
-      parser.error("Missing test variation count. Example: quizgen test 20")
+      parser.error(
+        "Missing test variation count. Examples: "
+        "quizgen test 20 --test_questions MLFQQuestion "
+        "or quizgen test --test_questions MLFQQuestion --test_all 20"
+      )
     return args
 
   if args.command == "deps":
@@ -400,7 +429,8 @@ def test_all_questions(
     question_filter: list = None,
     skip_missing_extras: bool = False,
     embed_images_typst: bool = False,
-    show_pdf_aids: bool = True
+    show_pdf_aids: bool = True,
+    seed: int | None = None,
 ):
   """
   Test all registered questions by generating N variations of each.
@@ -415,6 +445,7 @@ def test_all_questions(
     canvas_course: If provided, push a test quiz to this Canvas course
     strict: If True, skip PDF/Canvas generation if any questions fail
     question_filter: If provided, only test questions whose names contain one of these strings (case-insensitive)
+    seed: Base seed for deterministic runs; if None, a fresh seed is generated each run
   """
   # Allow FromGenerator during test_all runs so coverage includes generator-based questions.
   os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
@@ -445,6 +476,13 @@ def test_all_questions(
     'fromgenerator': {'generator': 'return "Generated test content"'},
   }
 
+  run_seed = seed if seed is not None else random.SystemRandom().randint(0, 2**31 - 1)
+  seed_rng = random.Random(run_seed)
+  if seed is None:
+    print(f"Test run seed: {run_seed} (auto-generated; pass --seed {run_seed} to reproduce)")
+  else:
+    print(f"Test run seed: {run_seed}")
+
   print(f"\nTesting {total_questions} registered question types with {num_variations} variations each...")
   print("=" * 70)
 
@@ -461,7 +499,7 @@ def test_all_questions(
     question_failures = []
 
     for variation in range(num_variations):
-      seed = variation * 1000  # Use different seeds for each variation
+      variation_seed = seed_rng.randint(0, 2**31 - 1)
       try:
         # Get any test defaults for this question type
         extra_kwargs = TEST_DEFAULTS.get(question_name, {})
@@ -474,7 +512,7 @@ def test_all_questions(
         )
 
         # Generate the question (this calls refresh and builds the AST)
-        instance = question.instantiate(rng_seed=seed, max_backoff_attempts=200)
+        instance = question.instantiate(rng_seed=variation_seed, max_backoff_attempts=200)
         question_ast = question._build_question_ast(instance)
 
         # Try rendering to both formats to catch format-specific issues
@@ -554,7 +592,8 @@ def test_all_questions(
 
     if generate_pdf:
       print("Generating PDF...")
-      pdf_seed = 12345  # Fixed seed for reproducibility
+      pdf_seed = seed_rng.randint(0, 2**31 - 1)
+      print(f"PDF example seed: {pdf_seed}")
       if use_typst:
         typst_text = test_quiz.get_quiz(rng_seed=pdf_seed).render(
           "typst",
@@ -1550,7 +1589,8 @@ def main():
       question_filter=args.test_questions,
       skip_missing_extras=args.skip_missing_extras,
       embed_images_typst=getattr(args, "embed_images_typst", False),
-      show_pdf_aids=getattr(args, "show_pdf_aids", True)
+      show_pdf_aids=getattr(args, "show_pdf_aids", True),
+      seed=args.seed,
     )
     if not success:
       raise QuizGenError("One or more questions failed during --test_all.")

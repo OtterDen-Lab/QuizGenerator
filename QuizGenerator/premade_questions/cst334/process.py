@@ -650,7 +650,7 @@ class MLFQQuestion(ProcessQuestion, TableQuestionMixin, BodyTemplatesMixin):
   MIN_ARRIVAL = 0
   MAX_ARRIVAL = 10
   DEFAULT_NUM_JOBS = 3
-  DEFAULT_NUM_QUEUES = 3
+  DEFAULT_NUM_QUEUES = 2
   ROUNDING_DIGITS = 2
   IMAGE_DPI = 140
   IMAGE_FIGSIZE = (9.5, 6.5)
