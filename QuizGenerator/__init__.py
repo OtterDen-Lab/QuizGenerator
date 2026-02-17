@@ -48,12 +48,27 @@ def _ensure_file_handler_directories(config: dict) -> None:
       os.makedirs(log_dir, exist_ok=True)
 
 
-def _find_project_root() -> Path:
-  package_dir = Path(__file__).resolve().parent
-  for candidate in [package_dir, *package_dir.parents]:
+def _find_pyproject_root(start_dir: Path) -> Path | None:
+  for candidate in [start_dir, *start_dir.parents]:
     if (candidate / "pyproject.toml").exists():
       return candidate
-  return package_dir.parent
+  return None
+
+
+def _find_project_root() -> Path:
+  cwd = Path.cwd().resolve()
+  cwd_root = _find_pyproject_root(cwd)
+  if cwd_root is not None:
+    return cwd_root
+
+  package_dir = Path(__file__).resolve().parent
+  package_root = _find_pyproject_root(package_dir)
+  if package_root is not None:
+    return package_root
+
+  # Wheel installs may live under non-writable site-packages. Fall back to
+  # current working directory instead of the package install location.
+  return cwd
 
 
 def _anchor_file_handler_paths(config: dict, *, base_dir: Path) -> None:

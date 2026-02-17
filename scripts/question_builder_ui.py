@@ -31,6 +31,7 @@ def _import_quizgenerator_modules():
   try:
     ca_module = importlib.import_module("QuizGenerator.contentast")
     generate_module = importlib.import_module("QuizGenerator.generate")
+    importlib.import_module("QuizGenerator.yaml_question")  # registers YAML nodes
     question_module = importlib.import_module("QuizGenerator.question")
   except ModuleNotFoundError as exc:
     # Support running this script directly from the repository checkout.
@@ -40,6 +41,7 @@ def _import_quizgenerator_modules():
       sys.path.insert(0, str(BASE_DIR))
     ca_module = importlib.import_module("QuizGenerator.contentast")
     generate_module = importlib.import_module("QuizGenerator.generate")
+    importlib.import_module("QuizGenerator.yaml_question")  # registers YAML nodes
     question_module = importlib.import_module("QuizGenerator.question")
   return (
     ca_module,
