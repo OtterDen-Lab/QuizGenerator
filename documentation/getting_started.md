@@ -127,3 +127,5 @@ pytest
 
 - **Pandoc missing**: ContentAST will fall back to raw markdown for LaTeX/Typst.
   Install pandoc to improve rendering quality.
+- **Log files location**: File logs are written under the project `out/logs/` directory.
+  Set `QUIZGEN_FILE_LOGGING=0` to disable file logging.
