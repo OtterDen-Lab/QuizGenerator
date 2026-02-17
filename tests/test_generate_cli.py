@@ -102,7 +102,7 @@ def test_parse_args_subcommand_practice_question_groups(monkeypatch):
     assert args.practice_question_groups == 5
 
 
-def test_parse_args_generate_practice_question_groups_must_be_positive(monkeypatch):
+def test_parse_args_subcommand_practice_question_groups_must_be_positive(monkeypatch):
     with pytest.raises(SystemExit):
         _parse(
             monkeypatch,
