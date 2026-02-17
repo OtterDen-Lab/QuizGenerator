@@ -3,7 +3,7 @@
 Wrapper to vendor LMSInterface into QuizGeneration using the shared script.
 
 Usage:
-    python scripts/vendor_lms_interface.py [--dry-run] [--quiet] [--lms-path PATH]
+    python scripts/vendor_lms_interface.py [--dry-run] [--quiet] [--sync-tests] [--lms-path PATH]
 """
 
 import argparse
@@ -41,9 +41,22 @@ def _sync_vendored_tests(
     target_repo: Path,
     dry_run: bool,
     quiet: bool,
+    sync_tests: bool,
 ) -> None:
-    source_tests = source_repo / "lms_interface" / "tests"
     target_tests = target_repo / "lms_interface" / "tests"
+
+    if not sync_tests:
+        if target_tests.exists():
+            if dry_run:
+                if not quiet:
+                    print(f"  [DRY RUN] Would remove stale vendored tests: {target_tests}")
+                return
+            shutil.rmtree(target_tests)
+            if not quiet:
+                print(f"Removed stale vendored tests: {target_tests}")
+        return
+
+    source_tests = source_repo / "lms_interface" / "tests"
     if not source_tests.exists():
         if not quiet:
             print("No lms_interface/tests directory found in source; skipping test sync.")
@@ -79,6 +92,11 @@ def main() -> int:
         "--quiet",
         action="store_true",
         help="Suppress detailed output and print a short summary",
+    )
+    parser.add_argument(
+        "--sync-tests",
+        action="store_true",
+        help="Also sync lms_interface/tests from LMSInterface (default: off)",
     )
 
     args = parser.parse_args()
@@ -128,6 +146,7 @@ def main() -> int:
             target_repo=repo_root,
             dry_run=args.dry_run,
             quiet=args.quiet,
+            sync_tests=args.sync_tests,
         )
         return 0
 
@@ -147,6 +166,7 @@ def main() -> int:
             target_repo=repo_root,
             dry_run=args.dry_run,
             quiet=args.quiet,
+            sync_tests=args.sync_tests,
         )
         return 0
 
