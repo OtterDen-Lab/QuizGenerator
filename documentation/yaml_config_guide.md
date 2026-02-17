@@ -58,7 +58,7 @@ Recommended core facets:
 - `topic:<name>` (for example `topic:memory`)
 - `skill:<name>` (for example `skill:round_robin`)
 
-Bare legacy forms (for example `cst334`, `memory`) are still accepted and are normalized automatically.
+Bare forms (for example `cst334`, `memory`) are accepted and normalized automatically.
 Free-form tags are allowed.
 
 ### Per-Question `_config`

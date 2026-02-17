@@ -42,10 +42,11 @@ pip install QuizGenerator[cst463]
 ## Quick Start (PDF)
 
 ```bash
-quizgen generate --yaml example_files/example_exam.yaml --num_pdfs 1
+quizgen generate --yaml example_files/example_exam_safe.yaml --num_pdfs 1
 ```
 
 PDFs are generated in `out/`.
+`example_files/example_exam_safe.yaml` avoids `FromGenerator`, so it works without extra flags.
 
 ## Dependency Check (Optional)
 
@@ -76,7 +77,7 @@ questions:
 To reduce PDF page count by reordering questions, use:
 
 ```bash
-quizgen generate --yaml example_files/example_exam.yaml --num_pdfs 1 --optimize_space
+quizgen generate --yaml example_files/example_exam_safe.yaml --num_pdfs 1 --optimize_space
 ```
 
 This affects both PDF and Canvas order.
@@ -93,7 +94,7 @@ CANVAS_API_KEY=your_api_key_here
 Then:
 
 ```bash
-quizgen generate --yaml example_files/example_exam.yaml --num_canvas 5 --course_id 12345
+quizgen generate --yaml example_files/example_exam_safe.yaml --num_canvas 5 --course_id 12345
 ```
 
 ## Testing Mode (No YAML Needed)
@@ -126,3 +127,5 @@ pytest
 
 - **Pandoc missing**: ContentAST will fall back to raw markdown for LaTeX/Typst.
   Install pandoc to improve rendering quality.
+- **Log files location**: File logs are written under the project `out/logs/` directory.
+  Set `QUIZGEN_FILE_LOGGING=0` to disable file logging.

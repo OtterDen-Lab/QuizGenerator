@@ -32,16 +32,6 @@ class QuizGenError(Exception):
   """User-facing error for CLI operations."""
 
 
-def _infer_legacy_subcommand(argv: list[str]) -> str:
-  if "--generate_practice" in argv:
-    return "practice"
-  if "--test_all" in argv or "--test_questions" in argv or "--strict" in argv:
-    return "test"
-  if "--check-deps" in argv:
-    return "deps"
-  return "generate"
-
-
 def _add_common_options(parser: argparse.ArgumentParser) -> None:
   parser.add_argument(
     "--env",
@@ -85,12 +75,6 @@ def _build_parser() -> argparse.ArgumentParser:
     default=None,
     help="Path to quiz YAML configuration"
   )
-  generate_parser.add_argument(
-    "--quiz_yaml",
-    dest="quiz_yaml",
-    default=None,
-    help=argparse.SUPPRESS  # Backwards-compatible alias for --yaml
-  )
   generate_parser.add_argument("--seed", type=int, default=None,
                               help="Random seed for quiz generation (default: None for random)")
   generate_parser.add_argument("--num_canvas", default=0, type=int, help="How many variations of each question to try to upload to canvas.")
@@ -114,14 +98,6 @@ def _build_parser() -> argparse.ArgumentParser:
   generate_parser.set_defaults(show_pdf_aids=True)
   generate_parser.add_argument("--allow_generator", action="store_true",
                               help="Enable FromGenerator questions (executes Python from YAML)")
-  generate_parser.add_argument("--check-deps", action="store_true",
-                              help=argparse.SUPPRESS)  # Prefer `quizgen deps`
-  generate_parser.add_argument("--test_all", type=int, default=None, metavar="N",
-                              help=argparse.SUPPRESS)  # Better guidance when test flags are misrouted to generate
-  generate_parser.add_argument("--test_questions", nargs='+', metavar="NAME",
-                              help=argparse.SUPPRESS)  # Better guidance when test flags are misrouted to generate
-  generate_parser.add_argument("--strict", action="store_true",
-                              help=argparse.SUPPRESS)  # Better guidance when test flags are misrouted to generate
   generate_parser.add_argument("--max_backoff_attempts", type=int, default=None,
                               help="Max attempts for question generation backoff (default: 200)")
   generate_parser.add_argument("--float_tolerance", type=float, default=None,
@@ -132,12 +108,6 @@ def _build_parser() -> argparse.ArgumentParser:
   _add_canvas_options(practice_parser)
   practice_parser.add_argument("tags", nargs="*", metavar="TAG",
                               help="Tag filters, e.g. course:cst334 topic:memory")
-  practice_parser.add_argument(
-    "--generate_practice",
-    nargs="+",
-    metavar="TAG",
-    help=argparse.SUPPRESS  # Backwards-compatible legacy flag
-  )
   practice_parser.add_argument(
     "--practice_match",
     choices=["any", "all"],
@@ -151,12 +121,6 @@ def _build_parser() -> argparse.ArgumentParser:
     help="Number of Canvas variations per question group (default: 5)."
   )
   practice_parser.add_argument(
-    "--num_canvas",
-    default=0,
-    type=int,
-    help=argparse.SUPPRESS  # Legacy alias for variations
-  )
-  practice_parser.add_argument(
     "--practice_question_groups",
     type=int,
     default=5,
@@ -164,12 +128,6 @@ def _build_parser() -> argparse.ArgumentParser:
       "Repeat each selected question this many times "
       "(each repetition gets its own variation pool)."
     )
-  )
-  practice_parser.add_argument(
-    "--practice_repeats",
-    dest="practice_question_groups",
-    type=int,
-    help=argparse.SUPPRESS  # Backwards-compatible alias
   )
   practice_parser.add_argument(
     "--practice_points",
@@ -182,12 +140,6 @@ def _build_parser() -> argparse.ArgumentParser:
     choices=["explicit", "merged", "derived"],
     default="merged",
     help="Which tag set to match against: explicit, derived, or merged (default)."
-  )
-  practice_parser.add_argument(
-    "--tag_source",
-    dest="practice_tag_source",
-    choices=["explicit", "merged", "derived"],
-    help=argparse.SUPPRESS
   )
   practice_parser.add_argument(
     "--practice_assignment_group",
@@ -205,12 +157,10 @@ def _build_parser() -> argparse.ArgumentParser:
   _add_common_options(test_parser)
   _add_canvas_options(test_parser)
   _add_typst_latex_flags(test_parser)
-  test_parser.add_argument("num_variations", nargs="?", type=int, metavar="N",
+  test_parser.add_argument("num_variations", type=int, metavar="N",
                           help="Number of variations to generate for each registered question type.")
-  test_parser.add_argument("--test_all", type=int, default=None, metavar="N",
-                          help=argparse.SUPPRESS)  # Legacy alias
   test_parser.add_argument("--test_questions", nargs='+', metavar="NAME",
-                          help="Only test specific question types by name (legacy order also accepts a trailing count)")
+                          help="Only test specific question types by name")
   test_parser.add_argument("--strict", action="store_true",
                           help="Skip Canvas upload if any question type fails")
   test_parser.add_argument("--seed", type=int, default=None,
@@ -231,12 +181,6 @@ def _build_parser() -> argparse.ArgumentParser:
   deps_parser = subparsers.add_parser("deps", help="Check external dependencies and exit.")
   _add_common_options(deps_parser)
   _add_typst_latex_flags(deps_parser)
-  deps_parser.add_argument("--check-deps", action="store_true", help=argparse.SUPPRESS)
-  # Legacy compatibility with historical docs/examples.
-  deps_parser.add_argument("--yaml", dest="quiz_yaml", default=None, help=argparse.SUPPRESS)
-  deps_parser.add_argument("--quiz_yaml", dest="quiz_yaml", default=None, help=argparse.SUPPRESS)
-  deps_parser.add_argument("--num_pdfs", default=0, type=int, help=argparse.SUPPRESS)
-  deps_parser.add_argument("--test_all", type=int, default=0, metavar="N", help=argparse.SUPPRESS)
 
   tags_parser = subparsers.add_parser("tags", help="Inspect tag coverage and classification for registered questions.")
   _add_common_options(tags_parser)
@@ -278,57 +222,15 @@ def _build_parser() -> argparse.ArgumentParser:
     help="Maximum number of matching question types to print (default: 20)."
   )
 
-  smoke_parser = subparsers.add_parser("TEST", help=argparse.SUPPRESS)
-  _add_common_options(smoke_parser)
-
   return parser
 
 
 def parse_args(argv: list[str] | None = None):
   parser = _build_parser()
-  raw_argv = list(sys.argv[1:] if argv is None else argv)
-
-  known_commands = {"generate", "practice", "test", "deps", "tags", "TEST"}
-  uses_subcommand = bool(raw_argv) and raw_argv[0] in known_commands
-  legacy_mode = not uses_subcommand
-  inferred_command = None
-  if legacy_mode:
-    inferred_command = _infer_legacy_subcommand(raw_argv)
-    raw_argv = [inferred_command, *raw_argv]
-
-  args = parser.parse_args(raw_argv)
-  args._legacy_mode = legacy_mode
-  args._legacy_inferred_command = inferred_command
-
-  compatibility_defaults = {
-    "quiz_yaml": None,
-    "num_canvas": 0,
-    "num_pdfs": 0,
-    "test_all": 0,
-    "generate_practice": None,
-    "check_deps": False,
-    "allow_generator": False,
-    "float_tolerance": None,
-    "max_backoff_attempts": None,
-    "practice_variations": 5,
-    "practice_question_groups": 5,
-    "practice_points": 1.0,
-    "practice_match": "any",
-    "practice_tag_source": "merged",
-    "practice_assignment_group": "practice",
-    "tags_command": None,
-    "show_pdf_aids": True,
-  }
-  for field, default_value in compatibility_defaults.items():
-    if not hasattr(args, field):
-      setattr(args, field, default_value)
+  args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
   if args.command == "practice":
-    legacy_tags = list(getattr(args, "generate_practice", []) or [])
-    positional_tags = list(getattr(args, "tags", []) or [])
-    args.generate_practice = positional_tags if positional_tags else legacy_tags
-
-    if not args.generate_practice:
+    if not args.tags:
       parser.error("Missing tags. Example: quizgen practice course:cst334 topic:memory --course_id 12345")
     if args.course_id is None:
       parser.error("Missing --course_id for practice uploads. Example: --course_id 12345")
@@ -341,45 +243,15 @@ def parse_args(argv: list[str] | None = None):
     return args
 
   if args.command == "generate":
-    if (
-      getattr(args, "test_questions", None)
-      or getattr(args, "test_all", None) is not None
-      or getattr(args, "strict", False)
-    ):
-      parser.error(
-        "Test flags were provided with 'generate'. "
-        "Use `quizgen test`, for example: quizgen test 1 --test_questions MLFQQuestion"
-      )
     if args.num_canvas > 0 and args.course_id is None:
       parser.error("Missing --course_id for Canvas upload. Example: --course_id 12345")
-    if not args.quiz_yaml and not args.check_deps:
+    if not args.quiz_yaml:
       parser.error("Missing --yaml. Example: quizgen generate --yaml example_files/example_exam.yaml --num_pdfs 1")
     return args
 
   if args.command == "test":
-    if args.num_variations is None and args.test_all is None and args.test_questions:
-      # Legacy input occasionally used: `quizgen test --test_questions Name 1`.
-      # `argparse` consumes that trailing `1` into `--test_questions`; recover it as N.
-      trailing_token = args.test_questions[-1]
-      if len(args.test_questions) >= 2 and re.fullmatch(r"\d+", trailing_token):
-        args.num_variations = int(trailing_token)
-        args.test_questions = args.test_questions[:-1]
-
-    positional_n = args.num_variations
-    legacy_n = args.test_all
-    if positional_n is not None and legacy_n is not None and positional_n != legacy_n:
-      parser.error("Conflicting values provided for test variations (positional N vs --test_all).")
-    args.test_all = positional_n if positional_n is not None else legacy_n
-    if args.test_all is None or args.test_all <= 0:
-      parser.error(
-        "Missing test variation count. Examples: "
-        "quizgen test 20 --test_questions MLFQQuestion "
-        "or quizgen test --test_questions MLFQQuestion --test_all 20"
-      )
-    return args
-
-  if args.command == "deps":
-    args.check_deps = True
+    if args.num_variations <= 0:
+      parser.error("num_variations must be >= 1")
     return args
 
   if args.command == "tags":
@@ -410,14 +282,6 @@ def _check_dependencies(*, require_typst: bool, require_latex: bool) -> tuple[bo
     log.warning("Pandoc not found. Markdown rendering may be lower quality.")
 
   return (len(missing) == 0), missing
-
-
-def test():
-  log.info("Running test...")
-
-  print("\n" + "="*60)
-  print("TEST COMPLETE")
-  print("="*60)
 
 
 def test_all_questions(
@@ -682,7 +546,7 @@ def generate_practice_quizzes(
 ):
   requested_tags = Question.normalize_tags(tag_filters)
   if not requested_tags:
-    raise QuizGenError("No valid tags supplied for --generate_practice.")
+    raise QuizGenError("No valid tags supplied for practice generation.")
 
   QuestionRegistry.load_premade_questions()
   selected: list[tuple[str, object, set[str]]] = []
@@ -1526,17 +1390,6 @@ def main():
       for handler in logger.handlers:
         handler.setLevel(logging.DEBUG)
 
-  if args.command == "TEST":
-    test()
-    return
-
-  if getattr(args, "_legacy_mode", False):
-    inferred = getattr(args, "_legacy_inferred_command", "generate")
-    log.warning(
-      f"Legacy CLI mode detected; interpreted arguments as '{inferred}'. "
-      "Consider using subcommands (generate/practice/test/deps)."
-    )
-
   if getattr(args, "allow_generator", False):
     os.environ["QUIZGEN_ALLOW_GENERATOR"] = "1"
 
@@ -1581,7 +1434,7 @@ def main():
       canvas_course = canvas_interface.get_course(course_id=args.course_id)
 
     success = test_all_questions(
-      args.test_all,
+      args.num_variations,
       generate_pdf=True,
       use_typst=getattr(args, 'typst', True),
       canvas_course=canvas_course,
@@ -1593,16 +1446,16 @@ def main():
       seed=args.seed,
     )
     if not success:
-      raise QuizGenError("One or more questions failed during --test_all.")
+      raise QuizGenError("One or more questions failed during test mode.")
     return
 
   if args.command == "practice":
     generate_practice_quizzes(
-      tag_filters=args.generate_practice,
+      tag_filters=args.tags,
       course_id=args.course_id,
       use_prod=args.prod,
       env_path=args.env,
-      num_variations=args.num_canvas if args.num_canvas > 0 else args.practice_variations,
+      num_variations=args.practice_variations,
       question_groups=args.practice_question_groups,
       points_value=args.practice_points,
       delete_assignment_group=getattr(args, 'delete_assignment_group', False),
@@ -1631,7 +1484,7 @@ def main():
   if args.command == "generate":
     require_typst = bool(getattr(args, "typst", True))
     require_latex = not require_typst
-    if args.num_pdfs > 0 or args.check_deps:
+    if args.num_pdfs > 0:
       ok, missing = _check_dependencies(
         require_typst=require_typst,
         require_latex=require_latex
@@ -1639,9 +1492,6 @@ def main():
       if not ok:
         message = "\n".join(missing)
         raise QuizGenError(message)
-      if args.check_deps:
-        print("Dependency check passed.")
-        return
 
     if args.num_pdfs and args.num_pdfs > 1:
       args.consistent_pages = True

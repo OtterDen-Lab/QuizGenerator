@@ -2,9 +2,9 @@ import pytest
 
 import QuizGenerator.contentast as ca
 from QuizGenerator.generate import generate_typst
+from QuizGenerator.question import Question
 from QuizGenerator.quiz import Quiz
 from QuizGenerator.typst_utils import check_typst_available
-from QuizGenerator.question import Question
 
 
 class _ReserveHeightQuestion(Question):

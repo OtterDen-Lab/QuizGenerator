@@ -74,6 +74,24 @@ questions:
         Quiz.from_yaml(str(path))
 
 
+def test_yaml_fromgenerator_enabled_with_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("QUIZGEN_ALLOW_GENERATOR", "1")
+    yaml_text = """
+name: "Gen Quiz"
+questions:
+  5:
+    "Gen":
+      class: FromGenerator
+      generator: |
+        return "hi"
+"""
+    path = tmp_path / "gen-enabled.yaml"
+    path.write_text(yaml_text)
+    quizzes = Quiz.from_yaml(str(path))
+    assert len(quizzes) == 1
+    assert len(quizzes[0].questions) == 1
+
+
 def test_yaml_seed_group_must_be_string(tmp_path):
     yaml_text = """
 name: "Bad seed group"
