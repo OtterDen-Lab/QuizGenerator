@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import io
 import json
 import os
 import pathlib
 import random
+import sys
 import time
 import zipfile
 from http import HTTPStatus
@@ -24,14 +26,31 @@ except ImportError:  # pragma: no cover - optional dependency
 
 
 BASE_DIR = pathlib.Path(__file__).resolve().parents[1]
-import sys
 
-if str(BASE_DIR) not in sys.path:
-  sys.path.insert(0, str(BASE_DIR))
+def _import_quizgenerator_modules():
+  try:
+    ca_module = importlib.import_module("QuizGenerator.contentast")
+    generate_module = importlib.import_module("QuizGenerator.generate")
+    question_module = importlib.import_module("QuizGenerator.question")
+  except ModuleNotFoundError as exc:
+    # Support running this script directly from the repository checkout.
+    if exc.name is None or not exc.name.startswith("QuizGenerator"):
+      raise
+    if str(BASE_DIR) not in sys.path:
+      sys.path.insert(0, str(BASE_DIR))
+    ca_module = importlib.import_module("QuizGenerator.contentast")
+    generate_module = importlib.import_module("QuizGenerator.generate")
+    question_module = importlib.import_module("QuizGenerator.question")
+  return (
+    ca_module,
+    generate_module,
+    question_module.Question,
+    question_module.QuestionContext,
+    question_module.QuestionRegistry,
+  )
 
-import QuizGenerator.contentast as ca
-from QuizGenerator import generate as quiz_generate
-from QuizGenerator.question import Question, QuestionContext, QuestionRegistry
+
+ca, quiz_generate, Question, QuestionContext, QuestionRegistry = _import_quizgenerator_modules()
 
 HTML_PATH = BASE_DIR / "documentation" / "question_builder_ui.html"
 ENV_PATH: str | None = None

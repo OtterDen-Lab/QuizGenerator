@@ -233,11 +233,11 @@ Make sure your module is importable:
 
 ```bash
 # Option A: Run from the same directory
-quizgen --yaml my_quiz.yaml --num_pdfs 3
+quizgen generate --yaml my_quiz.yaml --num_pdfs 3
 
 # Option B: Add to PYTHONPATH
 export PYTHONPATH="/path/to/my/questions:$PYTHONPATH"
-quizgen --yaml my_quiz.yaml --num_pdfs 3
+quizgen generate --yaml my_quiz.yaml --num_pdfs 3
 ```
 
 ---
@@ -396,7 +396,7 @@ questions:
 
 **Solution:** Enable it explicitly:
 ```bash
-quizgen --allow_generator --yaml my_quiz.yaml --num_pdfs 1
+quizgen generate --allow_generator --yaml my_quiz.yaml --num_pdfs 1
 ```
 Or set `QUIZGEN_ALLOW_GENERATOR=1` in your environment.
 

@@ -112,7 +112,7 @@ Create one practice quiz assignment per matching registered question type:
 ```bash
 quizgen \
   practice \
-  --generate_practice cst334 memory \
+  cst334 memory \
   --practice_match any \
   --practice_tag_source merged \
   --practice_question_groups 5 \

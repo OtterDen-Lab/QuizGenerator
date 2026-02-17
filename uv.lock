@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -1084,7 +1084,6 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "requests" },
-    { name = "ruff" },
     { name = "segno" },
     { name = "sympy" },
     { name = "tqdm" },
@@ -1119,8 +1118,7 @@ requires-dist = [
     { name = "pyyaml", specifier = "~=6.0.1" },
     { name = "pyzbar", marker = "extra == 'grading'", specifier = "~=0.1.9" },
     { name = "requests", specifier = "~=2.32.2" },
-    { name = "ruff", specifier = "~=0.7.4" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = "~=0.7.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = "~=0.7.4" },
     { name = "segno", specifier = "~=1.6.0" },
     { name = "sympy", specifier = "~=1.14.0" },
     { name = "tensorflow", marker = "extra == 'cst463'", specifier = "~=2.20.0" },
