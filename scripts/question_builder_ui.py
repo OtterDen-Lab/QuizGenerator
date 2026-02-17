@@ -16,6 +16,7 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import yaml
+
 try:
   from dotenv import load_dotenv
 except ImportError:  # pragma: no cover - optional dependency
@@ -24,14 +25,13 @@ except ImportError:  # pragma: no cover - optional dependency
 
 BASE_DIR = pathlib.Path(__file__).resolve().parents[1]
 import sys
+
 if str(BASE_DIR) not in sys.path:
   sys.path.insert(0, str(BASE_DIR))
 
 import QuizGenerator.contentast as ca
-import QuizGenerator.yaml_question  # registers YAML nodes
 from QuizGenerator import generate as quiz_generate
-from QuizGenerator.question import QuestionContext, QuestionRegistry, Question
-
+from QuizGenerator.question import Question, QuestionContext, QuestionRegistry
 
 HTML_PATH = BASE_DIR / "documentation" / "question_builder_ui.html"
 ENV_PATH: str | None = None
@@ -546,8 +546,8 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
         return
 
       try:
-        from QuizGenerator.quiz import Quiz
         from QuizGenerator import generate as quiz_generate
+        from QuizGenerator.quiz import Quiz
       except Exception as exc:
         self._send_json({"error": f"Quiz generation unavailable: {exc}"}, status=HTTPStatus.BAD_REQUEST)
         return

@@ -21,8 +21,8 @@ from pathlib import Path
 from typing import Any
 
 import segno
-from cryptography.fernet import Fernet
 from cryptography.exceptions import InvalidTag
+from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 log = logging.getLogger(__name__)

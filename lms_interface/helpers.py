@@ -3,8 +3,7 @@
 import argparse
 import logging
 from datetime import datetime, timezone
-from typing import Any
-from typing import List
+from typing import Any, List
 
 import canvasapi
 

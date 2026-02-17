@@ -9,7 +9,7 @@ import random
 import tempfile
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 
 import canvasapi
 import canvasapi.assignment
@@ -26,7 +26,6 @@ from .classes import (
   QuizSubmission,
   Student,
   Submission,
-  Submission__Canvas,
   TextSubmission__Canvas,
 )
 from .privacy import PrivacyContext
