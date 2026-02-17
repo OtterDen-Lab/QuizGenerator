@@ -2,3 +2,4 @@
 set -euo pipefail
 
 bash scripts/check_version_bump_vendoring.sh
+
