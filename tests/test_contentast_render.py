@@ -121,6 +121,15 @@ def test_pdf_aid_is_passed_as_question_parameter_in_typst():
     assert "pdf_aid:" not in typst_without_aid
 
 
+def test_pdf_aid_can_be_disabled_per_question():
+    q = _PdfAidQuestion(name="Aid", points_value=1.0, spacing=4, show_pdf_aids=False)
+    instance = q.instantiate(rng_seed=123)
+    ast = q._build_question_ast(instance)
+
+    typst = ast.render("typst")
+    assert "pdf_aid:" not in typst
+
+
 def test_typst_header_renders_pdf_aid_for_page_spacing():
     header = ca.Document.TYPST_HEADER
     assert "#if spacing >= 99cm and pdf_aid != none [" in header

@@ -812,6 +812,7 @@ class Question(abc.ABC):
     self.points_value = points_value
     self.topic = topic
     self.spacing = parse_spacing(kwargs.get("spacing", 0))
+    self.show_pdf_aids = bool(kwargs.get("show_pdf_aids", True))
     self.answer_kind = ca.Answer.CanvasAnswerKind.BLANK
 
     # Support for multi-part questions (defaults to 1 for normal questions)
@@ -831,7 +832,7 @@ class Question(abc.ABC):
     framework_params = {
       'name', 'points_value', 'topic', 'spacing', 'num_subquestions',
       'rng_seed_offset', 'rng_seed', 'class', 'kwargs', 'kind',
-      'question_id', 'seed_group', 'tags'
+      'question_id', 'seed_group', 'tags', 'show_pdf_aids'
     }
     self.config_params = {k: v for k, v in kwargs.items() if k not in framework_params}
     self.explicit_tags = self.normalize_tags(getattr(self.__class__, "TAGS", None))
@@ -1161,7 +1162,8 @@ class Question(abc.ABC):
       value=instance.value,
       spacing=instance.spacing,
       topic=instance.topic,
-      can_be_numerical=instance.can_be_numerical
+      can_be_numerical=instance.can_be_numerical,
+      show_pdf_aids=self.show_pdf_aids
     )
 
     # Attach regeneration metadata to the question AST

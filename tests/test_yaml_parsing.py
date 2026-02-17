@@ -263,6 +263,23 @@ questions:
         question = quizzes[0].questions[0]
         assert question.spacing == 7.5
 
+    def test_question_can_disable_pdf_aids(self, temp_yaml_file):
+        yaml_content = """
+name: "PDF Aid Toggle Quiz"
+questions:
+  1:
+    "Question With Aids Off":
+      class: FromText
+      kwargs:
+        text: "Explain the scheduler."
+        show_pdf_aids: false
+"""
+        path = temp_yaml_file(yaml_content)
+        quizzes = Quiz.from_yaml(path)
+
+        question = quizzes[0].questions[0]
+        assert question.show_pdf_aids is False
+
 
 class TestConfigOptions:
     """Tests for _config parsing."""

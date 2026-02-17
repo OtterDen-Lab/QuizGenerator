@@ -873,6 +873,12 @@ class Question(Container):
   
   def render_typst(self, **kwargs):
     """Render question in Typst format with proper formatting"""
+    question_show_pdf_aids = bool(self.default_kwargs.get("show_pdf_aids", True))
+    global_show_pdf_aids = bool(kwargs.get("show_pdf_aids", True))
+    effective_show_pdf_aids = question_show_pdf_aids and global_show_pdf_aids
+    render_kwargs = dict(kwargs)
+    render_kwargs["show_pdf_aids"] = effective_show_pdf_aids
+
     body = self.body
     aid_content = ""
     if isinstance(self.body, Container):
@@ -887,10 +893,10 @@ class Question(Container):
       body.elements = regular_elements
       if aid_elements:
         aid_container = Section(aid_elements)
-        aid_content = aid_container.render(OutputFormat.TYPST, **kwargs).strip()
+        aid_content = aid_container.render(OutputFormat.TYPST, **render_kwargs).strip()
 
     # Render question body
-    content = body.render(OutputFormat.TYPST, **kwargs)
+    content = body.render(OutputFormat.TYPST, **render_kwargs)
     
     # Generate QR code if question number is available
     embed_images = kwargs.get("embed_images_typst")
