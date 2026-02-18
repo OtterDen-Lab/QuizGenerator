@@ -34,9 +34,10 @@ dependencies = [
     "sympy~=1.14.0",
     "markdown~=3.9",
     "segno~=1.6.0",
-    "cryptography~=41.0.0",
+    "cryptography~=46.0.0",
     "canvasapi~=3.2.0",
     "tqdm>=4.67.3",
+    "typer>=0.12,<1",
 ]
 
 [project.urls]
@@ -46,7 +47,7 @@ Repository = "https://github.com/OtterDen-Lab/QuizGenerator"
 "Bug Tracker" = "https://github.com/OtterDen-Lab/QuizGenerator/issues"
 
 [project.scripts]
-quizgen = "QuizGenerator.generate:main"
+quizgen = "QuizGenerator.typer_cli:main"
 quizregen = "QuizGenerator.regenerate:main"
 
 [project.optional-dependencies]

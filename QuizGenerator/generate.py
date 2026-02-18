@@ -1403,9 +1403,9 @@ def generate_quiz(
     if bundle_path:
       log.info(f"Wrote output bundle to {bundle_path}")
 
-def main():
+def main(argv: list[str] | None = None):
 
-  args = parse_args()
+  args = parse_args(argv)
   
   # Load environment variables
   load_dotenv(args.env)

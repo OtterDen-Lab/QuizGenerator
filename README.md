@@ -137,6 +137,16 @@ quizgen tags list --only_missing_explicit --include_questions
 quizgen tags explain sched
 ```
 
+## CLI Completion
+
+```bash
+quizgen --help
+quizgen --install-completion
+quizgen test 3 --test-question MLFQQuestion
+```
+
+The CLI supports shell completion (`bash`, `zsh`, `fish`, PowerShell) through Typer.
+
 ## Creating Custom Questions
 
 QuizGenerator supports two approaches for adding custom question types:

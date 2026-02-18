@@ -116,6 +116,14 @@ quizgen tags list
 quizgen tags list --only_missing_explicit --include_questions
 ```
 
+## CLI Completion
+
+```bash
+quizgen --help
+quizgen --install-completion
+quizgen test 5 --test-question MLFQQuestion
+```
+
 ## Running Tests
 
 ```bash
