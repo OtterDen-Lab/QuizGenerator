@@ -30,7 +30,7 @@ jobs:
         run: bash scripts/check_repo_hygiene.sh
 
       - name: Run tests
-        run: uv run pytest tests/ lms_interface/tests/ -v --tb=short
+        run: uv run pytest -v --tb=short
 
   # Quick smoke test that quiz generation actually works
   smoke-test:
