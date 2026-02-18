@@ -25,8 +25,37 @@ jobs:
 
       - name: Install Typst
         run: |
-          curl -fsSL https://typst.community/typst-install/install.sh | sh
+          set -euo pipefail
+          mkdir -p "$HOME/.local/bin"
+          ASSET_URL=$(python - <<'PY'
+          import json
+          import urllib.request
+
+          url = "https://api.github.com/repos/typst/typst/releases/latest"
+          data = json.load(urllib.request.urlopen(url))
+          asset_url = None
+          for asset in data.get("assets", []):
+              name = asset.get("name", "").lower()
+              if "linux" in name and ("x86_64" in name or "amd64" in name):
+                  if name.endswith((".tar.xz", ".tar.gz")):
+                      asset_url = asset.get("browser_download_url")
+                      break
+          if not asset_url:
+              raise SystemExit("No suitable Typst asset found.")
+          print(asset_url)
+          PY
+          )
+          curl -fsSL -o /tmp/typst.tar $ASSET_URL
+          rm -rf /tmp/typst && mkdir -p /tmp/typst
+          tar -xf /tmp/typst.tar -C /tmp/typst
+          TYPST_BIN=$(find /tmp/typst -type f -name typst | head -n 1)
+          if [ -z "$TYPST_BIN" ]; then
+            echo "Typst binary not found in archive."
+            exit 1
+          fi
+          cp "$TYPST_BIN" "$HOME/.local/bin/typst"
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+          typst --version
 
       - name: Run repository hygiene checks
         run: bash scripts/check_repo_hygiene.sh
