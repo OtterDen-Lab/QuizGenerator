@@ -16,12 +16,23 @@ else
 fi
 
 echo "Checking docs/workflows for removed CLI forms..."
-if rg -n \
-  -e 'quizgen --yaml' \
-  -e '--generate_practice' \
-  -e '--test_all' \
-  -e '--check-deps' \
-  README.md documentation .github/workflows; then
+if command -v rg >/dev/null 2>&1; then
+  search_cmd=(rg -n
+    -e 'quizgen --yaml'
+    -e '--generate_practice'
+    -e '--test_all'
+    -e '--check-deps'
+    README.md documentation .github/workflows)
+else
+  search_cmd=(grep -R -n -E
+    -e 'quizgen --yaml'
+    -e '--generate_practice'
+    -e '--test_all'
+    -e '--check-deps'
+    README.md documentation .github/workflows)
+fi
+
+if "${search_cmd[@]}"; then
   echo "Found removed CLI syntax in docs/workflows. Please migrate to subcommands."
   exit 1
 fi
