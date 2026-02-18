@@ -118,15 +118,15 @@ else:
     @app.command("generate")
     def generate_command(
         quiz_yaml: str = typer.Option(..., "--yaml", help="Path to quiz YAML configuration."),
-        num_pdfs: int = typer.Option(0, "--num-pdfs", "--num_pdfs", min=0, help="How many PDF quizzes to create."),
+        num_pdfs: int = typer.Option(0, "--num-pdfs", min=0, help="How many PDF quizzes to create."),
         num_canvas: int = typer.Option(
-            0, "--num-canvas", "--num_canvas", min=0, help="How many variations to upload to Canvas."
+            0, "--num-canvas", min=0, help="How many variations to upload to Canvas."
         ),
         seed: int | None = typer.Option(None, "--seed", help="Random seed for quiz generation."),
         env: str = typer.Option(str(Path.home() / ".env"), "--env", help="Path to .env file."),
         debug: bool = typer.Option(False, "--debug", help="Set logging level to debug."),
         prod: bool = typer.Option(False, "--prod", help="Use production Canvas environment."),
-        course_id: int | None = typer.Option(None, "--course-id", "--course_id", help="Canvas course ID."),
+        course_id: int | None = typer.Option(None, "--course-id", help="Canvas course ID."),
         delete_assignment_group: bool = typer.Option(
             False,
             "--delete-assignment-group",
@@ -135,17 +135,17 @@ else:
         quiet: bool = typer.Option(False, "--quiet", help="Disable progress bars."),
         latex: bool = typer.Option(False, "--latex", help="Use LaTeX instead of Typst."),
         typst_measurement: bool = typer.Option(
-            False, "--typst-measurement", "--typst_measurement", help="Enable Typst measurement."
+            False, "--typst-measurement", help="Enable Typst measurement."
         ),
         consistent_pages: bool = typer.Option(
-            False, "--consistent-pages", "--consistent_pages", help="Keep page counts consistent."
+            False, "--consistent-pages", help="Keep page counts consistent."
         ),
-        layout_samples: int = typer.Option(10, "--layout-samples", "--layout_samples", min=1, help="Layout samples."),
+        layout_samples: int = typer.Option(10, "--layout-samples", min=1, help="Layout samples."),
         layout_safety_factor: float = typer.Option(
-            1.1, "--layout-safety-factor", "--layout_safety_factor", min=0.1, help="Safety multiplier for heights."
+            1.1, "--layout-safety-factor", min=0.1, help="Safety multiplier for heights."
         ),
         optimize_space: bool = typer.Option(
-            False, "--optimize-space", "--optimize_space", help="Optimize question ordering."
+            False, "--optimize-space", help="Optimize question ordering."
         ),
         embed_images_typst: bool = typer.Option(
             True,
@@ -160,14 +160,13 @@ else:
         allow_generator: bool = typer.Option(
             False,
             "--allow-generator",
-            "--allow_generator",
             help="Enable FromGenerator questions (executes Python from YAML).",
         ),
         max_backoff_attempts: int | None = typer.Option(
-            None, "--max-backoff-attempts", "--max_backoff_attempts", min=1, help="Max attempts for backoff."
+            None, "--max-backoff-attempts", min=1, help="Max attempts for backoff."
         ),
         float_tolerance: float | None = typer.Option(
-            None, "--float-tolerance", "--float_tolerance", min=0.0, help="Default float answer tolerance."
+            None, "--float-tolerance", min=0.0, help="Default float answer tolerance."
         ),
     ) -> None:
         with _quizgen_error_boundary():
@@ -208,29 +207,27 @@ else:
     @app.command("practice")
     def practice_command(
         tags: list[str] = typer.Argument(..., metavar="TAG", help="Tag filters, e.g. course:cst334 topic:memory."),
-        course_id: int = typer.Option(..., "--course-id", "--course_id", help="Canvas course ID."),
+        course_id: int = typer.Option(..., "--course-id", help="Canvas course ID."),
         practice_variations: int = typer.Option(
-            5, "--practice-variations", "--practice_variations", min=1, help="Variations per group."
+            5, "--practice-variations", min=1, help="Variations per group."
         ),
         practice_question_groups: int = typer.Option(
-            5, "--practice-question-groups", "--practice_question_groups", min=1, help="Groups per question."
+            5, "--practice-question-groups", min=1, help="Groups per question."
         ),
         practice_points: float = typer.Option(
-            1.0, "--practice-points", "--practice_points", min=0.0, help="Points per practice question."
+            1.0, "--practice-points", min=0.0, help="Points per practice question."
         ),
         practice_match: Literal["any", "all"] = typer.Option(
-            "any", "--practice-match", "--practice_match", help="Tag matching mode: any|all."
+            "any", "--practice-match", help="Tag matching mode: any|all."
         ),
         practice_tag_source: Literal["explicit", "merged", "derived"] = typer.Option(
             "merged",
             "--practice-tag-source",
-            "--practice_tag_source",
             help="Tag source: explicit|merged|derived.",
         ),
         practice_assignment_group: str = typer.Option(
             "practice",
             "--practice-assignment-group",
-            "--practice_assignment_group",
             help="Assignment group name for created quizzes.",
         ),
         env: str = typer.Option(str(Path.home() / ".env"), "--env", help="Path to .env file."),
@@ -245,14 +242,13 @@ else:
         allow_generator: bool = typer.Option(
             False,
             "--allow-generator",
-            "--allow_generator",
             help="Enable FromGenerator questions (executes Python from YAML).",
         ),
         max_backoff_attempts: int | None = typer.Option(
-            None, "--max-backoff-attempts", "--max_backoff_attempts", min=1, help="Max attempts for backoff."
+            None, "--max-backoff-attempts", min=1, help="Max attempts for backoff."
         ),
         float_tolerance: float | None = typer.Option(
-            None, "--float-tolerance", "--float_tolerance", min=0.0, help="Default float answer tolerance."
+            None, "--float-tolerance", min=0.0, help="Default float answer tolerance."
         ),
     ) -> None:
         with _quizgen_error_boundary():
@@ -286,7 +282,6 @@ else:
             None,
             "--test-question",
             "--test-questions",
-            "--test_questions",
             "-q",
             help="Only test specific question types. Use multiple times.",
         ),
@@ -295,18 +290,16 @@ else:
         skip_missing_extras: bool = typer.Option(
             False,
             "--skip-missing-extras",
-            "--skip_missing_extras",
             help="Skip questions that fail due to missing optional dependencies.",
         ),
         env: str = typer.Option(str(Path.home() / ".env"), "--env", help="Path to .env file."),
         debug: bool = typer.Option(False, "--debug", help="Set logging level to debug."),
         prod: bool = typer.Option(False, "--prod", help="Use production Canvas environment."),
-        course_id: int | None = typer.Option(None, "--course-id", "--course_id", help="Canvas course ID."),
+        course_id: int | None = typer.Option(None, "--course-id", help="Canvas course ID."),
         latex: bool = typer.Option(False, "--latex", help="Use LaTeX instead of Typst."),
         allow_generator: bool = typer.Option(
             False,
             "--allow-generator",
-            "--allow_generator",
             help="Enable FromGenerator questions (executes Python from YAML).",
         ),
         embed_images_typst: bool = typer.Option(
@@ -320,7 +313,7 @@ else:
             help="Render optional PDF scaffolding aids.",
         ),
         float_tolerance: float | None = typer.Option(
-            None, "--float-tolerance", "--float_tolerance", min=0.0, help="Default float answer tolerance."
+            None, "--float-tolerance", min=0.0, help="Default float answer tolerance."
         ),
     ) -> None:
         with _quizgen_error_boundary():
@@ -365,15 +358,14 @@ else:
     @tags_app.command("list")
     def tags_list_command(
         tag_source: Literal["explicit", "merged", "derived"] = typer.Option(
-            "merged", "--tag-source", "--tag_source", help="Tag source: explicit|merged|derived."
+            "merged", "--tag-source", help="Tag source: explicit|merged|derived."
         ),
         include_questions: bool = typer.Option(
-            False, "--include-questions", "--include_questions", help="Include per-question tag lines."
+            False, "--include-questions", help="Include per-question tag lines."
         ),
         only_missing_explicit: bool = typer.Option(
             False,
             "--only-missing-explicit",
-            "--only_missing_explicit",
             help="Show only question types without explicit tags.",
         ),
         tag_filter: list[str] | None = typer.Option(

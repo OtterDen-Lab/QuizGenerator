@@ -6,11 +6,11 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def _run_cli(*args: str):
+def _run_cli(*args: str, module: str = "QuizGenerator"):
     env = os.environ.copy()
     env["PYTHONPATH"] = str(REPO_ROOT)
     return subprocess.run(
-        [sys.executable, "-m", "QuizGenerator.generate", *args],
+        [sys.executable, "-m", module, *args],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -48,3 +48,15 @@ def test_cli_tags_list_succeeds():
     result = _run_cli("tags", "list")
     assert result.returncode == 0, result.stderr
     assert "Analyzed question types" in result.stdout
+
+
+def test_legacy_generate_module_forwards_to_typer():
+    result = _run_cli("--help", module="QuizGenerator.generate")
+    assert result.returncode == 0
+    assert "Usage:" in result.stdout
+
+
+def test_regenerate_module_uses_typer_help():
+    result = _run_cli("--help", module="QuizGenerator.regenerate")
+    assert result.returncode == 0
+    assert "Usage:" in result.stdout

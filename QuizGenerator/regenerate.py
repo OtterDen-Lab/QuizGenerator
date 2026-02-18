@@ -14,10 +14,10 @@ CLI Usage:
     quizregen --image exam_page.jpg --all
 
     # Decode an encrypted string directly
-    python -m QuizGenerator.regenerate --encrypted_str "EzE6JF86CDlf..."
+    python -m QuizGenerator.regenerate --encrypted-str "EzE6JF86CDlf..."
 
     # Decode with custom point value
-    python -m QuizGenerator.regenerate --encrypted_str "EzE6JF86CDlf..." --points 5.0
+    python -m QuizGenerator.regenerate --encrypted-str "EzE6JF86CDlf..." --points 5.0
 
 API Usage (recommended for web UIs):
     from QuizGenerator.regenerate import regenerate_from_encrypted
@@ -38,7 +38,6 @@ The QR codes contain encrypted question metadata that allows regenerating
 the exact question and answer without needing the original exam file.
 """
 
-import argparse
 import base64
 import copy
 import json
@@ -46,8 +45,9 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
+import typer
 import yaml
 
 # Load environment variables from .env file
@@ -697,89 +697,88 @@ def display_answer_summary(question_data: dict[str, Any]) -> None:
   print("=" * 60)
 
 
-def main():
-  parser = argparse.ArgumentParser(
-    description="Scan QR codes from quiz PDFs to regenerate answers for grading"
-  )
-  parser.add_argument(
-    '--image',
-    type=str,
-    help='Path to image file containing QR code(s)'
-  )
-  parser.add_argument(
-    '--encrypted_str',
-    type=str,
-    help='Encrypted string from QR code to decode directly'
-  )
-  parser.add_argument(
-    '--yaml',
-    type=str,
-    help='Path to replay YAML (required for question_id-based regeneration)'
-  )
-  parser.add_argument(
-    '--points',
-    type=float,
-    default=1.0,
-    help='Point value for the question (default: 1.0, only used with --encrypted_str)'
-  )
-  parser.add_argument(
-    '--all',
-    action='store_true',
-    help='Process all QR codes found in the image (default: only first one)'
-  )
-  parser.add_argument(
-    '--output',
-    type=str,
-    help='Save results to JSON file'
-  )
-  parser.add_argument(
-    '--verbose', '-v',
-    action='store_true',
-    help='Enable verbose debug logging'
-  )
-  parser.add_argument(
-    '--image-mode',
-    choices=['inline', 'none'],
-    default='inline',
-    help='HTML image handling (default: inline)'
-  )
+app = typer.Typer(
+  add_completion=True,
+  no_args_is_help=False,
+  invoke_without_command=True,
+  help="Scan quiz QR codes and regenerate answers for grading."
+)
 
-  args = parser.parse_args()
 
-  if args.verbose:
+@app.callback()
+def _cli(
+  ctx: typer.Context,
+  image: str | None = typer.Option(None, "--image", help="Path to image file containing QR code(s)."),
+  encrypted_str: str | None = typer.Option(
+    None,
+    "--encrypted-str",
+    help="Encrypted string from QR code to decode directly.",
+  ),
+  yaml_path: str | None = typer.Option(
+    None,
+    "--yaml",
+    help="Path to replay YAML (required for question_id-based regeneration).",
+  ),
+  points: float = typer.Option(
+    1.0,
+    "--points",
+    help="Point value for the question (used with --encrypted-str).",
+  ),
+  process_all: bool = typer.Option(
+    False,
+    "--all",
+    help="Process all QR codes found in the image (default: only first one).",
+  ),
+  output: str | None = typer.Option(None, "--output", help="Save results to JSON file."),
+  verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose debug logging."),
+  image_mode: Literal["inline", "none"] = typer.Option(
+    "inline",
+    "--image-mode",
+    help="HTML image handling mode.",
+  ),
+) -> None:
+  if ctx.resilient_parsing:
+    return
+
+  if verbose:
     logging.getLogger().setLevel(logging.DEBUG)
 
-  # Check for required arguments
-  if not args.image and not args.encrypted_str:
-    parser.print_help()
-    print("\nERROR: Either --image or --encrypted_str is required")
-    sys.exit(1)
+  if not image and not encrypted_str:
+    typer.echo(ctx.get_help())
+    typer.secho("\nERROR: Either --image or --encrypted-str is required", fg=typer.colors.RED, err=True)
+    raise typer.Exit(code=1)
 
-  if args.image and args.encrypted_str:
-    print("ERROR: Cannot use both --image and --encrypted_str at the same time")
-    sys.exit(1)
+  if image and encrypted_str:
+    typer.secho(
+      "ERROR: Cannot use both --image and --encrypted-str at the same time",
+      fg=typer.colors.RED,
+      err=True,
+    )
+    raise typer.Exit(code=1)
 
   results = []
 
-  # Handle direct encrypted string input
-  if args.encrypted_str:
+  if encrypted_str:
     try:
-      log.info(f"Decoding encrypted string (points={args.points})")
+      log.info(f"Decoding encrypted string (points={points})")
       result = regenerate_from_encrypted(
-        args.encrypted_str,
-        args.points,
-        image_mode=args.image_mode,
-        yaml_path=args.yaml
+        encrypted_str,
+        points,
+        image_mode=image_mode,
+        yaml_path=yaml_path
       )
 
-      # Format result similar to regenerate_question_answer output
       if "answers" not in result:
-        print("ERROR: This QR payload requires a replay YAML. Pass --yaml <replay.yaml>.")
-        sys.exit(1)
+        typer.secho(
+          "ERROR: This QR payload requires a replay YAML. Pass --yaml <replay.yaml>.",
+          fg=typer.colors.RED,
+          err=True,
+        )
+        raise typer.Exit(code=1)
 
       question_data = {
         "question_number": "N/A",
-        "points": args.points,
+        "points": points,
         "question_type": result["question_type"],
         "seed": result["seed"],
         "version": result.get("version"),
@@ -796,60 +795,72 @@ def main():
       results.append(question_data)
       display_answer_summary(question_data)
 
+    except typer.Exit:
+      raise
     except Exception as e:
       log.error(f"Failed to decode encrypted string: {e}")
       import traceback
-      if args.verbose:
+      if verbose:
         log.debug(traceback.format_exc())
-      sys.exit(1)
+      raise typer.Exit(code=1) from e
 
-  # Handle image scanning
   else:
-    # Scan QR codes from image
-    qr_codes = scan_qr_from_image(args.image)
+    qr_codes = scan_qr_from_image(image)
 
     if not qr_codes:
-      print("No QR codes found in image")
-      sys.exit(1)
+      typer.secho("No QR codes found in image", fg=typer.colors.RED, err=True)
+      raise typer.Exit(code=1)
 
-    # Process QR codes
-    if not args.all:
+    if not process_all:
       qr_codes = qr_codes[:1]
       log.info("Processing only the first QR code (use --all to process all)")
 
     for qr_string in qr_codes:
-      # Parse QR data
       qr_data = parse_qr_data(qr_string)
-
       if not qr_data:
         continue
 
-      # Regenerate question and answer
       question_data = regenerate_question_answer(
         qr_data,
-        image_mode=args.image_mode,
-        yaml_path=args.yaml
+        image_mode=image_mode,
+        yaml_path=yaml_path
       )
 
       if question_data:
         if "answers" not in question_data:
-          print("ERROR: This QR payload requires a replay YAML. Pass --yaml <replay.yaml>.")
-          sys.exit(1)
+          typer.secho(
+            "ERROR: This QR payload requires a replay YAML. Pass --yaml <replay.yaml>.",
+            fg=typer.colors.RED,
+            err=True,
+          )
+          raise typer.Exit(code=1)
         results.append(question_data)
         display_answer_summary(question_data)
-  
-  # Save to file if requested
-  if args.output:
-    output_path = Path(args.output)
-    with open(output_path, 'w') as f:
+
+  if output:
+    output_path = Path(output)
+    with open(output_path, "w", encoding="utf-8") as f:
       json.dump(results, f, indent=2, default=str)
     log.info(f"Results saved to {output_path}")
-  
+
   if not results:
-    print("\nNo questions could be regenerated from the QR codes.")
-    sys.exit(1)
-  
-  print(f"\nSuccessfully regenerated {len(results)} question(s)")
+    typer.secho("\nNo questions could be regenerated from the QR codes.", fg=typer.colors.RED, err=True)
+    raise typer.Exit(code=1)
+
+  typer.echo(f"\nSuccessfully regenerated {len(results)} question(s)")
+
+
+def main(argv: list[str] | None = None) -> None:
+  if argv is None:
+    app()
+    return
+
+  original_argv = sys.argv
+  try:
+    sys.argv = [original_argv[0] if original_argv else "quizregen", *argv]
+    app()
+  finally:
+    sys.argv = original_argv
 
 
 if __name__ == '__main__':

@@ -52,3 +52,14 @@ def test_typer_handles_quizgen_error(monkeypatch):
 
     assert result.exit_code == 1
     assert "synthetic failure" in result.output
+
+
+def test_typer_rejects_underscore_flag_names():
+    runner = CliRunner()
+    result = runner.invoke(
+        typer_cli.app,
+        ["generate", "--yaml", "quiz.yaml", "--num_pdfs", "1"],
+    )
+
+    assert result.exit_code != 0
+    assert "No such option: --num_pdfs" in result.output
