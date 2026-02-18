@@ -1,12 +1,12 @@
 """
 LMS integration for QuizGenerator
 
-Vendored from LMSInterface v0.4.4 (2026-02-17)
+Vendored from LMSInterface v0.4.4 (2026-02-18)
 """
 
 __version__ = "0.4.4"
 __vendored_from__ = "LMSInterface"
-__vendored_date__ = "2026-02-17"
+__vendored_date__ = "2026-02-18"
 
 try:
   from importlib.metadata import PackageNotFoundError, version
