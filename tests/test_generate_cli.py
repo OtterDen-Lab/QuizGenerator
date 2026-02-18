@@ -68,6 +68,20 @@ def test_parse_args_subcommand_test_positional_variations(monkeypatch):
     assert args.num_variations == 7
 
 
+def test_parse_args_subcommand_test_variations_after_test_questions(monkeypatch):
+    args = _parse(monkeypatch, ["test", "--test_questions", "MLFQQuestion", "1"])
+    assert args.command == "test"
+    assert args.num_variations == 1
+    assert args.test_questions == ["MLFQQuestion"]
+
+
+def test_parse_args_subcommand_test_variations_before_test_questions(monkeypatch):
+    args = _parse(monkeypatch, ["test", "1", "--test_questions", "MLFQQuestion"])
+    assert args.command == "test"
+    assert args.num_variations == 1
+    assert args.test_questions == ["MLFQQuestion"]
+
+
 def test_parse_args_subcommand_tags_defaults_to_list(monkeypatch):
     args = _parse(monkeypatch, ["tags"])
     assert args.command == "tags"

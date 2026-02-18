@@ -166,7 +166,7 @@ def _build_parser() -> argparse.ArgumentParser:
   _add_common_options(test_parser)
   _add_canvas_options(test_parser)
   _add_typst_latex_flags(test_parser)
-  test_parser.add_argument("num_variations", type=int, metavar="N",
+  test_parser.add_argument("num_variations", type=int, nargs="?", metavar="N",
                           help="Number of variations to generate for each registered question type.")
   test_parser.add_argument("--test_questions", nargs='+', metavar="NAME",
                           help="Only test specific question types by name")
@@ -259,6 +259,21 @@ def parse_args(argv: list[str] | None = None):
     return args
 
   if args.command == "test":
+    if args.num_variations is None:
+      # argparse greedily consumes trailing values for nargs='+', so support:
+      #   quizgen test --test_questions Name 1
+      # by treating a trailing integer as num_variations.
+      if args.test_questions:
+        trailing = args.test_questions[-1]
+        try:
+          args.num_variations = int(trailing)
+        except ValueError:
+          parser.error("Missing num_variations. Example: quizgen test --test_questions MLFQQuestion 1")
+        args.test_questions = args.test_questions[:-1]
+        if not args.test_questions:
+          parser.error("--test_questions requires at least one NAME before num_variations")
+      else:
+        parser.error("Missing num_variations. Example: quizgen test 1")
     if args.num_variations <= 0:
       parser.error("num_variations must be >= 1")
     return args
@@ -900,6 +915,17 @@ def _replay_yaml_path(path_to_quiz_yaml: str) -> str:
   return os.path.join("out", f"{sanitized}_replay.yaml")
 
 
+def _log_replay_yaml_notification(replay_path: str, *, sample_num_pdfs: int) -> None:
+  log.info(f"Wrote replay YAML to {replay_path}")
+  log.info(
+    "Replay YAML preserves question_id values for QR regeneration. "
+    f"Reuse it with: quizgen generate --yaml {replay_path} --num_pdfs {sample_num_pdfs}"
+  )
+  log.info(
+    f"Regenerate scanned QR answers with: quizregen --image <scan-image> --yaml {replay_path}"
+  )
+
+
 def _collect_recent_pdfs(start_time: float, *, out_dir: str = "out") -> list[str]:
   if not os.path.isdir(out_dir):
     return []
@@ -1367,7 +1393,7 @@ def generate_quiz(
     replay_path = _replay_yaml_path(path_to_quiz_yaml)
     with open(replay_path, "w", encoding="utf-8") as handle:
       yaml.safe_dump_all(replay_exam_dicts, handle, sort_keys=False)
-    log.info(f"Wrote replay YAML to {replay_path}")
+    _log_replay_yaml_notification(replay_path, sample_num_pdfs=max(1, num_pdfs))
     pdf_paths = _collect_recent_pdfs(start_time)
     bundle_path = _bundle_outputs(
       replay_path,
