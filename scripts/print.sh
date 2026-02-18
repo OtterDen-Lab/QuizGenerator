@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DIR="/Users/ssogden/repos/teaching/QuizGeneration/out"
+DIR="$PWD/out"
 
 for file in "$DIR"/*.pdf; do
     if [ -f "$file" ]; then
