@@ -1,9 +1,17 @@
+import re
+
 import pytest
 
 pytest.importorskip("typer")
 from typer.testing import CliRunner  # noqa: E402
 
 import QuizGenerator.typer_cli as typer_cli  # noqa: E402
+
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return ANSI_ESCAPE_RE.sub("", text)
 
 
 def test_typer_generate_command_invokes_core_functions(monkeypatch):
@@ -62,4 +70,6 @@ def test_typer_rejects_underscore_flag_names():
     )
 
     assert result.exit_code != 0
-    assert "No such option: --num_pdfs" in result.output
+    plain_output = _strip_ansi(result.output)
+    assert "No such option:" in plain_output
+    assert "--num_pdfs" in plain_output

@@ -1,9 +1,17 @@
+import re
+
 import pytest
 
 pytest.importorskip("typer")
 from typer.testing import CliRunner  # noqa: E402
 
 import QuizGenerator.regenerate as regenerate  # noqa: E402
+
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _strip_ansi(text: str) -> str:
+    return ANSI_ESCAPE_RE.sub("", text)
 
 
 def test_regenerate_cli_requires_image_or_encrypted_str():
@@ -70,4 +78,6 @@ def test_regenerate_cli_rejects_underscore_flag():
     result = runner.invoke(regenerate.app, ["--encrypted_str", "abc123"])
 
     assert result.exit_code != 0
-    assert "No such option: --encrypted_str" in result.output
+    plain_output = _strip_ansi(result.output)
+    assert "No such option:" in plain_output
+    assert "--encrypted_str" in plain_output
