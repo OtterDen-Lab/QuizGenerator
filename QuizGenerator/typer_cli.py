@@ -160,6 +160,7 @@ else:
         allow_generator: bool = typer.Option(
             False,
             "--allow-generator",
+            "--allow_generator",
             help="Enable FromGenerator questions (executes Python from YAML).",
         ),
         max_backoff_attempts: int | None = typer.Option(
@@ -178,7 +179,7 @@ else:
                 max_backoff_attempts=max_backoff_attempts,
             )
             if num_canvas > 0 and course_id is None:
-                raise QuizGenError("Missing --course_id for Canvas upload. Example: --course_id 12345")
+                raise QuizGenError("Missing --course-id for Canvas upload. Example: --course-id 12345")
             use_typst = not latex
             if num_pdfs > 0:
                 _ensure_dependencies(use_typst=use_typst)
@@ -244,6 +245,7 @@ else:
         allow_generator: bool = typer.Option(
             False,
             "--allow-generator",
+            "--allow_generator",
             help="Enable FromGenerator questions (executes Python from YAML).",
         ),
         max_backoff_attempts: int | None = typer.Option(
@@ -283,6 +285,7 @@ else:
         test_questions: list[str] | None = typer.Option(
             None,
             "--test-question",
+            "--test-questions",
             "--test_questions",
             "-q",
             help="Only test specific question types. Use multiple times.",
@@ -303,6 +306,7 @@ else:
         allow_generator: bool = typer.Option(
             False,
             "--allow-generator",
+            "--allow_generator",
             help="Enable FromGenerator questions (executes Python from YAML).",
         ),
         embed_images_typst: bool = typer.Option(

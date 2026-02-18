@@ -144,7 +144,7 @@ questions:
 
 ## Ordering Note
 
-If you want to preserve the exact question order you wrote in YAML, prefer the list-style `questions` format and set `question_order: yaml`. You can also enable `--optimize_space` to reorder questions for tighter PDF layout (this affects Canvas order too).
+If you want to preserve the exact question order you wrote in YAML, prefer the list-style `questions` format and set `question_order: yaml`. You can also enable `--optimize-space` to reorder questions for tighter PDF layout (this affects Canvas order too).
 
 ---
 
@@ -233,11 +233,11 @@ Make sure your module is importable:
 
 ```bash
 # Option A: Run from the same directory
-quizgen generate --yaml my_quiz.yaml --num_pdfs 3
+quizgen generate --yaml my_quiz.yaml --num-pdfs 3
 
 # Option B: Add to PYTHONPATH
 export PYTHONPATH="/path/to/my/questions:$PYTHONPATH"
-quizgen generate --yaml my_quiz.yaml --num_pdfs 3
+quizgen generate --yaml my_quiz.yaml --num-pdfs 3
 ```
 
 ---
@@ -396,7 +396,7 @@ questions:
 
 **Solution:** Enable it explicitly:
 ```bash
-quizgen generate --allow_generator --yaml my_quiz.yaml --num_pdfs 1
+quizgen generate --allow-generator --yaml my_quiz.yaml --num-pdfs 1
 ```
 Or set `QUIZGEN_ALLOW_GENERATOR=1` in your environment.
 

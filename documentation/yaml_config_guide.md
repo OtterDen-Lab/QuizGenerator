@@ -17,21 +17,21 @@ This guide documents the minimal YAML schema used by `quizgen`.
 Tag-filtered practice upload can generate one quiz per matching question type:
 
 ```bash
-quizgen practice cst334 memory --course_id 12345
+quizgen practice cst334 memory --course-id 12345
 ```
 
 Useful knobs:
 
-- `--practice_match any|all`: tag matching mode.
-- `--practice_variations N`: variation count per question group (default `5`).
-- `--practice_question_groups N`: repeat each selected question N times per quiz (default `5`).
-- `--practice_tag_source explicit|merged|derived`: choose whether matching uses only explicit tags, merged tags (default), or only derived tags.
+- `--practice-match any|all`: tag matching mode.
+- `--practice-variations N`: variation count per question group (default `5`).
+- `--practice-question-groups N`: repeat each selected question N times per quiz (default `5`).
+- `--practice-tag-source explicit|merged|derived`: choose whether matching uses only explicit tags, merged tags (default), or only derived tags.
 
 Tag audit helpers:
 
 ```bash
 quizgen tags list
-quizgen tags list --only_missing_explicit --include_questions
+quizgen tags list --only-missing-explicit --include-questions
 quizgen tags explain sched
 ```
 

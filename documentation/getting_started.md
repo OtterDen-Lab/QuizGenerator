@@ -42,7 +42,7 @@ pip install QuizGenerator[cst463]
 ## Quick Start (PDF)
 
 ```bash
-quizgen generate --yaml example_files/example_exam_safe.yaml --num_pdfs 1
+quizgen generate --yaml example_files/example_exam_safe.yaml --num-pdfs 1
 ```
 
 PDFs are generated in `out/`.
@@ -77,7 +77,7 @@ questions:
 To reduce PDF page count by reordering questions, use:
 
 ```bash
-quizgen generate --yaml example_files/example_exam_safe.yaml --num_pdfs 1 --optimize_space
+quizgen generate --yaml example_files/example_exam_safe.yaml --num-pdfs 1 --optimize-space
 ```
 
 This affects both PDF and Canvas order.
@@ -94,7 +94,7 @@ CANVAS_API_KEY=your_api_key_here
 Then:
 
 ```bash
-quizgen generate --yaml example_files/example_exam_safe.yaml --num_canvas 5 --course_id 12345
+quizgen generate --yaml example_files/example_exam_safe.yaml --num-canvas 5 --course-id 12345
 ```
 
 ## Testing Mode (No YAML Needed)
@@ -106,14 +106,14 @@ quizgen test 5
 Skip questions that require optional extras:
 
 ```bash
-quizgen test 5 --skip_missing_extras
+quizgen test 5 --skip-missing-extras
 ```
 
 ## Tag Audit (Optional)
 
 ```bash
 quizgen tags list
-quizgen tags list --only_missing_explicit --include_questions
+quizgen tags list --only-missing-explicit --include-questions
 ```
 
 ## CLI Completion

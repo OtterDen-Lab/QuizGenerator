@@ -86,7 +86,7 @@ questions:
 ### 2. Generate PDFs
 
 ```bash
-quizgen generate --yaml my_quiz.yaml --num_pdfs 3
+quizgen generate --yaml my_quiz.yaml --num-pdfs 3
 ```
 
 PDFs will be created in the `out/` directory.
@@ -101,8 +101,8 @@ PDFs will be created in the `out/` directory.
 quizgen \
   generate \
   --yaml my_quiz.yaml \
-  --num_canvas 5 \
-  --course_id 12345
+  --num-canvas 5 \
+  --course-id 12345
 ```
 
 ### 4. Generate Tag-Filtered Practice Quizzes
@@ -113,16 +113,16 @@ Create one practice quiz assignment per matching registered question type:
 quizgen \
   practice \
   cst334 memory \
-  --practice_match any \
-  --practice_tag_source merged \
-  --practice_question_groups 5 \
-  --practice_variations 5 \
-  --course_id 12345
+  --practice-match any \
+  --practice-tag-source merged \
+  --practice-question-groups 5 \
+  --practice-variations 5 \
+  --course-id 12345
 ```
 
 These are uploaded as regular graded quiz assignments into the `practice` assignment group, which is configured with `0.0` group weight.
 Tag filters accept either namespaced tags (for example `course:cst334`, `topic:memory`) or bare forms (`cst334`, `memory`).
-Use `--practice_tag_source explicit` if you want strict explicit-only tag matching.
+Use `--practice-tag-source explicit` if you want strict explicit-only tag matching.
 
 ### 5. Audit Tags
 
@@ -131,7 +131,7 @@ Use `--practice_tag_source explicit` if you want strict explicit-only tag matchi
 quizgen tags list
 
 # Show only question types missing explicit tags
-quizgen tags list --only_missing_explicit --include_questions
+quizgen tags list --only-missing-explicit --include-questions
 
 # Explain tags for matching question types
 quizgen tags explain sched
@@ -225,7 +225,7 @@ Notes:
 
 ### General
 - `FromText` - Custom text questions
-- `FromGenerator` - Programmatically generated questions (requires `--allow_generator` or `QUIZGEN_ALLOW_GENERATOR=1`)
+- `FromGenerator` - Programmatically generated questions (requires `--allow-generator` or `QUIZGEN_ALLOW_GENERATOR=1`)
 
 ## Documentation
 
@@ -251,7 +251,7 @@ CANVAS_API_KEY_prod=your_prod_api_key
 2. Use `--prod` flag for production Canvas instance:
 
 ```bash
-quizgen generate --prod --num_canvas 5 --course_id 12345 --yaml my_quiz.yaml
+quizgen generate --prod --num-canvas 5 --course-id 12345 --yaml my_quiz.yaml
 ```
 
 ## Advanced Features
@@ -261,23 +261,23 @@ quizgen generate --prod --num_canvas 5 --course_id 12345 --yaml my_quiz.yaml
 Typst is the default for faster compilation. Use `--latex` to force LaTeX:
 
 ```bash
-quizgen generate --latex --num_pdfs 3 --yaml my_quiz.yaml
+quizgen generate --latex --num-pdfs 3 --yaml my_quiz.yaml
 ```
 
-Experimental: `--typst_measurement` uses Typst to measure question height for tighter layout.
+Experimental: `--typst-measurement` uses Typst to measure question height for tighter layout.
 It can change pagination and ordering, so use with care on finalized exams.
 
 ### Layout Optimization
 
 By default, questions keep their YAML order (or point-value ordering for mapping format).
-Use `--optimize_space` to reorder questions to reduce PDF page count. This also affects Canvas order.
+Use `--optimize-space` to reorder questions to reduce PDF page count. This also affects Canvas order.
 
 ### Deterministic Generation
 
 Use seeds for reproducible quizzes:
 
 ```bash
-quizgen generate --seed 42 --num_pdfs 3 --yaml my_quiz.yaml
+quizgen generate --seed 42 --num-pdfs 3 --yaml my_quiz.yaml
 ```
 
 ### Generation Controls
@@ -285,13 +285,13 @@ quizgen generate --seed 42 --num_pdfs 3 --yaml my_quiz.yaml
 Limit backoff attempts for questions that retry until they are "interesting":
 
 ```bash
-quizgen generate --yaml my_quiz.yaml --num_pdfs 1 --max_backoff_attempts 50
+quizgen generate --yaml my_quiz.yaml --num-pdfs 1 --max-backoff-attempts 50
 ```
 
 Set a default numeric tolerance for float answers (overridable per question):
 
 ```bash
-quizgen generate --yaml my_quiz.yaml --num_pdfs 1 --float_tolerance 0.01
+quizgen generate --yaml my_quiz.yaml --num-pdfs 1 --float-tolerance 0.01
 ```
 
 Per-answer override in custom questions:
@@ -316,12 +316,12 @@ Use the grading tools to scan QR codes and regenerate exact exam versions.
 The `FromGenerator` question type executes **arbitrary Python code** from your YAML configuration files. This is a powerful feature for creating dynamic questions, but it carries security risks:
 
 - **Only use `FromGenerator` with YAML files you completely trust**
-- Never run `--allow_generator` on YAML files from untrusted sources
+- Never run `--allow-generator` on YAML files from untrusted sources
 - Be cautious when sharing question banks that contain generator code
 
 `FromGenerator` is disabled by default. To enable it, use one of:
 ```bash
-quizgen generate --allow_generator --yaml my_quiz.yaml
+quizgen generate --allow-generator --yaml my_quiz.yaml
 # or
 QUIZGEN_ALLOW_GENERATOR=1 quizgen generate --yaml my_quiz.yaml
 ```

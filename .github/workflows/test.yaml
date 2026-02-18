@@ -84,13 +84,13 @@ jobs:
 
       - name: Generate a test PDF (safe sample)
         run: |
-          uv run quizgen generate --yaml example_files/example_exam_safe.yaml --num_pdfs 1
+          uv run quizgen generate --yaml example_files/example_exam_safe.yaml --num-pdfs 1
           ls -la out/
           ls out/*.pdf && echo "Safe sample PDF generated successfully!"
 
       - name: Generate a test PDF (FromGenerator sample)
         run: |
           export QUIZGEN_ALLOW_GENERATOR=1
-          uv run quizgen generate --allow_generator --yaml example_files/example_exam.yaml --num_pdfs 1
+          uv run quizgen generate --allow-generator --yaml example_files/example_exam.yaml --num-pdfs 1
           ls -la out/
           ls out/*.pdf && echo "FromGenerator sample PDF generated successfully!"

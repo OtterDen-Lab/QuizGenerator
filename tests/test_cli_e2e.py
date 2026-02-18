@@ -38,7 +38,7 @@ def test_cli_generate_safe_yaml_without_pdf_succeeds():
         "generate",
         "--yaml",
         "example_files/example_exam_safe.yaml",
-        "--num_pdfs",
+        "--num-pdfs",
         "0",
     )
     assert result.returncode == 0, result.stderr

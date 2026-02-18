@@ -69,7 +69,7 @@ class FromGenerator(FromText, TableQuestionMixin):
     if not _generator_allowed():
       raise ValueError(
         "FromGenerator is disabled by default. "
-        "Use --allow_generator or set QUIZGEN_ALLOW_GENERATOR=1 to enable."
+        "Use --allow-generator or set QUIZGEN_ALLOW_GENERATOR=1 to enable."
       )
     _warn_generator_enabled()
     if generator is None and text is None:
