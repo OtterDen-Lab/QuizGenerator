@@ -422,12 +422,12 @@ class Quiz:
               #    It's probably going to be somewhere in the instantiate and get_attr fields, with "_current_questions"
               #    But will require changing how we add concrete questions (but that'll just be everything returns a list
               group_questions = []
-              for name, data in q_data.items():
-                merged_group_data = data | {"topic": question_config["topic"]}
-                child_tags = _combined_tags(merged_tags, data.get("tags"))
+              for group_question_name, group_question_data in q_data.items():
+                merged_group_data = group_question_data | {"topic": question_config["topic"]}
+                child_tags = _combined_tags(merged_tags, group_question_data.get("tags"))
                 if child_tags:
                   merged_group_data["tags"] = child_tags
-                group_questions.append(make_question(name, merged_group_data))
+                group_questions.append(make_question(group_question_name, merged_group_data))
 
               questions_for_exam.append(
                 QuestionGroup(

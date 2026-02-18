@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import argparse
 import copy
+import importlib.metadata
 import logging
 import os
 import random
@@ -30,6 +31,13 @@ log = logging.getLogger(__name__)
 
 class QuizGenError(Exception):
   """User-facing error for CLI operations."""
+
+
+def _get_cli_version() -> str:
+  try:
+    return importlib.metadata.version("QuizGenerator")
+  except importlib.metadata.PackageNotFoundError:
+    return "unknown"
 
 
 def _add_common_options(parser: argparse.ArgumentParser) -> None:
@@ -63,6 +71,7 @@ def _build_parser() -> argparse.ArgumentParser:
       "  --float_tolerance X        Default tolerance for float answers\n"
     )
   )
+  parser.add_argument("--version", action="version", version=f"%(prog)s {_get_cli_version()}")
 
   subparsers = parser.add_subparsers(dest="command", required=True)
 
