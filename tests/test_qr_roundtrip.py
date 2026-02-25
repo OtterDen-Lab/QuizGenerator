@@ -1,6 +1,6 @@
 import base64
 
-from QuizGenerator.qrcode_generator import QuestionQRCode
+from QuizGenerator.generation.qrcode_generator import QuestionQRCode
 
 
 def _encode_v1(question_type: str, seed: int, version: str, key: bytes) -> str:

@@ -1,8 +1,8 @@
 #!env python
 from __future__ import annotations
 
-import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry
+import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.question import Question, QuestionRegistry
 
 
 @QuestionRegistry.register("ExampleSimpleQuestion")

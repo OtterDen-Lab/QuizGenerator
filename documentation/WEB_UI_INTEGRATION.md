@@ -121,55 +121,57 @@ If you want this module to handle QR decoding:
 ```python
 import json
 from QuizGenerator.regenerate import scan_qr_from_image, parse_qr_data, regenerate_from_metadata
-from QuizGenerator.qrcode_generator import QuestionQRCode
+from QuizGenerator.generation.qrcode_generator import QuestionQRCode
+
 
 def grade_from_qr_image(image_path: str):
-    """
-    Full flow: QR image -> decoded metadata -> regenerated answers.
+  """
+  Full flow: QR image -> decoded metadata -> regenerated answers.
 
-    Args:
-        image_path: Path to image file containing QR code
-    """
-    # Step 1: Scan QR code from image
-    qr_codes = scan_qr_from_image(image_path)
-    if not qr_codes:
-        return {"error": "No QR code found"}
+  Args:
+      image_path: Path to image file containing QR code
+  """
+  # Step 1: Scan QR code from image
+  qr_codes = scan_qr_from_image(image_path)
+  if not qr_codes:
+    return {"error": "No QR code found"}
+  
+  # Step 2: Parse QR JSON
+  qr_data = parse_qr_data(qr_codes[0])
+  # Returns: {"q": 1, "pts": 2.0, "s": "encrypted_string"}
+  
+  # Step 3: Decrypt metadata
+  encrypted = qr_data.get('s')
+  if not encrypted:
+    return {"error": "QR code missing regeneration data"}
+  
+  metadata = QuestionQRCode.decrypt_question_data(encrypted)
+  # Returns: {"question_type": "...", "seed": 123, "version": "1.0"}
+  
+  # Step 4: Regenerate answers
+  result = regenerate_from_metadata(
+    question_type=metadata['question_type'],
+    seed=metadata['seed'],
+    version=metadata['version'],
+    points=qr_data['pts']
+  )
+  
+  return {
+    "question_number": qr_data['q'],
+    "answers": format_answers(result['answer_objects'])
+  }
 
-    # Step 2: Parse QR JSON
-    qr_data = parse_qr_data(qr_codes[0])
-    # Returns: {"q": 1, "pts": 2.0, "s": "encrypted_string"}
-
-    # Step 3: Decrypt metadata
-    encrypted = qr_data.get('s')
-    if not encrypted:
-        return {"error": "QR code missing regeneration data"}
-
-    metadata = QuestionQRCode.decrypt_question_data(encrypted)
-    # Returns: {"question_type": "...", "seed": 123, "version": "1.0"}
-
-    # Step 4: Regenerate answers
-    result = regenerate_from_metadata(
-        question_type=metadata['question_type'],
-        seed=metadata['seed'],
-        version=metadata['version'],
-        points=qr_data['pts']
-    )
-
-    return {
-        "question_number": qr_data['q'],
-        "answers": format_answers(result['answer_objects'])
-    }
 
 def format_answers(answer_objects):
-    """Format Answer objects for web display."""
-    return [
-        {
-            "key": key,
-            "value": ans.value,
-            "tolerance": getattr(ans, 'tolerance', None)
-        }
-        for key, ans in answer_objects.items()
-    ]
+  """Format Answer objects for web display."""
+  return [
+    {
+      "key": key,
+      "value": ans.value,
+      "tolerance": getattr(ans, 'tolerance', None)
+    }
+    for key, ans in answer_objects.items()
+  ]
 ```
 
 ## Example: Flask Web API
@@ -177,66 +179,72 @@ def format_answers(answer_objects):
 ```python
 from flask import Flask, request, jsonify
 from QuizGenerator.regenerate import regenerate_from_metadata
-from QuizGenerator.qrcode_generator import QuestionQRCode
+from QuizGenerator.generation.qrcode_generator import QuestionQRCode
 import json
 
 app = Flask(__name__)
 
+
 @app.route('/api/grade/regenerate', methods=['POST'])
 def regenerate_answer():
-    """
-    API endpoint to regenerate answers from QR metadata.
+  """
+  API endpoint to regenerate answers from QR metadata.
 
-    Request body:
-    {
-        "qr_data": {
-            "q": 1,
-            "pts": 2.0,
-            "s": "Yx8CBgc5DjAUVDdQCTcXNUcCA0hDalFFRQp0G0o="
-        }
-    }
-    """
-    try:
-        qr_data = request.json['qr_data']
+  Request body:
+  {
+      "qr_data": {
+          "q": 1,
+          "pts": 2.0,
+          "s": "Yx8CBgc5DjAUVDdQCTcXNUcCA0hDalFFRQp0G0o="
+      }
+  }
+  """
+  try:
+    qr_data = request.json['qr_data']
+    
+    # Decrypt metadata
+    encrypted = qr_data['s']
+    metadata = QuestionQRCode.decrypt_question_data(encrypted)
+    
+    # Regenerate answers
+    result = regenerate_from_metadata(
+      question_type=metadata['question_type'],
+      seed=metadata['seed'],
+      version=metadata['version'],
+      points=qr_data['pts']
+    )
+    
+    # Format response
+    answers = [
+      {
+        "key": k,
+        "value": str(v.value),
+        "tolerance": getattr(v, 'tolerance', None)
+      }
+      for k, v in result['answer_objects'].items()
+    ]
+    
+    return jsonify(
+      {
+        "success": True,
+        "question_number": qr_data['q'],
+        "points": qr_data['pts'],
+        "question_type": metadata['question_type'],
+        "answers": answers
+      }
+    )
+  
+  except Exception as e:
+    return jsonify(
+      {
+        "success": False,
+        "error": str(e)
+      }
+    ), 400
 
-        # Decrypt metadata
-        encrypted = qr_data['s']
-        metadata = QuestionQRCode.decrypt_question_data(encrypted)
-
-        # Regenerate answers
-        result = regenerate_from_metadata(
-            question_type=metadata['question_type'],
-            seed=metadata['seed'],
-            version=metadata['version'],
-            points=qr_data['pts']
-        )
-
-        # Format response
-        answers = [
-            {
-                "key": k,
-                "value": str(v.value),
-                "tolerance": getattr(v, 'tolerance', None)
-            }
-            for k, v in result['answer_objects'].items()
-        ]
-
-        return jsonify({
-            "success": True,
-            "question_number": qr_data['q'],
-            "points": qr_data['pts'],
-            "question_type": metadata['question_type'],
-            "answers": answers
-        })
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "error": str(e)
-        }), 400
 
 if __name__ == '__main__':
-    app.run(debug=True)
+  app.run(debug=True)
 ```
 
 ## Example: Django View
@@ -245,53 +253,58 @@ if __name__ == '__main__':
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from QuizGenerator.regenerate import regenerate_from_metadata
-from QuizGenerator.qrcode_generator import QuestionQRCode
+from QuizGenerator.generation.qrcode_generator import QuestionQRCode
 import json
+
 
 @csrf_exempt
 def regenerate_answer_view(request):
-    """
-    Django view to regenerate answers from QR metadata.
-    """
-    if request.method != 'POST':
-        return JsonResponse({"error": "POST required"}, status=405)
-
-    try:
-        data = json.loads(request.body)
-        qr_data = data['qr_data']
-
-        # Decrypt and regenerate
-        encrypted = qr_data['s']
-        metadata = QuestionQRCode.decrypt_question_data(encrypted)
-
-        result = regenerate_from_metadata(
-            question_type=metadata['question_type'],
-            seed=metadata['seed'],
-            version=metadata['version'],
-            points=qr_data['pts']
-        )
-
-        # Format answers
-        answers = [
-            {
-                "key": k,
-                "value": str(v.value),
-                "tolerance": getattr(v, 'tolerance', None)
-            }
-            for k, v in result['answer_objects'].items()
-        ]
-
-        return JsonResponse({
-            "success": True,
-            "question_number": qr_data['q'],
-            "answers": answers
-        })
-
-    except Exception as e:
-        return JsonResponse({
-            "success": False,
-            "error": str(e)
-        }, status=400)
+  """
+  Django view to regenerate answers from QR metadata.
+  """
+  if request.method != 'POST':
+    return JsonResponse({"error": "POST required"}, status=405)
+  
+  try:
+    data = json.loads(request.body)
+    qr_data = data['qr_data']
+    
+    # Decrypt and regenerate
+    encrypted = qr_data['s']
+    metadata = QuestionQRCode.decrypt_question_data(encrypted)
+    
+    result = regenerate_from_metadata(
+      question_type=metadata['question_type'],
+      seed=metadata['seed'],
+      version=metadata['version'],
+      points=qr_data['pts']
+    )
+    
+    # Format answers
+    answers = [
+      {
+        "key": k,
+        "value": str(v.value),
+        "tolerance": getattr(v, 'tolerance', None)
+      }
+      for k, v in result['answer_objects'].items()
+    ]
+    
+    return JsonResponse(
+      {
+        "success": True,
+        "question_number": qr_data['q'],
+        "answers": answers
+      }
+    )
+  
+  except Exception as e:
+    return JsonResponse(
+      {
+        "success": False,
+        "error": str(e)
+      }, status=400
+    )
 ```
 
 ## QR Code Format

@@ -1,4 +1,4 @@
-from QuizGenerator.question import QuestionRegistry
+from QuizGenerator.generation.question import QuestionRegistry
 
 
 def test_registry_load_premades_does_not_crash():

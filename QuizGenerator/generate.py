@@ -18,8 +18,8 @@ from datetime import datetime
 import yaml
 
 from lms_interface.canvas_interface import CanvasInterface
-from QuizGenerator.question import Question, QuestionGroup, QuestionRegistry
-from QuizGenerator.quiz import Quiz
+from QuizGenerator.generation.question import Question, QuestionGroup, QuestionRegistry
+from QuizGenerator.generation.quiz import Quiz
 
 log = logging.getLogger(__name__)
 

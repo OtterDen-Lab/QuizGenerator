@@ -63,9 +63,9 @@ except ImportError:
   pass
 
 # Quiz generator imports (always available)
-from QuizGenerator.qrcode_generator import QuestionQRCode
-from QuizGenerator.question import QuestionGroup, QuestionRegistry
-from QuizGenerator.quiz import Quiz
+from QuizGenerator.generation.qrcode_generator import QuestionQRCode
+from QuizGenerator.generation.question import QuestionGroup, QuestionRegistry
+from QuizGenerator.generation.quiz import Quiz
 
 # QR code reading (optional - only needed for CLI usage with --image)
 # Your web UI should use its own QR decoding library

@@ -1,7 +1,7 @@
 from unittest.mock import Mock
 
 from QuizGenerator.generate import _build_canvas_payloads, _normalize_canvas_html
-from QuizGenerator.premade_questions.basic import FromText
+from QuizGenerator.generation.premade_questions.basic import FromText
 
 
 def test_canvas_payload_dedupes_variations():

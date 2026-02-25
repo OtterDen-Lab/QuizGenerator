@@ -1,6 +1,6 @@
 import pytest
 
-from QuizGenerator.quiz import Quiz
+from QuizGenerator.generation.quiz import Quiz
 
 
 def test_yaml_missing_questions_key(tmp_path):

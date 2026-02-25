@@ -7,7 +7,7 @@ and generate proper Canvas export data.
 
 import numpy as np
 
-import QuizGenerator.contentast as ca
+import QuizGenerator.generation.contentast as ca
 
 
 class TestAnswerBase:

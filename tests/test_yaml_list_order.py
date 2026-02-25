@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from QuizGenerator.question import Question
-from QuizGenerator.quiz import Quiz
+from QuizGenerator.generation.question import Question
+from QuizGenerator.generation.quiz import Quiz
 
 
 def _write_tmp_yaml(text):

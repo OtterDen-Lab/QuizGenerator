@@ -307,7 +307,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
 
       ctx = QuestionContext(rng_seed=rng_seed, rng=random.Random(rng_seed))
       try:
-        import QuizGenerator.yaml_question as yaml_question
+        import QuizGenerator.generation.yaml_question as yaml_question
         yaml_question.apply_context_spec(spec_dict, ctx)
         templates = yaml_question.parse_question_templates(spec_dict)
         body = ca.resolve_template(templates.get("body"), ctx)
@@ -568,7 +568,7 @@ class QuestionBuilderHandler(SimpleHTTPRequestHandler):
 
       try:
         from QuizGenerator import generate as quiz_generate
-        from QuizGenerator.quiz import Quiz
+        from QuizGenerator.generation.quiz import Quiz
       except Exception as exc:
         self._send_json({"error": f"Quiz generation unavailable: {exc}"}, status=HTTPStatus.BAD_REQUEST)
         return

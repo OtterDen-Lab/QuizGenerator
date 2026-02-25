@@ -3,7 +3,7 @@ from QuizGenerator.generate import (
     _question_tags_for_source,
     _tags_match,
 )
-from QuizGenerator.question import QuestionRegistry
+from QuizGenerator.generation.question import QuestionRegistry
 
 
 def test_tags_match_any_and_all_modes():

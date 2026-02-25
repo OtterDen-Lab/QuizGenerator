@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from QuizGenerator.question import Question, QuestionGroup
-from QuizGenerator.quiz import Quiz
+from QuizGenerator.generation.question import Question, QuestionGroup
+from QuizGenerator.generation.quiz import Quiz
 
 
 @pytest.fixture
@@ -570,7 +570,7 @@ questions:
         path = temp_yaml_file(yaml_content)
         quiz = Quiz.from_yaml(path)[0]
 
-        import QuizGenerator.contentast as ca
+        import QuizGenerator.generation.contentast as ca
         document = quiz.get_quiz(rng_seed=42)
         assert isinstance(document, ca.Document)
 

@@ -1,5 +1,5 @@
-import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry
+import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.question import Question, QuestionRegistry
 from QuizGenerator.regenerate import (
     regenerate_from_metadata,
     regenerate_from_yaml_metadata,

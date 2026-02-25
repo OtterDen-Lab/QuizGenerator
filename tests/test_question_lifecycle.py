@@ -9,8 +9,8 @@ import random
 
 import pytest
 
-import QuizGenerator.contentast as ca
-from QuizGenerator.question import (
+import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.question import (
     SPACING_PRESETS,
     Question,
     QuestionContext,

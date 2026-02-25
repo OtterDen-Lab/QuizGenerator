@@ -8,7 +8,7 @@ to regenerate answers from QR code data.
 
 import os
 
-from QuizGenerator.qrcode_generator import QuestionQRCode
+from QuizGenerator.generation.qrcode_generator import QuestionQRCode
 from QuizGenerator.regenerate import regenerate_from_metadata
 
 # ============================================================================

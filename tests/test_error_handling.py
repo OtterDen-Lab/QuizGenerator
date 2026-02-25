@@ -10,9 +10,9 @@ from pathlib import Path
 
 import pytest
 
-import QuizGenerator.contentast as ca
-from QuizGenerator.question import QuestionContext, QuestionRegistry
-from QuizGenerator.quiz import Quiz
+import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.question import QuestionContext, QuestionRegistry
+from QuizGenerator.generation.quiz import Quiz
 
 
 class TestYAMLErrorHandling:
@@ -250,8 +250,8 @@ class TestFromGeneratorErrors:
 
         try:
             # Reset the global flag
-            import QuizGenerator.premade_questions.basic as basic_module
-            from QuizGenerator.premade_questions.basic import (
+            import QuizGenerator.generation.premade_questions.basic as basic_module
+            from QuizGenerator.generation.premade_questions.basic import (
                 FromGenerator,
             )
             basic_module.ALLOW_GENERATOR = False

@@ -1,8 +1,8 @@
 from unittest.mock import Mock
 
 from QuizGenerator.generate import upload_quiz_to_canvas
-from QuizGenerator.premade_questions.basic import FromText
-from QuizGenerator.quiz import Quiz
+from QuizGenerator.generation.premade_questions.basic import FromText
+from QuizGenerator.generation.quiz import Quiz
 
 
 def _make_canvas_course():

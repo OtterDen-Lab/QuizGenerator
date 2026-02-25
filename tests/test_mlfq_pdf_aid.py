@@ -1,8 +1,8 @@
 import math
 import random
 
-from QuizGenerator.premade_questions.cst334.process import MLFQQuestion
-from QuizGenerator.question import QuestionContext
+from QuizGenerator.generation.premade_questions.cst334.process import MLFQQuestion
+from QuizGenerator.generation.question import QuestionContext
 
 
 def _build_context(*, rng_seed: int) -> QuestionContext:

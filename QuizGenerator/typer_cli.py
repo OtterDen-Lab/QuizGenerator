@@ -27,7 +27,7 @@ else:
     from dotenv import load_dotenv
 
     from lms_interface.canvas_interface import CanvasInterface
-    from QuizGenerator.contentast import Answer
+    from QuizGenerator.generation.contentast import Answer
     from QuizGenerator.generate import (
         QuizGenError,
         _check_dependencies,
@@ -38,7 +38,7 @@ else:
         list_registered_tags,
         test_all_questions,
     )
-    from QuizGenerator.performance import PerformanceTracker
+    from QuizGenerator.generation.performance import PerformanceTracker
 
     app = typer.Typer(
         add_completion=True,

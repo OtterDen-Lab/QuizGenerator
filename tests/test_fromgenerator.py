@@ -3,7 +3,7 @@ import pytest
 
 def test_fromgenerator_disabled_by_default(monkeypatch):
     monkeypatch.delenv("QUIZGEN_ALLOW_GENERATOR", raising=False)
-    from QuizGenerator.premade_questions.basic import FromGenerator
+    from QuizGenerator.generation.premade_questions.basic import FromGenerator
 
     with pytest.raises(ValueError, match="FromGenerator is disabled by default"):
         FromGenerator(
@@ -15,7 +15,7 @@ def test_fromgenerator_disabled_by_default(monkeypatch):
 
 def test_fromgenerator_enabled_with_env(monkeypatch):
     monkeypatch.setenv("QUIZGEN_ALLOW_GENERATOR", "1")
-    from QuizGenerator.premade_questions.basic import FromGenerator
+    from QuizGenerator.generation.premade_questions.basic import FromGenerator
 
     q = FromGenerator(
         name="Gen",

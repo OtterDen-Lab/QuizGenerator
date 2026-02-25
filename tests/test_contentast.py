@@ -7,7 +7,7 @@ These tests verify that content AST elements render correctly to each output for
 import numpy as np
 import pytest
 
-import QuizGenerator.contentast as ca
+import QuizGenerator.generation.contentast as ca
 
 
 class TestText:

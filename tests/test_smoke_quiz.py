@@ -1,10 +1,10 @@
 import pytest
 
-import QuizGenerator.contentast as ca
+import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generate import generate_typst
-from QuizGenerator.question import Question
-from QuizGenerator.quiz import Quiz
-from QuizGenerator.typst_utils import check_typst_available
+from QuizGenerator.generation.question import Question
+from QuizGenerator.generation.quiz import Quiz
+from QuizGenerator.generation.typst_utils import check_typst_available
 
 
 class _ReserveHeightQuestion(Question):

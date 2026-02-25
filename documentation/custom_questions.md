@@ -25,72 +25,84 @@ my_custom_questions/
 ```
 
 **scheduling.py:**
+
 ```python
 import random
 
-import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry
+import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.question import Question, QuestionRegistry
+
 
 @QuestionRegistry.register()  # Registers as "schedulingquestion"
 class SchedulingQuestion(Question):
-    VERSION = "1.0"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, topic=Question.Topic.SYSTEM_PROCESSES, **kwargs)
-        self.possible_variations = float('inf')
-
-    @classmethod
-    def _build_context(cls, *, rng_seed=None, **kwargs):
-        context = super()._build_context(rng_seed=rng_seed, **kwargs)
-        rng = context.rng
-
-        # Generate random process workloads
-        num_processes = rng.randint(3, 5)
-        arrival_times = [rng.randint(0, 10) for _ in range(num_processes)]
-        burst_times = [rng.randint(1, 8) for _ in range(num_processes)]
-
-        # Calculate FIFO schedule
-        schedule = self._calculate_fifo(arrival_times, burst_times)
-
-        context["num_processes"] = num_processes
-        context["arrival_times"] = arrival_times
-        context["burst_times"] = burst_times
-        context["schedule"] = schedule
-        return context
-
-    def _calculate_fifo(self, arrival_times, burst_times):
-        # Implementation here...
-        pass
-
-    def _build_body(self, context) -> ca.Section:
-        body = ca.Section()
-        body.add_element(ca.Paragraph([
-            "Given the following processes with their arrival times and burst times, "
-            "calculate the completion time using FIFO scheduling:"
-        ]))
-
-        # Create table of processes
-        table_data = [["Process", "Arrival", "Burst"]]
-        for i in range(context["num_processes"]):
-            table_data.append([
-                f"P{i}",
-                str(context["arrival_times"][i]),
-                str(context["burst_times"][i]),
-            ])
-
-        body.add_element(ca.Table(table_data))
-        body.add_element(ca.Paragraph(["Completion time: "]))
-        body.add_element(ca.AnswerTypes.Int(context["schedule"][-1], label="Completion time"))
-
-        return body
-
-    def _build_explanation(self, context) -> ca.Section:
-        explanation = ca.Section()
-        explanation.add_element(ca.Paragraph([
-            "FIFO scheduling executes processes in order of arrival..."
-        ]))
-        # Add step-by-step solution
-        return explanation
+  VERSION = "1.0"
+  
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, topic=Question.Topic.SYSTEM_PROCESSES, **kwargs)
+    self.possible_variations = float('inf')
+  
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    rng = context.rng
+    
+    # Generate random process workloads
+    num_processes = rng.randint(3, 5)
+    arrival_times = [rng.randint(0, 10) for _ in range(num_processes)]
+    burst_times = [rng.randint(1, 8) for _ in range(num_processes)]
+    
+    # Calculate FIFO schedule
+    schedule = self._calculate_fifo(arrival_times, burst_times)
+    
+    context["num_processes"] = num_processes
+    context["arrival_times"] = arrival_times
+    context["burst_times"] = burst_times
+    context["schedule"] = schedule
+    return context
+  
+  def _calculate_fifo(self, arrival_times, burst_times):
+    # Implementation here...
+    pass
+  
+  def _build_body(self, context) -> ca.Section:
+    body = ca.Section()
+    body.add_element(
+      ca.Paragraph(
+        [
+          "Given the following processes with their arrival times and burst times, "
+          "calculate the completion time using FIFO scheduling:"
+        ]
+      )
+    )
+    
+    # Create table of processes
+    table_data = [["Process", "Arrival", "Burst"]]
+    for i in range(context["num_processes"]):
+      table_data.append(
+        [
+          f"P{i}",
+          str(context["arrival_times"][i]),
+          str(context["burst_times"][i]),
+        ]
+      )
+    
+    body.add_element(ca.Table(table_data))
+    body.add_element(ca.Paragraph(["Completion time: "]))
+    body.add_element(ca.AnswerTypes.Int(context["schedule"][-1], label="Completion time"))
+    
+    return body
+  
+  def _build_explanation(self, context) -> ca.Section:
+    explanation = ca.Section()
+    explanation.add_element(
+      ca.Paragraph(
+        [
+          "FIFO scheduling executes processes in order of arrival..."
+        ]
+      )
+    )
+    # Add step-by-step solution
+    return explanation
 ```
 
 ### Step 2: Register Your Questions via Entry Points
@@ -160,54 +172,68 @@ This approach is ideal for:
 Create a Python file anywhere accessible to your quiz config:
 
 **my_questions.py:**
+
 ```python
-import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question, QuestionRegistry
+import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.question import Question, QuestionRegistry
+
 
 @QuestionRegistry.register()
 class QuickMemoryQuestion(Question):
-    VERSION = "1.0"
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, topic=Question.Topic.SYSTEM_MEMORY, **kwargs)
-
-    @classmethod
-    def _build_context(cls, *, rng_seed=None, **kwargs):
-        context = super()._build_context(rng_seed=rng_seed, **kwargs)
-        rng = context.rng
-        page_size = rng.choice([4, 8, 16])  # KB
-        virtual_addr = rng.randint(0, 65535)
-
-        page_number = virtual_addr // (page_size * 1024)
-        offset = virtual_addr % (page_size * 1024)
-
-        context["page_size"] = page_size
-        context["virtual_addr"] = virtual_addr
-        context["page_number"] = page_number
-        context["offset"] = offset
-        return context
-
-    def _build_body(self, context) -> ca.Section:
-        body = ca.Section()
-        body.add_element(ca.Paragraph([
-            f"Given a page size of {context['page_size']}KB and virtual address {context['virtual_addr']}, "
-            "calculate the page number and offset."
-        ]))
-        body.add_element(ca.Paragraph(["Page number: "]))
-        body.add_element(ca.AnswerTypes.Int(context["page_number"], label="Page number"))
-        body.add_element(ca.Paragraph(["Offset: "]))
-        body.add_element(ca.AnswerTypes.Int(context["offset"], label="Offset"))
-        return body
-
-    def _build_explanation(self, context) -> ca.Section:
-        explanation = ca.Section()
-        explanation.add_element(ca.Paragraph([
-            f"Page number = {context['virtual_addr']} / ({context['page_size']} * 1024) = {context['page_number']}"
-        ]))
-        explanation.add_element(ca.Paragraph([
-            f"Offset = {context['virtual_addr']} % ({context['page_size']} * 1024) = {context['offset']}"
-        ]))
-        return explanation
+  VERSION = "1.0"
+  
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, topic=Question.Topic.SYSTEM_MEMORY, **kwargs)
+  
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    rng = context.rng
+    page_size = rng.choice([4, 8, 16])  # KB
+    virtual_addr = rng.randint(0, 65535)
+    
+    page_number = virtual_addr // (page_size * 1024)
+    offset = virtual_addr % (page_size * 1024)
+    
+    context["page_size"] = page_size
+    context["virtual_addr"] = virtual_addr
+    context["page_number"] = page_number
+    context["offset"] = offset
+    return context
+  
+  def _build_body(self, context) -> ca.Section:
+    body = ca.Section()
+    body.add_element(
+      ca.Paragraph(
+        [
+          f"Given a page size of {context['page_size']}KB and virtual address {context['virtual_addr']}, "
+          "calculate the page number and offset."
+        ]
+      )
+    )
+    body.add_element(ca.Paragraph(["Page number: "]))
+    body.add_element(ca.AnswerTypes.Int(context["page_number"], label="Page number"))
+    body.add_element(ca.Paragraph(["Offset: "]))
+    body.add_element(ca.AnswerTypes.Int(context["offset"], label="Offset"))
+    return body
+  
+  def _build_explanation(self, context) -> ca.Section:
+    explanation = ca.Section()
+    explanation.add_element(
+      ca.Paragraph(
+        [
+          f"Page number = {context['virtual_addr']} / ({context['page_size']} * 1024) = {context['page_number']}"
+        ]
+      )
+    )
+    explanation.add_element(
+      ca.Paragraph(
+        [
+          f"Offset = {context['virtual_addr']} % ({context['page_size']} * 1024) = {context['offset']}"
+        ]
+      )
+    )
+    return explanation
 ```
 
 ### Step 2: Import in Your Quiz YAML

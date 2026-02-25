@@ -1,5 +1,5 @@
-import QuizGenerator.contentast as ca
-from QuizGenerator.question import Question
+import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.question import Question
 
 
 class _DummyQuestion(Question):
