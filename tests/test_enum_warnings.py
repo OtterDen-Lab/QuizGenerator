@@ -1,6 +1,8 @@
 from unittest.mock import patch
 
-from QuizGenerator.generation.premade_questions.cst334.memory_questions import CachingQuestion
+from QuizGenerator.generation.premade_questions.cst334.memory_questions import (
+    CachingQuestion,
+)
 from QuizGenerator.generation.premade_questions.cst334.process import SchedulingQuestion
 
 

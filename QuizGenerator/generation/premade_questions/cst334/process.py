@@ -14,7 +14,11 @@ import matplotlib.pyplot as plt
 
 import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generation.mixins import BodyTemplatesMixin, TableQuestionMixin
-from QuizGenerator.generation.question import Question, QuestionRegistry, RegenerableChoiceMixin
+from QuizGenerator.generation.question import (
+  Question,
+  QuestionRegistry,
+  RegenerableChoiceMixin,
+)
 
 log = logging.getLogger(__name__)
 

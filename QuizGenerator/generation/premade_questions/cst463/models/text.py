@@ -4,7 +4,9 @@ import numpy as np
 
 import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generation.mixins import TableQuestionMixin
-from QuizGenerator.generation.premade_questions.cst463.models.matrices import MatrixQuestion
+from QuizGenerator.generation.premade_questions.cst463.models.matrices import (
+  MatrixQuestion,
+)
 from QuizGenerator.generation.question import QuestionRegistry
 
 log = logging.getLogger(__name__)
