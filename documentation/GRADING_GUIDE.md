@@ -235,7 +235,7 @@ Versioning ensures that regenerated answers match the questions that were actual
 1. **Generate exams with QR codes**:
    ```bash
    export QUIZ_ENCRYPTION_KEY="your-key-here"
-   quizgen --num-pdfs 90 --yaml exam_config.yaml
+   quizgen generate --num-pdfs 90 --yaml exam_config.yaml
    ```
 
 2. **Students complete exams** (printed PDFs with QR codes)

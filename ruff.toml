@@ -1,4 +1,6 @@
 extend-exclude = ["lms_interface"]
+indent-width = 2
+
 
 [lint]
 select = ["F401", "E402", "I001"]

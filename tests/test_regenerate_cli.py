@@ -1,8 +1,5 @@
 import re
 
-import pytest
-
-pytest.importorskip("typer")
 from typer.testing import CliRunner  # noqa: E402
 
 import QuizGenerator.regenerate as regenerate  # noqa: E402

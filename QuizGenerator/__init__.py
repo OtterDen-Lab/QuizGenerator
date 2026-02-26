@@ -83,6 +83,21 @@ def _anchor_file_handler_paths(config: dict, *, base_dir: Path) -> None:
       handler["filename"] = str((base_dir / path).resolve())
 
 
+def enable_debug_logging() -> None:
+  logging.getLogger().setLevel(logging.DEBUG)
+  for handler in logging.getLogger().handlers:
+    handler.setLevel(logging.DEBUG)
+  for logger_name in ["QuizGenerator", "lms_interface", "__main__"]:
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(logging.DEBUG)
+    for handler in logger.handlers:
+      handler.setLevel(logging.DEBUG)
+
+
+def is_debug_enabled(cli_debug: bool = False) -> bool:
+  return cli_debug or _env_flag("QUIZGEN_DEBUG", default=False)
+
+
 def setup_logging() -> None:
   config_path = os.path.join(os.path.dirname(__file__), 'logging.yaml')
   if os.path.exists(config_path):

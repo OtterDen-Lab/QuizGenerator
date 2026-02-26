@@ -7,7 +7,6 @@ import random
 import re
 import shutil
 import subprocess
-import sys
 import tempfile
 import time
 import traceback
@@ -1146,24 +1145,11 @@ def generate_quiz(
     if bundle_path:
       log.info(f"Wrote output bundle to {bundle_path}")
 
-def main(argv: list[str] | None = None) -> None:
-  """
-  Compatibility wrapper for `python -m QuizGenerator.generate`.
-
-  The canonical CLI is Typer-based (`QuizGenerator.typer_cli`).
-  """
+def main() -> None:
+  """Run the Typer CLI entrypoint."""
   from QuizGenerator.typer_cli import main as typer_main
 
-  if argv is None:
-    typer_main()
-    return
-
-  original_argv = sys.argv
-  try:
-    sys.argv = [original_argv[0] if original_argv else "quizgen", *argv]
-    typer_main()
-  finally:
-    sys.argv = original_argv
+  typer_main()
 
 
 if __name__ == "__main__":

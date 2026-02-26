@@ -43,7 +43,6 @@ import copy
 import json
 import logging
 import os
-import sys
 from pathlib import Path
 from typing import Any, Callable, Literal
 
@@ -62,6 +61,8 @@ except ImportError:
   # dotenv not available, will use system environment variables only
   pass
 
+from QuizGenerator import enable_debug_logging, is_debug_enabled
+
 # Quiz generator imports (always available)
 from QuizGenerator.generation.qrcode_generator import QuestionQRCode
 from QuizGenerator.generation.question import QuestionGroup, QuestionRegistry
@@ -78,10 +79,6 @@ except ImportError:
   HAS_IMAGE_SUPPORT = False
   # Don't fail immediately - only fail if user tries to use --image flag
 
-logging.basicConfig(
-  level=logging.INFO,
-  format='%(levelname)s: %(message)s'
-)
 log = logging.getLogger(__name__)
 
 
@@ -730,6 +727,7 @@ def _cli(
     help="Process all QR codes found in the image (default: only first one).",
   ),
   output: str | None = typer.Option(None, "--output", help="Save results to JSON file."),
+  debug: bool = typer.Option(False, "--debug", help="Enable debug logging."),
   verbose: bool = typer.Option(False, "--verbose", "-v", help="Enable verbose debug logging."),
   image_mode: Literal["inline", "none"] = typer.Option(
     "inline",
@@ -740,8 +738,8 @@ def _cli(
   if ctx.resilient_parsing:
     return
 
-  if verbose:
-    logging.getLogger().setLevel(logging.DEBUG)
+  if is_debug_enabled(debug or verbose):
+    enable_debug_logging()
 
   if not image and not encrypted_str:
     typer.echo(ctx.get_help())
@@ -850,17 +848,8 @@ def _cli(
   typer.echo(f"\nSuccessfully regenerated {len(results)} question(s)")
 
 
-def main(argv: list[str] | None = None) -> None:
-  if argv is None:
-    app()
-    return
-
-  original_argv = sys.argv
-  try:
-    sys.argv = [original_argv[0] if original_argv else "quizregen", *argv]
-    app()
-  finally:
-    sys.argv = original_argv
+def main() -> None:
+  app()
 
 
 if __name__ == '__main__':

@@ -30,3 +30,13 @@ def test_anchor_file_handler_paths_uses_absolute_base(tmp_path):
 
     quizgen_pkg._anchor_file_handler_paths(config, base_dir=base_dir)
     assert config["handlers"]["file"]["filename"] == str(base_dir / "out/logs/a.log")
+
+
+def test_is_debug_enabled_with_cli_flag(monkeypatch):
+    monkeypatch.delenv("QUIZGEN_DEBUG", raising=False)
+    assert quizgen_pkg.is_debug_enabled(cli_debug=True) is True
+
+
+def test_is_debug_enabled_with_env_flag(monkeypatch):
+    monkeypatch.setenv("QUIZGEN_DEBUG", "1")
+    assert quizgen_pkg.is_debug_enabled(cli_debug=False) is True

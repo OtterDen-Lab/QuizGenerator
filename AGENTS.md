@@ -13,8 +13,8 @@
 
 - `pip install -e .` — install the package in editable mode for local development.
 - `quizgen --help` — show CLI options.
-- `quizgen --yaml example_files/example_exam.yaml --num_pdfs 3` — generate PDFs in `out/` (Typst is the default renderer).
-- `quizgen --latex --num_pdfs 3` — force LaTeX rendering when needed.
+- `quizgen generate --yaml example_files/example_exam.yaml --num-pdfs 3` — generate PDFs in `out/` (Typst is the default renderer).
+- `quizgen generate --latex --yaml example_files/example_exam.yaml --num-pdfs 3` — force LaTeX rendering when needed.
 - `ruff check --fix` — enforce import placement/sorting and remove unused imports.
 - `python scripts/vendor_lms_interface.py --dry-run` — preview LMSInterface vendoring changes (top-level `lms_interface`).
 - `bash scripts/install_git_hooks.sh` — install local pre-commit hook and `git bump` alias.
@@ -22,7 +22,7 @@
 
 ## Coding Style & Naming Conventions
 
-- Python 3.12+; follow PEP 8 with 4-space indentation.
+- Python 3.12+; follow PEP 8 with 2-space indentation.
 - Use `snake_case` for functions/variables, `PascalCase` for classes, and `UPPER_SNAKE_CASE` for constants.
 - Keep modules focused; new question types belong under `QuizGenerator/premade_questions/` or a custom module referenced in YAML.
 
@@ -38,7 +38,7 @@
 
 - No dedicated test suite is currently committed.
 - For changes, run a manual smoke check by generating a small quiz:
-  - `quizgen --yaml example_files/example_exam.yaml --num_pdfs 1`
+  - `quizgen generate --yaml example_files/example_exam.yaml --num-pdfs 1`
 - If adding tests, prefer `tests/` with filenames like `test_<area>.py` and document how to run them.
 
 ## Commit & Pull Request Guidelines
