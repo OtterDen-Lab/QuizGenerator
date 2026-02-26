@@ -1211,7 +1211,7 @@ class Question(abc.ABC):
         temp_file.write(img_data.getbuffer())
         temp_file.flush()
         temp_file.seek(0)
-        upload_success, f = course.upload(temp_file, parent_folder_path=f"Quiz Files/{quiz.id}")
+        upload_success, f = course.upload(temp_file, parent_folder_path=f"Quiz Files")
       finally:
         temp_file.close()
         try:
