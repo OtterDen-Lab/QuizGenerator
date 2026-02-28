@@ -345,14 +345,14 @@ Install repository-managed git hooks and alias:
 bash scripts/install_git_hooks.sh
 ```
 
-This installs a pre-commit hook that checks version-bump vendoring and a local alias:
+This installs a pre-commit hook for repository hygiene checks and a local alias:
 
 ```bash
 git bump patch
 ```
 
-`git bump` bumps `pyproject.toml` via `uv version`, vendors `lms_interface`, stages `pyproject.toml`/`uv.lock`/`lms_interface`, and commits.
-Use `git bump patch --verbose` for full vendoring logs (default output is a short summary).
+`git bump` bumps `pyproject.toml` via `uv version`, stages `pyproject.toml` and `uv.lock`, commits, tags, and pushes by default.
+Use `git bump patch --no-tag --no-push` for a local-only bump.
 
 ## Project Structure
 
@@ -366,7 +366,6 @@ QuizGenerator/
 │   └── ...               # Question types and rendering utilities
 ├── example_files/        # Example quiz configurations
 ├── documentation/        # User guides
-├── lms_interface/        # Canvas LMS integration
 └── quizgen             # CLI entry point
 ```
 

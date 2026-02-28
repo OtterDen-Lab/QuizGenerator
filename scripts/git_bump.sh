@@ -2,22 +2,22 @@
 set -euo pipefail
 
 usage() {
-  cat <<'EOF'
+  cat <<'USAGE'
 Usage:
-  git bump [patch|minor|major] [-m "commit message"] [--no-commit] [--dry-run] [--skip-tests] [--verbose]
+  git bump [patch|minor|major] [-m "commit message"] [--no-commit] [--dry-run] [--skip-tests] [--verbose] [--tag|--no-tag] [--push|--no-push] [--remote <name>]
 
 Behavior:
-  1. Vendor LMSInterface via `python scripts/vendor_lms_interface.py`
-  2. Run test command (unless --skip-tests)
-  3. Bump version via `uv version --bump <kind>`
-  4. Stage `pyproject.toml`, `uv.lock`, `lms_interface/`, and managed tooling scripts
-  5. Commit (unless --no-commit)
+  1. Run test command (unless --skip-tests)
+  2. Bump version via `uv version --bump <kind>`
+  3. Stage `pyproject.toml` and `uv.lock`
+  4. Commit (unless --no-commit)
+  5. Create tag `v<version>` by default (disable with --no-tag)
+  6. Push branch and tag by default (disable with --no-push)
 
 Notes:
   - Requires a clean index and working tree (tracked files).
   - Uses normal `git commit -m ...` (no pathspec commit).
-  - Uses quiet vendoring output by default; pass --verbose for full logs.
-EOF
+USAGE
 }
 
 die() {
@@ -39,6 +39,11 @@ NO_COMMIT="0"
 DRY_RUN="0"
 VERBOSE="0"
 SKIP_TESTS="0"
+CREATE_TAG="1"
+PUSH_CHANGES="1"
+TAG_EXPLICIT="0"
+PUSH_EXPLICIT="0"
+REMOTE_NAME="origin"
 TEST_COMMAND='uv run pytest -q'
 
 while [[ $# -gt 0 ]]; do
@@ -69,6 +74,32 @@ while [[ $# -gt 0 ]]; do
       SKIP_TESTS="1"
       shift
       ;;
+    --tag)
+      CREATE_TAG="1"
+      TAG_EXPLICIT="1"
+      shift
+      ;;
+    --no-tag)
+      CREATE_TAG="0"
+      TAG_EXPLICIT="1"
+      shift
+      ;;
+    --push)
+      PUSH_CHANGES="1"
+      PUSH_EXPLICIT="1"
+      shift
+      ;;
+    --no-push)
+      PUSH_CHANGES="0"
+      PUSH_EXPLICIT="1"
+      shift
+      ;;
+    --remote)
+      shift
+      [[ $# -gt 0 ]] || die "Missing value for --remote"
+      REMOTE_NAME="$1"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -87,9 +118,7 @@ if [[ -n "$(git diff --name-only)" ]] || [[ -n "$(git diff --cached --name-only)
 fi
 
 if [[ "$VERBOSE" == "1" ]]; then
-  run python scripts/vendor_lms_interface.py
-else
-  run python scripts/vendor_lms_interface.py --quiet
+  echo "Note: --verbose is currently a no-op (vendoring removed)."
 fi
 
 if [[ "$SKIP_TESTS" != "1" ]] && [[ -n "$TEST_COMMAND" ]]; then
@@ -98,22 +127,36 @@ if [[ "$SKIP_TESTS" != "1" ]] && [[ -n "$TEST_COMMAND" ]]; then
 fi
 
 run uv version --bump "$BUMP_KIND"
-run git add pyproject.toml uv.lock lms_interface \
-  scripts/check_version_bump_vendoring.sh \
-  scripts/git_bump.sh \
-  scripts/install_git_hooks.sh \
-  scripts/lms_vendor_tooling.toml \
-  .githooks/pre-commit
+version="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n 1)"
+run git add pyproject.toml uv.lock
 
 if [[ "$NO_COMMIT" == "1" ]]; then
-  echo "Staged version bump and vendored LMSInterface updates (no commit created)."
+  if [[ ("$TAG_EXPLICIT" == "1" && "$CREATE_TAG" == "1") || ("$PUSH_EXPLICIT" == "1" && "$PUSH_CHANGES" == "1") ]]; then
+    die "--tag and --push require a commit. Remove --no-commit."
+  fi
+  echo "Staged version bump updates (no commit created)."
   exit 0
 fi
 
 if [[ -z "$COMMIT_MESSAGE" ]]; then
-  version="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n 1)"
   COMMIT_MESSAGE="Bump to version ${version}"
-  run env QUIZGEN_SKIP_PRECOMMIT_VENDOR=1 git commit -e -m "$COMMIT_MESSAGE"
+  run git commit -e -m "$COMMIT_MESSAGE"
 else
-  run env QUIZGEN_SKIP_PRECOMMIT_VENDOR=1 git commit -m "$COMMIT_MESSAGE"
+  run git commit -m "$COMMIT_MESSAGE"
+fi
+
+if [[ "$CREATE_TAG" == "1" ]]; then
+  tag_name="v${version}"
+  if git rev-parse -q --verify "refs/tags/${tag_name}" >/dev/null; then
+    die "Tag ${tag_name} already exists."
+  fi
+  run git tag "${tag_name}"
+fi
+
+if [[ "$PUSH_CHANGES" == "1" ]]; then
+  branch_name="$(git rev-parse --abbrev-ref HEAD)"
+  run git push "$REMOTE_NAME" "$branch_name"
+  if [[ "$CREATE_TAG" == "1" ]]; then
+    run git push "$REMOTE_NAME" "$tag_name"
+  fi
 fi
