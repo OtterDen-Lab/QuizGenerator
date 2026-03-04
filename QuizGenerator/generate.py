@@ -15,7 +15,6 @@ import zipfile
 from datetime import datetime
 
 import yaml
-
 from lms_interface.canvas_interface import CanvasInterface
 
 from QuizGenerator.generation.question import Question, QuestionGroup, QuestionRegistry
