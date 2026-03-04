@@ -83,6 +83,9 @@ jobs:
           uv run quizgen generate --allow-generator --yaml example_files/example_exam.yaml --num-pdfs 1
           ls out/*.pdf
 
+      - name: Vendor LMSInterface for release build
+        run: python scripts/vendor_lms_for_release.py
+
       - name: Build distributions
         run: uv build
 
