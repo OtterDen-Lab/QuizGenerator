@@ -14,6 +14,7 @@ import typer
 from dotenv import load_dotenv
 
 from lms_interface.canvas_interface import CanvasInterface
+
 from QuizGenerator import enable_debug_logging, is_debug_enabled
 from QuizGenerator.generate import (
     QuizGenError,
