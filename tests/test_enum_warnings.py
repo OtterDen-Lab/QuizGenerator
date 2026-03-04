@@ -20,3 +20,11 @@ def test_invalid_cache_policy_warns():
     assert ctx["cache_policy"] == CachingQuestion.Kind.FIFO
     warn.assert_called()
     assert any("Invalid cache policy" in str(call.args[0]) for call in warn.call_args_list)
+
+
+def test_invalid_cache_workload_warns():
+    with patch("QuizGenerator.generation.premade_questions.cst334.memory_questions.log.warning") as warn:
+        ctx = CachingQuestion._build_context(rng_seed=1, policy="FIFO", workload="RAND0M")
+    assert ctx["workload"] == CachingQuestion.Workload.RANDOM.value
+    warn.assert_called()
+    assert any("Invalid workload" in str(call.args[0]) for call in warn.call_args_list)

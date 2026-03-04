@@ -127,6 +127,13 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     
     def __str__(self):
       return self.name
+
+  class Workload(enum.Enum):
+    RANDOM = "random"
+    POPULAR = "popular"
+    
+    def __str__(self):
+      return self.value
   
   class Cache:
     def __init__(self, kind: CachingQuestion.Kind, cache_size: int, all_requests: list[int] | None = None):
@@ -190,6 +197,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     kwargs['num_elements'] = kwargs.get("num_elements", 5)
     kwargs['cache_size'] = kwargs.get("cache_size", 3)
     kwargs['num_requests'] = kwargs.get("num_requests", 10)
+    kwargs['workload'] = kwargs.get("workload", self.Workload.RANDOM.value)
 
     # Register the regenerable choice using the mixin
     policy_str = (kwargs.get("policy") or kwargs.get("algo"))
@@ -203,12 +211,65 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
     
     self.hit_rate = 0. # placeholder
 
+  @staticmethod
+  def get_workload_from_string(workload) -> CachingQuestion.Workload:
+    if workload is None:
+      return CachingQuestion.Workload.RANDOM
+    if isinstance(workload, CachingQuestion.Workload):
+      return workload
+
+    try:
+      return CachingQuestion.Workload[str(workload).strip().upper()]
+    except KeyError:
+      log.warning(
+        f"Invalid workload '{workload}'. "
+        f"Valid options: {[w.value for w in CachingQuestion.Workload]}. Defaulting to random."
+      )
+      return CachingQuestion.Workload.RANDOM
+  
+  @classmethod
+  def build_requests(
+    cls,
+    rng,
+    cache_size: int,
+    num_elements: int,
+    num_requests: int,
+    workload: CachingQuestion.Workload
+  ) -> list[int]:
+    if num_elements <= 0:
+      return []
+    
+    element_pool = list(range(num_elements))
+    warmup_requests = list(range(min(cache_size, num_elements)))
+    warm_hit_pool = list(range(min(max(cache_size - 1, 0), num_elements)))
+    warm_hit_request = rng.choice(warm_hit_pool or element_pool)
+    forced_miss_pool = list(range(cache_size, num_elements))
+    forced_miss_request = rng.choice(forced_miss_pool or element_pool)
+
+    trailing_request_count = max(0, num_requests - 2)
+    if workload == cls.Workload.POPULAR:
+      # Bias requests toward lower-numbered pages to mimic a "hot set".
+      request_weights = [num_elements - element for element in element_pool]
+      trailing_requests = rng.choices(
+        population=element_pool,
+        weights=request_weights,
+        k=trailing_request_count
+      )
+    else:
+      trailing_requests = rng.choices(
+        population=element_pool,
+        k=trailing_request_count
+      )
+
+    return warmup_requests + [warm_hit_request, forced_miss_request] + trailing_requests
+
   @classmethod
   def _build_context(cls, *, rng_seed=None, **kwargs):
     rng = random.Random(rng_seed)
     num_elements = kwargs.get("num_elements", 5)
     cache_size = kwargs.get("cache_size", 3)
     num_requests = kwargs.get("num_requests", 10)
+    workload_kind = cls.get_workload_from_string(kwargs.get("workload", "random"))
 
     policy = kwargs.get("policy") or kwargs.get("algo")
     if policy is None:
@@ -228,20 +289,29 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
           cache_policy = cls.Kind.FIFO
       config_params = {"policy": cache_policy.name}
 
-    requests = (
-        list(range(cache_size))
-        + rng.choices(population=list(range(cache_size - 1)), k=1)
-        + rng.choices(population=list(range(cache_size, num_elements)), k=1)
-        + rng.choices(population=list(range(num_elements)), k=(num_requests - 2))
+    config_params["workload"] = workload_kind.value
+
+    requests = cls.build_requests(
+      rng=rng,
+      cache_size=cache_size,
+      num_elements=num_elements,
+      num_requests=num_requests,
+      workload=workload_kind,
     )
 
     cache = cls.Cache(cache_policy, cache_size, requests)
     request_results = {}
     number_of_hits = 0
+    number_of_capacity_misses = 0
+    seen_requests = set()
     for (request_number, request) in enumerate(requests):
+      seen_before = request in seen_requests
       was_hit, evicted, cache_state = cache.query_cache(request, request_number)
       if was_hit:
         number_of_hits += 1
+      elif seen_before:
+        number_of_capacity_misses += 1
+      seen_requests.add(request)
       hit_value = 'hit' if was_hit else 'miss'
       evicted_value = '-' if evicted is None else f"{evicted}"
       cache_state_value = copy.copy(cache_state)
@@ -259,7 +329,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         ),
       }
 
-    hit_rate = 100 * number_of_hits / num_requests
+    hit_rate = 100 * number_of_hits / max(num_requests, 1)
     hit_rate_answer = ca.AnswerTypes.Float(
       hit_rate,
       label="Hit rate, excluding non-capacity misses",
@@ -271,16 +341,21 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
       "cache_size": cache_size,
       "num_requests": num_requests,
       "cache_policy": cache_policy,
+      "workload": workload_kind.value,
       "requests": requests,
       "request_results": request_results,
       "hit_rate": hit_rate,
+      "num_capacity_misses": number_of_capacity_misses,
+      "can_have_capacity_miss": (num_elements > cache_size) and (num_requests > 2),
       "hit_rate_answer": hit_rate_answer,
       "_config_params": config_params,
     }
 
   @classmethod
   def is_interesting_ctx(cls, context) -> bool:
-    return (context["hit_rate"] / 100.0) < 0.7
+    if not context.get("can_have_capacity_miss", True):
+      return True
+    return context.get("num_capacity_misses", 0) >= 1
 
   @classmethod
   def _build_body(cls, context):

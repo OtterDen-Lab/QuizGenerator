@@ -64,6 +64,7 @@ questions:
       num_elements: 5
       cache_size: 3
       num_requests: 10
+      workload: popular
       policy: null
       algo: null
       topic: MEMORY
@@ -200,6 +201,7 @@ questions:
       num_elements: 5
       cache_size: 3
       num_requests: 10
+      workload: random
       
     BaseAndBounds:
       class: cst334.BaseAndBounds
