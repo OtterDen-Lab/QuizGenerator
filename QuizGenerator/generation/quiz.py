@@ -607,8 +607,7 @@ class Quiz:
 
       # Check if this point tier should preserve order
       if points in preserve_order_for:
-        # Sort by topic only (preserve original order)
-        group.sort(key=lambda q: self.question_sort_order.index(q.topic))
+        # Preserve the original YAML/insertion order inside this point tier.
         optimized_questions.extend(group)
         log.debug(f"  {points}pt questions: {len(group)} questions (order preserved by config)")
         # After adding preserved-order questions, we're no longer on the first bin
@@ -738,16 +737,9 @@ class Quiz:
         **kwargs
       )
 
-    # Default: order by point value, then topic
-    def sort_func(q):
-      if self.question_sort_order is not None:
-        try:
-          return (-q.points_value, self.question_sort_order.index(q.topic))
-        except ValueError:
-          return (-q.points_value, float('inf'))
-      return -q.points_value
-
-    return sorted(self.questions, key=sort_func)
+    # Default: order by point value while preserving YAML/insertion order
+    # within each point tier.
+    return sorted(self.questions, key=lambda q: -q.points_value)
 
   def get_quiz(self, **kwargs) -> ca.Document:
     quiz = ca.Document(title=self.name)

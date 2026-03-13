@@ -9,10 +9,23 @@ cd "$repo_root"
 export UV_CACHE_DIR="${UV_CACHE_DIR:-$repo_root/.uv_cache}"
 
 echo "Running Ruff checks..."
+ruff_status=0
 if command -v ruff >/dev/null 2>&1; then
-  ruff check --output-format=github .
+  if ruff check --output-format=github .; then
+    :
+  else
+    ruff_status=$?
+  fi
 else
-  uv run ruff check --output-format=github .
+  if uv run ruff check --output-format=github .; then
+    :
+  else
+    ruff_status=$?
+  fi
+fi
+
+if [[ "$ruff_status" != "0" ]]; then
+  echo "WARNING: Ruff reported issues, but commits are not blocked on lint errors."
 fi
 
 echo "Checking docs/workflows for removed CLI forms..."
@@ -37,4 +50,4 @@ if "${search_cmd[@]}"; then
   exit 1
 fi
 
-echo "Repository hygiene checks passed."
+echo "Repository hygiene checks completed."

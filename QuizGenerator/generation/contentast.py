@@ -656,9 +656,12 @@ class Document(Container):
           v(spacing)
         }
       }
-      // PAGE and EXTRA_PAGE spacing presets should page-break after the
-      // question body renders so first-page header space doesn't push
-      // the whole question to page 2.
+      // PAGE and EXTRA_PAGE questions reserve the rest of the current
+      // page for student work before forcing the next question onto a
+      // fresh page.
+      if spacing >= 99cm {
+        v(1fr)
+      }
       if spacing >= 199cm {
         
         pagebreak()
@@ -972,8 +975,12 @@ class Question(Container):
 
     params_text = ",\n        ".join(params)
 
+    prefix = ""
+    if self.spacing >= 99 and self.question_number is not None and self.question_number > 1:
+      prefix = "#pagebreak(weak: true)\n"
+
     # Use the question function which handles all formatting including non-breaking
-    return textwrap.dedent(f"""
+    return prefix + textwrap.dedent(f"""
     #question(
         {params_text}
       )[

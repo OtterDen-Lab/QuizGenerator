@@ -351,6 +351,8 @@ This installs a pre-commit hook for repository hygiene checks and a local alias:
 git bump patch
 ```
 
+The hook reports Ruff issues but does not block commits on lint failures.
+
 `git bump` bumps `pyproject.toml` via `uv version`, stages `pyproject.toml` and `uv.lock`, commits, tags, and pushes by default.
 Use `git bump patch --no-tag --no-push` for a local-only bump.
 
