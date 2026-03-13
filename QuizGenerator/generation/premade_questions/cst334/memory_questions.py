@@ -566,6 +566,34 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
   MAX_BITS = 20
   MIN_VIRTUAL_BITS = 5
   MAX_VIRTUAL_BITS = 10
+
+  @classmethod
+  def _resolve_bit_limits(cls, **kwargs) -> tuple[int, int]:
+    max_physical_bits = int(kwargs.get("max_physical_bits", kwargs.get("max_bits", cls.MAX_BITS)))
+
+    if max_physical_bits < cls.MIN_VIRTUAL_BITS + 1:
+      raise ValueError(
+        "Segmentation requires max_bits/max_physical_bits to be at least "
+        f"{cls.MIN_VIRTUAL_BITS + 1}."
+      )
+
+    if "max_virtual_bits" in kwargs:
+      max_virtual_bits = int(kwargs["max_virtual_bits"])
+    else:
+      max_virtual_bits = min(cls.MAX_VIRTUAL_BITS, max_physical_bits - 1)
+
+    if max_virtual_bits < cls.MIN_VIRTUAL_BITS:
+      raise ValueError(
+        f"Segmentation requires max_virtual_bits to be at least {cls.MIN_VIRTUAL_BITS}."
+      )
+
+    if max_virtual_bits >= max_physical_bits:
+      raise ValueError(
+        "Segmentation requires max_virtual_bits to be smaller than "
+        "max_bits/max_physical_bits."
+      )
+
+    return max_virtual_bits, max_physical_bits
   
   @staticmethod
   def _within_bounds(segment, offset, bounds):
@@ -579,10 +607,11 @@ class Segmentation(MemoryAccessQuestion, TableQuestionMixin, BodyTemplatesMixin)
   @classmethod
   def _build_context(cls, *, rng_seed=None, **kwargs):
     rng = random.Random(rng_seed)
+    max_virtual_bits, max_physical_bits = cls._resolve_bit_limits(**kwargs)
 
     # Pick how big each of our address spaces will be
-    virtual_bits = rng.randint(cls.MIN_VIRTUAL_BITS, cls.MAX_VIRTUAL_BITS)
-    physical_bits = rng.randint(virtual_bits + 1, cls.MAX_BITS)
+    virtual_bits = rng.randint(cls.MIN_VIRTUAL_BITS, max_virtual_bits)
+    physical_bits = rng.randint(virtual_bits + 1, max_physical_bits)
 
     # Start with blank base and bounds
     base = {
@@ -1348,7 +1377,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       '# PFN bits': f"{context['num_bits_pfn']}"
     }
 
-    body.add_element(cls.create_info_table(parameter_info))
+    info_table = cls.create_info_table(parameter_info)
 
     # Page Directory table
     pd_matrix = []
@@ -1363,18 +1392,21 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     if (max(context['page_directory'].keys()) + 1) != 2 ** context['num_bits_pdi']:
       pd_matrix.append(['...', '...'])
 
-    # Use a simple text paragraph - the bold will come from markdown conversion
-    body.add_element(
-      ca.Paragraph([
-        '**Page Directory:**'
-      ])
+    page_directory_table = ca.Table(
+      headers=['PDI', 'PD Entry'],
+      data=pd_matrix
     )
-    body.add_element(
-      ca.Table(
-        headers=['PDI', 'PD Entry'],
-        data=pd_matrix
-      )
+
+    overview_tables = ca.TableGroup()
+    overview_tables.add_table(
+      label='Address Info:',
+      table=info_table
     )
+    overview_tables.add_table(
+      label='Page Directory:',
+      table=page_directory_table
+    )
+    body.add_element(overview_tables)
 
     # Page Tables - use TableGroup for side-by-side display
     table_group = ca.TableGroup()

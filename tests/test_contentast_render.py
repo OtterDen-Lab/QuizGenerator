@@ -1,4 +1,9 @@
 import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.premade_questions.cst334.memory_questions import (
+    HierarchicalPaging,
+    Paging,
+    Segmentation,
+)
 from QuizGenerator.generation.question import Question
 
 
@@ -136,3 +141,33 @@ def test_typst_header_renders_pdf_aid_for_page_spacing():
     assert "#if spacing >= 99cm and pdf_aid != none [" in header
     assert "#v(1fr)" in header
     assert "#align(bottom + left)" in header
+
+
+def test_section_typst_adds_spacing_between_top_level_elements():
+    body = ca.Section()
+    body.add_element(ca.Paragraph(["Intro text"]))
+    body.add_element(ca.Table(headers=["A"], data=[["B"]]))
+    body.add_element(ca.AnswerBlock([ca.AnswerTypes.String("x", label="Value")]))
+
+    rendered = body.render("typst")
+
+    assert rendered.count("#v(0.35cm)") == 2
+
+
+def test_memory_question_bodies_include_typst_block_spacing():
+    for question_cls in (Segmentation, Paging):
+        question = question_cls(name=question_cls.__name__, points_value=8)
+        instance = question.instantiate(rng_seed=123)
+        rendered = instance.body.render("typst")
+
+        assert "#v(0.35cm)" in rendered
+
+
+def test_hierarchical_paging_uses_grouped_tables_for_compact_layout():
+    question = HierarchicalPaging(name="HierarchicalPaging", points_value=8)
+    instance = question.instantiate(rng_seed=123)
+    rendered = instance.body.render("typst")
+
+    assert rendered.count("#grid(") >= 2
+    assert "Address Info:" in rendered
+    assert "Page Directory:" in rendered

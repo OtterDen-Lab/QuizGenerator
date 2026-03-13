@@ -52,6 +52,20 @@ List format: each item is a question entry with `name` and `points`. This preser
 - `seed_group` (string, optional): Questions with the same `seed_group` share one RNG seed per generated PDF.
 - `num_subquestions` (int, optional): Used for multipart questions.
 
+Question-specific kwargs are passed through directly to the question class. For example, `Segmentation` supports bit caps:
+
+```yaml
+questions:
+  8:
+    Segmentation:
+      class: Segmentation
+      kwargs:
+        max_bits: 12
+        max_virtual_bits: 7
+```
+
+For `Segmentation`, `max_bits` is a shortcut for `max_physical_bits`. You can also set `max_physical_bits` explicitly.
+
 Recommended core facets:
 
 - `course:<code>` (for example `course:cst334`)

@@ -1019,7 +1019,25 @@ class Section(Container):
           body.add_element(ans)
           return body, answers
   """
-  pass
+  def render_typst(self, **kwargs):
+    rendered_parts = []
+
+    for element in self.elements:
+      rendered = self.render_element(
+        element,
+        output_format=OutputFormat.TYPST,
+        **kwargs
+      ).strip()
+      if not rendered:
+        continue
+
+      if rendered_parts:
+        rendered_parts.append("#v(0.35cm)\n")
+
+      rendered_parts.append(rendered)
+      rendered_parts.append("\n")
+
+    return "".join(rendered_parts)
 
 # Individual elements
 class Text(Leaf):
