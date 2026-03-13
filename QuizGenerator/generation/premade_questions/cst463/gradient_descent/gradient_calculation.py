@@ -5,7 +5,7 @@ import logging
 
 import sympy as sp
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
 
 from .misc import format_vector, generate_function

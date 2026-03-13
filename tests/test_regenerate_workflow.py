@@ -1,4 +1,4 @@
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
 from QuizGenerator.regenerate import (
     regenerate_from_metadata,

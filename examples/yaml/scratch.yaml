@@ -1,0 +1,27 @@
+name: "Lab: Caching"
+questions:
+  3:
+    FIFO:
+      class: cst334.CachingQuestion
+      num_elements: 7
+      cache_size: 3
+      num_requests: 10
+      algo: FIFO
+    LRU:
+      class: cst334.CachingQuestion
+      num_elements: 7
+      cache_size: 3
+      num_requests: 10
+      algo: LRU
+    Belady:
+      class: cst334.CachingQuestion
+      num_elements: 7
+      cache_size: 3
+      num_requests: 10
+      algo: BELADY
+  1:
+    Grabbag:
+      class: cst334.CachingQuestion
+      num_elements: 8
+      cache_size: 4
+      num_requests: 15

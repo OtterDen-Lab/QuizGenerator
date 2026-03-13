@@ -9,7 +9,7 @@ import logging
 import math
 import random
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.mixins import BodyTemplatesMixin, TableQuestionMixin
 from QuizGenerator.generation.question import (
   Question,

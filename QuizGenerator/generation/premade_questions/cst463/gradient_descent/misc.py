@@ -3,7 +3,7 @@ from typing import Any
 
 import sympy as sp
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 
 
 def generate_function(rng, num_variables: int, max_degree: int, use_quadratic: bool = True) -> tuple[Any, sp.Expr, sp.MutableDenseMatrix, sp.Equality]:

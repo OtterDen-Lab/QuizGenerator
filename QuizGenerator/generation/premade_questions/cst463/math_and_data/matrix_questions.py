@@ -2,7 +2,7 @@
 import logging
 import random
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
 
 log = logging.getLogger(__name__)

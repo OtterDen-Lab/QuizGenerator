@@ -25,7 +25,7 @@ from QuizGenerator.generate import (
     list_registered_tags,
     test_all_questions,
 )
-from QuizGenerator.generation.contentast import Answer
+from QuizGenerator.core.contentast import Answer
 from QuizGenerator.generation.performance import PerformanceTracker
 
 app = typer.Typer(

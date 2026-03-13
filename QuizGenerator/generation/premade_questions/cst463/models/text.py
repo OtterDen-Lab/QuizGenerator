@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.mixins import TableQuestionMixin
 from QuizGenerator.generation.premade_questions.cst463.models.matrices import (
   MatrixQuestion,

@@ -7,7 +7,7 @@ These mixins provide reusable patterns for common question structures.
 import abc
 from typing import Any, Union
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 
 
 class TableQuestionMixin:
@@ -284,7 +284,7 @@ class MultiPartQuestionMixin:
         ]
         return self.create_repeated_problem_part(subparts)
     """
-    import QuizGenerator.generation.contentast as ca
+    import QuizGenerator.core.contentast as ca
     return ca.RepeatedProblemPart(subpart_data_list)
   
   def generate_subquestion_data(self):
@@ -335,7 +335,7 @@ class MultiPartQuestionMixin:
             else:
                 return self.create_single_part_body()
     """
-    import QuizGenerator.generation.contentast as ca
+    import QuizGenerator.core.contentast as ca
     body = ca.Section()
     body.add_element(ca.Paragraph([intro_text]))
     

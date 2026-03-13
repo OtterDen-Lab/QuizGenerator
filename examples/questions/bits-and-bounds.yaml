@@ -1,0 +1,37 @@
+name: "AddressSpaceSize"
+tags: ["memory", "addressing"]
+
+# Context generation
+context_generator:
+  variables:
+    num_bits:
+      type: int
+      min: 0
+      max: 10
+    
+    num_bytes:
+      type: computed
+      expression: "2 ** num_bits"
+    
+    is_even:
+      type: computed
+      expression: "(num_bits % 2) == 0"
+
+# Question structure
+body:
+  node_type: container
+  children:
+    - node_type: template
+      content: "Given {num_bits} bits, how many bytes can be addressed?"
+
+explanation:
+  node_type: container
+  children:
+    - node_type: conditional
+      condition_var: is_even
+      true_branch:
+        node_type: template
+        content: "2^{num_bits} = {num_bytes} bytes"
+      false_branch:
+        node_type: template
+        content: "2**{num_bits} = {num_bytes} bytes"

@@ -13,7 +13,7 @@ import tempfile
 import textwrap
 from pathlib import Path
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 
 log = logging.getLogger(__name__)
 

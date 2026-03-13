@@ -22,7 +22,7 @@ from typing import Any, Callable, Mapping, MutableMapping
 import canvasapi.course
 import canvasapi.quiz
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 
 log = logging.getLogger(__name__)
 

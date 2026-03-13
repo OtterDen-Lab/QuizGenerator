@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import QuestionContext, QuestionRegistry
 from QuizGenerator.generation.quiz import Quiz
 

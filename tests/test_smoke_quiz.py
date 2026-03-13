@@ -1,6 +1,6 @@
 import pytest
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generate import generate_typst
 from QuizGenerator.generation.question import Question
 from QuizGenerator.generation.quiz import Quiz

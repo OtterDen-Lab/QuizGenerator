@@ -570,7 +570,7 @@ questions:
         path = temp_yaml_file(yaml_content)
         quiz = Quiz.from_yaml(path)[0]
 
-        import QuizGenerator.generation.contentast as ca
+        import QuizGenerator.core.contentast as ca
         document = quiz.get_quiz(rng_seed=42)
         assert isinstance(document, ca.Document)
 

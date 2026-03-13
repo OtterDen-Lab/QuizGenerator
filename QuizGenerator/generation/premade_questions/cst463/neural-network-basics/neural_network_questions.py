@@ -7,7 +7,7 @@ import logging
 import matplotlib.pyplot as plt
 import numpy as np
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
 
 from ..models.matrices import MatrixQuestion

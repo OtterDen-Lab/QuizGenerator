@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import sympy as sp
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.mixins import BodyTemplatesMixin, TableQuestionMixin
 from QuizGenerator.generation.question import Question, QuestionRegistry
 

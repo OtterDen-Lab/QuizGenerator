@@ -2,7 +2,7 @@ import logging
 
 import numpy as np
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import QuestionRegistry
 
 from .matrices import MatrixQuestion

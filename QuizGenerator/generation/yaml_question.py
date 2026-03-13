@@ -9,7 +9,7 @@ from typing import Any
 import numpy as np
 import yaml
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import QuestionContext
 
 _TEMPLATE_RE = re.compile(r"\{\{(.*?)\}\}")

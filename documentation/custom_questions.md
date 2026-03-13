@@ -29,7 +29,7 @@ my_custom_questions/
 ```python
 import random
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
 
 
@@ -174,7 +174,7 @@ Create a Python file anywhere accessible to your quiz config:
 **my_questions.py:**
 
 ```python
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
 
 

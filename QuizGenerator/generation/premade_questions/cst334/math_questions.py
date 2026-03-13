@@ -4,7 +4,7 @@ import logging
 import math
 import random
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation.constants import MathRanges
 from QuizGenerator.generation.question import Question, QuestionRegistry
 
@@ -214,7 +214,7 @@ class AverageMemoryAccessTime(MathQuestion):
       hit_rate = rng.random()
 
     hit_rate = round(hit_rate, 4)
-    amat = hit_rate * hit_latency + (1 - hit_rate) * miss_latency
+    amat = hit_latency + (1 - hit_rate) * miss_latency
     show_miss_rate = rng.random() > 0.5
 
     return {
@@ -287,8 +287,8 @@ class AverageMemoryAccessTime(MathQuestion):
       ca.Equation.make_block_equation__multiline_equals(
         lhs="AMAT",
         rhs=[
-          r"(hit\_rate)*(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
-          f"({context['hit_rate']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({context['hit_latency']}) + "
+          r"(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
+          f"({context['hit_latency']}) + "
           f"({1 - context['hit_rate']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({context['miss_latency']}) = "
           f"{context['amat']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
         ]

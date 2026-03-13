@@ -7,7 +7,7 @@ import random
 import sys
 from types import SimpleNamespace
 
-import QuizGenerator.generation.contentast as ca
+import QuizGenerator.core.contentast as ca
 from QuizGenerator.generation import yaml_question
 from QuizGenerator.generation.mixins import TableQuestionMixin
 from QuizGenerator.generation.question import Question, QuestionRegistry
