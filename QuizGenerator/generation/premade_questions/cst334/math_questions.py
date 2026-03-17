@@ -27,7 +27,7 @@ class BitsAndBytes(MathQuestion):
   def _build_context(cls, *, rng_seed=None, **kwargs):
     rng = random.Random(rng_seed)
     from_binary = (0 == rng.randint(0, 1))
-    num_bits = rng.randint(cls.MIN_BITS, cls.MAX_BITS)
+    num_bits = int(kwargs.get("num_bits", rng.randint(cls.MIN_BITS, cls.MAX_BITS)))
     num_bytes = int(math.pow(2, num_bits))
     return {
       "from_binary": from_binary,
@@ -110,7 +110,7 @@ class HexAndBinary(MathQuestion):
   def _build_context(cls, *, rng_seed=None, **kwargs):
     rng = random.Random(rng_seed)
     from_binary = rng.choice([True, False])
-    number_of_hexits = rng.randint(1, 8)
+    number_of_hexits = int(kwargs.get("number_of_hexits", rng.randint(1, 8)))
     value = rng.randint(1, 16**number_of_hexits)
     hex_val = f"0x{value:0{number_of_hexits}X}"
     binary_val = f"0b{value:0{4*number_of_hexits}b}"
