@@ -5,6 +5,7 @@ import abc
 import collections
 import dataclasses
 import enum
+import fractions
 import io
 import logging
 import math
@@ -234,93 +235,150 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
     time_quantum=None,
     scheduler_algorithm=None
   ):
-    curr_time = 0
-    selected_job: SchedulingQuestion.Job | None = None
-
+    curr_time = fractions.Fraction(0, 1)
+    running_jobs: list[SchedulingQuestion.Job] = []
+    completed_job_ids: set[int] = set()
+    remaining_time = {
+      job.job_id: fractions.Fraction(str(job.duration))
+      for job in jobs_to_run
+    }
+    arrival_time = {
+      job.job_id: fractions.Fraction(str(job.arrival_time))
+      for job in jobs_to_run
+    }
     timeline = collections.defaultdict(list)
-    timeline[curr_time].append("Simulation Start")
+    timeline[0].append("Simulation Start")
     for job in jobs_to_run:
       timeline[job.arrival_time].append(f"Job{job.job_id} arrived")
 
-    while len(jobs_to_run) > 0:
-      possible_time_slices = []
+    while len(completed_job_ids) < len(jobs_to_run):
+      available_jobs = [
+        job for job in jobs_to_run
+        if job.job_id not in completed_job_ids and arrival_time[job.job_id] <= curr_time
+      ]
+      future_jobs = [
+        job for job in jobs_to_run
+        if job.job_id not in completed_job_ids and arrival_time[job.job_id] > curr_time
+      ]
 
-      # Get the jobs currently in the system
-      available_jobs = list(filter(
-        (lambda j: j.arrival_time <= curr_time),
-        jobs_to_run
-      ))
+      if scheduler_algorithm == cls.Kind.RoundRobin:
+        desired_running_jobs = sorted(available_jobs, key=lambda job: job.job_id)
+      else:
+        selected_job = None
+        if (
+          not preemptable
+          and len(running_jobs) == 1
+          and running_jobs[0].job_id not in completed_job_ids
+        ):
+          selected_job = running_jobs[0]
+        elif len(available_jobs) > 0:
+          selected_job = min(
+            available_jobs,
+            key=(lambda job: selector(job, float(curr_time)))
+          )
+        desired_running_jobs = [] if selected_job is None else [selected_job]
 
-      # Get the jobs that will enter the system in the future
-      future_jobs : list[SchedulingQuestion.Job] = list(filter(
-        (lambda j: j.arrival_time > curr_time),
-        jobs_to_run
-      ))
+      previous_running_ids = {job.job_id for job in running_jobs}
+      desired_running_ids = {job.job_id for job in desired_running_jobs}
+      stopping_jobs = [
+        job for job in running_jobs
+        if job.job_id not in desired_running_ids
+      ]
+      starting_jobs = [
+        job for job in desired_running_jobs
+        if job.job_id not in previous_running_ids
+      ]
 
-      # Check whether there are jobs in the system already
-      if len(available_jobs) > 0:
-        # Use the selector to identify what job we are going to run
-        selected_job : SchedulingQuestion.Job = min(
-          available_jobs,
-          key=(lambda j: selector(j, curr_time))
+      for job in stopping_jobs:
+        if scheduler_algorithm != cls.Kind.RoundRobin:
+          job.state_change_times.append(float(curr_time))
+        job.unpause_time = None
+        job.last_run = float(curr_time)
+
+      for job in starting_jobs:
+        if job.response_time is None:
+          job.start_time = float(curr_time)
+          job.response_time = float(curr_time - arrival_time[job.job_id])
+          timeline[float(curr_time)].append(
+            f"Starting Job{job.job_id} "
+            f"(resp = {job.response_time:0.{cls.ROUNDING_DIGITS}f}s)"
+          )
+        job.unpause_time = float(curr_time)
+        if scheduler_algorithm != cls.Kind.RoundRobin:
+          job.state_change_times.append(float(curr_time))
+
+      running_jobs = desired_running_jobs
+
+      if len(running_jobs) == 0:
+        if len(future_jobs) == 0:
+          log.error("No jobs available to schedule")
+          break
+        timeline[float(curr_time)].append("(No job running)")
+        curr_time = min(arrival_time[job.job_id] for job in future_jobs)
+        continue
+
+      if scheduler_algorithm == cls.Kind.RoundRobin:
+        service_rates = {
+          job.job_id: fractions.Fraction(1, len(running_jobs))
+          for job in running_jobs
+        }
+      else:
+        service_rates = {running_jobs[0].job_id: fractions.Fraction(1, 1)}
+
+      next_completion_delta = min(
+        remaining_time[job.job_id] / service_rates[job.job_id]
+        for job in running_jobs
+      )
+      next_arrival_delta = None
+      if len(future_jobs) > 0:
+        next_arrival_delta = min(
+          arrival_time[job.job_id] - curr_time
+          for job in future_jobs
         )
-        if selected_job.has_started():
-          timeline[curr_time].append(
-            f"Starting Job{selected_job.job_id} "
-            f"(resp = {curr_time - selected_job.arrival_time:0.{cls.ROUNDING_DIGITS}f}s)"
-          )
-        # We start the job that we selected
-        selected_job.run(curr_time, (scheduler_algorithm == cls.Kind.RoundRobin))
 
-        # We could run to the end of the job
-        possible_time_slices.append(selected_job.time_remaining(curr_time))
+      next_time_slice = next_completion_delta
+      if next_arrival_delta is not None:
+        next_time_slice = min(next_time_slice, next_arrival_delta)
 
-      # Check if we are preemptable or if we haven't found any time slices yet
-      if preemptable or len(possible_time_slices) == 0:
-        # Then when a job enters we could stop the current task
-        if len(future_jobs) != 0:
-          next_arrival : SchedulingQuestion.Job = min(
-            future_jobs,
-            key=(lambda j: j.arrival_time)
-          )
-          possible_time_slices.append((next_arrival.arrival_time - curr_time))
-
-      if time_quantum is not None:
-        possible_time_slices.append(time_quantum)
-
-      ## Now we pick the minimum
-      try:
-        next_time_slice = min(possible_time_slices)
-      except ValueError:
-        log.error("No jobs available to schedule")
-        break
       if scheduler_algorithm != SchedulingQuestion.Kind.RoundRobin:
-        if selected_job is not None:
-          timeline[curr_time].append(
-            f"Running Job{selected_job.job_id} "
-            f"for {next_time_slice:0.{cls.ROUNDING_DIGITS}f}s"
-          )
-        else:
-          timeline[curr_time].append(f"(No job running)")
+        timeline[float(curr_time)].append(
+          f"Running Job{running_jobs[0].job_id} "
+          f"for {float(next_time_slice):0.{cls.ROUNDING_DIGITS}f}s"
+        )
+
+      for job in running_jobs:
+        remaining_time[job.job_id] -= service_rates[job.job_id] * next_time_slice
       curr_time += next_time_slice
+      for job in running_jobs:
+        job.elapsed_time = float(
+          fractions.Fraction(str(job.duration)) - remaining_time[job.job_id]
+        )
+        job.unpause_time = float(curr_time)
 
-      # We stop the job we selected, and potentially mark it as complete
-      if selected_job is not None:
-        selected_job.stop(curr_time, (scheduler_algorithm == cls.Kind.RoundRobin))
-        if selected_job.is_complete(curr_time):
-          timeline[curr_time].append(
-            f"Completed Job{selected_job.job_id} "
-            f"(TAT = {selected_job.turnaround_time:0.{cls.ROUNDING_DIGITS}f}s)"
-          )
-      selected_job = None
+      completed_now = [
+        job for job in running_jobs
+        if remaining_time[job.job_id] <= 0
+      ]
+      for job in completed_now:
+        remaining_time[job.job_id] = fractions.Fraction(0, 1)
+        job.elapsed_time = float(job.duration)
+        job.end_time = float(curr_time)
+        job.turnaround_time = float(curr_time - arrival_time[job.job_id])
+        job.unpause_time = None
+        job.last_run = float(curr_time)
+        if scheduler_algorithm != cls.Kind.RoundRobin:
+          job.state_change_times.append(float(curr_time))
+        timeline[float(curr_time)].append(
+          f"Completed Job{job.job_id} "
+          f"(TAT = {job.turnaround_time:0.{cls.ROUNDING_DIGITS}f}s)"
+        )
+        completed_job_ids.add(job.job_id)
 
-      # Filter out completed jobs
-      jobs_to_run : list[SchedulingQuestion.Job] = list(filter(
-        (lambda j: not j.is_complete(curr_time)),
-        jobs_to_run
-      ))
-      if len(jobs_to_run) == 0:
-        break
+      if len(completed_now) > 0:
+        running_jobs = [
+          job for job in running_jobs
+          if job.job_id not in completed_job_ids
+        ]
 
     return timeline
   
@@ -364,7 +422,7 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
           jobs_to_run=jobs,
           selector=(lambda j, curr_time: (j.last_run, j.job_id)),
           preemptable=True,
-          time_quantum=1e-05,
+          time_quantum=None,
           scheduler_algorithm=scheduler_algorithm
         )
       case _:
