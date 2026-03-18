@@ -12,9 +12,10 @@ from typing import Literal
 
 import typer
 from dotenv import load_dotenv
-
 from lms_interface.canvas_interface import CanvasInterface
+
 from QuizGenerator import enable_debug_logging, is_debug_enabled
+from QuizGenerator.core.contentast import Answer
 from QuizGenerator.generate import (
     QuizGenError,
     _check_dependencies,
@@ -25,7 +26,6 @@ from QuizGenerator.generate import (
     list_registered_tags,
     test_all_questions,
 )
-from QuizGenerator.core.contentast import Answer
 from QuizGenerator.generation.performance import PerformanceTracker
 
 app = typer.Typer(

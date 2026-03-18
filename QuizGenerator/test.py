@@ -4,10 +4,9 @@ import logging
 import pathlib
 import pprint
 
-import typer
-
-import yaml as pyyaml
 import core.classes as classes
+import typer
+import yaml as pyyaml
 
 from QuizGenerator import enable_debug_logging, is_debug_enabled
 

@@ -2,13 +2,13 @@
 from __future__ import annotations
 
 import logging
-import os
-from typing import List
+import random
+from typing import Any, List
 
 import pydantic
 from pydantic import constr
 
-from QuizGenerator.core.question_ast import NodeRegistry, Node
+from QuizGenerator.core.question_ast import Node, NodeRegistry
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +48,6 @@ class Question(pydantic.BaseModel):
     )
   
 
-
 class Submission(StrictBase):
   """
   Submission of an exam.  For now, we assume it came from a file that has a name and a hash.
@@ -69,3 +68,34 @@ class Submission(StrictBase):
     Feedback from either grader, default, ai, or generated
     """
     text: str
+
+
+class QuestionContext(StrictBase):
+  def __init__(self, rng: int | random.Random | None = None, **kwargs):
+    super().__init__()
+    # Setup RNG (might be None if reconstructing from frozen state)
+    if rng is None:
+      self.rng = None
+      self.rng_seed = None
+    elif isinstance(rng, int):
+      self.rng = random.Random(rng)
+      self.rng_seed = rng
+    else:
+      self.rng = rng
+      self.rng_seed = getattr(rng, 'seed', None)
+    
+    self._overrides = kwargs
+  
+  def to_dict(self) -> dict[str, Any]:
+    """Export all context (inputs + computed) for freezing"""
+    return {
+      k: v for k, v in self.__dict__.items()
+      if not k.startswith('_') and k not in ['rng', 'rng_seed']
+    }
+  
+  @classmethod
+  def from_dict(cls, data: dict[str, Any]) -> "QuestionContext":
+    """Reconstruct from frozen state (no RNG needed)"""
+    # Pass all data as overrides, no RNG generation
+    return cls(rng=None, **data)
+

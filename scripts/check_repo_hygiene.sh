@@ -12,7 +12,7 @@ echo "Running Ruff checks..."
 if command -v ruff >/dev/null 2>&1; then
   ruff check --output-format=github .
 else
-  uv run ruff check --output-format=github .
+  uvx --from ruff==0.7.4 ruff check --output-format=github .
 fi
 
 echo "Checking docs/workflows for removed CLI forms..."
