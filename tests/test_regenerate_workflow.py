@@ -1,3 +1,5 @@
+import pytest
+
 import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
 from QuizGenerator.regenerate import (
@@ -77,3 +79,55 @@ questions:
     assert any("YAML id mismatch" in warning for warning in warnings)
     assert any("Points mismatch" in warning for warning in warnings)
     assert result["answer_objects"][0].value == 59
+
+
+def test_regenerate_from_yaml_metadata_ignores_unrelated_fromgenerator_entries():
+    yaml_text = """
+name: "Mixed Replay Quiz"
+questions:
+  1:
+    "Safe seeded question":
+      question_id: "seeded-q2"
+      class: test.regen.seeded
+    "Unrelated generator question":
+      class: FromGenerator
+      kwargs:
+        generator: |
+          return "unsafe"
+"""
+
+    result = regenerate_from_yaml_metadata(
+        question_id="seeded-q2",
+        seed=42,
+        points=1.0,
+        yaml_text=yaml_text,
+    )
+
+    assert result["question_id"] == "seeded-q2"
+    assert result["answer_objects"][0].value == 59
+
+
+def test_regenerate_from_yaml_metadata_rejects_duplicate_question_ids_across_docs():
+    yaml_text = """
+name: "Quiz A"
+questions:
+  1:
+    "Question A":
+      question_id: "duplicate-q"
+      class: test.regen.seeded
+---
+name: "Quiz B"
+questions:
+  1:
+    "Question B":
+      question_id: "duplicate-q"
+      class: test.regen.seeded
+"""
+
+    with pytest.raises(ValueError, match="not unique"):
+        regenerate_from_yaml_metadata(
+            question_id="duplicate-q",
+            seed=42,
+            points=1.0,
+            yaml_text=yaml_text,
+        )
