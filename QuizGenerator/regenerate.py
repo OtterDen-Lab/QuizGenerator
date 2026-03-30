@@ -199,6 +199,107 @@ def _find_questions_by_id(quizzes: list[Quiz], question_id: str) -> list:
   return matches
 
 
+def _build_minimal_exam_doc_for_question_id(
+  exam_dict: dict[str, Any],
+  question_id: str
+) -> dict[str, Any] | None:
+  questions = exam_dict.get("questions")
+  if not isinstance(questions, (dict, list)):
+    return None
+
+  minimal_doc: dict[str, Any] = {
+    "name": exam_dict.get("name", "Replay Quiz"),
+    "questions": None,
+  }
+
+  for key in (
+    "yaml_id",
+    "custom_modules",
+    "practice",
+    "description",
+    "sort order",
+    "question_order",
+  ):
+    if key in exam_dict:
+      minimal_doc[key] = copy.deepcopy(exam_dict[key])
+
+  if isinstance(questions, list):
+    for entry in questions:
+      if not isinstance(entry, dict):
+        continue
+      if str(entry.get("question_id", "")) != question_id:
+        continue
+      minimal_doc["questions"] = [copy.deepcopy(entry)]
+      return minimal_doc
+    return None
+
+  for points_value, question_definitions in questions.items():
+    if not isinstance(question_definitions, dict):
+      continue
+
+    for q_name, q_data in question_definitions.items():
+      if q_name == "_config" or not isinstance(q_data, dict):
+        continue
+
+      group_config = q_data.get("_config", {}) or {}
+      if group_config.get("group", False):
+        for group_question_name, group_question_data in q_data.items():
+          if group_question_name == "_config" or not isinstance(group_question_data, dict):
+            continue
+          if str(group_question_data.get("question_id", "")) != question_id:
+            continue
+
+          minimal_doc["questions"] = {
+            points_value: {
+              q_name: {
+                "_config": copy.deepcopy(group_config),
+                group_question_name: copy.deepcopy(group_question_data),
+              }
+            }
+          }
+          return minimal_doc
+
+      if str(q_data.get("question_id", "")) != question_id:
+        continue
+
+      minimal_doc["questions"] = {
+        points_value: {
+          q_name: copy.deepcopy(q_data),
+        }
+      }
+      return minimal_doc
+
+  return None
+
+
+def _load_quizzes_for_question_id(
+  docs: list[dict[str, Any]],
+  question_id: str,
+  *,
+  source_path: str | None = None
+) -> list[Quiz]:
+  minimal_docs = []
+  for doc in docs:
+    if not isinstance(doc, dict):
+      continue
+    minimal_doc = _build_minimal_exam_doc_for_question_id(doc, question_id)
+    if minimal_doc is not None:
+      minimal_docs.append(minimal_doc)
+
+  if not minimal_docs:
+    raise ValueError(f"Question ID '{question_id}' not found in provided YAML.")
+  if len(minimal_docs) > 1:
+    raise ValueError(f"Question ID '{question_id}' is not unique in provided YAML.")
+
+  quizzes = Quiz.from_exam_dicts(minimal_docs, source_path=source_path)
+  matches = _find_questions_by_id(quizzes, question_id)
+  if not matches:
+    raise ValueError(f"Question ID '{question_id}' not found after loading replay YAML.")
+  if len(matches) > 1:
+    raise ValueError(f"Question ID '{question_id}' is not unique after loading replay YAML.")
+  return quizzes
+
+
 def regenerate_from_yaml_metadata(
   *,
   question_id: str,
@@ -224,14 +325,13 @@ def regenerate_from_yaml_metadata(
       upload_func: Optional upload function used when image_mode="upload"
   """
   docs = _load_yaml_docs(yaml_path=yaml_path, yaml_text=yaml_text, yaml_docs=yaml_docs)
-  quizzes = Quiz.from_exam_dicts(copy.deepcopy(docs), source_path=yaml_path)
+  quizzes = _load_quizzes_for_question_id(
+    copy.deepcopy(docs),
+    question_id,
+    source_path=yaml_path
+  )
 
   matches = _find_questions_by_id(quizzes, question_id)
-  if not matches:
-    raise ValueError(f"Question ID '{question_id}' not found in provided YAML.")
-  if len(matches) > 1:
-    raise ValueError(f"Question ID '{question_id}' is not unique in provided YAML.")
-
   question = matches[0]
 
   warnings: list[str] = []
