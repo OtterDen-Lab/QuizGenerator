@@ -1,5 +1,6 @@
 import math
 import os
+from fractions import Fraction
 
 os.environ.setdefault("MPLCONFIGDIR", "/tmp/mpl-test-cache")
 
@@ -96,3 +97,38 @@ def test_round_robin_canvas_answers_round_up_repeating_sixths():
 
   assert "10.6667" in accepted
   assert "10.6666" not in accepted
+
+
+def test_average_tat_keeps_fraction_answers_for_exact_results(monkeypatch):
+  jobs = [
+    SchedulingQuestion.Job(job_id=0, arrival_time=0, duration=2),
+    SchedulingQuestion.Job(job_id=1, arrival_time=0, duration=3),
+  ]
+
+  def fake_get_workload(rng, num_jobs, *args, **kwargs):
+    return jobs
+
+  monkeypatch.setattr(SchedulingQuestion, "get_workload", fake_get_workload)
+
+  ctx = SchedulingQuestion._build_context(
+    rng_seed=1,
+    num_jobs=2,
+    scheduler_kind=SchedulingQuestion.Kind.FIFO,
+  )
+
+  assert ctx["overall_stats"]["TAT"] == Fraction(7, 2)
+
+  body = SchedulingQuestion._build_body(ctx)
+  avg_block = next(
+    element
+    for element in body.elements
+    if isinstance(element, ca.AnswerBlock)
+  )
+  avg_tat_answer = avg_block.data[1][0]
+  accepted = {
+    entry["answer_text"]
+    for entry in avg_tat_answer.get_for_canvas()
+  }
+
+  assert "7/2" in accepted
+  assert "3.5" in accepted

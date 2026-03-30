@@ -444,9 +444,20 @@ class SchedulingQuestion(ProcessQuestion, RegenerableChoiceMixin, TableQuestionM
       }
       for (i, job) in enumerate(jobs)
     }
+
+    # Keep the overall averages exact so Float answers can emit equivalent
+    # fraction forms when the result is a finite rational value.
+    overall_response = sum(
+      fractions.Fraction(str(job.response_time))
+      for job in jobs
+    ) / len(jobs)
+    overall_tat = sum(
+      fractions.Fraction(str(job.turnaround_time))
+      for job in jobs
+    ) / len(jobs)
     overall_stats = {
-      "Response" : sum([job.response_time for job in jobs]) / len(jobs),
-      "TAT" : sum([job.turnaround_time for job in jobs]) / len(jobs)
+      "Response" : overall_response,
+      "TAT" : overall_tat,
     }
 
     return {
