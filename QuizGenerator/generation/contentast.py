@@ -2810,10 +2810,12 @@ class Answer(Leaf):
     # Round to our standard precision first
     decimal.getcontext().prec = max(34, rounding_digits + 10)
     q = decimal.Decimal(1).scaleb(-rounding_digits)
+    exact_fraction = None
     if isinstance(value, str) and '/' in value:
-      f = Answer._to_fraction(value)
-      decimal_value = decimal.Decimal(f.numerator) / decimal.Decimal(f.denominator)
+      exact_fraction = Answer._to_fraction(value)
+      decimal_value = decimal.Decimal(exact_fraction.numerator) / decimal.Decimal(exact_fraction.denominator)
     elif isinstance(value, fractions.Fraction):
+      exact_fraction = value
       decimal_value = decimal.Decimal(value.numerator) / decimal.Decimal(value.denominator)
     else:
       decimal_value = decimal.Decimal(str(value))
@@ -2833,22 +2835,22 @@ class Answer(Leaf):
     if rounded_decimal == rounded_decimal.to_integral_value():
       outs.add(str(int(rounded_decimal)))
 
-    # Fraction form (only if exactly representable with reasonable denominator)
-    f = Answer._to_fraction(rounded_decimal)
-    fr = f.limit_denominator(max_denominator)
-    if fr == f and fr.denominator > 1:
-      outs.add(f"{fr.numerator}/{fr.denominator}")
-      denominators = (
-        Answer.DEFAULT_EQUIVALENT_FRACTION_DENOMINATORS
-        if allowed_fraction_denominators is None
-        else allowed_fraction_denominators
-      )
-      for denominator in Answer._normalize_denominators(denominators):
-        if denominator % fr.denominator != 0:
-          continue
-        multiplier = denominator // fr.denominator
-        unsimplified_numerator = fr.numerator * multiplier
-        outs.add(f"{unsimplified_numerator}/{denominator}")
+    # Fraction form for exact rational values
+    if exact_fraction is not None:
+      fr = exact_fraction.limit_denominator(max_denominator)
+      if fr == exact_fraction and fr.denominator > 1:
+        outs.add(f"{fr.numerator}/{fr.denominator}")
+        denominators = (
+          Answer.DEFAULT_EQUIVALENT_FRACTION_DENOMINATORS
+          if allowed_fraction_denominators is None
+          else allowed_fraction_denominators
+        )
+        for denominator in Answer._normalize_denominators(denominators):
+          if denominator % fr.denominator != 0:
+            continue
+          multiplier = denominator // fr.denominator
+          unsimplified_numerator = fr.numerator * multiplier
+          outs.add(f"{unsimplified_numerator}/{denominator}")
 
     return sorted(outs, key=lambda s: (len(s), s))
   

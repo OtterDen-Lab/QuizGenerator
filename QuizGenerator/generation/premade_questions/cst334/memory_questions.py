@@ -5,6 +5,7 @@ import abc
 import collections
 import copy
 import enum
+import fractions
 import logging
 import math
 import random
@@ -329,7 +330,7 @@ class CachingQuestion(MemoryQuestion, RegenerableChoiceMixin, TableQuestionMixin
         ),
       }
 
-    hit_rate = 100 * number_of_hits / max(num_requests, 1)
+    hit_rate = fractions.Fraction(100 * number_of_hits, max(num_requests, 1))
     hit_rate_answer = ca.AnswerTypes.Float(
       hit_rate,
       label="Hit rate, excluding non-capacity misses",
