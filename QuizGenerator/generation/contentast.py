@@ -3043,12 +3043,20 @@ class AnswerTypes:
           }
         ]
       else:
-        # Use the accepted_strings helper
-        answer_strings = Answer.accepted_strings(
-          self.value,
-          max_denominator=60,
-          allowed_fraction_denominators=self.allowed_fraction_denominators
-        )
+        # Use the accepted_strings helper. Support list-valued floats so a
+        # single blank can accept multiple equivalent or transitional answers.
+        values = self.value if isinstance(self.value, list) else [self.value]
+        answer_strings = []
+        seen = set()
+        for value in values:
+          for answer_string in Answer.accepted_strings(
+            value,
+            max_denominator=60,
+            allowed_fraction_denominators=self.allowed_fraction_denominators
+          ):
+            if answer_string not in seen:
+              seen.add(answer_string)
+              answer_strings.append(answer_string)
       
         canvas_answers = [
           {
@@ -3061,6 +3069,16 @@ class AnswerTypes:
       return canvas_answers
 
     def get_display_string(self) -> str:
+      if hasattr(self, "display") and self.display is not None:
+        return str(self.display)
+      if isinstance(self.value, list):
+        return " / ".join(
+          Answer.accepted_strings(
+            value,
+            allowed_fraction_denominators=self.allowed_fraction_denominators
+          )[0]
+          for value in self.value
+        )
       answer_strings = Answer.accepted_strings(
         self.value,
         allowed_fraction_denominators=self.allowed_fraction_denominators

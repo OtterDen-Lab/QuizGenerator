@@ -214,14 +214,19 @@ class AverageMemoryAccessTime(MathQuestion):
       hit_rate = rng.random()
 
     hit_rate = round(hit_rate, 4)
-    amat = hit_rate * hit_latency + (1 - hit_rate) * miss_latency
+    miss_rate = round(1 - hit_rate, 4)
+    weighted_amat = hit_rate * hit_latency + miss_rate * miss_latency
+    miss_penalty_amat = hit_latency + miss_rate * miss_latency
     show_miss_rate = rng.random() > 0.5
 
     return {
       "hit_latency": hit_latency,
       "miss_latency": miss_latency,
       "hit_rate": hit_rate,
-      "amat": amat,
+      "miss_rate": miss_rate,
+      "weighted_amat": weighted_amat,
+      "miss_penalty_amat": miss_penalty_amat,
+      "amat": weighted_amat,
       "show_miss_rate": show_miss_rate,
     }
 
@@ -229,7 +234,8 @@ class AverageMemoryAccessTime(MathQuestion):
   def _build_body(cls, context):
     """Build question body and collect answers."""
     answer = ca.AnswerTypes.Float(
-      context["amat"],
+      [context["weighted_amat"], context["miss_penalty_amat"]],
+      display=f"{context['weighted_amat']:.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f}",
       label="Average Memory Access Time",
       unit="cycles"
     )
@@ -253,9 +259,9 @@ class AverageMemoryAccessTime(MathQuestion):
 
     # Add in either miss rate or hit rate -- we only need one of them
     if context["show_miss_rate"]:
-      table_data.append(["Miss Rate", f"{100 * (1 - context['hit_rate']): 0.2f}%"])
+      table_data.append(["Miss Rate", f"{100 * context['miss_rate']:.2f}%"])
     else:
-      table_data.append(["Hit Rate", f"{100 * context['hit_rate']: 0.2f}%"])
+      table_data.append(["Hit Rate", f"{100 * context['hit_rate']:.2f}%"])
 
     body.add_element(
       ca.Table(
@@ -272,27 +278,60 @@ class AverageMemoryAccessTime(MathQuestion):
   @classmethod
   def _build_explanation(cls, context):
     explanation = ca.Section()
+    hit_rate = context["hit_rate"]
+    miss_rate = context["miss_rate"]
+    hit_latency = context["hit_latency"]
+    miss_latency = context["miss_latency"]
+    weighted_amat = context["weighted_amat"]
+    miss_penalty_amat = context["miss_penalty_amat"]
+    digits = ca.Answer.DEFAULT_ROUNDING_DIGITS
     
-    # Add in General explanation
     explanation.add_element(
       ca.Paragraph([
-        "Remember that to calculate the Average Memory Access Time "
-        "we weight both the hit and miss times by their relative likelihood.",
-        "That is, we calculate:"
+        "This question accepts either AMAT convention.",
+        "One convention uses a weighted average with hit rate and miss rate.",
+        "The other uses hit time plus a miss-rate penalty term."
       ])
     )
-    
-    # Add in equations
+
+    explanation.add_element(
+      ca.Paragraph([
+        "If you use the weighted-average convention, compute:"
+      ])
+    )
     explanation.add_element(
       ca.Equation.make_block_equation__multiline_equals(
         lhs="AMAT",
         rhs=[
-          r"(hit\_rate)*(hit\_cost) + (1 - hit\_rate)*(miss\_cost)",
-          f"({context['hit_rate']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({context['hit_latency']}) + "
-          f"({1 - context['hit_rate']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f})*({context['miss_latency']}) = "
-          f"{context['amat']: 0.{ca.Answer.DEFAULT_ROUNDING_DIGITS}f}\\text{{cycles}}"
+          r"(\text{hit rate}) \cdot (\text{hit time}) + (\text{miss rate}) \cdot (\text{miss time})",
+          f"({hit_rate:.{digits}f}) \\cdot ({hit_latency}) + "
+          f"({miss_rate:.{digits}f}) \\cdot ({miss_latency}) = "
+          f"{weighted_amat:.{digits}f}\\text{{cycles}}",
         ]
       )
+    )
+
+    explanation.add_element(
+      ca.Paragraph([
+        "If you use the miss-penalty convention, compute:"
+      ])
+    )
+    explanation.add_element(
+      ca.Equation.make_block_equation__multiline_equals(
+        lhs="AMAT",
+        rhs=[
+          r"\text{hit time} + (\text{miss rate}) \cdot (\text{miss time})",
+          f"{hit_latency} + ({miss_rate:.{digits}f}) \\cdot ({miss_latency}) = "
+          f"{miss_penalty_amat:.{digits}f}\\text{{cycles}}",
+        ]
+      )
+    )
+
+    explanation.add_element(
+      ca.Paragraph([
+        "If the table gives hit rate, use `1 - hit rate` for miss rate.",
+        "If it gives miss rate, use it directly."
+      ])
     )
 
     return explanation
