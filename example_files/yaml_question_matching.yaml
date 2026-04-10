@@ -1,0 +1,17 @@
+version: 1
+
+body:
+  - paragraph:
+      - "Match each city to its state."
+  - matching:
+      pairs:
+        - [Salt Lake City, Utah]
+        - [Boise, Idaho]
+        - [Sacramento, California]
+      distractors:
+        - Nevada
+        - Washington
+
+explanation:
+  - paragraph:
+      - "Answers: Salt Lake City → Utah; Boise → Idaho; Sacramento → California."

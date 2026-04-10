@@ -6,3 +6,7 @@ questions:
       class: FromYaml
       yaml_path: example_files/yaml_question_example.yaml
       topic: MEMORY
+    yaml_matching:
+      class: FromYaml
+      yaml_path: example_files/yaml_question_matching.yaml
+      topic: MISC
