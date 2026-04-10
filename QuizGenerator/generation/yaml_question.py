@@ -400,6 +400,66 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
   return ca.Expr(builder)
 
 
+def _parse_matching(spec: Any) -> ca.TemplateElement:
+  """
+  YAML node for Canvas matching questions.
+
+  Example:
+    - matching:
+        pairs:
+          - [Salt Lake City, Utah]
+          - [Boise, Idaho]
+        distractors:
+          - Nevada
+          - California
+  """
+  if spec is None:
+    spec = {}
+
+  if isinstance(spec, list):
+    pairs_spec = spec
+    distractors_spec = None
+    shuffle_options = False
+  elif isinstance(spec, dict):
+    pairs_spec = spec.get("pairs") or spec.get("items") or []
+    distractors_spec = (
+      spec.get("distractors")
+      or spec.get("incorrect_matches")
+      or spec.get("matching_answer_incorrect_matches")
+    )
+    shuffle_options = bool(spec.get("shuffle_options", False))
+  else:
+    raise ValueError("matching node must be a mapping or list of pairs.")
+
+  if not isinstance(pairs_spec, list):
+    raise ValueError("matching.pairs must be a list.")
+
+  def builder(ctx):
+    pairs: list[tuple[str, str]] = []
+    for item in pairs_spec:
+      left = None
+      right = None
+      if isinstance(item, dict):
+        left = item.get("left")
+        right = item.get("right")
+      elif isinstance(item, (list, tuple)) and len(item) == 2:
+        left, right = item
+      else:
+        raise ValueError(f"Invalid matching pair: {item!r}")
+
+      left_value = _eval_field(left, ctx)
+      right_value = _eval_field(right, ctx)
+      pairs.append((str(left_value), str(right_value)))
+
+    return ca.MatchingBlock(
+      pairs,
+      distractors=_eval_field(distractors_spec, ctx),
+      shuffle_options=shuffle_options,
+    )
+
+  return ca.Expr(builder)
+
+
 def _evaluate_var_def(var_def: Any, context: QuestionContext | dict[str, Any]) -> Any:
   if isinstance(var_def, dict):
     var_type = str(var_def.get("type", "expr")).lower()
@@ -633,6 +693,18 @@ ca.register_yaml_node(
     "title": "Answer Block",
     "fields": [
       {"name": "answers", "type": "node_list", "required": True, "node_filter": ["answer"]},
+    ],
+  }
+)
+ca.register_yaml_node(
+  "matching",
+  _parse_matching,
+  form_spec={
+    "title": "Matching",
+    "fields": [
+      {"name": "pairs", "type": "inline_grid", "required": True},
+      {"name": "distractors", "type": "expr_list"},
+      {"name": "shuffle_options", "type": "bool", "default": False},
     ],
   }
 )
