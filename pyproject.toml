@@ -38,7 +38,7 @@ dependencies = [
     "tqdm>=4.67.3",
     "typer>=0.12,<1",
     "pydantic>=2.12.5",
-    "lms-interface @ https://github.com/OtterDen-Lab/LMSInterface/releases/download/v0.4.7/lms_interface-0.4.7-py3-none-any.whl",
+    "lms-interface @ git+https://github.com/OtterDen-Lab/LMSInterface.git@v0.6.0",
 ]
 
 [project.urls]

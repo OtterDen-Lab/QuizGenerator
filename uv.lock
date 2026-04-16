@@ -617,8 +617,8 @@ wheels = [
 
 [[package]]
 name = "lms-interface"
-version = "0.4.7"
-source = { url = "https://github.com/OtterDen-Lab/LMSInterface/releases/download/v0.4.7/lms_interface-0.4.7-py3-none-any.whl" }
+version = "0.6.0"
+source = { git = "https://github.com/OtterDen-Lab/LMSInterface.git?rev=v0.6.0#7d9cfe7bdea2c7b4375845cf88b7e944c65b2a22" }
 dependencies = [
     { name = "canvasapi" },
     { name = "pytest" },
@@ -626,25 +626,6 @@ dependencies = [
     { name = "pyyaml" },
     { name = "requests" },
 ]
-wheels = [
-    { url = "https://github.com/OtterDen-Lab/LMSInterface/releases/download/v0.4.7/lms_interface-0.4.7-py3-none-any.whl", hash = "sha256:18e1919fd2cca550be20d86d02eacf27071a3d6b3f724b6ef37c38c8884b6303" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "black", marker = "extra == 'dev'" },
-    { name = "canvasapi", specifier = "==3.2.0" },
-    { name = "flake8", marker = "extra == 'dev'" },
-    { name = "jsonschema", marker = "extra == 'dev'" },
-    { name = "mypy", marker = "extra == 'dev'" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "pytest", marker = "extra == 'dev'" },
-    { name = "python-dotenv", specifier = "==1.0.1" },
-    { name = "pyyaml", specifier = "==6.0.3" },
-    { name = "requests", specifier = "==2.32.2" },
-    { name = "ruff", marker = "extra == 'dev'" },
-]
-provides-extras = ["dev"]
 
 [[package]]
 name = "markdown"
@@ -1370,7 +1351,7 @@ requires-dist = [
     { name = "canvasapi", specifier = "~=3.2.0" },
     { name = "cryptography", specifier = "~=46.0.0" },
     { name = "keras", marker = "extra == 'cst463'", specifier = "~=3.12.0" },
-    { name = "lms-interface", url = "https://github.com/OtterDen-Lab/LMSInterface/releases/download/v0.4.7/lms_interface-0.4.7-py3-none-any.whl" },
+    { name = "lms-interface", git = "https://github.com/OtterDen-Lab/LMSInterface.git?rev=v0.6.0" },
     { name = "markdown", specifier = "~=3.9" },
     { name = "matplotlib", specifier = ">=3.8,<4" },
     { name = "numpy", specifier = ">=1.26,<3" },
@@ -1392,7 +1373,7 @@ provides-extras = ["grading", "cst463", "dev"]
 
 [[package]]
 name = "requests"
-version = "2.32.2"
+version = "2.33.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "certifi" },
@@ -1400,9 +1381,9 @@ dependencies = [
     { name = "idna" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/86/ec/535bf6f9bd280de6a4637526602a146a68fde757100ecf8c9333173392db/requests-2.32.2.tar.gz", hash = "sha256:dd951ff5ecf3e3b3aa26b40703ba77495dab41da839ae72ef3c8e5d8e2433289", size = 130327, upload-time = "2024-05-21T18:51:32.819Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5f/a4/98b9c7c6428a668bf7e42ebb7c79d576a1c3c1e3ae2d47e674b468388871/requests-2.33.1.tar.gz", hash = "sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517", size = 134120, upload-time = "2026-03-30T16:09:15.531Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/20/748e38b466e0819491f0ce6e90ebe4184966ee304fe483e2c414b0f4ef07/requests-2.32.2-py3-none-any.whl", hash = "sha256:fc06670dd0ed212426dfeb94fc1b983d917c4f9847c863f313c9dfaaffb7c23c", size = 63902, upload-time = "2024-05-21T18:51:29.562Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/8e/7540e8a2036f79a125c1d2ebadf69ed7901608859186c856fa0388ef4197/requests-2.33.1-py3-none-any.whl", hash = "sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a", size = 64947, upload-time = "2026-03-30T16:09:13.83Z" },
 ]
 
 [[package]]
