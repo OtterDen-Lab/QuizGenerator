@@ -2583,6 +2583,7 @@ class Answer(Leaf):
     ESSAY = "essay_question"
     MULTIPLE_DROPDOWN = "multiple_dropdowns_question"
     NUMERICAL_QUESTION = "numerical_question"
+    MATCHING = "matching_question"
 
   class VariableKind(enum.Enum):
     STR = enum.auto()
@@ -2863,6 +2864,160 @@ class Answer(Leaf):
   def get_spacing_variations_of_list(l, remove_space=False):
     return [', '.join(l)] + ([', '.join(l)] if remove_space else [])
   
+
+class MatchingAnswer(Answer):
+  """
+  Canvas matching answer row.
+
+  Matching answers are not embedded blanks; they are separate answer rows
+  containing a left prompt and the correct right-side match.
+  """
+
+  def __init__(
+    self,
+    *,
+    left: str,
+    right: str,
+    incorrect_matches: str | list[str] | None = None,
+    answer_weight: int = 100,
+  ):
+    super().__init__(
+      value=right,
+      kind=Answer.CanvasAnswerKind.MATCHING,
+      label="",
+      unit="",
+      blank_length=0,
+      pdf_only=False,
+    )
+    self.answer_match_left = str(left)
+    self.answer_match_right = str(right)
+    self.matching_answer_incorrect_matches = incorrect_matches
+    self.answer_weight = int(answer_weight)
+
+  def get_for_canvas(self, single_answer: bool = False) -> list[dict]:
+    payload: dict[str, object] = {
+      "answer_match_left": self.answer_match_left,
+      "answer_match_right": self.answer_match_right,
+      "answer_weight": self.answer_weight,
+    }
+    incorrect = self.matching_answer_incorrect_matches
+    if incorrect is not None:
+      if isinstance(incorrect, list):
+        payload["matching_answer_incorrect_matches"] = "\n".join(str(x) for x in incorrect)
+      else:
+        payload["matching_answer_incorrect_matches"] = str(incorrect)
+    return [payload]
+
+  def render_markdown(self, **kwargs):
+    return ""
+
+  def render_html(self, **kwargs):
+    return ""
+
+  def render_latex(self, **kwargs):
+    return ""
+
+  def render_typst(self, **kwargs):
+    return ""
+
+
+class MatchingBlock(Container):
+  """
+  A block of Canvas matching pairs.
+
+  - Renders as a simple matching list in PDF/Markdown outputs.
+  - Hidden in HTML output (Canvas will render the matching UI).
+  - Contains MatchingAnswer children so the Question pipeline collects answers.
+  """
+
+  def __init__(
+    self,
+    pairs: list[tuple[str, str]],
+    *,
+    distractors: str | list[str] | None = None,
+    shuffle_options: bool = False,
+  ):
+    super().__init__(elements=[])
+    self.pairs = [(str(left), str(right)) for left, right in pairs]
+    self.distractors = distractors
+    self.shuffle_options = bool(shuffle_options)
+
+    for left, right in self.pairs:
+      self.add_element(
+        MatchingAnswer(
+          left=left,
+          right=right,
+          incorrect_matches=distractors,
+        )
+      )
+
+  def _options_for_display(self) -> list[str]:
+    options: list[str] = []
+    seen: set[str] = set()
+
+    for _, right in self.pairs:
+      if right in seen:
+        continue
+      seen.add(right)
+      options.append(right)
+
+    distractors = self.distractors
+    if isinstance(distractors, str):
+      distractor_items = [item.strip() for item in distractors.splitlines() if item.strip()]
+    elif isinstance(distractors, list):
+      distractor_items = [str(item) for item in distractors if str(item).strip()]
+    else:
+      distractor_items = []
+
+    for item in distractor_items:
+      if item in seen:
+        continue
+      seen.add(item)
+      options.append(item)
+
+    return options
+
+  def render_markdown(self, **kwargs):
+    if not self.pairs:
+      return ""
+    lines: list[str] = []
+    for left, _ in self.pairs:
+      lines.append(f"- {left} -> ______")
+    options = self._options_for_display()
+    if options:
+      lines.append("")
+      lines.append("Options: " + ", ".join(options))
+    return "\n".join(lines)
+
+  def render_html(self, **kwargs):
+    return ""
+
+  def render_latex(self, **kwargs):
+    if not self.pairs:
+      return ""
+    lines: list[str] = []
+    for left, _ in self.pairs:
+      safe_left = str(left).replace("\n", " ")
+      lines.append(rf"\item {safe_left} $\rightarrow$ \underline{{\hspace{{2.5in}}}}")
+    rendered = "\\begin{itemize}\n" + "\n".join(lines) + "\n\\end{itemize}"
+    options = self._options_for_display()
+    if options:
+      rendered += "\n\n" + "Options: " + ", ".join(options)
+    return rendered
+
+  def render_typst(self, **kwargs):
+    if not self.pairs:
+      return ""
+    lines: list[str] = []
+    for left, _ in self.pairs:
+      safe_left = str(left).replace("\n", " ")
+      lines.append(f"- {safe_left} -> ______")
+    options = self._options_for_display()
+    if options:
+      lines.append("")
+      lines.append("Options: " + ", ".join(options))
+    return "\n".join(lines)
+
 
 class AnswerTypes:
   # Multibase answers that can accept either hex, binary or decimal

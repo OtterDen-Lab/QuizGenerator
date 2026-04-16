@@ -34,3 +34,10 @@ local (do not expose it to the public internet).
 - Preview a premade question and a YAML question (with MathJax).
 - Export PDF with `PDF count = 1` (downloads PDF).
 - Export PDF with `PDF count > 1` (downloads ZIP).
+
+## Matching questions (Canvas)
+
+YAML questions support Canvas matching questions via the `matching` node:
+
+- Example spec: `example_files/yaml_question_matching.yaml`
+- Example quiz referencing it: `example_files/yaml_question_exam.yaml`

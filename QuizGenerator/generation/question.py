@@ -1150,8 +1150,27 @@ class Question(abc.ABC):
     if len(answers) == 0:
       return (ca.Answer.CanvasAnswerKind.ESSAY, [])
 
+    question_kind = self.answer_kind
+    if question_kind == ca.Answer.CanvasAnswerKind.BLANK:
+      inferred: list[ca.Answer.CanvasAnswerKind] = []
+      for ans in answers:
+        kind = getattr(ans, "kind", None)
+        if kind is None:
+          continue
+        if kind == ca.Answer.CanvasAnswerKind.BLANK:
+          continue
+        if kind not in inferred:
+          inferred.append(kind)
+
+      if len(inferred) > 1:
+        raise ValueError(
+          f"Mixed Canvas answer kinds in question '{self.name}': {[k.value for k in inferred]}"
+        )
+      if len(inferred) == 1:
+        question_kind = inferred[0]
+
     return (
-      self.answer_kind,
+      question_kind,
       list(itertools.chain(*[a.get_for_canvas() for a in answers]))
     )
 

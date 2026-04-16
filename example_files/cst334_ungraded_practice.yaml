@@ -1,0 +1,495 @@
+# CST334 BitsAndBytes Practice
+name: "(Ungraded) BitsAndBytes Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    BitsAndBytes_8bit:
+      class: cst334.BitsAndBytes
+      topic: MATH
+      num_bits: 8
+      spacing: 0
+    BitsAndBytes_12bit:
+      class: cst334.BitsAndBytes
+      topic: MATH
+      num_bits: 12
+      spacing: 0
+    BitsAndBytes_16bit:
+      class: cst334.BitsAndBytes
+      topic: MATH
+      num_bits: 16
+      spacing: 0
+    BitsAndBytes_20bit:
+      class: cst334.BitsAndBytes
+      topic: MATH
+      num_bits: 20
+      spacing: 0
+    BitsAndBytes_24bit:
+      class: cst334.BitsAndBytes
+      topic: MATH
+      num_bits: 24
+      spacing: 0
+
+---
+
+# CST334 HexAndBinary Practice
+name: "(Ungraded) HexAndBinary Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    HexAndBinary_1:
+      class: cst334.HexAndBinary
+      topic: MATH
+      number_of_hexits: 2
+      spacing: 0
+    HexAndBinary_2:
+      class: cst334.HexAndBinary
+      topic: MATH
+      number_of_hexits: 3
+      spacing: 0
+    HexAndBinary_3:
+      class: cst334.HexAndBinary
+      topic: MATH
+      number_of_hexits: 4
+      spacing: 0
+    HexAndBinary_4:
+      class: cst334.HexAndBinary
+      topic: MATH
+      number_of_hexits: 5
+      spacing: 0
+    HexAndBinary_5:
+      class: cst334.HexAndBinary
+      topic: MATH
+      number_of_hexits: 6
+      spacing: 0
+
+---
+
+# CST334 AverageMemoryAccessTime Practice
+name: "(Ungraded) AverageMemoryAccessTime Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    AverageMemoryAccessTime_1:
+      class: cst334.AverageMemoryAccessTime
+      topic: MATH
+      spacing: 0
+    AverageMemoryAccessTime_2:
+      class: cst334.AverageMemoryAccessTime
+      topic: MATH
+      spacing: 0
+    AverageMemoryAccessTime_3:
+      class: cst334.AverageMemoryAccessTime
+      topic: MATH
+      spacing: 0
+    AverageMemoryAccessTime_4:
+      class: cst334.AverageMemoryAccessTime
+      topic: MATH
+      spacing: 0
+    AverageMemoryAccessTime_5:
+      class: cst334.AverageMemoryAccessTime
+      topic: MATH
+      spacing: 0
+
+---
+
+# CST334 VirtualAddressParts Practice
+name: "(Ungraded) VirtualAddressParts Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    VirtualAddressParts_8bit:
+      class: cst334.VirtualAddressParts
+      topic: MEMORY
+      num_bits_va: 8
+      spacing: 0
+    VirtualAddressParts_12bit:
+      class: cst334.VirtualAddressParts
+      topic: MEMORY
+      num_bits_va: 12
+      spacing: 0
+    VirtualAddressParts_16bit:
+      class: cst334.VirtualAddressParts
+      topic: MEMORY
+      num_bits_va: 16
+      spacing: 0
+    VirtualAddressParts_20bit:
+      class: cst334.VirtualAddressParts
+      topic: MEMORY
+      num_bits_va: 20
+      spacing: 0
+    VirtualAddressParts_24bit:
+      class: cst334.VirtualAddressParts
+      topic: MEMORY
+      num_bits_va: 24
+      spacing: 0
+
+---
+
+# CST334 CachingQuestion Practice
+name: "(Ungraded) CachingQuestion Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    Caching_FIFO:
+      class: cst334.CachingQuestion
+      topic: MEMORY
+      num_elements: 5
+      cache_size: 3
+      num_requests: 10
+      workload: popular
+      policy: FIFO
+      spacing: 0
+    Caching_LRU:
+      class: cst334.CachingQuestion
+      topic: MEMORY
+      num_elements: 5
+      cache_size: 3
+      num_requests: 10
+      workload: popular
+      policy: LRU
+      spacing: 0
+    Caching_BELADY:
+      class: cst334.CachingQuestion
+      topic: MEMORY
+      num_elements: 5
+      cache_size: 3
+      num_requests: 10
+      workload: popular
+      policy: BELADY
+      spacing: 0
+    Caching_Random:
+      class: cst334.CachingQuestion
+      topic: MEMORY
+      num_elements: 5
+      cache_size: 3
+      num_requests: 10
+      workload: random
+      policy: null
+      spacing: 0
+    Caching_RandomLonger:
+      class: cst334.CachingQuestion
+      topic: MEMORY
+      num_elements: 6
+      cache_size: 3
+      num_requests: 14
+      workload: random
+      policy: null
+      spacing: 0
+
+---
+
+# CST334 BaseAndBounds Practice
+name: "(Ungraded) BaseAndBounds Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    BaseAndBounds_1:
+      class: cst334.BaseAndBounds
+      topic: MEMORY
+      spacing: 0
+    BaseAndBounds_2:
+      class: cst334.BaseAndBounds
+      topic: MEMORY
+      spacing: 0
+    BaseAndBounds_3:
+      class: cst334.BaseAndBounds
+      topic: MEMORY
+      spacing: 0
+    BaseAndBounds_4:
+      class: cst334.BaseAndBounds
+      topic: MEMORY
+      spacing: 0
+    BaseAndBounds_5:
+      class: cst334.BaseAndBounds
+      topic: MEMORY
+      spacing: 0
+
+---
+
+# CST334 Segmentation Practice
+name: "(Ungraded) Segmentation Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    Segmentation_Short:
+      class: cst334.Segmentation
+      topic: MEMORY
+      max_virtual_bits: 5
+      max_physical_bits: 6
+      spacing: 0
+    Segmentation_MediumSmall:
+      class: cst334.Segmentation
+      topic: MEMORY
+      max_virtual_bits: 6
+      max_physical_bits: 8
+      spacing: 0
+    Segmentation_Medium:
+      class: cst334.Segmentation
+      topic: MEMORY
+      max_virtual_bits: 7
+      max_physical_bits: 10
+      spacing: 0
+    Segmentation_MediumLarge:
+      class: cst334.Segmentation
+      topic: MEMORY
+      max_virtual_bits: 8
+      max_physical_bits: 12
+      spacing: 0
+    Segmentation_Large:
+      class: cst334.Segmentation
+      topic: MEMORY
+      max_virtual_bits: 10
+      max_physical_bits: 16
+      spacing: 0
+
+---
+
+# CST334 Paging Practice
+name: "(Ungraded) Paging Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    Paging_1:
+      class: cst334.Paging
+      topic: MEMORY
+      spacing: 0
+    Paging_2:
+      class: cst334.Paging
+      topic: MEMORY
+      spacing: 0
+    Paging_3:
+      class: cst334.Paging
+      topic: MEMORY
+      spacing: 0
+    Paging_4:
+      class: cst334.Paging
+      topic: MEMORY
+      spacing: 0
+    Paging_5:
+      class: cst334.Paging
+      topic: MEMORY
+      spacing: 0
+
+---
+
+# CST334 HierarchicalPaging Practice
+name: "(Ungraded) HierarchicalPaging Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    HierarchicalPaging_1:
+      class: cst334.HierarchicalPaging
+      topic: MEMORY
+      spacing: 0
+    HierarchicalPaging_2:
+      class: cst334.HierarchicalPaging
+      topic: MEMORY
+      spacing: 0
+    HierarchicalPaging_3:
+      class: cst334.HierarchicalPaging
+      topic: MEMORY
+      spacing: 0
+    HierarchicalPaging_4:
+      class: cst334.HierarchicalPaging
+      topic: MEMORY
+      spacing: 0
+    HierarchicalPaging_5:
+      class: cst334.HierarchicalPaging
+      topic: MEMORY
+      spacing: 0
+
+---
+
+# CST334 SchedulingQuestion Practice
+name: "(Ungraded) SchedulingQuestion Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    Scheduling_FIFO_4jobs:
+      class: cst334.SchedulingQuestion
+      topic: PROCESS
+      num_jobs: 4
+      scheduler_kind: FIFO
+      spacing: 0
+    Scheduling_SJF_4jobs:
+      class: cst334.SchedulingQuestion
+      topic: PROCESS
+      num_jobs: 4
+      scheduler_kind: ShortestDuration
+      spacing: 0
+    Scheduling_STCF_4jobs:
+      class: cst334.SchedulingQuestion
+      topic: PROCESS
+      num_jobs: 4
+      scheduler_kind: ShortestTimeRemaining
+      spacing: 0
+    Scheduling_RR_4jobs:
+      class: cst334.SchedulingQuestion
+      topic: PROCESS
+      num_jobs: 4
+      scheduler_kind: RoundRobin
+      spacing: 0
+    Scheduling_RR_5jobs:
+      class: cst334.SchedulingQuestion
+      topic: PROCESS
+      num_jobs: 5
+      scheduler_kind: RoundRobin
+      spacing: 0
+
+---
+
+# CST334 MLFQQuestion Practice
+name: "(Ungraded) MLFQQuestion Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    MLFQ_Intro:
+      class: cst334.MLFQQuestion
+      topic: PROCESS
+      num_jobs: 3
+      num_queues: 2
+      spacing: 0
+    MLFQ_WithBoost:
+      class: cst334.MLFQQuestion
+      topic: PROCESS
+      num_jobs: 3
+      num_queues: 2
+      boost_interval: 10
+      spacing: 0
+    MLFQ_ThreeQueues:
+      class: cst334.MLFQQuestion
+      topic: PROCESS
+      num_jobs: 4
+      num_queues: 3
+      spacing: 0
+    MLFQ_ThreeQueuesBoost:
+      class: cst334.MLFQQuestion
+      topic: PROCESS
+      num_jobs: 4
+      num_queues: 3
+      boost_interval: 12
+      spacing: 0
+    MLFQ_Challenge:
+      class: cst334.MLFQQuestion
+      topic: PROCESS
+      num_jobs: 5
+      num_queues: 3
+      boost_interval: 15
+      spacing: 0
+
+---
+
+# CST334 HardDriveAccessTime Practice
+name: "(Ungraded) HardDriveAccessTime Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    HardDriveAccessTime_1:
+      class: cst334.HardDriveAccessTime
+      topic: IO
+      spacing: 0
+    HardDriveAccessTime_2:
+      class: cst334.HardDriveAccessTime
+      topic: IO
+      spacing: 0
+    HardDriveAccessTime_3:
+      class: cst334.HardDriveAccessTime
+      topic: IO
+      spacing: 0
+    HardDriveAccessTime_4:
+      class: cst334.HardDriveAccessTime
+      topic: IO
+      spacing: 0
+    HardDriveAccessTime_5:
+      class: cst334.HardDriveAccessTime
+      topic: IO
+      spacing: 0
+
+---
+
+# CST334 INodeAccesses Practice
+name: "(Ungraded) INodeAccesses Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    INodeAccesses_1:
+      class: cst334.INodeAccesses
+      topic: IO
+      spacing: 0
+    INodeAccesses_2:
+      class: cst334.INodeAccesses
+      topic: IO
+      spacing: 0
+    INodeAccesses_3:
+      class: cst334.INodeAccesses
+      topic: IO
+      spacing: 0
+    INodeAccesses_4:
+      class: cst334.INodeAccesses
+      topic: IO
+      spacing: 0
+    INodeAccesses_5:
+      class: cst334.INodeAccesses
+      topic: IO
+      spacing: 0
+
+---
+
+# CST334 VSFS_states Practice
+name: "(Ungraded) VSFS_states Practice"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+    VSFS_3steps:
+      class: cst334.VSFS_states
+      topic: IO
+      num_steps: 3
+      spacing: 0
+    VSFS_5steps:
+      class: cst334.VSFS_states
+      topic: IO
+      num_steps: 5
+      spacing: 0
+    VSFS_7steps:
+      class: cst334.VSFS_states
+      topic: IO
+      num_steps: 7
+      spacing: 0
+    VSFS_9steps:
+      class: cst334.VSFS_states
+      topic: IO
+      num_steps: 9
+      spacing: 0
+    VSFS_11steps:
+      class: cst334.VSFS_states
+      topic: IO
+      num_steps: 11
+      spacing: 0
