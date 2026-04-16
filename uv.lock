@@ -1332,7 +1332,7 @@ wheels = [
 
 [[package]]
 name = "quizgenerator"
-version = "0.24.5"
+version = "0.24.6"
 source = { editable = "." }
 dependencies = [
     { name = "canvasapi" },
@@ -1345,7 +1345,6 @@ dependencies = [
     { name = "pypandoc" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "requests" },
     { name = "segno" },
     { name = "sympy" },
     { name = "tqdm" },
@@ -1382,7 +1381,6 @@ requires-dist = [
     { name = "python-dotenv", specifier = "~=1.0.1" },
     { name = "pyyaml", specifier = "~=6.0.1" },
     { name = "pyzbar", marker = "extra == 'grading'", specifier = "~=0.1.9" },
-    { name = "requests", specifier = "~=2.32.2" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "~=0.7.4" },
     { name = "segno", specifier = "~=1.6.0" },
     { name = "sympy", specifier = "~=1.14.0" },
