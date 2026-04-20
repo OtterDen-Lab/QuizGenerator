@@ -4,7 +4,9 @@ from __future__ import annotations
 import abc
 import difflib
 import logging
+import re
 import random
+from fractions import Fraction
 
 import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generation.mixins import BodyTemplatesMixin, TableQuestionMixin
@@ -31,9 +33,9 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     number_of_reads = rng.randint(1, 20)
     size_of_reads = rng.randint(1, 10)
 
-    rotational_delay = (1 / hard_drive_rotation_speed) * (60 / 1) * (1000 / 1) * (1/2)
-    access_delay = rotational_delay + seek_delay
-    transfer_delay = 1000 * (size_of_reads * number_of_reads) / 1024 / transfer_rate
+    rotational_delay = Fraction(1, hard_drive_rotation_speed) * 60 * 1000 * Fraction(1, 2)
+    access_delay = rotational_delay + Fraction(str(seek_delay))
+    transfer_delay = Fraction(1000 * size_of_reads * number_of_reads, 1024 * transfer_rate)
     disk_access_delay = access_delay * number_of_reads + transfer_delay
 
     return {
@@ -51,10 +53,26 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
   @classmethod
   def _build_body(cls, context):
     """Build question body and collect answers."""
-    rotational_answer = ca.AnswerTypes.Float(context["rotational_delay"])
-    access_answer = ca.AnswerTypes.Float(context["access_delay"])
-    transfer_answer = ca.AnswerTypes.Float(context["transfer_delay"])
-    disk_access_answer = ca.AnswerTypes.Float(context["disk_access_delay"])
+    rotational_answer = ca.AnswerTypes.Float(
+      context["rotational_delay"],
+      display=f"{float(context['rotational_delay']):0.2f}",
+      unit="ms",
+    )
+    access_answer = ca.AnswerTypes.Float(
+      context["access_delay"],
+      display=f"{float(context['access_delay']):0.2f}",
+      unit="ms",
+    )
+    transfer_answer = ca.AnswerTypes.Float(
+      context["transfer_delay"],
+      display=f"{float(context['transfer_delay']):0.2f}",
+      unit="ms",
+    )
+    disk_access_answer = ca.AnswerTypes.Float(
+      context["disk_access_delay"],
+      display=f"{float(context['disk_access_delay']):0.2f}",
+      unit="ms",
+    )
 
     # Create parameter info table using mixin
     parameter_info = {
@@ -69,10 +87,10 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
 
     # Create answer table with multiple rows using mixin
     answer_rows = [
-      {"Variable": "Rotational Delay", "Value": rotational_answer},
-      {"Variable": "Access Delay", "Value": access_answer},
-      {"Variable": "Transfer Delay", "Value": transfer_answer},
-      {"Variable": "Total Disk Access Delay", "Value": disk_access_answer}
+      {"Variable": "Rotational Delay (ms)", "Value": rotational_answer},
+      {"Variable": "Access Delay (ms)", "Value": access_answer},
+      {"Variable": "Transfer Delay (ms)", "Value": transfer_answer},
+      {"Variable": "Total Disk Access Delay (ms)", "Value": disk_access_answer}
     ]
 
     answer_table = cls.create_answer_table(
@@ -85,6 +103,7 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     intro_text = "Given the information below, please calculate the following values."
 
     instructions = (
+      "All calculated answers should be entered in milliseconds (ms). "
       f"Make sure that if you round your answers you use the unrounded values for your final calculations, "
       f"otherwise you may introduce error into your calculations."
       f"(i.e. don't use your rounded answers to calculate your overall answer)"
@@ -105,11 +124,24 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     
     explanation.add_element(
       ca.Paragraph([
-        "To calculate the total disk access time (or \"delay\"), "
-        "we should first calculate each of the individual parts.",
-        r"Since we know that  $t_{total} = (\text{# of reads}) \cdot t_{access} + t_{transfer}$"
-        r"we therefore need to calculate $t_{access}$ and  $t_{transfer}$, where "
-        r"$t_{access} = t_{rotation} + t_{seek}$.",
+        "To calculate the total disk access time (or \"delay\"), we should first calculate each of the individual parts.",
+        "Since we know that:",
+      ])
+    )
+    explanation.add_element(
+      ca.Equation(
+        r"t_{total} = (\text{# of reads}) \cdot t_{access} + t_{transfer}"
+      )
+    )
+    explanation.add_element(
+      ca.Paragraph([
+        "We therefore need to calculate ",
+        ca.Equation(r"t_{access}", inline=True),
+        " and ",
+        ca.Equation(r"t_{transfer}", inline=True),
+        ", where ",
+        ca.Equation(r"t_{access} = t_{rotation} + t_{seek}", inline=True),
+        ".",
       ])
     )
     
@@ -117,8 +149,8 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       ca.Paragraph(["Starting with the rotation delay, we calculate:"]),
       ca.Equation(
         "t_{rotation} = "
-        + f"\\frac{{1 minute}}{{{context['hard_drive_rotation_speed']}revolutions}}"
-        + r"\cdot \frac{60 seconds}{1 minute} \cdot \frac{1000 ms}{1 second} \cdot \frac{1 revolution}{2} = "
+        + f"\\frac{{1 \\text{{ minute}}}}{{{context['hard_drive_rotation_speed']} \\text{{ revolutions}}}}"
+        + r"\cdot \frac{60 \text{ seconds}}{1 \text{ minute}} \cdot \frac{1000 \text{ ms}}{1 \text{ second}} \cdot \frac{1 \text{ revolution}}{2} = "
         + f"{context['rotational_delay']:0.2f}ms",
       )
     ])
@@ -135,12 +167,16 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     ])
     
     explanation.add_elements([
-      ca.Paragraph([r"Next we need to calculate our transfer delay, $t_{transfer}$, which we do as:"]),
+      ca.Paragraph([
+        "Next we need to calculate our transfer delay, ",
+        ca.Equation(r"t_{transfer}", inline=True),
+        ", which we do as:",
+      ]),
       ca.Equation(
         f"t_{{transfer}} "
-        f"= \\frac{{{context['number_of_reads']} \\cdot {context['size_of_reads']}KB}}{{1}} \\cdot \\frac{{1MB}}{{1024KB}} "
-        f"\\cdot \\frac{{1 second}}{{{context['transfer_rate']}MB}} \\cdot \\frac{{1000ms}}{{1second}} "
-        f"= {context['transfer_delay']:0.2}ms"
+        f"= \\frac{{{context['number_of_reads']} \\cdot {context['size_of_reads']} \\text{{ KB}}}}{{1}} \\cdot \\frac{{1 \\text{{ MB}}}}{{1024 \\text{{ KB}}}} "
+        f"\\cdot \\frac{{1 \\text{{ second}}}}{{{context['transfer_rate']} \\text{{ MB}}}} \\cdot \\frac{{1000 \\text{{ ms}}}}{{1 \\text{{ second}}}} "
+        f"= {context['transfer_delay']:0.2f}ms"
       )
     ])
     
@@ -232,72 +268,77 @@ class INodeAccesses(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
     
     explanation.add_element(
       ca.Paragraph([
-        "If we are given an inode number, there are a few steps that we need to take to load the actual inode.  "
-        "These consist of determining the address of the inode, which block would contain it, "
-        "and then its address within the block.",
+        "If we are given an inode number, there are a few steps that we need to take to load the actual inode.",
+        "These consist of determining the address of the inode, which block would contain it, and then its address within the block.",
         "To find the inode address, we calculate:",
       ])
     )
     
     explanation.add_element(
-      ca.Equation.make_block_equation__multiline_equals(
-        r"(\text{Inode address})",
-        [
-          r"(\text{Inode Start Location}) + (\text{inode #}) \cdot (\text{inode size})",
-          f"{context['inode_start_location']} + {context['inode_number']} \\cdot {context['inode_size']}",
-          f"{context['inode_address']}"
-        ])
+      ca.Equation(
+        r"(\text{Inode address}) = (\text{Inode Start Location}) + (\text{inode #}) \cdot (\text{inode size})"
+      )
+    )
+    explanation.add_element(
+      ca.Equation(
+        f"= {context['inode_start_location']} + {context['inode_number']} \\cdot {context['inode_size']}"
+      )
+    )
+    explanation.add_element(
+      ca.Equation(
+        f"= {context['inode_address']}"
+      )
     )
     
     explanation.add_element(
       ca.Paragraph([
-        "Next, we us this to figure out what block the inode is in.  "
+        "Next, we use this to figure out what block the inode is in. "
         "We do this directly so we know what block to load, "
         "thus minimizing the number of loads we have to make.",
       ])
     )
-    explanation.add_element(ca.Equation.make_block_equation__multiline_equals(
-      r"\text{Block containing inode}",
-      [
-        r"(\text{Inode address}) \mathbin{//} (\text{block size})",
-        f"{context['inode_address']} \\mathbin{{//}} {context['block_size']}",
-        f"{context['inode_block']}"
-      ]
+    explanation.add_element(ca.Equation(
+      r"\text{Block containing inode} = (\text{Inode address}) \text{//} (\text{block size})"
+    ))
+    explanation.add_element(ca.Equation(
+      f"= {context['inode_address']} \\text{{//}} {context['block_size']}"
+    ))
+    explanation.add_element(ca.Equation(
+      f"= {context['inode_block']}"
     ))
     
     explanation.add_element(
       ca.Paragraph([
         "When we load this block, we now have in our system memory "
         "(remember, blocks on the hard drive are effectively useless to us until they're in main memory!), "
-        "the inode, so next we need to figure out where it is within that block."
-        "This means that we'll need to find the offset into this block.  "
-        "We'll calculate this both as the offset in bytes, and also in number of inodes, "
-        "since we can use array indexing.",
+        "the inode, so next we need to figure out where it is within that block.",
+        "This means that we'll need to find the offset into this block.",
+        "We'll calculate this both as the offset in bytes and also in number of inodes, since we can use array indexing.",
       ])
     )
     
-    explanation.add_element(ca.Equation.make_block_equation__multiline_equals(
-      r"\text{offset within block}",
-      [
-        r"(\text{Inode address}) \bmod (\text{block size})",
-        f"{context['inode_address']} \\bmod {context['block_size']}",
-        f"{context['inode_address_in_block']}"
-      ]
+    explanation.add_element(ca.Equation(
+      r"\text{offset within block} = (\text{Inode address}) \text{ mod } (\text{block size})"
+    ))
+    explanation.add_element(ca.Equation(
+      f"= {context['inode_address']} \\text{{ mod }} {context['block_size']}"
+    ))
+    explanation.add_element(ca.Equation(
+      f"= {context['inode_address_in_block']}"
     ))
     
     explanation.add_element(
       ca.Text("Remember that `mod` is the same as `%`, the modulo operation.")
     )
-    
-    explanation.add_element(ca.Paragraph(["and"]))
       
-    explanation.add_element(ca.Equation.make_block_equation__multiline_equals(
-      r"\text{index within block}",
-      [
-        r"\dfrac{\text{offset within block}}{\text{inode size}}",
-        f"\\dfrac{{{context['inode_address_in_block']}}}{{{context['inode_size']}}}",
-        f"{context['inode_index_in_block']}"
-      ]
+    explanation.add_element(ca.Equation(
+      r"\text{index within block} = \frac{\text{offset within block}}{\text{inode size}}"
+    ))
+    explanation.add_element(ca.Equation(
+      f"= \\frac{{{context['inode_address_in_block']}}}{{{context['inode_size']}}}"
+    ))
+    explanation.add_element(ca.Equation(
+      f"= {context['inode_index_in_block']}"
     ))
 
     return explanation
@@ -322,10 +363,16 @@ class VSFS_states(IOQuestion):
 
     start_state = operations[-1]["start_state"]
     end_state = operations[-1]["end_state"]
+    correct_cmd = str(operations[-1]["cmd"])
+    baffles = [
+      cmd
+      for cmd in dict.fromkeys(op["cmd"] for op in operations[:-1])
+      if cmd != correct_cmd
+    ]
 
     command_answer = ca.Answer.dropdown(
-      f"{operations[-1]['cmd']}",
-      baffles=list(set([op['cmd'] for op in operations[:-1] if op != operations[-1]['cmd']])),
+      correct_cmd,
+      baffles=baffles,
       label="Command"
     )
 
@@ -374,75 +421,70 @@ class VSFS_states(IOQuestion):
       ])
     ])
     
-    chunk_to_add = []
     lines_that_changed = []
     for start_line, end_line in zip(context["start_state"].split('\n'), context["end_state"].split('\n')):
       if start_line == end_line:
         continue
       lines_that_changed.append((start_line, end_line))
-      chunk_to_add.append(
-        f" - `{start_line}` -> `{end_line}`"
-      )
     
-    explanation.add_element(
-      ca.Paragraph(chunk_to_add)
-    )
-    
-    chunk_to_add = [
-      "A great place to start is to check to see if the bitmaps have changed as this can quickly tell us a lot of information"
-    ]
-    
+    def split_label_body(line: str) -> tuple[str, str]:
+      match = re.match(r"^(?P<label>.+?)\s{2,}(?P<body>.+)$", line.rstrip())
+      if match:
+        return match.group("label"), match.group("body")
+      parts = line.strip().split(None, 1)
+      if len(parts) == 2:
+        return parts[0], parts[1]
+      return line.strip(), ""
+
+    for start_line, end_line in lines_that_changed:
+      label, start_body = split_label_body(start_line)
+      _, end_body = split_label_body(end_line)
+      explanation.add_element(ca.Paragraph([f"{label.title()}:"]))
+      explanation.add_element(ca.Code(
+        f"{start_body}\n{end_body}"
+      ))
+      explanation.add_element(ca.LineBreak())
+
     inode_bitmap_lines = list(filter(lambda s: "inode bitmap" in s[0], lines_that_changed))
     data_bitmap_lines = list(filter(lambda s: "data bitmap" in s[0], lines_that_changed))
-    
-    def get_bitmap(line: str) -> str:
-      log.debug(f"line: {line}")
-      return line.split()[-1]
-    
+
+    summary_lines = [
+      "A great place to start is to check the bitmap changes, since they quickly tell us what kind of operation happened."
+    ]
+
+    if len(inode_bitmap_lines) > 0:
+      inode_before, inode_after = inode_bitmap_lines[0]
+      if inode_before.split()[-1].count("1") < inode_after.split()[-1].count("1"):
+        summary_lines.append("The inode bitmap gained an inode, so we likely called `creat` or `mkdir`.")
+      else:
+        summary_lines.append("The inode bitmap lost an inode, so we likely called `unlink`.")
+
+    if len(data_bitmap_lines) > 0:
+      data_before, data_after = data_bitmap_lines[0]
+      if data_before.split()[-1].count("1") < data_after.split()[-1].count("1"):
+        summary_lines.append("The data bitmap gained a block, so we likely called `mkdir` or `write`.")
+      else:
+        summary_lines.append("The data bitmap lost a block, so we likely called `unlink`.")
+
+    if len(data_bitmap_lines) == 0 and len(inode_bitmap_lines) == 0:
+      summary_lines.append("If neither bitmap changed, then we likely called `link` or `unlink` and need to inspect the reference counts.")
+
+    explanation.add_element(ca.Paragraph(summary_lines))
+
     def highlight_changes(a: str, b: str) -> str:
       matcher = difflib.SequenceMatcher(None, a, b)
       result = []
-      
+
       for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
           result.append(b[j1:j2])
         elif tag in ("insert", "replace"):
           result.append(f"***{b[j1:j2]}***")
         # for "delete", do nothing since text is removed
-      
+
       return "".join(result)
-    
-    if len(inode_bitmap_lines) > 0:
-      inode_bitmap_lines = inode_bitmap_lines[0]
-      chunk_to_add.append(f"The inode bitmap lines have changed from {get_bitmap(inode_bitmap_lines[0])} to {get_bitmap(inode_bitmap_lines[1])}.")
-      if get_bitmap(inode_bitmap_lines[0]).count('1') < get_bitmap(inode_bitmap_lines[1]).count('1'):
-        chunk_to_add.append("We can see that we have added an inode, so we have either called `creat` or `mkdir`.")
-      else:
-        chunk_to_add.append("We can see that we have removed an inode, so we have called `unlink`.")
-    
-    if len(data_bitmap_lines) > 0:
-      data_bitmap_lines = data_bitmap_lines[0]
-      chunk_to_add.append(f"The inode bitmap lines have changed from {get_bitmap(data_bitmap_lines[0])} to {get_bitmap(data_bitmap_lines[1])}.")
-      if get_bitmap(data_bitmap_lines[0]).count('1') < get_bitmap(data_bitmap_lines[1]).count('1'):
-        chunk_to_add.append("We can see that we have added a data block, so we have either called `mkdir` or `write`.")
-      else:
-        chunk_to_add.append("We can see that we have removed a data block, so we have `unlink`ed a file.")
-    
-    if len(data_bitmap_lines) == 0 and len(inode_bitmap_lines) == 0:
-      chunk_to_add.append("If they have not changed, then we know we must have eithered called `link` or `unlink` and must check the references.")
-      
-    explanation.add_element(
-      ca.Paragraph(chunk_to_add)
-    )
-    
-    explanation.add_elements([
-      ca.Paragraph(["The overall changes are highlighted with `*` symbols below"])
-    ])
-    
-    explanation.add_element(
-      ca.Code(
-        highlight_changes(context["start_state"], context["end_state"])
-      )
-    )
+
+    explanation.add_element(ca.Paragraph(["The overall changes are highlighted with `*` symbols below"]))
+    explanation.add_element(ca.Code(highlight_changes(context["start_state"], context["end_state"])))
 
     return explanation
