@@ -712,7 +712,11 @@ def _canvas_payload_fingerprint(payload):
   answers = payload.get("answers", [])
   try:
     fingerprint += "".join(
-      "|".join(f"{k}:{a[k]}" for k in sorted(a.keys()))
+      "|".join(
+        f"{k}:{a[k]}"
+        for k in sorted(a.keys())
+        if k != "blank_id"
+      )
       for a in answers
     )
   except TypeError:

@@ -143,6 +143,11 @@ class BNF:
 @QuestionRegistry.register("LanguageQuestion")
 class ValidStringsInLanguageQuestion(LanguageQuestion):
   MAX_TRIES = 1000
+  EMPTY_STRING_DISPLAY = "ε"
+
+  @classmethod
+  def _canonicalize_generated_string(cls, value: str) -> str:
+    return cls.EMPTY_STRING_DISPLAY if value == "" else value
   
   def __init__(self, grammar_str_good: str | None = None, grammar_str_bad: str | None = None, *args, **kwargs):
     # Preserve question-specific params for QR code config
@@ -229,14 +234,14 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       max_length = 100
     elif which_grammar == 3:
       grammar_str_good = """
-        <A> ::= a <B> a
-        <B> ::= b <C> b
-        <C> ::= c <A> c
+        <A> ::= a <B> a |
+        <B> ::= b <C> b |
+        <C> ::= c <A> c |
       """
       grammar_str_bad = """
         <A> ::= a <B> c
-        <B> ::= b <C> a
-        <C> ::= c <A> b
+        <B> ::= b <C> a |
+        <C> ::= c <A> b |
       """
       include_spaces = False
       max_length = 100
@@ -273,21 +278,23 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
 
     answer_options = []
 
-    good_string = grammar_good.generate(include_spaces)
+    good_string = cls._canonicalize_generated_string(grammar_good.generate(include_spaces))
     answer_options.append(ca.Answer(
       value=good_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=True
     ))
 
-    bad_string = grammar_bad.generate(include_spaces)
+    bad_string = cls._canonicalize_generated_string(grammar_bad.generate(include_spaces))
     answer_options.append(ca.Answer(
       value=bad_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
       correct=False
     ))
 
-    bad_early_string = grammar_bad.generate(include_spaces, early_exit=True)
+    bad_early_string = cls._canonicalize_generated_string(
+      grammar_bad.generate(include_spaces, early_exit=True)
+    )
     answer_options.append(ca.Answer(
       value=bad_early_string,
       kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
@@ -303,11 +310,11 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       else:
         early_exit = False
 
-      generated_string = (
+      generated_string = cls._canonicalize_generated_string((
         grammar_good
         if correct or early_exit
         else grammar_bad
-      ).generate(include_spaces, early_exit=early_exit)
+      ).generate(include_spaces, early_exit=early_exit))
 
       is_correct = correct and not early_exit
 
@@ -321,17 +328,28 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       num_tries += 1
 
     featured_answers = {
-      grammar_good.generate(),
-      grammar_bad.generate(),
-      grammar_good.generate(early_exit=True)
+      cls._canonicalize_generated_string(grammar_good.generate()),
+      cls._canonicalize_generated_string(grammar_bad.generate()),
+      cls._canonicalize_generated_string(grammar_good.generate(early_exit=True))
     }
-    while len(featured_answers) < num_answer_options:
+    num_feature_tries = 0
+    while len(featured_answers) < num_answer_options and num_feature_tries < cls.MAX_TRIES:
       featured_answers.add(
         rng.choice([
-          lambda: grammar_good.generate(),
-          lambda: grammar_bad.generate(),
-          lambda: grammar_good.generate(early_exit=True),
+          lambda: cls._canonicalize_generated_string(grammar_good.generate()),
+          lambda: cls._canonicalize_generated_string(grammar_bad.generate()),
+          lambda: cls._canonicalize_generated_string(grammar_good.generate(early_exit=True)),
         ])()
+      )
+      num_feature_tries += 1
+
+    if len(featured_answers) < num_answer_options:
+      log.warning(
+        "LanguageQuestion only found %d featured answers after %d attempts; "
+        "requested %d.",
+        len(featured_answers),
+        num_feature_tries,
+        num_answer_options,
       )
 
     return {
