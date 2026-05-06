@@ -2492,6 +2492,7 @@ class OnlyLatex(Container):
       # Add to main content - only appears in PDF
       body.add_element(latex_only)
   """
+  harvest_answers = False
 
   def render(self, output_format: OutputFormat, **kwargs):
     if output_format not in ("latex", "typst"):

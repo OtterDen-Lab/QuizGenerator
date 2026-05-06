@@ -1051,6 +1051,8 @@ class Question(abc.ABC):
     def visit(node):
       if node is None:
         return
+      if getattr(node, "harvest_answers", True) is False:
+        return
       if isinstance(node, ca.Answer):
         answers.append(node)
         return

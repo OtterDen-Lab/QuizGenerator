@@ -229,14 +229,14 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       max_length = 100
     elif which_grammar == 3:
       grammar_str_good = """
-        <A> ::= a <B> a |
-        <B> ::= b <C> b |
-        <C> ::= c <A> c |
+        <A> ::= a <B> a
+        <B> ::= b <C> b
+        <C> ::= c <A> c
       """
       grammar_str_bad = """
         <A> ::= a <B> c
-        <B> ::= b <C> a |
-        <C> ::= c <A> b |
+        <B> ::= b <C> a
+        <C> ::= c <A> b
       """
       include_spaces = False
       max_length = 100
