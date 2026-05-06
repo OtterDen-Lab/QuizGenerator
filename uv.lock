@@ -1313,7 +1313,7 @@ wheels = [
 
 [[package]]
 name = "quizgenerator"
-version = "0.25.5"
+version = "0.25.6"
 source = { editable = "." }
 dependencies = [
     { name = "canvasapi" },
