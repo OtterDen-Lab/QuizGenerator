@@ -19,6 +19,7 @@ from lms_interface.canvas_interface import CanvasInterface
 
 from QuizGenerator.generation.question import Question, QuestionGroup, QuestionRegistry
 from QuizGenerator.generation.quiz import Quiz
+from QuizGenerator.generation.review_html import render_review_html_document
 
 log = logging.getLogger(__name__)
 
@@ -657,11 +658,11 @@ def _replay_yaml_path(path_to_quiz_yaml: str) -> str:
   return os.path.join("out", f"{sanitized}_replay.yaml")
 
 
-def _log_replay_yaml_notification(replay_path: str, *, sample_num_pdfs: int) -> None:
+def _log_replay_yaml_notification(replay_path: str, *, sample_num_outputs: int) -> None:
   log.info(f"Wrote replay YAML to {replay_path}")
   log.info(
     "Replay YAML preserves question_id values for QR regeneration. "
-    f"Reuse it with: quizgen generate --yaml {replay_path} --num-pdfs {sample_num_pdfs}"
+    f"Reuse it with the same output count, e.g. --num-pdfs {sample_num_outputs} or --num-htmls {sample_num_outputs}."
   )
   log.info(
     f"Regenerate scanned QR answers with: quizregen --image <scan-image> --yaml {replay_path}"
@@ -688,7 +689,8 @@ def _bundle_outputs(
   replay_path: str | None,
   *,
   bundle_label: str,
-  pdf_paths: list[str] | None = None
+  pdf_paths: list[str] | None = None,
+  html_paths: list[str] | None = None,
 ) -> str | None:
   out_dir = "out"
   if not os.path.isdir(out_dir):
@@ -696,12 +698,16 @@ def _bundle_outputs(
   bundle_name = f"{sanitize_filename(bundle_label)}_bundle.zip"
   bundle_path = os.path.join(out_dir, bundle_name)
   pdfs = pdf_paths or []
-  if not pdfs and not replay_path:
+  htmls = html_paths or []
+  if not pdfs and not htmls and not replay_path:
     return None
   with zipfile.ZipFile(bundle_path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
     for pdf_path in pdfs:
       if os.path.exists(pdf_path):
         bundle.write(pdf_path, arcname=os.path.basename(pdf_path))
+    for html_path in htmls:
+      if os.path.exists(html_path):
+        bundle.write(html_path, arcname=os.path.basename(html_path))
     if replay_path and os.path.exists(replay_path):
       bundle.write(replay_path, arcname=os.path.basename(replay_path))
   return bundle_path
@@ -1023,9 +1029,22 @@ def generate_typst(typst_text, remove_previous=False, name_prefix=None) -> bool:
   return True
 
 
+def generate_review_html(html_text: str, *, output_name: str, remove_previous: bool = False) -> str:
+  """Write a standalone review HTML file to out/ and return its path."""
+  if remove_previous and os.path.exists("out"):
+    shutil.rmtree("out")
+
+  os.makedirs("out", exist_ok=True)
+  output_path = os.path.join("out", f"{output_name}.html")
+  with open(output_path, "w", encoding="utf-8") as handle:
+    handle.write(html_text)
+  return output_path
+
+
 def generate_quiz(
     path_to_quiz_yaml,
     num_pdfs=0,
+    num_htmls=0,
     num_canvas=0,
     use_prod=False,
     course_id=None,
@@ -1049,7 +1068,7 @@ def generate_quiz(
     raw_exam_dicts = list(yaml.safe_load_all(fid))
 
   replay_exam_dicts = None
-  if num_pdfs > 0:
+  if num_pdfs > 0 or num_htmls > 0:
     replay_exam_dicts = copy.deepcopy(raw_exam_dicts)
     _annotate_exam_dicts_for_replay(replay_exam_dicts)
     exam_dicts_for_parsing = copy.deepcopy(replay_exam_dicts)
@@ -1071,53 +1090,63 @@ def generate_quiz(
 
     log.info(f"Using assignment group '{assignment_group.name}' for all quizzes")
 
+  copy_count = max(num_pdfs, num_htmls)
+  generated_html_paths: list[str] = []
+
   for quiz in quizzes:
 
-    for i in range(num_pdfs):
-      log.debug(f"Generating PDF {i+1}/{num_pdfs}")
-      # If base_seed is provided, use it with an offset for each PDF
-      # Otherwise generate a random seed for this PDF
+    for i in range(copy_count):
+      log.debug(f"Generating copy {i+1}/{copy_count}")
+      # If base_seed is provided, use it with an offset for each copy.
+      # Otherwise generate a random seed for this copy.
       if base_seed is not None:
         pdf_seed = base_seed + (i * 1000)  # Large gap to avoid overlap with rng_seed_offset
       else:
         pdf_seed = random.randint(0, 1_000_000)
 
-      log.info(f"Generating PDF {i+1} with seed: {pdf_seed}")
+      log.info(f"Generating copy {i+1} with seed: {pdf_seed}")
 
-      if use_typst:
-        # Generate using Typst
-        quiz_kwargs = {
-          "rng_seed": pdf_seed,
-          "use_typst_measurement": use_typst_measurement,
-          "consistent_pages": consistent_pages,
-        }
-        if max_backoff_attempts is not None:
-          quiz_kwargs["max_backoff_attempts"] = max_backoff_attempts
-        if consistent_pages:
-          quiz_kwargs["layout_samples"] = layout_samples
-          quiz_kwargs["layout_safety_factor"] = layout_safety_factor
-        typst_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render(
-          "typst",
-          embed_images_typst=embed_images_typst,
-          show_pdf_aids=show_pdf_aids
+      quiz_kwargs = {
+        "rng_seed": pdf_seed,
+        "use_typst_measurement": use_typst_measurement,
+        "consistent_pages": consistent_pages,
+      }
+      if max_backoff_attempts is not None:
+        quiz_kwargs["max_backoff_attempts"] = max_backoff_attempts
+      if consistent_pages:
+        quiz_kwargs["layout_samples"] = layout_samples
+        quiz_kwargs["layout_safety_factor"] = layout_safety_factor
+
+      quiz_doc = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout)
+
+      if i < num_pdfs:
+        if use_typst:
+          typst_text = quiz_doc.render(
+            "typst",
+            embed_images_typst=embed_images_typst,
+            show_pdf_aids=show_pdf_aids
+          )
+          if not generate_typst(typst_text, remove_previous=(i == 0), name_prefix=quiz.name):
+            raise QuizGenError("PDF generation failed (Typst).")
+        else:
+          latex_text = quiz_doc.render_latex()
+          if not generate_latex(latex_text, remove_previous=(i == 0), name_prefix=quiz.name):
+            raise QuizGenError("PDF generation failed (LaTeX).")
+
+      if i < num_htmls:
+        review_html = render_review_html_document(
+          quiz_doc,
+          copy_index=i + 1,
+          total_copies=num_htmls if num_htmls > 0 else None,
         )
-        if not generate_typst(typst_text, remove_previous=(i==0), name_prefix=quiz.name):
-          raise QuizGenError("PDF generation failed (Typst).")
-      else:
-        # Generate using LaTeX (default)
-        quiz_kwargs = {
-          "rng_seed": pdf_seed,
-          "use_typst_measurement": use_typst_measurement,
-          "consistent_pages": consistent_pages,
-        }
-        if max_backoff_attempts is not None:
-          quiz_kwargs["max_backoff_attempts"] = max_backoff_attempts
-        if consistent_pages:
-          quiz_kwargs["layout_samples"] = layout_samples
-          quiz_kwargs["layout_safety_factor"] = layout_safety_factor
-        latex_text = quiz.get_quiz(**quiz_kwargs, optimize_layout=optimize_layout).render_latex()
-        if not generate_latex(latex_text, remove_previous=(i==0), name_prefix=quiz.name):
-          raise QuizGenError("PDF generation failed (LaTeX).")
+        html_name = f"{sanitize_filename(quiz.name) or 'quiz'}-review-{i + 1:02d}"
+        html_path = generate_review_html(
+          review_html,
+          output_name=html_name,
+          remove_previous=(i == 0 and num_pdfs == 0),
+        )
+        generated_html_paths.append(html_path)
+        log.info(f"Wrote review HTML to {html_path}")
 
     if num_canvas > 0:
       upload_quiz_to_canvas(
@@ -1139,12 +1168,13 @@ def generate_quiz(
     replay_path = _replay_yaml_path(path_to_quiz_yaml)
     with open(replay_path, "w", encoding="utf-8") as handle:
       yaml.safe_dump_all(replay_exam_dicts, handle, sort_keys=False)
-    _log_replay_yaml_notification(replay_path, sample_num_pdfs=max(1, num_pdfs))
+    _log_replay_yaml_notification(replay_path, sample_num_outputs=max(1, num_pdfs, num_htmls))
     pdf_paths = _collect_recent_pdfs(start_time)
     bundle_path = _bundle_outputs(
       replay_path,
       bundle_label=os.path.splitext(os.path.basename(path_to_quiz_yaml))[0],
-      pdf_paths=pdf_paths
+      pdf_paths=pdf_paths,
+      html_paths=generated_html_paths,
     )
     if bundle_path:
       log.info(f"Wrote output bundle to {bundle_path}")

@@ -8,6 +8,7 @@ import enum
 import importlib
 import inspect
 import itertools
+import html
 import logging
 import os
 import pathlib
@@ -1120,13 +1121,29 @@ class Question(abc.ABC):
   def _append_entry_warnings(cls, body: ca.Element, warnings: list[str]) -> ca.Element:
     if not warnings:
       return body
-    notes_lines = ["**Notes for answer entry**", ""]
-    notes_lines.extend(f"- {warning}" for warning in warnings)
-    warning_elements = ca.OnlyHtml([ca.Text("\n".join(notes_lines))])
+    warning_items = "".join(
+      f"<li>{cls._format_warning_html(warning)}</li>"
+      for warning in warnings
+      if warning
+    )
+    warning_block = ca.OnlyHtml([
+      ca.RawHtml(
+        f"<div class=\"answer-warnings\"><p><strong>Notes for answer entry</strong></p><ul>{warning_items}</ul></div>"
+      )
+    ])
     if isinstance(body, ca.Container):
-      body.add_element(warning_elements)
+      body.add_element(warning_block)
       return body
-    return ca.Section([body, warning_elements])
+    return ca.Section([body, warning_block])
+
+  @staticmethod
+  def _format_warning_html(warning: str) -> str:
+    escaped = html.escape(warning)
+    return re.sub(
+      r"`([^`]+)`",
+      lambda match: f"<code>{match.group(1)}</code>",
+      escaped,
+    )
 
   @classmethod
   def _can_be_numerical_from_answers(cls, answers: list[ca.Answer]) -> bool:

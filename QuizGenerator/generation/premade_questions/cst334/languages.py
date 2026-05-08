@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import abc
 import enum
+import html
 import logging
 import random
 
@@ -16,6 +17,38 @@ class LanguageQuestion(Question, abc.ABC):
   def __init__(self, *args, **kwargs):
     kwargs["topic"] = kwargs.get("topic", Question.Topic.LANGUAGES)
     super().__init__(*args, **kwargs)
+
+
+class StandaloneLanguageChoices(ca.Container):
+  def __init__(self, answer_options: list[ca.Answer]):
+    super().__init__([])
+    self.answer_options = list(answer_options)
+
+  def render_markdown(self, **kwargs):
+    return ""
+
+  def render_html(self, **kwargs):
+    return ""
+
+  def render_latex(self, **kwargs):
+    return ""
+
+  def render_typst(self, **kwargs):
+    return ""
+
+  def render_standalone_html(self, **kwargs):
+    option_html: list[str] = []
+    for answer in self.answer_options:
+      display = answer.get_display_string() if hasattr(answer, "get_display_string") else str(answer)
+      display = display if display != "" else '""'
+      option_html.append(
+        f'<label class="quizgen-checkbox-option" data-correct="{str(bool(getattr(answer, "correct", False))).lower()}">'
+        '<input type="checkbox" class="quizgen-checkbox-input">'
+        f'<span class="quizgen-choice-text"><code>{html.escape(display)}</code></span>'
+        '<span class="quizgen-feedback" aria-live="polite"></span>'
+        '</label>'
+      )
+    return f'<div class="quizgen-checkbox-list">{"".join(option_html)}</div>'
 
 class BNF:
   
@@ -384,6 +417,12 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
 
     body.add_element(
       ca.Code(context["grammar_good"].get_grammar_string())
+    )
+
+    body.add_element(
+      ca.OnlyStandaloneHtml([
+        StandaloneLanguageChoices(context["answer_options"]),
+      ])
     )
 
     # Add in some answers as latex-only options to be circled

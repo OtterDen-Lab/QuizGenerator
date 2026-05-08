@@ -99,6 +99,12 @@ def _ensure_dependencies(*, use_typst: bool) -> None:
 def generate_command(
     quiz_yaml: str = typer.Option(..., "--yaml", help="Path to quiz YAML configuration."),
     num_pdfs: int = typer.Option(0, "--num-pdfs", min=0, help="How many PDF quizzes to create."),
+    num_htmls: int = typer.Option(
+        0,
+        "--num-htmls",
+        min=0,
+        help="How many standalone HTML review documents to create.",
+    ),
     num_canvas: int = typer.Option(
         0, "--num-canvas", min=0, help="How many variations to upload to Canvas."
     ),
@@ -166,6 +172,7 @@ def generate_command(
         generate_quiz(
             quiz_yaml,
             num_pdfs=num_pdfs,
+            num_htmls=num_htmls,
             num_canvas=num_canvas,
             use_prod=prod,
             course_id=course_id,

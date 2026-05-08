@@ -1364,7 +1364,9 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     body.add_element(
       ca.Paragraph([
         'Given the below information please calculate the equivalent physical address of the given virtual address, filling out all steps along the way.',
-        'This problem uses **two-level (hierarchical) paging**.',
+        ca.Text('This problem uses '),
+        ca.Text('two-level (hierarchical) paging', emphasis=True),
+        ca.Text('.'),
         'Remember, we typically have the MSB representing valid or invalid.'
       ])
     )
@@ -1493,10 +1495,10 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       ca.Paragraph([
         '**Step 1: Extract components from Virtual Address**',
         'Virtual Address = PDI | PTI | Offset',
-        f"<tt>0b{context['virtual_address']:0{context['num_bits_vpn'] + context['num_bits_offset']}b}</tt> = "
-        f"<tt>0b{context['pdi']:0{context['num_bits_pdi']}b}</tt> | "
-        f"<tt>0b{context['pti']:0{context['num_bits_pti']}b}</tt> | "
-        f"<tt>0b{context['offset']:0{context['num_bits_offset']}b}</tt>"
+        f"`0b{context['virtual_address']:0{context['num_bits_vpn'] + context['num_bits_offset']}b}` = "
+        f"`0b{context['pdi']:0{context['num_bits_pdi']}b}` | "
+        f"`0b{context['pti']:0{context['num_bits_pti']}b}` | "
+        f"`0b{context['offset']:0{context['num_bits_offset']}b}`"
       ])
     )
 
@@ -1504,7 +1506,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
     explanation.add_element(
       ca.Paragraph([
         '**Step 2: Look up Page Directory Entry**',
-        f"Using PDI = <tt>0b{context['pdi']:0{context['num_bits_pdi']}b}</tt>, we find PD Entry = <tt>0b{context['pd_entry']:0{context['num_bits_pfn'] + 1}b}</tt>"
+        f"Using PDI = `0b{context['pdi']:0{context['num_bits_pdi']}b}`, we find PD Entry = `0b{context['pd_entry']:0{context['num_bits_pfn'] + 1}b}`"
       ])
     )
 
@@ -1522,8 +1524,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
         ca.Paragraph([
           'Since the Page Directory Entry is invalid, the translation fails here.',
           'We write **INVALID** for all remaining fields.',
-          'If it were valid, we would continue with the steps below.',
-          '<hr>'
+          'If it were valid, we would continue with the steps below.'
         ])
       )
 
@@ -1554,8 +1555,8 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
       explanation.add_element(
         ca.Paragraph([
           '**Step 5: Look up Page Table Entry**',
-          f"Using PTI = <tt>0b{context['pti']:0{context['num_bits_pti']}b}</tt> in Page Table #{context['page_table_number']}, "
-          f"we find PTE = <tt>0b{context['pte']:0{context['num_bits_pfn'] + 1}b}</tt>"
+          f"Using PTI = `0b{context['pti']:0{context['num_bits_pti']}b}` in Page Table #{context['page_table_number']}, "
+          f"we find PTE = `0b{context['pte']:0{context['num_bits_pfn'] + 1}b}`"
         ])
       )
 
@@ -1573,8 +1574,7 @@ class HierarchicalPaging(MemoryAccessQuestion, TableQuestionMixin, BodyTemplates
           ca.Paragraph([
             'Since the Page Table Entry is invalid, the translation fails.',
             'We write **INVALID** for PFN and Physical Address.',
-            'If it were valid, we would continue with the steps below.',
-            '<hr>'
+            'If it were valid, we would continue with the steps below.'
           ])
         )
 

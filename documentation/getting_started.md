@@ -48,6 +48,14 @@ quizgen generate --yaml example_files/example_exam_safe.yaml --num-pdfs 1
 PDFs are generated in `out/`.
 `example_files/example_exam_safe.yaml` avoids `FromGenerator`, so it works without extra flags.
 
+If you want a self-contained practice review page with answer checking and spoilers, add:
+
+```bash
+quizgen generate --yaml example_files/example_exam_safe.yaml --num-htmls 1
+```
+
+That writes a standalone HTML review file in `out/` for each generated copy.
+
 ## Dependency Check (Optional)
 
 Verify external tools before generating:

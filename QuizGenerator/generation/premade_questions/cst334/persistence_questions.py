@@ -106,7 +106,7 @@ class HardDriveAccessTime(IOQuestion, TableQuestionMixin, BodyTemplatesMixin):
       "All calculated answers should be entered in milliseconds (ms). "
       f"Make sure that if you round your answers you use the unrounded values for your final calculations, "
       f"otherwise you may introduce error into your calculations."
-      f"(i.e. don't use your rounded answers to calculate your overall answer)"
+      f" (i.e. don't use your rounded answers to calculate your overall answer)"
     )
 
     body = cls.create_parameter_calculation_body(

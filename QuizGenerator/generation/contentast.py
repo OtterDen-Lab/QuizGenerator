@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import abc
 import base64
+import html
 import copy
 import decimal
 import enum
 import fractions
+import json
 import hashlib
 import itertools
 import logging
@@ -75,6 +77,7 @@ Examples:
 
 class OutputFormat(enum.StrEnum):
   HTML = "html"
+  STANDALONE_HTML = "standalone_html"
   TYPST = "typst"
   LATEX = "latex"
   MARKDOWN = "markdown"
@@ -142,6 +145,9 @@ class Element(abc.ABC):
   @abc.abstractmethod
   def render_typst(self, **kwargs):
     pass
+
+  def render_standalone_html(self, **kwargs):
+    return self.render_html(**kwargs)
 
   def is_mergeable(self, other: Element):
     return False
@@ -384,6 +390,14 @@ class Container(Element):
       for element in self.elements
     ])
 
+  def render_standalone_html(self, **kwargs):
+    for element in self.elements:
+      log.debug(f"element: {element}")
+    return " ".join([
+      self.render_element(element, output_format=OutputFormat.STANDALONE_HTML, **kwargs)
+      for element in self.elements
+    ])
+
   def render_latex(self, **kwargs):
     latex = "".join([
       self.render_element(element, output_format=OutputFormat.LATEX, **kwargs)
@@ -463,7 +477,18 @@ class Leaf(Element):
     return self.convert_markdown(self.content, OutputFormat.MARKDOWN)
   
   def render_html(self, **kwargs):
-    return self.convert_markdown(self.content, OutputFormat.HTML)
+    content = self.content
+    if kwargs.get("in_table"):
+      # Table cells should not interpret leading "# ..." as headings.
+      def _escape_heading(match: re.Match) -> str:
+        return "".join("&#35;" for _ in match.group(1)) + match.group(2)
+
+      content = re.sub(
+        r"(?m)^(#{1,6})(\s+)",
+        _escape_heading,
+        content,
+      )
+    return self.convert_markdown(content, OutputFormat.HTML)
   
   def render_latex(self, **kwargs):
     return self.convert_markdown(self.content, OutputFormat.LATEX)
@@ -1080,8 +1105,42 @@ class Text(Leaf):
   def render_html(self, **kwargs):
     if self.hide_from_html:
       return ""
-    return self.convert_markdown(self.content,OutputFormat.HTML)
-    
+
+    # HTML review/Canvas output should stay inline-safe. Markdown conversion is
+    # too aggressive here because it can reinterpret ordinary prose as block
+    # markup (headings, lists, extra paragraphs) when a question uses emphasis
+    # or other inline formatting. We keep only a small inline subset instead.
+    content = html.escape(self.content)
+    if kwargs.get("in_table"):
+      # Table cells should not interpret leading "# ..." as headings.
+      def _escape_heading(match: re.Match) -> str:
+        return "".join("&#35;" for _ in match.group(1)) + match.group(2)
+
+      content = re.sub(
+        r"(?m)^(#{1,6})(\s+)",
+        _escape_heading,
+        content,
+      )
+
+    def _format_code(match: re.Match) -> str:
+      return f"<code>{match.group(1)}</code>"
+
+    def _format_strong(match: re.Match) -> str:
+      return f"<strong>{match.group(1)}</strong>"
+
+    def _format_em(match: re.Match) -> str:
+      return f"<em>{match.group(1)}</em>"
+
+    content = re.sub(r"`([^`]+)`", _format_code, content)
+    content = re.sub(r"\*\*([^*]+)\*\*", _format_strong, content)
+    content = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", _format_em, content)
+    content = content.replace("\n", "<br>")
+
+    if self.emphasis:
+      content = f"<strong>{content}</strong>"
+
+    return content
+
   def render_latex(self, **kwargs):
     if self.hide_from_latex:
       return ""
@@ -1145,6 +1204,27 @@ class Text(Leaf):
     self.content = self.render_markdown() + " " + other.render_markdown()
     self.emphasis = False
 
+
+class RawHtml(Leaf):
+  """
+  HTML-only literal content.
+
+  Use sparingly for small, self-contained snippets that should be emitted
+  exactly as written in standalone/Canvas HTML.
+  """
+
+  def render_markdown(self, **kwargs):
+    return self.content
+
+  def render_html(self, **kwargs):
+    return self.content
+
+  def render_latex(self, **kwargs):
+    return ""
+
+  def render_typst(self, **kwargs):
+    return ""
+
 class Code(Text):
   """
   Code block formatter with proper syntax highlighting and monospace formatting.
@@ -1183,7 +1263,8 @@ class Code(Text):
     return content
   
   def render_html(self, **kwargs):
-    return self.convert_markdown(textwrap.indent(self.content, "\t"), OutputFormat.HTML)
+    escaped = html.escape(self.content.rstrip())
+    return f"<pre><code>{escaped}</code></pre>"
   
   def render_latex(self, **kwargs):
     return self.convert_markdown(self.render_markdown(), OutputFormat.LATEX)
@@ -1237,7 +1318,7 @@ class Equation(Leaf):
       return r"$\displaystyle " + f"{self.latex}" + r"$"
 
   def render_html(self, **kwargs):
-    if self.inline:
+    if self.inline or kwargs.get("in_table"):
       return fr"\({self.latex}\)"
     else:
       return f"<div class='math'>$$ \\displaystyle {self.latex} \\; $$</div>"
@@ -1529,7 +1610,7 @@ class MathExpression(Leaf):
 
   def render_html(self, **kwargs):
     content = self._render_parts(OutputFormat.HTML, **kwargs)
-    if self.inline:
+    if self.inline or kwargs.get("in_table"):
       return f"\\({content}\\)"
     else:
       return f"<div class='math'>$$ \\displaystyle {content} \\; $$</div>"
@@ -1689,7 +1770,7 @@ class Matrix(Leaf):
       rows.append(" & ".join(str(cell) for cell in row))
     matrix_content = r" \\ ".join(rows)
 
-    if self.inline:
+    if self.inline or kwargs.get("in_table"):
       return f"<span class='math'>$\\big(\\begin{{{matrix_env}}} {matrix_content} \\end{{{matrix_env}}}\\big)$</span>"
     else:
       name_str = f"\\text{{{self.name}}} = " if self.name else ""
@@ -1936,7 +2017,7 @@ class Paragraph(Container):
     return "\n\n" + super().render(output_format, **kwargs) + "\n\n"
   
   def render_html(self, **kwargs):
-    return super().render_html(**kwargs) + "<br>"
+    return f"<p>{super().render_html(**kwargs)}</p>"
   
   def add_line(self, line: str):
     self.elements.append(Text(line))
@@ -2036,7 +2117,7 @@ class Table(Container):
   
   def render_html(self, **kwargs):
     # HTML table implementation
-    result = ["<table border=\"1\" style=\"border-collapse: collapse; width: 100%;\">"]
+    result = ["<table border=\"1\" style=\"border-collapse: collapse; width: 100%; table-layout: auto;\">"]
     
     result.append("  <tbody>")
     
@@ -2048,7 +2129,12 @@ class Table(Container):
         if self.alignments and i < len(self.alignments):
           align_attr = f' align="{self.alignments[i]}"'
         # Render header as bold content in regular <td> tag
-        rendered_header = header.render(output_format="html", **kwargs)
+        header_kwargs = dict(kwargs)
+        header_kwargs["in_table"] = True
+        if isinstance(header, Element):
+          rendered_header = header.render(output_format="html", **header_kwargs)
+        else:
+          rendered_header = Text(str(header)).render_html(**header_kwargs)
         result.append(
           f"      <td style=\"padding: {'5px' if self.padding else '0x'}; font-weight: bold; {align_attr};\"><b>{rendered_header}</b></td>"
         )
@@ -2058,17 +2144,24 @@ class Table(Container):
     for row in self.data:
       result.append("    <tr>")
       for i, cell in enumerate(row):
+        cell_kwargs = dict(kwargs)
+        cell_kwargs["in_table"] = True
         if isinstance(cell, Element):
-          cell = cell.render(output_format="html", **kwargs)
+          cell = cell.render(output_format="html", **cell_kwargs)
+        else:
+          cell = Text(str(cell)).render_html(**cell_kwargs)
         align_attr = ""
         if self.alignments and i < len(self.alignments):
           align_attr = f' align="{self.alignments[i]}"'
-        result.append(f"      <td  style=\"padding: {'5px' if self.padding else '0x'} ; {align_attr};\">{cell}</td>")
+        result.append(f"      <td  style=\"padding: {'5px' if self.padding else '0x'} ; vertical-align: top; {align_attr};\">{cell}</td>")
       result.append("    </tr>")
     result.append("  </tbody>")
     result.append("</table>")
     
     return "\n".join(result)
+
+  def render_standalone_html(self, **kwargs):
+    return self.render_html(**kwargs)
   
   def render_latex(self, **kwargs):
     # LaTeX table implementation
@@ -2229,6 +2322,9 @@ class TableGroup(Container):
         result.append(f"<p><b>{label}</b></p>")
       result.append(table.render("html", **kwargs))
     return "\n".join(result)
+
+  def render_standalone_html(self, **kwargs):
+    return self.render_html(**kwargs)
 
   def render_latex(self, **kwargs):
     if not self.tables:
@@ -2434,6 +2530,9 @@ class RepeatedProblemPart(Container):
         result.append(f"<p>({letter}) {content_str}</p>")
     return "\n".join(result)
 
+  def render_standalone_html(self, **kwargs):
+    return self.render_html(**kwargs)
+
   def render_latex(self, **kwargs):
     if not self.subpart_contents:
       return ""
@@ -2495,9 +2594,9 @@ class OnlyLatex(Container):
   harvest_answers = False
 
   def render(self, output_format: OutputFormat, **kwargs):
-    if output_format not in ("latex", "typst"):
-      return ""
-    return super().render(output_format=output_format, **kwargs)
+    if output_format in ("latex", "typst"):
+      return super().render(output_format=output_format, **kwargs)
+    return ""
 
 
 class PDFAid(Container):
@@ -2551,7 +2650,17 @@ class OnlyHtml(Container):
   """
   
   def render(self, output_format, **kwargs):
-    if output_format != "html":
+    if output_format not in ("html", "standalone_html"):
+      return ""
+    return super().render(output_format, **kwargs)
+
+class OnlyStandaloneHtml(Container):
+  """
+  Container that only renders in the standalone HTML review format.
+  """
+
+  def render(self, output_format, **kwargs):
+    if output_format != "standalone_html":
       return ""
     return super().render(output_format, **kwargs)
 
@@ -2689,7 +2798,45 @@ class Answer(Leaf):
   def render_markdown(self, **kwargs):
     return f"{self.label + (':' if len(self.label) > 0 else '')} [{self.key}] {self.unit}".strip()
 
-  def render_html(self, show_answers=False, can_be_numerical=False, **kwargs):
+  def render_html(self, show_answers=False, can_be_numerical=False, review_mode=False, **kwargs):
+    if self.pdf_only:
+      return ""
+
+    if review_mode:
+      accepted_answers: list[str] = []
+      try:
+        for canvas_answer in self.get_for_canvas():
+          if canvas_answer.get("answer_weight", 0) > 0:
+            answer_text = str(canvas_answer.get("answer_text", ""))
+            if answer_text not in accepted_answers:
+              accepted_answers.append(answer_text)
+      except Exception as exc:
+        log.warning(f"Failed to build review answers for {self.key}: {exc}")
+        if self.value is not None:
+          accepted_answers = [str(self.value)]
+
+      blank_width = max(18, min(80, int(self.blank_length) * 4 + 6))
+      label_text = f"{self.label}:" if self.label else ""
+      unit_text = f" {self.unit}" if self.unit else ""
+      aria_label = self.label or "Answer"
+      data_accepted = html.escape(json.dumps(accepted_answers), quote=True)
+      key_attr = html.escape(self.key, quote=True)
+      label_html = f'<span class="quizgen-answer-label">{html.escape(label_text)}</span>' if label_text else ""
+      unit_html = f'<span class="quizgen-answer-unit">{html.escape(unit_text)}</span>' if unit_text else ""
+      return (
+        f'<span class="quizgen-answer-field" data-blank-id="{key_attr}">'
+        f'{label_html}'
+        f'<input type="text" class="quizgen-answer-input" '
+        f'data-accepted="{data_accepted}" '
+        f'data-blank-id="{key_attr}" '
+        f'aria-label="{html.escape(aria_label, quote=True)}" '
+        f'autocomplete="off" autocapitalize="off" spellcheck="false" '
+        f'style="width: min(100%, {blank_width}ch); min-width: 18rem;">'
+        f'{unit_html}'
+        f'<span class="quizgen-feedback" aria-live="polite"></span>'
+        f'</span>'
+      )
+
     if can_be_numerical:
       return f"Calculate {self.label}"
     if show_answers:
