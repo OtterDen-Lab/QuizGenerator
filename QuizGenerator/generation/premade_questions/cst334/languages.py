@@ -328,17 +328,17 @@ class ValidStringsInLanguageQuestion(LanguageQuestion):
       num_tries += 1
 
     featured_answers = {
-      cls._canonicalize_generated_string(grammar_good.generate()),
-      cls._canonicalize_generated_string(grammar_bad.generate()),
-      cls._canonicalize_generated_string(grammar_good.generate(early_exit=True))
+      cls._canonicalize_generated_string(grammar_good.generate(include_spaces)),
+      cls._canonicalize_generated_string(grammar_bad.generate(include_spaces)),
+      cls._canonicalize_generated_string(grammar_good.generate(include_spaces, early_exit=True))
     }
     num_feature_tries = 0
     while len(featured_answers) < num_answer_options and num_feature_tries < cls.MAX_TRIES:
       featured_answers.add(
         rng.choice([
-          lambda: cls._canonicalize_generated_string(grammar_good.generate()),
-          lambda: cls._canonicalize_generated_string(grammar_bad.generate()),
-          lambda: cls._canonicalize_generated_string(grammar_good.generate(early_exit=True)),
+          lambda: cls._canonicalize_generated_string(grammar_good.generate(include_spaces)),
+          lambda: cls._canonicalize_generated_string(grammar_bad.generate(include_spaces)),
+          lambda: cls._canonicalize_generated_string(grammar_good.generate(include_spaces, early_exit=True)),
         ])()
       )
       num_feature_tries += 1
