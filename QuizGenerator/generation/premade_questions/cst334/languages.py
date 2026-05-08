@@ -143,7 +143,7 @@ class BNF:
 @QuestionRegistry.register("LanguageQuestion")
 class ValidStringsInLanguageQuestion(LanguageQuestion):
   MAX_TRIES = 1000
-  EMPTY_STRING_DISPLAY = "ε"
+  EMPTY_STRING_DISPLAY = "\"\""
 
   @classmethod
   def _canonicalize_generated_string(cls, value: str) -> str:
