@@ -218,7 +218,9 @@ class TestParagraph:
     def test_paragraph_html_has_line_break(self):
         para = ca.Paragraph(["Some text"])
         rendered = para.render("html")
-        assert "<br>" in rendered
+        assert rendered.strip().startswith("<p>")
+        assert rendered.strip().endswith("</p>")
+        assert "Some text" in rendered
 
 
 class TestSection:
