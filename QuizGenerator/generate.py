@@ -1,4 +1,14 @@
 #!/usr/bin/env python
+from pathlib import Path
+import sys
+
+# Prefer the repository checkout when this file is executed directly.
+# This keeps local development and the installed `quizgen` package from
+# drifting apart when the repo has changes that are not yet installed.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+  sys.path.insert(0, str(_REPO_ROOT))
+
 import copy
 import importlib.metadata
 import logging
@@ -12,7 +22,6 @@ import time
 import traceback
 import uuid
 import zipfile
-import sys
 from datetime import datetime
 
 import yaml

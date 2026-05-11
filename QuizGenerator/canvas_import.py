@@ -18,9 +18,12 @@ import yaml
 
 log = logging.getLogger(__name__)
 
+_YAML_WIDTH = 88
+
 
 _FILE_ID_RE = re.compile(r"/files/(\d+)(?:/|$)")
 _BLANK_TOKEN_RE = re.compile(r"\[([^\[\]]+)\]")
+_INLINE_MATH_RE = re.compile(r"\$\$(.+?)\$\$|\$(.+?)\$|\\\((.+?)\\\)|\\\[(.+?)\\\]", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -76,7 +79,12 @@ def export_canvas_quiz_to_yaml(
     image_dir=image_dir,
     flatten_groups=flatten_groups,
   )
-  yaml_text = yaml.safe_dump(spec, sort_keys=False, allow_unicode=True)
+  yaml_text = yaml.safe_dump(
+    spec,
+    sort_keys=False,
+    allow_unicode=True,
+    width=_YAML_WIDTH,
+  )
   output_path.write_text(yaml_text, encoding="utf-8")
   return output_path
 
@@ -215,6 +223,7 @@ def _build_blank_answer_specs(question) -> dict[str, dict[str, Any]]:
       5,
       max((len(str(value)) for value in [*correct_values, *incorrect_values] if value), default=0),
     )
+    blank_length = min(blank_length, 16)
     answer_spec: dict[str, Any] = {
       "type": node_type,
       "value": parsed_value,
@@ -641,15 +650,99 @@ def _parts_to_node(parts: list[Any]) -> dict[str, Any] | str | None:
       continue
     if isinstance(part, str) and part == "":
       continue
-    flattened.append(part)
+    if isinstance(part, str):
+      flattened.extend(_inline_math_to_parts(part))
+    else:
+      flattened.append(part)
 
   if not flattened:
     return None
 
   if len(flattened) == 1:
-    return flattened[0]
+    single = flattened[0]
+    if isinstance(single, str):
+      math_node = _maybe_equation_node(single)
+      if math_node is not None:
+        return math_node
+    return single
 
   return {"paragraph": {"lines": flattened}}
+
+
+def _inline_math_to_parts(text: str) -> list[Any]:
+  if not text:
+    return []
+
+  parts: list[Any] = []
+  cursor = 0
+  for match in _INLINE_MATH_RE.finditer(text):
+    start, end = match.span()
+    if start > cursor:
+      parts.append(text[cursor:start])
+    latex = next((group for group in match.groups() if group is not None), "")
+    latex = _strip_math_wrappers(latex.strip())
+    inline_expr = match.group(2) is not None or match.group(3) is not None
+    parts.append(
+      {
+        "equation": {
+          "latex": latex.strip(),
+          "inline": inline_expr,
+        }
+      }
+    )
+    cursor = end
+  if cursor < len(text):
+    parts.append(text[cursor:])
+  return parts
+
+
+def _maybe_equation_node(text: str) -> dict[str, Any] | None:
+  stripped = _normalize_text(text)
+  if not stripped:
+    return None
+
+  stripped = _strip_math_wrappers(stripped)
+
+  if not stripped:
+    return None
+
+  if _looks_like_latex_math(stripped):
+    return {"equation": {"latex": stripped, "inline": False}}
+  return None
+
+
+def _looks_like_latex_math(text: str) -> bool:
+  if any(token in text for token in (r"\left", r"\right", r"\frac", r"\begin{", r"\end{", r"\sum", r"\nabla", r"\cdot", r"\times", r"\int", r"\sqrt")):
+    return True
+  if re.search(r"\\[A-Za-z]+", text):
+    return True
+  if re.search(r"[A-Za-z_]\s*\^\s*[{(]?", text):
+    return True
+  if re.search(r"[=+\-*/]", text) and re.search(r"[A-Za-z0-9]", text):
+    return True
+  return False
+
+
+def _strip_math_wrappers(text: str) -> str:
+  stripped = text.strip()
+  if not stripped:
+    return ""
+
+  dollar_match = re.match(r"^\$+\s*(.*?)\s*\$+$", stripped, flags=re.DOTALL)
+  if dollar_match:
+    stripped = dollar_match.group(1).strip()
+
+  if stripped.startswith(r"\(") and stripped.endswith(r"\)"):
+    stripped = stripped[2:-2].strip()
+  elif stripped.startswith(r"\[") and stripped.endswith(r"\]"):
+    stripped = stripped[2:-2].strip()
+
+  if stripped.startswith(r"\displaystyle "):
+    stripped = stripped[len(r"\displaystyle "):].strip()
+  elif stripped == r"\displaystyle":
+    stripped = ""
+
+  return stripped
 
 
 def _html_to_nodes(
@@ -747,9 +840,7 @@ def _download_image(canvas_course, src: str, image_dir: Path) -> Path | None:
     try:
       canvas_file = canvas_course.course.get_file(file_id)
       filename = getattr(canvas_file, "filename", None) or getattr(canvas_file, "display_name", None) or f"file-{file_id}"
-      path = image_dir / sanitize_filename(str(filename))
-      if path.suffix == "":
-        path = path.with_suffix(".bin")
+      path = _build_image_path(image_dir, str(filename), content_type=getattr(canvas_file, "content_type", None))
       canvas_file.download(str(path))
       return path.resolve()
     except Exception as exc:
@@ -759,10 +850,12 @@ def _download_image(canvas_course, src: str, image_dir: Path) -> Path | None:
   if parsed.scheme in {"http", "https"}:
     try:
       response = canvas_course.course._requester.request("GET", _url=src)
-      filename = os.path.basename(parsed.path) or f"image-{abs(hash(src)) & 0xffffffff:08x}.bin"
-      path = image_dir / sanitize_filename(filename)
-      if path.suffix == "":
-        path = path.with_suffix(".bin")
+      filename = os.path.basename(parsed.path) or f"image-{abs(hash(src)) & 0xffffffff:08x}"
+      path = _build_image_path(
+        image_dir,
+        filename,
+        content_type=getattr(response, "headers", {}).get("Content-Type"),
+      )
       path.write_bytes(response.content)
       return path.resolve()
     except Exception as exc:
@@ -770,3 +863,28 @@ def _download_image(canvas_course, src: str, image_dir: Path) -> Path | None:
       return None
 
   return None
+
+
+def _build_image_path(image_dir: Path, filename: str, *, content_type: str | None = None) -> Path:
+  raw_name = Path(str(filename))
+  stem = sanitize_filename(raw_name.stem)
+  suffix = raw_name.suffix
+  if not suffix:
+    suffix = _guess_image_extension(content_type)
+  return image_dir / f"{stem}{suffix}"
+
+
+def _guess_image_extension(content_type: str | None) -> str:
+  if content_type:
+    mime = content_type.split(";", 1)[0].strip().lower()
+    if mime:
+      ext = mimetypes.guess_extension(mime)
+      if ext:
+        return ext
+      if mime == "image/jpeg":
+        return ".jpg"
+      if mime == "image/svg+xml":
+        return ".svg"
+      if mime == "image/webp":
+        return ".webp"
+  return ".png"

@@ -1361,7 +1361,14 @@ class Equation(Leaf):
     - Operators: 'nabla' not '\nabla', 'times' not '\times'
     """
 
-    # Remove \left and \right (Typst uses auto-sizing)
+    latex_str = Equation._strip_math_wrappers(latex_str)
+
+    latex_str = Equation._latex_wrapped_matrix_to_typst(latex_str, r"\left[", r"\right]", "[")
+    latex_str = Equation._latex_wrapped_matrix_to_typst(latex_str, r"\left(", r"\right)", "(")
+    latex_str = Equation._latex_wrapped_matrix_to_typst(latex_str, r"\left|", r"\right|", "|")
+    latex_str = Equation._latex_wrapped_matrix_to_typst(latex_str, r"\left{", r"\right}", "{")
+
+    # Remove any remaining \left and \right (Typst uses auto-sizing)
     latex_str = latex_str.replace(r'\left', '').replace(r'\right', '')
     
     # Hat Notation
@@ -1429,37 +1436,69 @@ class Equation(Leaf):
       'matrix': None,       # no brackets
     }
 
+    latex_str = Equation._latex_matrix_envs_to_typst(latex_str, bracket_map)
+
+    # Handle \left\| ... \right\| for norms
+    latex_str = re.sub(r'\\\|', '||', latex_str)
+
+    return latex_str
+
+  @staticmethod
+  def _strip_math_wrappers(latex_str: str) -> str:
+    stripped = latex_str.strip()
+    if not stripped:
+      return ""
+
+    dollar_match = re.match(r"^\$+\s*(.*?)\s*\$+$", stripped, flags=re.DOTALL)
+    if dollar_match:
+      stripped = dollar_match.group(1).strip()
+
+    if stripped.startswith(r"\(") and stripped.endswith(r"\)"):
+      stripped = stripped[2:-2].strip()
+    elif stripped.startswith(r"\[") and stripped.endswith(r"\]"):
+      stripped = stripped[2:-2].strip()
+
+    stripped = re.sub(r"\\?displaystyle\s*", "", stripped)
+    return stripped
+
+  @staticmethod
+  def _latex_wrapped_matrix_to_typst(latex_str: str, left_wrapper: str, right_wrapper: str, delimiter: str) -> str:
+    pattern = re.escape(left_wrapper) + r"(.*?)" + re.escape(right_wrapper)
+
+    def replace(match: re.Match) -> str:
+      inner = match.group(1)
+      if r"\begin{" not in inner:
+        return match.group(0)
+      converted = Equation._latex_matrix_envs_to_typst(inner, {"matrix": f'"{delimiter}"'})
+      return converted
+
+    return re.sub(pattern, replace, latex_str, flags=re.DOTALL)
+
+  @staticmethod
+  def _latex_matrix_envs_to_typst(latex_str: str, bracket_map: dict[str, str | None]) -> str:
     for env_type, delim in bracket_map.items():
       pattern = rf'\\begin\{{{env_type}\}}(.*?)\\end\{{{env_type}\}}'
 
       def make_replacer(delimiter):
         def replace_matrix(match):
           content = match.group(1)
-          # Split rows by \\ and columns by &
           rows = content.split(r'\\')
           rows = [r.strip() for r in rows if r.strip()]
 
-          # Check if it's a vector (single column) or matrix
           is_vector = all('&' not in row for row in rows)
 
           if is_vector:
-            # Single column - use semicolons to separate rows in mat()
             elements = "; ".join(rows)
           else:
-            # Multiple columns - replace & with , and rows with ;
             formatted_rows = [row.replace('&', ',').strip() for row in rows]
             elements = "; ".join(formatted_rows)
 
           if delimiter:
             return f"mat(delim: {delimiter}, {elements})"
-          else:
-            return f"mat({elements})"
+          return f"mat({elements})"
         return replace_matrix
 
       latex_str = re.sub(pattern, make_replacer(delim), latex_str, flags=re.DOTALL)
-
-    # Handle \left\| ... \right\| for norms
-    latex_str = re.sub(r'\\\|', '||', latex_str)
 
     return latex_str
 
@@ -2240,7 +2279,9 @@ class Table(Container):
     if self.headers:
       header_cells = []
       for header in self.headers:
-        rendered = header.render(output_format="typst", **kwargs).strip()
+        header_kwargs = dict(kwargs)
+        header_kwargs["in_table"] = True
+        rendered = header.render(output_format="typst", **header_kwargs).strip()
         header_cells.append(f"[*{rendered}*]")
       all_rows.append(header_cells)
     
@@ -2248,7 +2289,9 @@ class Table(Container):
     for row in self.data:
       row_cells = []
       for cell in row:
-        rendered = cell.render(output_format="typst", **kwargs).strip()
+        cell_kwargs = dict(kwargs)
+        cell_kwargs["in_table"] = True
+        rendered = cell.render(output_format="typst", **cell_kwargs).strip()
         row_cells.append(f"[{rendered}]")
       all_rows.append(row_cells)
     
@@ -2857,8 +2900,11 @@ class Answer(Leaf):
 
   def render_typst(self, **kwargs):
     """Render answer blank as an underlined space in Typst."""
-    blank_width = self.blank_length * 0.75  # Convert character length to cm
-    blank = f"#fillline(width: {blank_width}cm)"
+    if kwargs.get("in_table"):
+      blank = "#fillline(width: 100%)"
+    else:
+      blank_width = min(max(self.blank_length * 0.75, 3.0), 12.0)
+      blank = f"#fillline(width: {blank_width}cm)"
 
     label_part = f"{self.label}:" if self.label else ""
     unit_part = f" {self.unit}" if self.unit else ""
