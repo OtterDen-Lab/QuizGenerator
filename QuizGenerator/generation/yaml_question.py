@@ -253,6 +253,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
   answer_type = str(spec.get("type", "string")).lower()
   strict = bool(spec.get("strict", False))
   require_prefix = bool(spec.get("require_prefix", False))
+  default_correct = bool(spec.get("correct", True))
+  key = spec.get("key")
 
   if answer_type.endswith("_strict"):
     strict = True
@@ -267,6 +269,7 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
     baffles = _eval_field(spec.get("baffles"), ctx)
     pdf_only = bool(_eval_field(spec.get("pdf_only", False), ctx))
     order_matters = bool(_eval_field(spec.get("order_matters", True), ctx))
+    correct = bool(_eval_field(spec.get("correct", default_correct), ctx))
     allowed_fraction_denominators = _eval_field(
       spec.get("allowed_fraction_denominators", spec.get("fraction_denominators")),
       ctx
@@ -286,7 +289,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         unit=unit,
         blank_length=blank_length,
         pdf_only=pdf_only,
-        require_prefix=require_prefix
+        require_prefix=require_prefix,
+        correct=correct,
       )
 
     if answer_type == "binary":
@@ -296,7 +300,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        correct=correct,
       )
     if answer_type == "hex":
       return ca.AnswerTypes.Hex(
@@ -305,7 +310,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        correct=correct,
       )
     if answer_type == "decimal":
       return ca.AnswerTypes.Decimal(
@@ -314,7 +320,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        correct=correct,
       )
     if answer_type == "int":
       return ca.AnswerTypes.Int(
@@ -322,7 +329,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        correct=correct,
       )
     if answer_type == "float":
       return ca.AnswerTypes.Float(
@@ -331,7 +339,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         unit=unit,
         blank_length=blank_length,
         pdf_only=pdf_only,
-        allowed_fraction_denominators=allowed_fraction_denominators
+        allowed_fraction_denominators=allowed_fraction_denominators,
+        correct=correct,
       )
     if answer_type == "string":
       return ca.AnswerTypes.String(
@@ -339,7 +348,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        correct=correct,
       )
     if answer_type == "list":
       return ca.AnswerTypes.List(
@@ -348,7 +358,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         unit=unit,
         blank_length=blank_length,
         pdf_only=pdf_only,
-        order_matters=order_matters
+        order_matters=order_matters,
+        correct=correct,
       )
     if answer_type == "vector":
       return ca.AnswerTypes.Vector(
@@ -356,7 +367,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        correct=correct,
       )
     if answer_type == "matrix":
       matrix_value = value
@@ -365,7 +377,8 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
       return ca.AnswerTypes.Matrix(
         value=matrix_value,
         label=label,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        correct=correct,
       )
     if answer_type == "open_ended":
       return ca.AnswerTypes.OpenEnded(
@@ -373,27 +386,37 @@ def _parse_answer(spec: dict[str, Any]) -> ca.TemplateElement:
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
+        correct=correct,
       )
     if answer_type == "dropdown":
-      return ca.Answer.dropdown(
+      answer = ca.Answer(
         value=value,
+        kind=ca.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN,
+        correct=correct,
         baffles=baffles,
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
       )
+      if key is not None:
+        answer.key = str(key)
+      return answer
     if answer_type == "multiple_choice":
-      return ca.Answer.multiple_choice(
-        key="",
+      answer = ca.Answer(
         value=value,
+        kind=ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER,
+        correct=correct,
         baffles=baffles,
         label=label,
         unit=unit,
         blank_length=blank_length,
-        pdf_only=pdf_only
+        pdf_only=pdf_only,
       )
+      if key is not None:
+        answer.key = str(key)
+      return answer
 
     raise ValueError(f"Unknown answer type '{answer_type}'.")
 
@@ -458,6 +481,28 @@ def _parse_matching(spec: Any) -> ca.TemplateElement:
     )
 
   return ca.Expr(builder)
+
+
+def _parse_picture(spec: Any) -> ca.Element:
+  if not isinstance(spec, dict):
+    raise ValueError("picture node must be a mapping.")
+  path = spec.get("path")
+  if path is None:
+    raise ValueError("picture node requires a path.")
+  caption = spec.get("caption")
+  width = spec.get("width")
+  return ca.Picture(path=path, caption=caption, width=width)
+
+
+def _parse_only_html(spec: Any) -> ca.Element:
+  if spec is None:
+    return ca.OnlyHtml()
+  if isinstance(spec, dict):
+    children = spec.get("children", spec.get("nodes", []))
+  else:
+    children = spec
+  section = _parse_section(children)
+  return ca.OnlyHtml(section.elements)
 
 
 def _evaluate_var_def(var_def: Any, context: QuestionContext | dict[str, Any]) -> Any:
@@ -676,8 +721,10 @@ ca.register_yaml_node(
       {"name": "value", "type": "expr", "required": True},
       {"name": "label", "type": "templated_string"},
       {"name": "unit", "type": "templated_string"},
+      {"name": "key", "type": "templated_string"},
       {"name": "length", "type": "expr"},
       {"name": "blank_length", "type": "expr", "default": 5},
+      {"name": "correct", "type": "bool", "default": True},
       {"name": "strict", "type": "bool", "default": False},
       {"name": "require_prefix", "type": "bool", "default": False},
       {"name": "baffles", "type": "expr_list"},
@@ -725,6 +772,28 @@ ca.register_yaml_node(
   _parse_section,
   form_spec={
     "title": "Section",
+    "fields": [
+      {"name": "children", "type": "node_list", "required": True},
+    ],
+  }
+)
+ca.register_yaml_node(
+  "picture",
+  _parse_picture,
+  form_spec={
+    "title": "Picture",
+    "fields": [
+      {"name": "path", "type": "templated_string", "required": True},
+      {"name": "caption", "type": "templated_string"},
+      {"name": "width", "type": "templated_string"},
+    ],
+  }
+)
+ca.register_yaml_node(
+  "only_html",
+  _parse_only_html,
+  form_spec={
+    "title": "HTML Only",
     "fields": [
       {"name": "children", "type": "node_list", "required": True},
     ],

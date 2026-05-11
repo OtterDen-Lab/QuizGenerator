@@ -25,6 +25,7 @@ from QuizGenerator.generate import (
     list_registered_tags,
     test_all_questions,
 )
+from QuizGenerator.canvas_import import export_canvas_quiz_to_yaml
 from QuizGenerator.generation.contentast import Answer
 from QuizGenerator.generation.performance import PerformanceTracker
 
@@ -261,6 +262,44 @@ def practice_command(
             quiet=quiet,
             max_backoff_attempts=max_backoff_attempts,
         )
+
+@app.command("import-canvas")
+def import_canvas_command(
+    course_id: int = typer.Option(..., "--course-id", help="Canvas course ID."),
+    quiz_id: int | None = typer.Option(None, "--quiz-id", help="Canvas classic quiz ID."),
+    assignment_id: int | None = typer.Option(
+        None,
+        "--assignment-id",
+        help="Canvas assignment ID for a classic quiz.",
+    ),
+    output: str = typer.Option(
+        "out/canvas_import.yaml",
+        "--output",
+        help="Path for the exported YAML file.",
+    ),
+    env: str = typer.Option(str(Path.home() / ".env"), "--env", help="Path to .env file."),
+    debug: bool = typer.Option(False, "--debug", help="Set logging level to debug."),
+    prod: bool = typer.Option(False, "--prod", help="Use production Canvas environment."),
+    flatten_groups: bool = typer.Option(
+        True,
+        "--flatten-groups/--preserve-groups",
+        help="Flatten Canvas question groups to their first question.",
+    ),
+) -> None:
+    with _quizgen_error_boundary():
+        _configure_runtime(env=env, debug=debug)
+        if quiz_id is None and assignment_id is None:
+            raise QuizGenError("Provide either --quiz-id or --assignment-id.")
+        canvas_interface = CanvasInterface(prod=prod, env_path=env)
+        canvas_course = canvas_interface.get_course(course_id=course_id)
+        output_path = export_canvas_quiz_to_yaml(
+            canvas_course,
+            quiz_id=quiz_id,
+            assignment_id=assignment_id,
+            output_path=output,
+            flatten_groups=flatten_groups,
+        )
+        typer.echo(str(output_path))
 
 @app.command("test")
 def test_command(

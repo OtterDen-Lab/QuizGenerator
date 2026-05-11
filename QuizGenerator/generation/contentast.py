@@ -1853,12 +1853,17 @@ class Picture(Leaf):
       )
       body.add_element(picture)
   """
-  def __init__(self, img_data, caption=None, width=None):
+  def __init__(self, img_data=None, path=None, caption=None, width=None):
     super().__init__("[picture]")
+    if img_data is None and path is None:
+      raise ValueError("Picture requires img_data or path.")
+    if img_data is None and path is not None:
+      with open(path, "rb") as handle:
+        img_data = BytesIO(handle.read())
     self.img_data = img_data
     self.caption = caption
     self.width = width
-    self.path = None  # Will be set when image is saved
+    self.path = path  # Will be set when image is saved if not provided
 
   def _ensure_image_saved(self):
     """Save image data to file if not already saved."""

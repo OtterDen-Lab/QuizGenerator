@@ -12,6 +12,7 @@ import time
 import traceback
 import uuid
 import zipfile
+import sys
 from datetime import datetime
 
 import yaml
@@ -1182,6 +1183,12 @@ def generate_quiz(
 def main() -> None:
   """Run the Typer CLI entrypoint."""
   from QuizGenerator.typer_cli import main as typer_main
+
+  argv = sys.argv
+  if len(argv) >= 3 and argv[1] == "generate":
+    next_command = argv[2]
+    if next_command in {"generate", "practice", "import-canvas", "test", "deps", "tags"}:
+      sys.argv = [argv[0], *argv[2:]]
 
   typer_main()
 

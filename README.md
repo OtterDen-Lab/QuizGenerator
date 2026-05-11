@@ -105,7 +105,20 @@ quizgen \
   --course-id 12345
 ```
 
-### 4. Generate Tag-Filtered Practice Quizzes
+### 4. Import from Canvas
+
+Pull a classic quiz back into YAML:
+
+```bash
+quizgen import-canvas \
+  --course-id 12345 \
+  --quiz-id 67890 \
+  --output out/imported_quiz.yaml
+```
+
+This flattens question groups to the first variant for now and downloads linked images into a sibling assets directory.
+
+### 5. Generate Tag-Filtered Practice Quizzes
 
 Create one practice quiz assignment per matching registered question type:
 
@@ -124,7 +137,7 @@ These are uploaded as regular graded quiz assignments into the `practice` assign
 Tag filters accept either namespaced tags (for example `course:cst334`, `topic:memory`) or bare forms (`cst334`, `memory`).
 Use `--practice-tag-source explicit` if you want strict explicit-only tag matching.
 
-### 5. Audit Tags
+### 6. Audit Tags
 
 ```bash
 # Tag summary
