@@ -2,22 +2,24 @@
 set -euo pipefail
 
 usage() {
-  cat <<'USAGE'
+  cat <<'EOF'
 Usage:
   git bump [patch|minor|major] [-m "commit message"] [--no-commit] [--dry-run] [--skip-tests] [--verbose] [--tag|--no-tag] [--push|--no-push] [--remote <name>]
 
 Behavior:
   1. Run test command (unless --skip-tests)
   2. Bump version via `uv version --bump <kind>`
-  3. Stage `pyproject.toml` and `uv.lock`
-  4. Commit (unless --no-commit)
-  5. Create tag `v<version>` by default (disable with --no-tag)
-  6. Push branch and tag by default (disable with --no-push)
+  3. Refresh dependency resolution via `uv lock --upgrade`
+  4. Re-run test command against the upgraded lockfile (unless --skip-tests)
+  5. Stage `pyproject.toml` and `uv.lock`
+  6. Commit (unless --no-commit)
+  7. Create tag `v<version>` by default (disable with --no-tag)
+  8. Push branch and tag by default (disable with --no-push)
 
 Notes:
   - Requires a clean index and working tree (tracked files).
   - Uses normal `git commit -m ...` (no pathspec commit).
-USAGE
+EOF
 }
 
 die() {
@@ -45,6 +47,17 @@ TAG_EXPLICIT="0"
 PUSH_EXPLICIT="0"
 REMOTE_NAME="origin"
 TEST_COMMAND='uv run pytest -q'
+# Run from a temporary copy so script updates cannot affect the active run.
+if [[ "${LMS_GIT_BUMP_STAGE2:-0}" != "1" ]]; then
+  script_tmp="$(mktemp "${TMPDIR:-/tmp}/lms_git_bump.XXXXXX.sh")"
+  cp "$0" "$script_tmp"
+  chmod +x "$script_tmp"
+  exec env LMS_GIT_BUMP_STAGE2=1 LMS_GIT_BUMP_TMP="$script_tmp" bash "$script_tmp" "$@"
+fi
+
+if [[ -n "${LMS_GIT_BUMP_TMP:-}" ]]; then
+  trap 'rm -f "$LMS_GIT_BUMP_TMP"' EXIT
+fi
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -117,16 +130,17 @@ if [[ -n "$(git diff --name-only)" ]] || [[ -n "$(git diff --cached --name-only)
   die "Working tree has tracked changes. Commit or stash them before running git bump."
 fi
 
-if [[ "$VERBOSE" == "1" ]]; then
-  echo "Note: --verbose is currently a no-op (vendoring removed)."
-fi
-
 if [[ "$SKIP_TESTS" != "1" ]] && [[ -n "$TEST_COMMAND" ]]; then
   echo "Running tests: $TEST_COMMAND"
   run bash -lc "$TEST_COMMAND"
 fi
 
 run uv version --bump "$BUMP_KIND"
+run uv lock --upgrade
+if [[ "$SKIP_TESTS" != "1" ]] && [[ -n "$TEST_COMMAND" ]]; then
+  echo "Re-running tests after dependency refresh: $TEST_COMMAND"
+  run bash -lc "$TEST_COMMAND"
+fi
 version="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n 1)"
 run git add pyproject.toml uv.lock
 
