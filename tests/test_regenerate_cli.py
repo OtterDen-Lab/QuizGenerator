@@ -76,5 +76,6 @@ def test_regenerate_cli_rejects_underscore_flag():
 
     assert result.exit_code != 0
     plain_output = _strip_ansi(result.output)
-    assert "No such option:" in plain_output
     assert "--encrypted_str" in plain_output
+    assert "No such option:" in plain_output or "Did you mean" in plain_output
+    assert "--encrypted-str" in plain_output

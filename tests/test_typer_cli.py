@@ -68,5 +68,6 @@ def test_typer_rejects_underscore_flag_names():
 
     assert result.exit_code != 0
     plain_output = _strip_ansi(result.output)
-    assert "No such option:" in plain_output
     assert "--num_pdfs" in plain_output
+    assert "No such option:" in plain_output or "Did you mean" in plain_output
+    assert "--num-pdfs" in plain_output

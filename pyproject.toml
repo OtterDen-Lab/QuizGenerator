@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "QuizGenerator"
-version = "0.27.1"
+version = "0.27.2"
 description = "Generate randomized quiz questions for Canvas LMS and PDF exams"
 readme = "README.md"
 license = {text = "GPL-3.0-or-later"}
@@ -31,7 +31,7 @@ dependencies = [
     "matplotlib>=3.8,<4",
     "numpy>=1.26,<3",
     "sympy~=1.14.0",
-    "markdown~=3.9",
+    "markdown~=3.10",
     "segno~=1.6.0",
     "cryptography~=46.0.0",
     "canvasapi~=3.2.0",
@@ -53,7 +53,7 @@ quizregen = "QuizGenerator.regenerate:main"
 [project.optional-dependencies]
 grading = [
     "pyzbar~=0.1.9",
-    "pillow>=10.4,<12",
+    "pillow~=12.2",
 ]
 
 cst463 = [
