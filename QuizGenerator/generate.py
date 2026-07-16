@@ -1,15 +1,6 @@
 #!/usr/bin/env python
-from pathlib import Path
-import sys
-
-# Prefer the repository checkout when this file is executed directly.
-# This keeps local development and the installed `quizgen` package from
-# drifting apart when the repo has changes that are not yet installed.
-_REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(_REPO_ROOT) not in sys.path:
-  sys.path.insert(0, str(_REPO_ROOT))
-
 import copy
+import importlib
 import importlib.metadata
 import logging
 import os
@@ -17,19 +8,39 @@ import random
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import traceback
 import uuid
 import zipfile
 from datetime import datetime
+from pathlib import Path
 
 import yaml
 from lms_interface.canvas_interface import CanvasInterface
 
-from QuizGenerator.generation.question import Question, QuestionGroup, QuestionRegistry
-from QuizGenerator.generation.quiz import Quiz
-from QuizGenerator.generation.review_html import render_review_html_document
+if __package__ in {None, ""}:
+  # Prefer the repository checkout when this file is executed directly.
+  # This keeps local development and the installed `quizgen` package from
+  # drifting apart when the repo has changes that are not yet installed.
+  _REPO_ROOT = Path(__file__).resolve().parents[1]
+  if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+  _question_module = importlib.import_module("QuizGenerator.generation.question")
+  _quiz_module = importlib.import_module("QuizGenerator.generation.quiz")
+  _review_html_module = importlib.import_module("QuizGenerator.generation.review_html")
+else:
+  _question_module = importlib.import_module(".generation.question", package=__package__)
+  _quiz_module = importlib.import_module(".generation.quiz", package=__package__)
+  _review_html_module = importlib.import_module(".generation.review_html", package=__package__)
+
+Question = _question_module.Question
+QuestionGroup = _question_module.QuestionGroup
+QuestionRegistry = _question_module.QuestionRegistry
+Quiz = _quiz_module.Quiz
+render_review_html_document = _review_html_module.render_review_html_document
 
 log = logging.getLogger(__name__)
 

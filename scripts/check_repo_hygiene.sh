@@ -10,18 +10,20 @@ export UV_CACHE_DIR="${UV_CACHE_DIR:-$repo_root/.uv_cache}"
 
 echo "Running Ruff checks..."
 ruff_status=0
-if command -v ruff >/dev/null 2>&1; then
+if command -v uv >/dev/null 2>&1; then
+  if uv run ruff check --output-format=github .; then
+    :
+  else
+    ruff_status=$?
+  fi
+elif command -v ruff >/dev/null 2>&1; then
   if ruff check --output-format=github .; then
     :
   else
     ruff_status=$?
   fi
 else
-  if uv run ruff check --output-format=github .; then
-    :
-  else
-    ruff_status=$?
-  fi
+  echo "WARNING: Neither uv nor ruff is installed; skipping Ruff checks."
 fi
 
 if [[ "$ruff_status" != "0" ]]; then

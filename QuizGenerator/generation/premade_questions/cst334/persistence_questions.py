@@ -4,8 +4,8 @@ from __future__ import annotations
 import abc
 import difflib
 import logging
-import re
 import random
+import re
 from fractions import Fraction
 
 import QuizGenerator.generation.contentast as ca

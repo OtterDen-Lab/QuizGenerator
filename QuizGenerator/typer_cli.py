@@ -15,6 +15,7 @@ from dotenv import load_dotenv
 from lms_interface.canvas_interface import CanvasInterface
 
 from QuizGenerator import enable_debug_logging, is_debug_enabled
+from QuizGenerator.canvas_import import export_canvas_quiz_to_yaml
 from QuizGenerator.generate import (
     QuizGenError,
     _check_dependencies,
@@ -25,7 +26,6 @@ from QuizGenerator.generate import (
     list_registered_tags,
     test_all_questions,
 )
-from QuizGenerator.canvas_import import export_canvas_quiz_to_yaml
 from QuizGenerator.generation.contentast import Answer
 from QuizGenerator.generation.performance import PerformanceTracker
 

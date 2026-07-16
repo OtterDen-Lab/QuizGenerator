@@ -5,12 +5,11 @@ import argparse
 import os
 import re
 import shutil
+import tomllib
 import urllib.request
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
-
-import tomllib
 
 DEFAULT_CONFIG = Path("scripts/lms_release_source.toml")
 DEFAULT_PYPROJECT = Path("pyproject.toml")

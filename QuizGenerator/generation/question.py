@@ -5,10 +5,10 @@ import abc
 import dataclasses
 import datetime
 import enum
+import html
 import importlib
 import inspect
 import itertools
-import html
 import logging
 import os
 import pathlib
