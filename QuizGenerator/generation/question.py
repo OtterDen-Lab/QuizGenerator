@@ -1248,14 +1248,18 @@ class Question(abc.ABC):
       try:
         temp_file.write(img_data.getbuffer())
         temp_file.flush()
-        temp_file.seek(0)
-        upload_success, f = course.upload(temp_file, parent_folder_path=f"Quiz Files")
-      finally:
         temp_file.close()
+        upload_success, f = course.upload(temp_file.name, parent_folder_path="Quiz Files")
+      finally:
+        if not temp_file.closed:
+          temp_file.close()
         try:
           os.remove(temp_file.name)
         except OSError:
           log.warning(f"Failed to remove temp image {temp_file.name}")
+
+      if not upload_success:
+        raise RuntimeError(f"Failed to upload image to Canvas: {f}")
 
       img_data.name = "img.png"
       log.debug("path: " + f"/courses/{course.id}/files/{f['id']}/preview")
