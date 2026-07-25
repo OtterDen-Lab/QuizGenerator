@@ -78,6 +78,7 @@ Examples:
 class OutputFormat(enum.StrEnum):
   HTML = "html"
   STANDALONE_HTML = "standalone_html"
+  IFRAME_HTML = "iframe_html"
   TYPST = "typst"
   LATEX = "latex"
   MARKDOWN = "markdown"
@@ -123,6 +124,9 @@ class Element(abc.ABC):
     return self.render_markdown()
   
   def render(self, output_format : OutputFormat, **kwargs) -> str:
+    if output_format == OutputFormat.IFRAME_HTML:
+      return self.render_html(iframe_mode=True, **kwargs)
+
     # Render using the appropriate method, if it exists
     method_name = f"render_{output_format}"
     if hasattr(self, method_name):
@@ -2499,6 +2503,18 @@ class AnswerBlock(Table):
     )
     return content
 
+  def render_html(self, **kwargs):
+    if not kwargs.get("iframe_mode"):
+      return super().render_html(**kwargs)
+
+    rendered_answers = []
+    for row in self.data:
+      for answer in row:
+        rendered_answers.append(
+          f"<p>{answer.render_html(**kwargs)}</p>"
+        )
+    return "\n".join(rendered_answers)
+
 ## Specialized Elements
 class RepeatedProblemPart(Container):
   """
@@ -2849,6 +2865,36 @@ class Answer(Leaf):
   def render_html(self, show_answers=False, can_be_numerical=False, review_mode=False, **kwargs):
     if self.pdf_only:
       return ""
+
+    if kwargs.get("iframe_mode"):
+      accepted_answers: list[str] = []
+      try:
+        for canvas_answer in self.get_for_canvas():
+          if canvas_answer.get("answer_weight", 0) <= 0:
+            continue
+          answer_text = str(canvas_answer.get("answer_text", ""))
+          if answer_text not in accepted_answers:
+            accepted_answers.append(answer_text)
+      except Exception as exc:
+        log.warning("Failed to build iframe answers for %s: %s", self.key, exc)
+        if self.value is not None:
+          accepted_answers = [str(self.value)]
+
+      label = self.label.strip() if self.label else ""
+      label_text = f"{label}: " if label else ""
+      unit_text = f" {self.unit}" if self.unit else ""
+      aria_label = label or "Answer"
+      accepted_json = html.escape(json.dumps(accepted_answers), quote=True)
+      return (
+        "<label>"
+        f"{html.escape(label_text)}"
+        f"<input class=\"quizgen-answer-input\" data-accepted=\"{accepted_json}\" "
+        f"data-blank-id=\"{html.escape(self.key, quote=True)}\" "
+        f"aria-label=\"{html.escape(aria_label, quote=True)}\">"
+        "<span class=\"quizgen-feedback\"></span>"
+        f"{html.escape(unit_text)}"
+        "</label>"
+      )
 
     if review_mode:
       accepted_answers: list[str] = []

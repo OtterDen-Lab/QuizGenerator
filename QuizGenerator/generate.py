@@ -31,16 +31,19 @@ if __package__ in {None, ""}:
   _question_module = importlib.import_module("QuizGenerator.generation.question")
   _quiz_module = importlib.import_module("QuizGenerator.generation.quiz")
   _review_html_module = importlib.import_module("QuizGenerator.generation.review_html")
+  _iframe_export_module = importlib.import_module("QuizGenerator.generation.iframe_export")
 else:
   _question_module = importlib.import_module(".generation.question", package=__package__)
   _quiz_module = importlib.import_module(".generation.quiz", package=__package__)
   _review_html_module = importlib.import_module(".generation.review_html", package=__package__)
+  _iframe_export_module = importlib.import_module(".generation.iframe_export", package=__package__)
 
 Question = _question_module.Question
 QuestionGroup = _question_module.QuestionGroup
 QuestionRegistry = _question_module.QuestionRegistry
 Quiz = _quiz_module.Quiz
 render_review_html_document = _review_html_module.render_review_html_document
+export_iframe_variants = _iframe_export_module.export_iframe_variants
 
 log = logging.getLogger(__name__)
 
@@ -1081,7 +1084,9 @@ def generate_quiz(
     show_pdf_aids=True,
     optimize_layout=False,
     max_backoff_attempts=None,
-    quiet: bool = False
+    quiet: bool = False,
+    iframe_variations: int = 0,
+    iframe_output_dir: str | None = None,
 ):
 
   start_time = time.time()
@@ -1097,6 +1102,20 @@ def generate_quiz(
     exam_dicts_for_parsing = raw_exam_dicts
 
   quizzes = Quiz.from_exam_dicts(exam_dicts_for_parsing, source_path=path_to_quiz_yaml)
+
+  if iframe_variations > 0:
+    if not iframe_output_dir:
+      raise QuizGenError("--iframe-output-dir is required when --iframe-variations is used.")
+    try:
+      written = export_iframe_variants(
+        quizzes,
+        variations=iframe_variations,
+        output_dir=iframe_output_dir,
+        base_seed=base_seed,
+      )
+    except ValueError as exc:
+      raise QuizGenError(str(exc)) from exc
+    log.info("Wrote %d iframe YAML variants to %s", len(written), iframe_output_dir)
 
   # Handle Canvas uploads with shared assignment group
   if num_canvas > 0:

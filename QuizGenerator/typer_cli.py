@@ -109,6 +109,17 @@ def generate_command(
     num_canvas: int = typer.Option(
         0, "--num-canvas", min=0, help="How many variations to upload to Canvas."
     ),
+    iframe_variations: int = typer.Option(
+        0,
+        "--iframe-variations",
+        min=0,
+        help="How many bare iframe YAML variants to write per question.",
+    ),
+    iframe_output_dir: str | None = typer.Option(
+        None,
+        "--iframe-output-dir",
+        help="Directory to recreate with qNN/vNNN iframe YAML files.",
+    ),
     seed: int | None = typer.Option(None, "--seed", help="Random seed for quiz generation."),
     env: str = typer.Option(str(Path.home() / ".env"), "--env", help="Path to .env file."),
     debug: bool = typer.Option(False, "--debug", help="Set logging level to debug."),
@@ -190,6 +201,8 @@ def generate_command(
             optimize_layout=optimize_space,
             max_backoff_attempts=max_backoff_attempts,
             quiet=quiet,
+            iframe_variations=iframe_variations,
+            iframe_output_dir=iframe_output_dir,
         )
 
 @app.command("practice")
