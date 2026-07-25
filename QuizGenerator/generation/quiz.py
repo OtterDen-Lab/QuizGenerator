@@ -266,7 +266,7 @@ class Quiz:
         if key in registry or key in reverse:
           return True
         # Backward-compat prefix handling
-        for prefix in ["cst334.", "cst463."]:
+        for prefix in ["cst334.", "cst463.", "math130."]:
           if key.startswith(prefix):
             stripped = key[len(prefix):]
             if stripped in registry or stripped in reverse:

@@ -222,7 +222,7 @@ class QuestionRegistry:
         log.debug(f"Resolved class name '{question_type}' to registered name '{question_key}'")
       else:
         # Try stripping common course prefixes and module paths for backward compatibility
-        for prefix in ['cst334.', 'cst463.']:
+        for prefix in ['cst334.', 'cst463.', 'math130.']:
           if question_key.startswith(prefix):
             stripped_name = question_key[len(prefix):]
             if stripped_name in cls._registry:

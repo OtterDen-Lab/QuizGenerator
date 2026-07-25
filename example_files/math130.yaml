@@ -1,0 +1,64 @@
+# MATH130 Precalculus Readiness Diagnostic
+name: "MATH130 Precalculus Readiness Diagnostic"
+practice: False
+questions:
+  1:
+    FunctionEvaluation:
+      class: math130.FunctionEvaluation
+      topic: FUNCTIONS
+      _config:
+        repeat: 1
+  2:
+    QuadraticVertex:
+      class: math130.QuadraticVertex
+      topic: FUNCTIONS
+      _config:
+        repeat: 1
+  3:
+    PolynomialFactoring:
+      class: math130.PolynomialFactoring
+      topic: POLYNOMIALS
+      _config:
+        repeat: 1
+  4:
+    RationalDomain:
+      class: math130.RationalDomain
+      topic: RATIONAL_FUNCTIONS
+      _config:
+        repeat: 1
+  5:
+    ExponentialGrowth:
+      class: math130.ExponentialGrowth
+      topic: EXPONENTIALS
+      _config:
+        repeat: 1
+  6:
+    LogarithmConversion:
+      class: math130.LogarithmConversion
+      topic: LOGARITHMS
+      _config:
+        repeat: 1
+  7:
+    TrigSpecialAngle:
+      class: math130.TrigSpecialAngle
+      topic: TRIGONOMETRY
+      _config:
+        repeat: 1
+  8:
+    TrigEquation:
+      class: math130.TrigEquation
+      topic: TRIGONOMETRY
+      _config:
+        repeat: 1
+  9:
+    LinearModelPrediction:
+      class: math130.LinearModelPrediction
+      topic: MODELING
+      _config:
+        repeat: 1
+  10:
+    DataSummary:
+      class: math130.DataSummary
+      topic: DATA_ANALYSIS
+      _config:
+        repeat: 1
