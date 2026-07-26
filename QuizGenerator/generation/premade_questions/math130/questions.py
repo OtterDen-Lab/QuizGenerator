@@ -31,6 +31,11 @@ def _signed(value):
   return f"+ {value}" if value >= 0 else f"- {abs(value)}"
 
 
+def _explanation(*elements):
+  """Build a worked explanation from paragraphs and equations."""
+  return ca.Section(list(elements))
+
+
 @QuestionRegistry.register()
 class FunctionEvaluation(Math130Question):
   """Evaluate a function at a specified input."""
@@ -56,7 +61,16 @@ class FunctionEvaluation(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.Int(context["value"]), f"The function value is {context['value']}.")[1]
+    a, b, x, value = context["a"], context["b"], context["x"], context["value"]
+    return _explanation(
+      ca.Paragraph([
+        "The notation f(", ca.Equation(str(x), inline=True), ") means that we use ",
+        ca.Equation(str(x), inline=True), " in place of every ",
+        ca.Equation("x", inline=True), " in the rule for the function."
+      ]),
+      ca.Equation(f"f({x}) = {a}({x}) {_signed(b)} = {value}"),
+      ca.Paragraph([f"So the value of the function at x = {x} is {value}."])
+    )
 
 
 @QuestionRegistry.register()
@@ -85,7 +99,19 @@ class QuadraticVertex(Math130Question):
   @classmethod
   def _build_explanation(cls, context):
     kind = "minimum" if context["coefficient"] == 1 else "maximum"
-    return _section("", ca.AnswerTypes.String(""), f"The vertex is ({context['h']}, {context['k']}); it is the parabola's {kind}.")[1]
+    h, k = context["h"], context["k"]
+    return _explanation(
+      ca.Paragraph([
+        "A quadratic written in vertex form has the pattern ",
+        ca.Equation("y = a(x - h)^2 + k", inline=True),
+        ". Its turning point is ", ca.Equation("(h, k)", inline=True), "."
+      ]),
+      ca.Paragraph([
+        f"Here, h = {h} and k = {k}, so the turning point is ({h}, {k}). "
+        f"Because the squared term has a {'positive' if context['coefficient'] == 1 else 'negative'} coefficient, "
+        f"the parabola has a {kind} at that point."
+      ])
+    )
 
 
 @QuestionRegistry.register()
@@ -116,7 +142,15 @@ class PolynomialFactoring(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.List([]), f"The zeros are {context['r1']} and {context['r2']}.")[1]
+    r1, r2 = context["r1"], context["r2"]
+    return _explanation(
+      ca.Paragraph([
+        "A product equals zero when at least one factor equals zero. "
+        "Set each factor equal to zero and solve for x."
+      ]),
+      ca.Equation(f"x {_signed(-r1)} = 0 \\quad \\text{{or}} \\quad x {_signed(-r2)} = 0"),
+      ca.Paragraph([f"This gives x = {r1} or x = {r2}, so those are the two real zeros."])
+    )
 
 
 @QuestionRegistry.register()
@@ -145,7 +179,15 @@ class RationalDomain(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.Int(context["excluded"]), "A rational function cannot have a zero denominator.")[1]
+    excluded = context["excluded"]
+    return _explanation(
+      ca.Paragraph([
+        "A fraction is undefined when its denominator is zero, so we only need to find "
+        "the value of x that makes the denominator zero."
+      ]),
+      ca.Equation(f"x {_signed(-excluded)} = 0 \\quad \\Rightarrow \\quad x = {excluded}"),
+      ca.Paragraph([f"Therefore x = {excluded} is not allowed in the domain."])
+    )
 
 
 @QuestionRegistry.register()
@@ -178,7 +220,22 @@ class ExponentialGrowth(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.Float(context["value"]), f"The modeled amount is {context['value']:.2f}.")[1]
+    initial, rate, years, value = (
+      context["initial"], context["rate"], context["years"], context["value"]
+    )
+    growth_factor = 1 + rate
+    powered_factor = growth_factor ** years
+    return _explanation(
+      ca.Paragraph([
+        f"The input t tells us how many time periods have passed. Since the question asks for {years} "
+        f"time periods, replace t with {years} in the model."
+      ]),
+      ca.Equation(
+        f"P({years}) = {initial}({growth_factor})^{{{years}}} "
+        f"= {initial}({powered_factor}) = {value}"
+      ),
+      ca.Paragraph([f"The population after {years} time periods is {value:.2f}."])
+    )
 
 
 @QuestionRegistry.register()
@@ -207,7 +264,18 @@ class LogarithmConversion(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.Int(context["exponent"]), "A logarithm asks for the exponent.")[1]
+    base, exponent, power = context["base"], context["exponent"], context["power"]
+    return _explanation(
+      ca.Paragraph([
+        "A logarithm asks: what exponent must be placed on the base to make the given number? "
+        f"Look for the exponent that makes {base} become {power}."
+      ]),
+      ca.Equation(f"{base}^{{{exponent}}} = {power}"),
+      ca.Paragraph([
+        "Because this equation is true, ",
+        ca.Equation(f"\\log_{{{base}}}({power}) = {exponent}", inline=True), "."
+      ])
+    )
 
 
 @QuestionRegistry.register()
@@ -235,7 +303,15 @@ class TrigSpecialAngle(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.Float(context["value"]), "Use the unit-circle sine coordinate.")[1]
+    angle, value = context["angle"], context["value"]
+    return _explanation(
+      ca.Paragraph([
+        "On the unit circle, sine is the vertical coordinate (the y-coordinate) of the point at the angle. "
+        f"At {angle} degrees, that vertical coordinate is {value}."
+      ]),
+      ca.Equation(f"\\sin({angle}^\\circ) = {value}"),
+      ca.Paragraph([f"So the requested sine value is {value}."])
+    )
 
 
 @QuestionRegistry.register()
@@ -265,7 +341,20 @@ class TrigEquation(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.List([]), "Use the reference angle and the quadrants where sine has the required sign.")[1]
+    value = context["value"]
+    solutions = context["solutions"]
+    solution_text = ", ".join(str(solution) for solution in solutions)
+    return _explanation(
+      ca.Paragraph([
+        "First find the unit-circle angles whose vertical coordinate (sine) is ",
+        ca.Equation(str(value), inline=True), ". Then keep only the angles from 0 through 360 degrees."
+      ]),
+      ca.Equation(
+        "\\sin(\\theta) = " + str(value) + " \\quad \\Rightarrow \\quad "
+        + ", \\; ".join(f"\\theta = {solution}^\\circ" for solution in solutions)
+      ),
+      ca.Paragraph([f"Therefore the solutions are {solution_text} degrees."])
+    )
 
 
 @QuestionRegistry.register()
@@ -296,7 +385,23 @@ class LinearModelPrediction(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.Int(context["value"]), "Substitute the observed input into the model.")[1]
+    intercept, slope, miles, value = (
+      context["intercept"], context["slope"], context["x"], context["value"]
+    )
+    mileage_cost = slope * miles
+    return _explanation(
+      ca.Paragraph([
+        f"The model uses m for the number of miles traveled. This trip is {miles} miles, "
+        f"so replace m with {miles}."
+      ]),
+      ca.Equation(
+        f"C({miles}) = {intercept} + {slope}({miles}) = {intercept} + {mileage_cost} = {value}"
+      ),
+      ca.Paragraph([
+        f"The {intercept} is the starting fare, and {slope} times {miles} is the mileage charge. "
+        f"Together, the predicted fare is {value}."
+      ])
+    )
 
 
 @QuestionRegistry.register()
@@ -322,4 +427,13 @@ class DataSummary(Math130Question):
 
   @classmethod
   def _build_explanation(cls, context):
-    return _section("", ca.AnswerTypes.Float(context["mean"]), "The mean is the sum divided by the number of observations.")[1]
+    data, mean = context["data"], context["mean"]
+    total = sum(data)
+    values = " + ".join(str(value) for value in data)
+    return _explanation(
+      ca.Paragraph([
+        "The mean is the average. To find it, add every data value and then divide by the number of values."
+      ]),
+      ca.Equation(f"\\frac{{{values}}}{{{len(data)}}} = \\frac{{{total}}}{{{len(data)}}} = {mean}"),
+      ca.Paragraph([f"There are {len(data)} values, so the mean is {mean:.2f}."])
+    )

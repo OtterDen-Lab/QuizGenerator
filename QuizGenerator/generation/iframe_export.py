@@ -12,6 +12,23 @@ import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generation.question import QuestionGroup
 
 
+class _IframeYamlDumper(yaml.SafeDumper):
+  """Prefer readable block scalars for HTML fragments."""
+
+
+def _represent_string(dumper, value):
+  style = "|" if "\n" in value else None
+  return dumper.represent_scalar("tag:yaml.org,2002:str", value, style=style)
+
+
+_IframeYamlDumper.add_representer(str, _represent_string)
+
+
+def _clean_html_fragment(fragment: str) -> str:
+  """Remove renderer-only blank lines while retaining intentional HTML lines."""
+  return "\n".join(line.strip() for line in fragment.splitlines() if line.strip())
+
+
 def _accepted_values(answer: ca.Answer) -> list[str]:
   """Return unique accepted answer strings in the same form Canvas receives."""
   accepted: list[str] = []
@@ -86,13 +103,23 @@ def export_iframe_variants(
         answer.key = f"q{question_index:02d}-v{variation_index:03d}-a{answer_index:02d}"
 
       payload = {
-        "question_html": instance.body.render(ca.OutputFormat.IFRAME_HTML),
+        "question_html": _clean_html_fragment(
+          instance.body.render(ca.OutputFormat.IFRAME_HTML)
+        ),
         "answer": [_answer_data(answer) for answer in instance.answers],
-        "explanation_html": instance.explanation.render(ca.OutputFormat.IFRAME_HTML),
+        "explanation_html": _clean_html_fragment(
+          instance.explanation.render(ca.OutputFormat.IFRAME_HTML)
+        ),
       }
       output_path = question_dir / f"v{variation_index:03d}.yaml"
       with output_path.open("w", encoding="utf-8") as handle:
-        yaml.safe_dump(payload, handle, allow_unicode=True, sort_keys=False)
+        yaml.dump(
+          payload,
+          handle,
+          Dumper=_IframeYamlDumper,
+          allow_unicode=True,
+          sort_keys=False,
+        )
       written.append(output_path)
 
   return written
