@@ -109,6 +109,24 @@ def generate_command(
     num_canvas: int = typer.Option(
         0, "--num-canvas", min=0, help="How many variations to upload to Canvas."
     ),
+    body_length: int | None = typer.Option(
+        None,
+        "--body-length",
+        min=0,
+        help="Pad every Canvas question body to this rendered HTML length.",
+    ),
+    explanation_length: int | None = typer.Option(
+        None,
+        "--explanation-length",
+        min=0,
+        help="Pad every Canvas explanation to this rendered HTML length.",
+    ),
+    suppress: str | None = typer.Option(
+        None,
+        "--suppress",
+        "--supress",
+        help="Comma-separated Canvas payload parts to suppress: body, explanation, answers.",
+    ),
     iframe_variations: int = typer.Option(
         0,
         "--iframe-variations",
@@ -177,6 +195,18 @@ def generate_command(
         )
         if num_canvas > 0 and course_id is None:
             raise QuizGenError("Missing --course-id for Canvas upload. Example: --course-id 12345")
+        suppress_parts = {
+            part.strip().lower()
+            for part in (suppress or "").split(",")
+            if part.strip()
+        }
+        invalid_suppress_parts = suppress_parts - {"body", "explanation", "answers"}
+        if invalid_suppress_parts:
+            invalid = ", ".join(sorted(invalid_suppress_parts))
+            raise QuizGenError(
+                "Invalid --suppress value(s): "
+                f"{invalid}. Choose from: body, explanation, answers."
+            )
         use_typst = not latex
         if num_pdfs > 0:
             _ensure_dependencies(use_typst=use_typst)
@@ -203,6 +233,9 @@ def generate_command(
             quiet=quiet,
             iframe_variations=iframe_variations,
             iframe_output_dir=iframe_output_dir,
+            body_length=body_length,
+            explanation_length=explanation_length,
+            canvas_suppress_parts=suppress_parts,
         )
 
 @app.command("practice")

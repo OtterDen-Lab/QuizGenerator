@@ -87,7 +87,7 @@ def enable_debug_logging() -> None:
   logging.getLogger().setLevel(logging.DEBUG)
   for handler in logging.getLogger().handlers:
     handler.setLevel(logging.DEBUG)
-  for logger_name in ["QuizGenerator", "lms_interface", "__main__"]:
+  for logger_name in ["QuizGenerator", "lms_interface", "canvasapi", "__main__"]:
     logger = logging.getLogger(logger_name)
     logger.setLevel(logging.DEBUG)
     for handler in logger.handlers:

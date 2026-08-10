@@ -1087,6 +1087,9 @@ def generate_quiz(
     quiet: bool = False,
     iframe_variations: int = 0,
     iframe_output_dir: str | None = None,
+    body_length: int | None = None,
+    explanation_length: int | None = None,
+    canvas_suppress_parts: set[str] | None = None,
 ):
 
   start_time = time.time()
@@ -1102,6 +1105,29 @@ def generate_quiz(
     exam_dicts_for_parsing = raw_exam_dicts
 
   quizzes = Quiz.from_exam_dicts(exam_dicts_for_parsing, source_path=path_to_quiz_yaml)
+
+  if body_length is not None or explanation_length is not None or canvas_suppress_parts:
+    for quiz in quizzes:
+      for question_or_group in quiz.questions:
+        questions = (
+          question_or_group.questions
+          if isinstance(question_or_group, QuestionGroup)
+          else [question_or_group]
+        )
+        for question in questions:
+          if body_length is not None:
+            question.extra_attrs["body_length"] = body_length
+          if explanation_length is not None:
+            question.extra_attrs["explanation_length"] = explanation_length
+          if canvas_suppress_parts:
+            question.extra_attrs["canvas_suppress_parts"] = set(canvas_suppress_parts)
+    log.info(
+      "Applying Canvas diagnostic overrides to all questions "
+      "(body_length=%s, explanation_length=%s, suppress=%s).",
+      body_length,
+      explanation_length,
+      ",".join(sorted(canvas_suppress_parts or ())) or "none",
+    )
 
   if iframe_variations > 0:
     if not iframe_output_dir:

@@ -1230,6 +1230,7 @@ class Question(abc.ABC):
       instance.answers,
       instance.can_be_numerical
     )
+    suppress_parts = set(self.extra_attrs.get("canvas_suppress_parts", ()))
 
     # Define a helper function for uploading images to canvas
     def image_upload(img_data) -> str:
@@ -1266,14 +1267,33 @@ class Question(abc.ABC):
       return f"/courses/{course.id}/files/{f['id']}/preview"
 
     # Render AST to HTML for Canvas
-    question_html = questionAST.render(
-      "html",
-      upload_func=image_upload
-    )
-    explanation_html = questionAST.explanation.render(
-      "html",
-      upload_func=image_upload
-    )
+    if "body" in suppress_parts:
+      # Canvas requires question_text to be present, so retain a minimal,
+      # visible marker rather than sending an empty required field.
+      question_html = "<p>Canvas body suppressed.</p>"
+    else:
+      question_html = questionAST.render(
+        "html",
+        upload_func=image_upload
+      )
+
+    if "explanation" in suppress_parts:
+      explanation_html = ""
+    else:
+      explanation_html = questionAST.explanation.render(
+        "html",
+        upload_func=image_upload
+      )
+
+    if "answers" in suppress_parts:
+      answers = []
+
+    # MWE/debugging support: pad rendered Canvas fields to an exact character
+    # length with visible text. This is useful for isolating request-size
+    # limits or edge filters. The configured length is a minimum; content is
+    # never truncated.
+    question_html = self._pad_canvas_html(question_html, "body_length")
+    explanation_html = self._pad_canvas_html(explanation_html, "explanation_length")
 
     # Build appropriate dictionary to send to canvas
     return {
@@ -1284,6 +1304,26 @@ class Question(abc.ABC):
       "answers": answers,
       "neutral_comments_html": explanation_html
     }
+
+  def _pad_canvas_html(self, content: str, option_name: str) -> str:
+    target = self.extra_attrs.get(option_name)
+    if target is None:
+      return content
+
+    if isinstance(target, bool):
+      raise ValueError(f"{option_name} must be a non-negative integer.")
+    try:
+      target_length = int(target)
+    except (TypeError, ValueError) as exc:
+      raise ValueError(f"{option_name} must be a non-negative integer.") from exc
+
+    if target_length < 0:
+      raise ValueError(f"{option_name} must be a non-negative integer.")
+    padding_length = max(0, target_length - len(content))
+    if padding_length == 0:
+      return content
+    padding = ("padding " * ((padding_length // len("padding ")) + 1))
+    return content + padding[:padding_length]
   
   def _get_registered_name(self) -> str:
     """
