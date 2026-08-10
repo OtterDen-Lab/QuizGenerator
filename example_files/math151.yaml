@@ -1,0 +1,23 @@
+name: "MATH151 Calculus II Readiness"
+practice: false
+questions:
+  1:
+    ExponentialEvaluation: {class: math151.ExponentialEvaluation}
+  2:
+    LogDerivative: {class: math151.LogDerivative}
+  3:
+    InverseTrigValue: {class: math151.InverseTrigValue}
+  4:
+    IntegrationByParts: {class: math151.IntegrationByParts}
+  5:
+    PartialFractions: {class: math151.PartialFractions}
+  6:
+    SeparableDifferentialEquation: {class: math151.SeparableDifferentialEquation}
+  7:
+    TaylorApproximation: {class: math151.TaylorApproximation}
+  8:
+    LHopitalLimit: {class: math151.LHopitalLimit}
+  9:
+    ImproperIntegral: {class: math151.ImproperIntegral}
+  10:
+    GeometricSeries: {class: math151.GeometricSeries}

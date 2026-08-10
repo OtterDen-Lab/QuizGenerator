@@ -1,0 +1,23 @@
+name: "MATH270 Mathematics for Computing Readiness"
+practice: false
+questions:
+  1:
+    LinearSystem: {class: math270.LinearSystem}
+  2:
+    MatrixMultiplication: {class: math270.MatrixMultiplication}
+  3:
+    VectorDotProduct: {class: math270.VectorDotProduct}
+  4:
+    Determinant: {class: math270.Determinant}
+  5:
+    DiagonalEigenvalue: {class: math270.DiagonalEigenvalue}
+  6:
+    TrapezoidRule: {class: math270.TrapezoidRule}
+  7:
+    ExpectedValue: {class: math270.ExpectedValue}
+  8:
+    BinomialProbability: {class: math270.BinomialProbability}
+  9:
+    PythonExpectedValue: {class: math270.PythonExpectedValue}
+  10:
+    RegularExpressionMatch: {class: math270.RegularExpressionMatch}

@@ -1,0 +1,23 @@
+name: "MATH150 Calculus I Readiness"
+practice: false
+questions:
+  1:
+    LimitEvaluation: {class: math150.LimitEvaluation}
+  2:
+    ContinuityCheck: {class: math150.ContinuityCheck}
+  3:
+    PowerRuleDerivative: {class: math150.PowerRuleDerivative}
+  4:
+    TrigDerivative: {class: math150.TrigDerivative}
+  5:
+    ChainRuleDerivative: {class: math150.ChainRuleDerivative}
+  6:
+    CriticalPoint: {class: math150.CriticalPoint}
+  7:
+    ImplicitDerivative: {class: math150.ImplicitDerivative}
+  8:
+    RelatedRatesCircle: {class: math150.RelatedRatesCircle}
+  9:
+    MeanValueTheorem: {class: math150.MeanValueTheorem}
+  10:
+    DefiniteIntegral: {class: math150.DefiniteIntegral}

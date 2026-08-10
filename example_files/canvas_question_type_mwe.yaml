@@ -1,0 +1,80 @@
+name: "Canvas Question-Type MWE"
+practice: true
+# To test a request-size threshold, add either option to a question's `kwargs`:
+#   body_length: 4096          # minimum rendered question_text length
+#   explanation_length: 8192   # minimum rendered neutral_comments_html length
+# Padding repeats visible "padding " text and does not truncate content.
+# For content-isolation tests, use the CLI option:
+#   --suppress body,explanation,answers
+questions:
+  1:
+    fill_in_multiple_blanks:
+      class: FromYaml
+      yaml_spec:
+        body:
+          - paragraph: "MWE: fill in multiple blanks. Enter 2 and blue."
+          - answer_block:
+              - answer:
+                  type: int
+                  value: 2
+                  label: "Number"
+              - answer:
+                  type: string
+                  value: blue
+                  label: "Color"
+        explanation:
+          - paragraph: "This verifies the fill_in_multiple_blanks_question payload."
+
+    multiple_dropdowns:
+      class: FromYaml
+      yaml_spec:
+        body:
+          - paragraph: "MWE: select the correct color."
+          - answer_block:
+              - answer:
+                  type: dropdown
+                  key: mwe_color
+                  value: blue
+                  baffles: [red, green]
+                  label: "Color"
+        explanation:
+          - paragraph: "This verifies the multiple_dropdowns_question payload."
+
+    multiple_answers:
+      class: FromYaml
+      yaml_spec:
+        body:
+          - paragraph: "MWE: select blue."
+          - answer_block:
+              - answer:
+                  type: multiple_choice
+                  value: blue
+                  baffles: [red, green]
+                  label: "Color"
+        explanation:
+          - paragraph: "This verifies the multiple_answers_question payload."
+
+    matching:
+      class: FromYaml
+      yaml_spec:
+        body:
+          - paragraph: "MWE: match each item to its value."
+          - matching:
+              pairs:
+                - [one, "1"]
+                - [two, "2"]
+              distractors: ["3"]
+        explanation:
+          - paragraph: "This verifies the matching_question payload."
+
+    essay:
+      class: FromYaml
+      yaml_spec:
+        body:
+          - paragraph: "MWE: briefly explain why this is an essay response."
+          - answer:
+              type: open_ended
+              value: ""
+              label: "Response"
+        explanation:
+          - paragraph: "This verifies the essay_question payload."

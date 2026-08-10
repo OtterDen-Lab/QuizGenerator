@@ -1,0 +1,23 @@
+name: "MATH170 Discrete Mathematics Readiness"
+practice: false
+questions:
+  1:
+    SetUnion: {class: math170.SetUnion}
+  2:
+    LogicalStatement: {class: math170.LogicalStatement}
+  3:
+    Contrapositive: {class: math170.Contrapositive}
+  4:
+    ArithmeticSequence: {class: math170.ArithmeticSequence}
+  5:
+    Summation: {class: math170.Summation}
+  6:
+    BijectiveFunction: {class: math170.BijectiveFunction}
+  7:
+    EquivalenceRelation: {class: math170.EquivalenceRelation}
+  8:
+    CountingPrinciple: {class: math170.CountingPrinciple}
+  9:
+    DiscreteProbability: {class: math170.DiscreteProbability}
+  10:
+    CompleteGraphEdges: {class: math170.CompleteGraphEdges}
