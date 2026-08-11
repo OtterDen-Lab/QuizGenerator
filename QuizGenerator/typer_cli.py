@@ -127,6 +127,12 @@ def generate_command(
         "--supress",
         help="Comma-separated Canvas payload parts to suppress: body, explanation, answers.",
     ),
+    canvas_upload_workers: int | None = typer.Option(
+        None,
+        "--canvas-upload-workers",
+        min=1,
+        help="Concurrent Canvas question uploads; use 1 to avoid rate-limit bursts.",
+    ),
     iframe_variations: int = typer.Option(
         0,
         "--iframe-variations",
@@ -236,6 +242,7 @@ def generate_command(
             body_length=body_length,
             explanation_length=explanation_length,
             canvas_suppress_parts=suppress_parts,
+            canvas_upload_workers=canvas_upload_workers,
         )
 
 @app.command("practice")

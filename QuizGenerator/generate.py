@@ -853,7 +853,8 @@ def upload_quiz_to_canvas(
     assignment_group=None,
     optimize_layout=False,
     max_backoff_attempts=None,
-    quiet: bool = False
+    quiet: bool = False,
+    canvas_upload_workers: int | None = None,
 ):
   if assignment_group is None:
     assignment_group = canvas_course.create_assignment_group()
@@ -870,6 +871,10 @@ def upload_quiz_to_canvas(
   log.info(f"Starting to push quiz '{title or canvas_quiz.title}' with {total_questions} questions to Canvas")
   log.info(f"Target: {num_variations} variations per question")
   show_progress_bar = not quiet
+  create_question_kwargs = {}
+  if canvas_upload_workers is not None:
+    create_question_kwargs["max_workers"] = canvas_upload_workers
+    log.info("Using %d concurrent Canvas upload worker(s).", canvas_upload_workers)
   overall_bar = None
   if show_progress_bar:
     try:
@@ -955,7 +960,8 @@ def upload_quiz_to_canvas(
         pick_count=question.num_to_pick,
         show_progress_bar=show_progress_bar,
         progress_label=f"Uploading {label}",
-        progress_callback=upload_callback
+        progress_callback=upload_callback,
+        **create_question_kwargs,
       )
       continue
 
@@ -983,7 +989,8 @@ def upload_quiz_to_canvas(
       pick_count=1,
       show_progress_bar=show_progress_bar,
       progress_label=f"Uploading {label}",
-      progress_callback=upload_callback
+      progress_callback=upload_callback,
+      **create_question_kwargs,
     )
 
   if overall_bar is not None:
@@ -1090,6 +1097,7 @@ def generate_quiz(
     body_length: int | None = None,
     explanation_length: int | None = None,
     canvas_suppress_parts: set[str] | None = None,
+    canvas_upload_workers: int | None = None,
 ):
 
   start_time = time.time()
@@ -1224,7 +1232,8 @@ def generate_quiz(
         assignment_group=assignment_group,
         optimize_layout=optimize_layout,
         max_backoff_attempts=max_backoff_attempts,
-        quiet=quiet
+        quiet=quiet,
+        canvas_upload_workers=canvas_upload_workers,
       )
     
     quiz.describe()
