@@ -1094,6 +1094,9 @@ def generate_quiz(
     quiet: bool = False,
     iframe_variations: int = 0,
     iframe_output_dir: str | None = None,
+    qti_variations: int = 0,
+    qti_upload: bool = False,
+    date_stamp: bool = False,
     body_length: int | None = None,
     explanation_length: int | None = None,
     canvas_suppress_parts: set[str] | None = None,
@@ -1150,6 +1153,38 @@ def generate_quiz(
     except ValueError as exc:
       raise QuizGenError(str(exc)) from exc
     log.info("Wrote %d iframe YAML variants to %s", len(written), iframe_output_dir)
+
+  if qti_variations > 0:
+    from QuizGenerator.qti_export import (
+      QtiExportError,
+      QtiUploadError,
+      export_qti_package,
+      upload_qti_package,
+    )
+
+    for quiz in quizzes:
+      output_name = f"{sanitize_filename(quiz.name) or 'quiz'}-canvas-qti.zip"
+      try:
+        package = export_qti_package(
+          quiz,
+          variations=qti_variations,
+          output_path=Path("out") / output_name,
+          base_seed=base_seed,
+          date_stamp=date_stamp,
+        )
+      except QtiExportError as exc:
+        raise QuizGenError(str(exc)) from exc
+      log.info("Wrote Canvas QTI package to %s", package)
+      if qti_upload:
+        try:
+          canvas_interface = CanvasInterface(prod=use_prod, env_path=env_path)
+          canvas_course = canvas_interface.get_course(course_id=course_id)
+          upload_qti_package(canvas_course.course, package)
+        except QtiUploadError as exc:
+          raise QuizGenError(f"Canvas QTI upload failed: {exc}") from exc
+        log.info("Uploaded Canvas QTI package to course %s", course_id)
+  elif qti_upload:
+    raise QuizGenError("--qti-upload requires --qti-variations at least 1.")
 
   # Handle Canvas uploads with shared assignment group
   if num_canvas > 0:
@@ -1223,18 +1258,17 @@ def generate_quiz(
         log.info(f"Wrote review HTML to {html_path}")
 
     if num_canvas > 0:
-      upload_quiz_to_canvas(
-        canvas_course,
-        quiz,
-        num_canvas,
-        title=quiz.name,
-        is_practice=quiz.practice,
-        assignment_group=assignment_group,
-        optimize_layout=optimize_layout,
-        max_backoff_attempts=max_backoff_attempts,
-        quiet=quiet,
-        canvas_upload_workers=canvas_upload_workers,
-      )
+      upload_kwargs = {
+        "title": quiz.name,
+        "is_practice": quiz.practice,
+        "assignment_group": assignment_group,
+        "optimize_layout": optimize_layout,
+        "max_backoff_attempts": max_backoff_attempts,
+        "quiet": quiet,
+      }
+      if canvas_upload_workers is not None:
+        upload_kwargs["canvas_upload_workers"] = canvas_upload_workers
+      upload_quiz_to_canvas(canvas_course, quiz, num_canvas, **upload_kwargs)
     
     quiz.describe()
 

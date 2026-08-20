@@ -1,0 +1,24 @@
+name: "Test 1 $TIME"
+practice: True
+questions:
+  1:
+        
+    VSFS_states 3:
+      class: cst334.VSFS_states
+      num_steps: 3
+      _config:
+        repeat: 10
+      
+---
+
+name: "Test 2 $TIME"
+practice: True
+questions:
+  1:
+        
+    VSFS_states 3:
+      class: cst334.VSFS_states
+      num_steps: 3
+      _config:
+        repeat: 10
+

@@ -139,6 +139,22 @@ def generate_command(
         min=0,
         help="How many bare iframe YAML variants to write per question.",
     ),
+    qti_variations: int = typer.Option(
+        0,
+        "--qti-variations",
+        min=0,
+        help="Generate this many deterministic Canvas QTI candidates per question.",
+    ),
+    qti_upload: bool = typer.Option(
+        False,
+        "--qti-upload",
+        help="Upload the generated Canvas QTI package to --course-id.",
+    ),
+    date_stamp: bool = typer.Option(
+        False,
+        "--date-stamp",
+        help="Append the current month and year to Canvas QTI question titles.",
+    ),
     iframe_output_dir: str | None = typer.Option(
         None,
         "--iframe-output-dir",
@@ -199,7 +215,7 @@ def generate_command(
             float_tolerance=float_tolerance,
             max_backoff_attempts=max_backoff_attempts,
         )
-        if num_canvas > 0 and course_id is None:
+        if (num_canvas > 0 or qti_upload) and course_id is None:
             raise QuizGenError("Missing --course-id for Canvas upload. Example: --course-id 12345")
         suppress_parts = {
             part.strip().lower()
@@ -239,6 +255,9 @@ def generate_command(
             quiet=quiet,
             iframe_variations=iframe_variations,
             iframe_output_dir=iframe_output_dir,
+            qti_variations=qti_variations,
+            qti_upload=qti_upload,
+            date_stamp=date_stamp,
             body_length=body_length,
             explanation_length=explanation_length,
             canvas_suppress_parts=suppress_parts,
