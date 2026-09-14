@@ -15,10 +15,6 @@ This is a Python-based teaching tools project focused on quiz generation and Can
   - `premade_questions/`: Collection of specialized question generators (memory, processes, persistence, etc.)
   - `misc.py`: Utilities for output formats and content handling
 
-- **lms_interface/**: Canvas LMS integration (submodule)
-  - `canvas_interface.py`: CanvasInterface and CanvasCourse classes for API interaction
-  - `classes.py`: Data models for LMS objects
-
 ### Question System
 The project uses a plugin-based question system where question types are defined as classes in `premade_questions/` and registered dynamically. Questions are defined in YAML files that specify the class name and parameters.
 

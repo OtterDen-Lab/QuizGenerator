@@ -720,18 +720,6 @@ wheels = [
 ]
 
 [[package]]
-name = "lms-interface"
-version = "0.6.0"
-source = { git = "https://github.com/OtterDen-Lab/LMSInterface.git?rev=v0.6.0#7d9cfe7bdea2c7b4375845cf88b7e944c65b2a22" }
-dependencies = [
-    { name = "canvasapi" },
-    { name = "pytest" },
-    { name = "python-dotenv" },
-    { name = "pyyaml" },
-    { name = "requests" },
-]
-
-[[package]]
 name = "lxml"
 version = "6.1.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1227,6 +1215,21 @@ wheels = [
 ]
 
 [[package]]
+name = "otterden-lms-interface"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "canvasapi" },
+    { name = "python-dotenv" },
+    { name = "pyyaml" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0c/0b/12d137730e27e1eeadfc21806bfc4bb940e5744a155f47261be7a0485d12/otterden_lms_interface-0.7.3.tar.gz", hash = "sha256:65ea7c60b941553620d9b1f645df6760cffe42061b428932033e4abc4432c08a", size = 278676, upload-time = "2026-09-13T20:34:53.607Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/03/8a/e240a3bf8fef3b24a67617e3db6cd0b6116a03ec6b12aea7370dc35c65be/otterden_lms_interface-0.7.3-py3-none-any.whl", hash = "sha256:df4dee4b5efd60714bd08f7e3a8139804ab1ae654ccc8c4030197fbe6a7e5b83", size = 77886, upload-time = "2026-09-13T20:34:52.594Z" },
+]
+
+[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1489,11 +1492,11 @@ source = { editable = "." }
 dependencies = [
     { name = "canvasapi" },
     { name = "cryptography" },
-    { name = "lms-interface" },
     { name = "lxml" },
     { name = "markdown" },
     { name = "matplotlib" },
     { name = "numpy" },
+    { name = "otterden-lms-interface" },
     { name = "pypandoc" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
@@ -1522,11 +1525,11 @@ requires-dist = [
     { name = "canvasapi", specifier = "~=3.2.0" },
     { name = "cryptography", specifier = "~=46.0.0" },
     { name = "keras", marker = "extra == 'cst463'", specifier = "~=3.12.0" },
-    { name = "lms-interface", git = "https://github.com/OtterDen-Lab/LMSInterface.git?rev=v0.6.0" },
     { name = "lxml", specifier = ">=5.3,<7" },
     { name = "markdown", specifier = "~=3.10" },
     { name = "matplotlib", specifier = ">=3.8,<4" },
     { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "otterden-lms-interface", specifier = "~=0.7.3" },
     { name = "pillow", marker = "extra == 'grading'", specifier = "~=12.2" },
     { name = "pypandoc", specifier = "~=1.6.3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4.2" },

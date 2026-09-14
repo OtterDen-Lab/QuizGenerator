@@ -16,9 +16,9 @@
 - `quizgen generate --yaml example_files/example_exam.yaml --num-pdfs 3` — generate PDFs in `out/` (Typst is the default renderer).
 - `quizgen generate --latex --yaml example_files/example_exam.yaml --num-pdfs 3` — force LaTeX rendering when needed.
 - `ruff check --fix` — enforce import placement/sorting and remove unused imports.
-- `python scripts/vendor_lms_interface.py --dry-run` — preview LMSInterface vendoring changes (top-level `lms_interface`).
+- LMSInterface is installed from PyPI as `otterden-lms-interface`; do not vendor its source.
 - `bash scripts/install_git_hooks.sh` — install local pre-commit hook and `git bump` alias.
-- `git bump patch` — bump version, vendor LMSInterface, stage, and commit.
+- `git bump patch` — bump version, refresh the lockfile, stage, and commit.
 
 ## Coding Style & Naming Conventions
 
