@@ -52,7 +52,7 @@ def _question_type(question: ExportedQuestion) -> str:
     ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER: "multiple_choice_question",
     ca.Answer.CanvasAnswerKind.MULTIPLE_DROPDOWN: "multiple_dropdowns_question",
     ca.Answer.CanvasAnswerKind.MATCHING: "matching_question",
-  }.get(question.answer_kind, "numerical_question" if question.can_be_numerical else "fill_in_multiple_blanks_question")
+  }.get(question.answer_kind, "fill_in_multiple_blanks_question")
 
 
 def _response(parent, response_id: str, options: list[str], correct: str) -> tuple[str, str]:
@@ -92,8 +92,18 @@ def _item(question: ExportedQuestion, number: int) -> etree._Element:
       if question.answer_kind == ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER:
         response_ids.append(_response(presentation, response_id, _accepted_values(answer) + [str(x) for x in (answer.baffles or [])], str(answer.value)))
       else:
-        body_html = body_html.replace(answer.key, f"[answer_{index}]")
-        response_ids.append((response_id, str(answer.value)))
+        # Answer.render_html() already wraps blank keys in square brackets.
+        # Replace that complete token so the Canvas placeholder remains
+        # [answer_N], rather than becoming [[answer_N]].
+        body_html = body_html.replace(f"[{answer.key}]", f"[answer_{index}]")
+        # Canvas resolves [answer_N] by finding this response_lid.  Without
+        # it, Canvas imports the placeholder as ordinary text.
+        response_ids.append(_response(
+          presentation,
+          response_id,
+          _accepted_values(answer) + [str(x) for x in (answer.baffles or [])],
+          str(answer.value),
+        ))
   material = etree.Element("material")
   _mattext(material, body_html, html=True)
   presentation.insert(0, material)
