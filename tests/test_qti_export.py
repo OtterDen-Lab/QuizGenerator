@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import zipfile
 
 from lxml import etree
@@ -75,3 +76,37 @@ def test_qti_export_uses_single_bracket_blank_tokens(tmp_path):
   assert item.xpath('//*[local-name()="response_label"]/@ident') == ["response_answer_1_1"]
   assert item.xpath('//*[local-name()="varequal"]/@respident') == ["response_answer_1"]
   assert item.xpath('//*[local-name()="varequal"]/text()') == ["response_answer_1_1"]
+  feedback = item.xpath('//*[local-name()="itemfeedback" and @ident="general_fb"]//*[local-name()="mattext"]//text()')
+  assert "So the value of the function" in "".join(feedback)
+
+
+def test_qti_export_links_every_mlfq_blank_to_a_scored_response(tmp_path):
+  QuestionRegistry.load_premade_questions()
+  quiz = Quiz.from_exam_dicts([{
+    "name": "MLFQ QTI test",
+    "questions": {
+      1: {"MLFQ": {"class": "cst334.MLFQQuestion", "num_jobs": 3, "num_queues": 2}},
+    },
+  }])[0]
+
+  package = export_qti_package(
+    quiz,
+    variations=1,
+    output_path=tmp_path / "mlfq.zip",
+    base_seed=12,
+  )
+
+  with zipfile.ZipFile(package) as archive:
+    item_name = next(name for name in archive.namelist() if name.endswith(".xml") and name != "imsmanifest.xml")
+    item = etree.fromstring(archive.read(item_name))
+
+  body = "".join(item.xpath('//*[local-name()="presentation"]/*[local-name()="material"]//*[local-name()="mattext"]//text()'))
+  blank_ids = re.findall(r"\[([^\[\]]+)\]", body)
+  response_ids = item.xpath('//*[local-name()="response_lid"]/@ident')
+  scored_responses = item.xpath('//*[local-name()="varequal"]/@respident')
+  scored_choice_ids = item.xpath('//*[local-name()="varequal"]/text()')
+
+  assert len(blank_ids) == 3
+  assert response_ids == [f"response_{blank_id}" for blank_id in blank_ids]
+  assert scored_responses == response_ids
+  assert all(scored_choice_ids)

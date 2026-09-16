@@ -18,6 +18,7 @@ class ExportedQuestion:
   title: str
   points: float
   body_html: str
+  explanation_html: str
   answers: list[ca.Answer]
   answer_kind: ca.Answer.CanvasAnswerKind
   can_be_numerical: bool
@@ -53,10 +54,15 @@ def adapt_instance(question, instance, *, title: str, image_upload=None) -> Expo
     raise QtiCompatibilityError(f"{title}: matching export requires matching answers")
 
   body_html = instance.body.render("html", upload_func=image_upload or (lambda _: ""))
+  explanation_html = instance.explanation.render(
+    "html",
+    upload_func=image_upload or (lambda _: ""),
+  )
   return ExportedQuestion(
     title=title,
     points=float(instance.value),
     body_html=body_html,
+    explanation_html=explanation_html,
     answers=answers,
     answer_kind=kind,
     can_be_numerical=instance.can_be_numerical,

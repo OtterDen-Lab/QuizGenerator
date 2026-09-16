@@ -98,11 +98,12 @@ def _item(question: ExportedQuestion, number: int) -> etree._Element:
         body_html = body_html.replace(f"[{answer.key}]", f"[answer_{index}]")
         # Canvas resolves [answer_N] by finding this response_lid.  Without
         # it, Canvas imports the placeholder as ordinary text.
+        accepted_values = _accepted_values(answer)
         response_ids.append(_response(
           presentation,
           response_id,
-          _accepted_values(answer) + [str(x) for x in (answer.baffles or [])],
-          str(answer.value),
+          accepted_values + [str(x) for x in (answer.baffles or [])],
+          accepted_values[0],
         ))
   material = etree.Element("material")
   _mattext(material, body_html, html=True)
@@ -116,6 +117,19 @@ def _item(question: ExportedQuestion, number: int) -> etree._Element:
     conditionvar = etree.SubElement(condition, "conditionvar")
     etree.SubElement(conditionvar, "varequal", respident=response_id).text = correct
     etree.SubElement(condition, "setvar", varname="SCORE", action="Add").text = str(100 / len(response_ids))
+  if question.explanation_html:
+    condition = etree.SubElement(processing, "respcondition", attrib={"continue": "Yes"})
+    conditionvar = etree.SubElement(condition, "conditionvar")
+    etree.SubElement(conditionvar, "other")
+    etree.SubElement(
+      condition,
+      "displayfeedback",
+      feedbacktype="Response",
+      linkrefid="general_fb",
+    )
+    feedback = etree.SubElement(item, "itemfeedback", ident="general_fb")
+    material = etree.SubElement(etree.SubElement(feedback, "flow_mat"), "material")
+    _mattext(material, question.explanation_html, html=True)
   return item
 
 
