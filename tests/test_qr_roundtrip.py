@@ -1,5 +1,7 @@
 import base64
 
+import pytest
+
 from QuizGenerator.generation.qrcode_generator import QuestionQRCode
 
 
@@ -38,3 +40,33 @@ def test_qr_roundtrip_v1_fallback():
     assert decoded["question_type"] == "TestQuestion"
     assert decoded["seed"] == 12345
     assert decoded["version"] == "1.0"
+
+
+@pytest.fixture(autouse=True)
+def _restore_generated_key():
+    original = QuestionQRCode._generated_key
+    QuestionQRCode._generated_key = None
+    yield
+    QuestionQRCode._generated_key = original
+
+
+def test_encryption_key_loads_from_default_token_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("QUIZ_ENCRYPTION_KEY", raising=False)
+    token_dir = tmp_path / ".tokens"
+    token_dir.mkdir()
+    token_file = token_dir / "quizgenerator.env"
+    token_file.write_text("QUIZ_ENCRYPTION_KEY=key-from-token-file\n", encoding="utf-8")
+
+    assert QuestionQRCode.get_encryption_key() == b"key-from-token-file"
+
+
+def test_environment_key_overrides_default_token_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("QUIZ_ENCRYPTION_KEY", "explicit-environment-key")
+    token_dir = tmp_path / ".tokens"
+    token_dir.mkdir()
+    token_file = token_dir / "quizgenerator.env"
+    token_file.write_text("QUIZ_ENCRYPTION_KEY=key-from-token-file\n", encoding="utf-8")
+
+    assert QuestionQRCode.get_encryption_key() == b"explicit-environment-key"

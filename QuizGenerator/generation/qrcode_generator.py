@@ -24,6 +24,7 @@ import segno
 from cryptography.exceptions import InvalidTag
 from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from dotenv import load_dotenv
 
 log = logging.getLogger(__name__)
 
@@ -44,6 +45,15 @@ class QuestionQRCode:
     ERROR_CORRECTION = 'M'
     _generated_key: bytes | None = None
     V2_PREFIX = "v2."
+
+    @staticmethod
+    def _load_default_encryption_env() -> None:
+        """Load the QR encryption key from the standard per-user token file."""
+        env_path = Path.home() / ".tokens" / "quizgenerator.env"
+        if env_path.is_file():
+            # Never replace a key that was explicitly supplied by the caller.
+            load_dotenv(env_path, override=False)
+            log.debug("Loaded QR encryption environment from %s", env_path)
 
     @classmethod
     def _persist_generated_key(cls, key: bytes) -> None:
@@ -75,6 +85,9 @@ class QuestionQRCode:
             Generate a key once with: Fernet.generate_key()
         """
         key_str = os.environ.get('QUIZ_ENCRYPTION_KEY')
+        if key_str is None:
+            cls._load_default_encryption_env()
+            key_str = os.environ.get('QUIZ_ENCRYPTION_KEY')
 
         if key_str is None:
             log.warning(

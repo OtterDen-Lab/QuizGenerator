@@ -39,7 +39,7 @@ pip install pyzbar pillow
 
 ### Set Encryption Key (REQUIRED)
 
-QR codes use encrypted data to prevent tampering. You MUST set an encryption key as an environment variable:
+QR codes use encrypted data to prevent tampering. Set an encryption key in your environment, or place it in the default token file at `~/.tokens/quizgenerator.env`:
 
 ```bash
 # Generate a new key (do this ONCE and save it!)
@@ -48,6 +48,13 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 # Set the environment variable (add to your .bashrc or .zshrc)
 export QUIZ_ENCRYPTION_KEY="your-generated-key-here"
 ```
+
+```dotenv
+# ~/.tokens/quizgenerator.env
+QUIZ_ENCRYPTION_KEY=your-generated-key-here
+```
+
+An explicitly exported `QUIZ_ENCRYPTION_KEY` takes precedence over the token file.
 
 **IMPORTANT**:
 - Use the SAME key for generating exams and grading them
