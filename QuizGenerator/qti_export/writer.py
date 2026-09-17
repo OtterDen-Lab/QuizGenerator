@@ -47,6 +47,43 @@ def _accepted_values(answer: ca.Answer) -> list[str]:
   return list(dict.fromkeys(values)) or [str(answer.value)]
 
 
+class _QtiImageAssets:
+  """Store rendered images beside the assessment and return QTI-relative URLs."""
+
+  def __init__(self, assessment_folder: Path):
+    self.assessment_folder = assessment_folder
+    self.relative_paths: list[str] = []
+
+  @staticmethod
+  def _extension(image_bytes: bytes) -> str:
+    if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+      return "png"
+    if image_bytes.startswith(b"\xff\xd8\xff"):
+      return "jpg"
+    if image_bytes.startswith((b"GIF87a", b"GIF89a")):
+      return "gif"
+    if image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
+      return "webp"
+    return "png"
+
+  def add(self, image_data) -> str:
+    position = image_data.tell()
+    try:
+      image_data.seek(0)
+      image_bytes = image_data.read()
+    finally:
+      image_data.seek(position)
+
+    image_hash = hashlib.sha256(image_bytes).hexdigest()
+    relative_path = f"assets/{image_hash}.{self._extension(image_bytes)}"
+    if relative_path not in self.relative_paths:
+      destination = self.assessment_folder / relative_path
+      destination.parent.mkdir(exist_ok=True)
+      destination.write_bytes(image_bytes)
+      self.relative_paths.append(relative_path)
+    return relative_path
+
+
 def _question_type(question: ExportedQuestion) -> str:
   return {
     ca.Answer.CanvasAnswerKind.MULTIPLE_ANSWER: "multiple_choice_question",
@@ -149,28 +186,29 @@ def export_qti_package(
   seed_rng = random.Random(0 if base_seed is None else base_seed)
   title_suffix = f" ({datetime.now().strftime('%B %Y')})" if date_stamp else ""
   assessment_title = f"{quiz.name}{title_suffix}"
-  try:
-    exported: list[ExportedQuestion] = []
-    for source in quiz.questions:
-      questions = source.questions if isinstance(source, QuestionGroup) else [source]
-      for question in questions:
-        for variation in range(1, variations + 1):
-          instance = question.instantiate(rng_seed=seed_rng.randint(0, 2**31 - 1))
-          if isinstance(instance, list):
-            raise QtiCompatibilityError(f"{question.name}: multi-instance questions are unsupported")
-          exported.append(adapt_instance(
-            question,
-            instance,
-            title=f"{question.name}{title_suffix} variation {variation}",
-          ))
-  except QtiCompatibilityError as exc:
-    raise QtiExportError(str(exc)) from exc
-
   assessment_id = _id(assessment_title, base_seed, variations)
   with tempfile.TemporaryDirectory(prefix="quizgen-canvas-qti-") as temporary:
     root = Path(temporary)
     folder = root / assessment_id
     folder.mkdir()
+    image_assets = _QtiImageAssets(folder)
+    try:
+      exported: list[ExportedQuestion] = []
+      for source in quiz.questions:
+        questions = source.questions if isinstance(source, QuestionGroup) else [source]
+        for question in questions:
+          for variation in range(1, variations + 1):
+            instance = question.instantiate(rng_seed=seed_rng.randint(0, 2**31 - 1))
+            if isinstance(instance, list):
+              raise QtiCompatibilityError(f"{question.name}: multi-instance questions are unsupported")
+            exported.append(adapt_instance(
+              question,
+              instance,
+              title=f"{question.name}{title_suffix} variation {variation}",
+              image_upload=image_assets.add,
+            ))
+    except QtiCompatibilityError as exc:
+      raise QtiExportError(str(exc)) from exc
     document = etree.Element("questestinterop", nsmap={None: QTI})
     assessment = etree.SubElement(document, "assessment", ident=assessment_id, title=assessment_title)
     qtimetadata = etree.SubElement(assessment, "qtimetadata")
@@ -184,6 +222,8 @@ def export_qti_package(
     resources = etree.SubElement(manifest, "resources")
     resource = etree.SubElement(resources, "resource", identifier=assessment_id, type="imsqti_xmlv1p2")
     etree.SubElement(resource, "file", href=f"{assessment_id}/{assessment_id}.xml")
+    for relative_path in image_assets.relative_paths:
+      etree.SubElement(resource, "file", href=f"{assessment_id}/{relative_path}")
     (root / "imsmanifest.xml").write_bytes(etree.tostring(manifest, encoding="UTF-8", xml_declaration=True, pretty_print=True))
     with zipfile.ZipFile(destination, "w", zipfile.ZIP_DEFLATED) as archive:
       for file in root.rglob("*"):

@@ -99,6 +99,8 @@ def test_qti_export_links_every_mlfq_blank_to_a_scored_response(tmp_path):
   with zipfile.ZipFile(package) as archive:
     item_name = next(name for name in archive.namelist() if name.endswith(".xml") and name != "imsmanifest.xml")
     item = etree.fromstring(archive.read(item_name))
+    manifest = etree.fromstring(archive.read("imsmanifest.xml"))
+    archive_names = set(archive.namelist())
 
   body = "".join(item.xpath('//*[local-name()="presentation"]/*[local-name()="material"]//*[local-name()="mattext"]//text()'))
   blank_ids = re.findall(r"\[([^\[\]]+)\]", body)
@@ -110,3 +112,15 @@ def test_qti_export_links_every_mlfq_blank_to_a_scored_response(tmp_path):
   assert response_ids == [f"response_{blank_id}" for blank_id in blank_ids]
   assert scored_responses == response_ids
   assert all(scored_choice_ids)
+
+  explanation_html = "".join(
+    item.xpath('//*[local-name()="itemfeedback" and @ident="general_fb"]//*[local-name()="mattext"]//text()')
+  )
+  image_sources = re.findall(r'<img src="([^"]+)"', explanation_html)
+  assert image_sources
+  assessment_folder = item_name.rsplit("/", 1)[0]
+  manifest_files = manifest.xpath('//*[local-name()="file"]/@href')
+  for source in image_sources:
+    archive_path = f"{assessment_folder}/{source}"
+    assert archive_path in archive_names
+    assert archive_path in manifest_files
