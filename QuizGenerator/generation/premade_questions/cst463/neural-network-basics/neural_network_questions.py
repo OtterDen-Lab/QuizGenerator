@@ -332,7 +332,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     if include_activations and self.a1 is not None:
       for i in range(self.num_hidden):
         right_data.append([
-          ca.Equation(f"h_{{\\mathrm{{pre}},{i+1}}} = z_{i+1}", inline=True),
+          ca.Equation(f"h_{{pre,{i+1}}} = z_{i+1}", inline=True),
           f"{self.z1[i]:.4f}"
         ])
         right_data.append([
@@ -343,7 +343,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     # Binary-classifier output values (if computed and requested)
     if include_activations and self.a2 is not None:
       right_data.append([
-        ca.Equation(r"z_{out} 	ext{(logit)}", inline=True),
+        ca.Equation(r"z_{out}", inline=True),
         f"{self.z2[0]:.4f}"
       ])
       right_data.append([
@@ -665,7 +665,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
         z_calc += f" + {self.b1[i]:.{self.param_digits}f}"
 
       explanation.add_element(ca.Equation(
-        f"h_{{\\mathrm{{pre}},{i+1}}} = z_{i+1} = {z_calc} = {self.z1[i]:.4f}",
+        f"h_{{pre,{i+1}}} = z_{i+1} = {z_calc} = {self.z1[i]:.4f}",
         inline=False
       ))
 
@@ -676,7 +676,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     for i in range(self.num_hidden):
       explanation.add_element(ca.Equation(
-        f"h_{i+1} = \\text{{ReLU}}(h_{{\\mathrm{{pre}},{i+1}}}) = \\max(0, {self.z1[i]:.4f}) \\approx {self.a1[i]:.4f}",
+        f"h_{i+1} = \\text{{ReLU}}(h_{{pre,{i+1}}}) = \\max(0, {self.z1[i]:.4f}) \\approx {self.a1[i]:.4f}",
         inline=False
       ))
 
@@ -882,7 +882,7 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
       ))
     elif self.activation_function == self.ACTIVATION_RELU:
       explanation.add_element(ca.Equation(
-        f"\\text{{ReLU}}'(z_1) = \\mathbb{{1}}(z_1 > 0) = {da1_dz1:.4f}",
+        f"\\text{{ReLU}}'(z_1) = {da1_dz1:.4f}",
         inline=False
       ))
 
@@ -1017,7 +1017,7 @@ class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
       ])
     for hidden_idx in range(self.num_hidden):
       right_data.append([
-        ca.Equation(f"h_{{\\mathrm{{pre}},{hidden_idx+1}}}", inline=True),
+        ca.Equation(f"h_{{pre,{hidden_idx+1}}}", inline=True),
         f"{self.z1[hidden_idx]:.4f}"
       ])
       right_data.append([
@@ -1156,13 +1156,13 @@ class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
         inline=False
       ))
       explanation.add_element(ca.Equation(
-        f"\\text{{ReLU}}'(h_{{\\mathrm{{pre}},{hidden_idx+1}}}) = {relu_derivative:.0f}",
+        f"\\text{{ReLU}}'(h_{{pre,{hidden_idx+1}}}) = {relu_derivative:.0f}",
         inline=False
       ))
       for input_idx in range(self.num_inputs):
         gradient = self._compute_gradient_W1(hidden_idx, input_idx)
         explanation.add_element(ca.Equation(
-          f"\\frac{{\\partial L}}{{\\partial w^{{(1)}}_{{{hidden_idx+1},{input_idx+1}}}}} = \\frac{{\\partial L}}{{\\partial h_{{\\mathrm{{pre}},{hidden_idx+1}}}}} \\cdot x_{input_idx+1} = {dL_dhpre:.4f} \\cdot {self.X[input_idx]:.1f} = {gradient:.4f}",
+          f"\\frac{{\\partial L}}{{\\partial w^{{(1)}}_{{{hidden_idx+1},{input_idx+1}}}}} = \\frac{{\\partial L}}{{\\partial h_{{pre,{hidden_idx+1}}}}} \\cdot x_{input_idx+1} = {dL_dhpre:.4f} \\cdot {self.X[input_idx]:.1f} = {gradient:.4f}",
           inline=False
         ))
     return explanation, []

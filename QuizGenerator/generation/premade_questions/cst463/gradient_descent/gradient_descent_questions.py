@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import abc
+import io
 import logging
 
+import matplotlib.pyplot as plt
+import numpy as np
 import sympy
 import sympy as sp
 
@@ -167,6 +170,158 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       function_values[index + 1] < function_values[index] - 1e-10
       for index in range(len(function_values) - 1)
     )
+
+  @classmethod
+  def _generate_trajectory_plot(cls, context) -> io.BytesIO:
+    """Plot the rounded gradient-descent locations used in the solution table."""
+    locations = [result['location'] for result in context.gradient_descent_results]
+    locations.append(context.final_location)
+    function = sp.lambdify(context.variables, context.function, "numpy")
+
+    if context.num_variables == 1:
+      x_points = np.array([location[0] for location in locations])
+      margin = max(1.0, 0.35 * (x_points.max() - x_points.min()))
+      x_values = np.linspace(x_points.min() - margin, x_points.max() + margin, 300)
+      y_values = np.asarray(function(x_values), dtype=float)
+      point_values = np.asarray(function(x_points), dtype=float)
+
+      fig, ax = plt.subplots(figsize=(7, 3.8))
+      ax.plot(x_values, y_values, color="#2673a8", linewidth=2, label="f(x)")
+      ax.plot(x_points, point_values, "o", color="#c23b22", markersize=7,
+              label="gradient-descent locations")
+      for step, (x_value, y_value) in enumerate(zip(x_points, point_values)):
+        ax.annotate(f"t={step}", (x_value, y_value), xytext=(0, 8),
+                    textcoords="offset points", ha="center", fontsize=9)
+      ax.set_xlabel(r"$x$")
+      ax.set_ylabel(r"$f(x)$")
+      ax.set_title("Gradient-descent trajectory")
+      ax.grid(alpha=0.25)
+      ax.legend(loc="best")
+    elif context.num_variables == 2:
+      x_points = np.array([location[0] for location in locations])
+      y_points = np.array([location[1] for location in locations])
+
+      # Keep the surface focused on the part students actually traversed.
+      # Integer endpoints make the close-up readable without hiding any
+      # rounded iterate locations.
+      def enclosing_integer_bounds(values):
+        lower = float(np.floor(values.min()))
+        upper = float(np.ceil(values.max()))
+        if lower == upper:
+          lower -= 0.5
+          upper += 0.5
+        return lower, upper
+
+      x_lower, x_upper = enclosing_integer_bounds(x_points)
+      y_lower, y_upper = enclosing_integer_bounds(y_points)
+      x_values = np.linspace(x_lower, x_upper, 90)
+      y_values = np.linspace(y_lower, y_upper, 90)
+      x_grid, y_grid = np.meshgrid(x_values, y_values)
+      z_grid = np.asarray(function(x_grid, y_grid), dtype=float)
+      z_points = np.asarray(function(x_points, y_points), dtype=float)
+      z_lower = min(0.0, float(np.floor(z_grid.min())))
+      z_upper = float(np.ceil(z_grid.max()))
+      if z_lower == z_upper:
+        z_upper += 1.0
+      # A small lift avoids z-fighting. The trajectory is deliberately drawn
+      # above the surface so every update remains visible in the overview.
+      path_lift = max(1e-6, 1e-5 * (z_grid.max() - z_grid.min()))
+      label_lift = max(0.1, 0.04 * (z_grid.max() - z_grid.min()))
+      label_dx = 0.09 * (x_values.max() - x_values.min())
+      label_dy = 0.09 * (y_values.max() - y_values.min())
+      label_offsets = ((0.6, 0.7), (0.7, -1.0), (-1.0, 0.7), (-1.0, -1.0))
+
+      fig = plt.figure(figsize=(7, 4.8))
+      ax = fig.add_subplot(111, projection="3d", computed_zorder=False)
+      ax.plot_surface(x_grid, y_grid, z_grid, cmap="Blues", alpha=0.8,
+                      linewidth=0, antialiased=True, zorder=1)
+      ax.plot(x_points, y_points, z_points + path_lift, "o-", color="#c23b22",
+              linewidth=2, markersize=5, label="gradient-descent path", zorder=10)
+      for step, (x_value, y_value, z_value) in enumerate(zip(x_points, y_points, z_points)):
+        offset_x, offset_y = label_offsets[step % len(label_offsets)]
+        ax.text(x_value + offset_x * label_dx, y_value + offset_y * label_dy,
+                z_value + (2 + step % 2) * label_lift, f"t={step}",
+                color="#7a2015", fontsize=8, ha="center", zorder=11)
+      ax.set_xlabel(r"$x_0$", labelpad=8)
+      ax.set_ylabel(r"$x_1$", labelpad=8)
+      ax.set_zlabel(r"$f(x_0, x_1)$", labelpad=8)
+      ax.set_xlim(x_lower, x_upper)
+      ax.set_ylim(y_lower, y_upper)
+      ax.set_zlim(z_lower, z_upper)
+      ax.set_title("Gradient-descent trajectory on the loss surface")
+      ax.view_init(elev=28, azim=-58)
+      ax.legend(loc="upper left")
+    else:
+      raise ValueError("Trajectory plots support one- and two-variable functions only.")
+
+    buffer = io.BytesIO()
+    fig.tight_layout()
+    fig.savefig(buffer, format="png", dpi=150, bbox_inches="tight",
+                facecolor="white", edgecolor="none")
+    plt.close(fig)
+    buffer.seek(0)
+    return buffer
+
+  @classmethod
+  def _generate_coordinate_projection_plot(cls, context) -> io.BytesIO:
+    """Plot coordinate-loss projections with loss-surface cross-sections."""
+    locations = [result['location'] for result in context.gradient_descent_results]
+    locations.append(context.final_location)
+    function_values = [result['function_value'] for result in context.gradient_descent_results]
+    function_values.append(context.final_function_value)
+    function = sp.lambdify(context.variables, context.function, "numpy")
+
+    fig, axes = plt.subplots(1, 2, figsize=(8, 3.5), sharey=True)
+    coordinate_names = (r"$x_0$", r"$x_1$")
+    for coordinate_index, (axis, coordinate_name) in enumerate(zip(axes, coordinate_names)):
+      coordinate_values = np.array([
+        location[coordinate_index] for location in locations
+      ])
+      coordinate_margin = max(0.1, 0.15 * (coordinate_values.max() - coordinate_values.min()))
+      curve_coordinates = np.linspace(
+        coordinate_values.min() - coordinate_margin,
+        coordinate_values.max() + coordinate_margin,
+        200,
+      )
+
+      # Each blue curve is a slice of the surface through one iterate. For the
+      # x_0 panel x_1 is held fixed, and vice versa, so its red point lies on it.
+      for step, location in enumerate(locations):
+        if coordinate_index == 0:
+          curve_values = function(curve_coordinates, location[1])
+        else:
+          curve_values = function(location[0], curve_coordinates)
+        axis.plot(
+          curve_coordinates,
+          curve_values,
+          color="#2673a8",
+          alpha=0.28,
+          linewidth=1.25,
+          label="loss-surface slices" if step == 0 else None,
+        )
+      axis.plot(coordinate_values, function_values, "o-", color="#c23b22",
+                linewidth=2, markersize=6, label="gradient-descent path")
+      for step, (coordinate_value, function_value) in enumerate(
+          zip(coordinate_values, function_values)
+      ):
+        vertical_offset = 8 if step % 2 == 0 else -14
+        axis.annotate(f"t={step}", (coordinate_value, function_value),
+                      xytext=(0, vertical_offset), textcoords="offset points",
+                      ha="center", fontsize=8)
+      axis.set_xlabel(coordinate_name)
+      axis.set_title(f"Projection onto the {coordinate_name}-loss plane")
+      axis.grid(alpha=0.25)
+      axis.margins(x=0.08, y=0.14)
+      axis.legend(loc="best", fontsize=8)
+    axes[0].set_ylabel(r"$f(x_0, x_1)$")
+
+    buffer = io.BytesIO()
+    fig.tight_layout()
+    fig.savefig(buffer, format="png", dpi=150, bbox_inches="tight",
+                facecolor="white", edgecolor="none")
+    plt.close(fig)
+    buffer.seek(0)
+    return buffer
   
   @classmethod
   def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
@@ -325,6 +480,39 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     )
 
     explanation.add_element(solution_table)
+
+    if self.num_variables in (1, 2):
+      explanation.add_element(
+        ca.Paragraph(
+          [
+            "The plot marks each rounded location from the table. The path moves "
+            "down the function surface from ",
+            ca.Equation("t=0", inline=True),
+            f" through {self.num_steps} updates."
+          ]
+        )
+      )
+      explanation.add_element(
+        ca.Picture(
+          img_data=cls._generate_trajectory_plot(self),
+          caption="Gradient-descent path; labels identify the table step."
+        )
+      )
+      if self.num_variables == 2:
+        explanation.add_element(
+          ca.Paragraph(
+            [
+              "These coordinate-loss projections show the same red locations. Each "
+              "blue curve is a cross-section of the loss surface through one location."
+            ]
+          )
+        )
+        explanation.add_element(
+          ca.Picture(
+            img_data=cls._generate_coordinate_projection_plot(self),
+            caption="Coordinate projections of the gradient-descent path."
+          )
+        )
 
     # Step-by-step explanation
     for i, result in enumerate(self.gradient_descent_results):

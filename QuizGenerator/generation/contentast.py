@@ -1386,8 +1386,13 @@ class Equation(Leaf):
     def convert_sub_super(match):
       content = match.group(1)
       prefix = match.group(0)[0]  # '_' or '^'
-      # If it's purely numeric or a single char, no quotes needed
-      if content.isdigit() or len(content) == 1:
+      # Preserve numeric and arithmetic expressions as math. Textual labels
+      # such as ``out`` and ``pre,1`` need quotes in Typst.
+      if re.fullmatch(r"-?\d+(?:\.\d+)?", content) or len(content) == 1:
+        return f'{prefix}({content})'
+      if re.fullmatch(r"[A-Za-z0-9_+*/().-]+", content) and any(
+          character in content for character in "+-*/()."
+      ):
         return f'{prefix}({content})'
       # If it's multi-char text, quote it
       return f'{prefix}("{content}")'
@@ -1415,15 +1420,19 @@ class Equation(Leaf):
     latex_str = latex_str.replace(r'\sum', 'sum')
     latex_str = latex_str.replace(r'\prod', 'product')
     latex_str = latex_str.replace(r'\int', 'integral')
-    latex_str = latex_str.replace(r'\ln', 'ln')
-    latex_str = latex_str.replace(r'\log', 'log')
-    latex_str = latex_str.replace(r'\exp', 'exp')
-    latex_str = latex_str.replace(r'\sin', 'sin')
-    latex_str = latex_str.replace(r'\cos', 'cos')
-    latex_str = latex_str.replace(r'\tan', 'tan')
-    latex_str = latex_str.replace(r'\max', 'max')
-    latex_str = latex_str.replace(r'\min', 'min')
-    latex_str = latex_str.replace(r'\sqrt', 'sqrt')
+    # Keep a separating space when a LaTeX operator follows a variable.  For
+    # example, ``y\log(x)`` must become ``y log(x)``, not the Typst variable
+    # ``ylog``.
+    latex_str = latex_str.replace(r'\ln', ' ln')
+    latex_str = latex_str.replace(r'\log', ' log')
+    latex_str = latex_str.replace(r'\exp', ' exp')
+    latex_str = latex_str.replace(r'\sin', ' sin')
+    latex_str = latex_str.replace(r'\cos', ' cos')
+    latex_str = latex_str.replace(r'\tan', ' tan')
+    latex_str = latex_str.replace(r'\max', ' max')
+    latex_str = latex_str.replace(r'\min', ' min')
+    latex_str = latex_str.replace(r'\sqrt', ' sqrt')
+    latex_str = latex_str.replace(r'\approx', ' approx ')
     # Convert \text{...} to "..." for Typst
     latex_str = re.sub(r'\\text\{([^}]*)\}', r'"\1"', latex_str)
     # Convert \frac{a}{b} to frac(a, b) for Typst
