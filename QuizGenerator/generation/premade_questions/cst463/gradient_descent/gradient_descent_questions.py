@@ -30,17 +30,17 @@ class GradientDescentQuestion(Question, abc.ABC):
 class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, BodyTemplatesMixin):
   DEFAULT_NUM_STEPS = 4
   DEFAULT_NUM_VARIABLES = 2
-  DEFAULT_MAX_DEGREE = 2
   DEFAULT_SINGLE_VARIABLE = False
-  DEFAULT_MINIMIZE = True
+  STEP_DIGITS = 4
+  # With the generated quadratics, alpha < 0.5 guarantees a strict decrease
+  # away from the optimum even for the largest quadratic coefficient (2).
+  LEARNING_RATES = (0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4)
 
   def __init__(self, *args, **kwargs):
     super().__init__(*args, **kwargs)
     self.num_steps = kwargs.get("num_steps", self.DEFAULT_NUM_STEPS)
     self.num_variables = kwargs.get("num_variables", self.DEFAULT_NUM_VARIABLES)
-    self.max_degree = kwargs.get("max_degree", self.DEFAULT_MAX_DEGREE)
     self.single_variable = kwargs.get("single_variable", self.DEFAULT_SINGLE_VARIABLE)
-    self.minimize = kwargs.get("minimize", self.DEFAULT_MINIMIZE)  # Default to minimization
     
     if self.single_variable:
       self.num_variables = 1
@@ -54,26 +54,28 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     num_steps,
     variables,
     learning_rate,
-    minimize=True,
   ) -> list[dict]:
     """
     Perform gradient descent and return step-by-step results.
     """
     results = []
     
-    x = list(map(float, starting_point))  # current location as floats
+    # Each table entry is rounded before it is used in the next row, matching
+    # the arithmetic students can reproduce from their submitted work.
+    x = [round(float(value), cls.STEP_DIGITS) for value in starting_point]
     
     for step in range(num_steps):
       subs_map = dict(zip(variables, x))
       
       # gradient as floats
       g_syms = gradient_function.subs(subs_map)
-      g = [float(val) for val in g_syms]
+      g = [round(float(val), cls.STEP_DIGITS) for val in g_syms]
       
       # function value
       f_val = float(function.subs(subs_map))
       
-      update = [learning_rate * gi for gi in g]
+      update = [round(learning_rate * gi, cls.STEP_DIGITS) for gi in g]
+      next_x = [round(xi - ui, cls.STEP_DIGITS) for xi, ui in zip(x, update)]
       
       results.append(
         {
@@ -82,11 +84,11 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           "gradient": g[:],
           "update": update[:],
           "function_value": f_val,
+          "next_location": next_x[:],
         }
       )
-      
-      x = [xi - ui for xi, ui in zip(x, update)] if minimize else \
-        [xi + ui for xi, ui in zip(x, update)]
+
+      x = next_x
 
     return results
 
@@ -94,20 +96,20 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
   def _build_context(cls, *, rng_seed=None, **kwargs):
     context = super()._build_context(rng_seed=rng_seed, **kwargs)
     context.num_steps = kwargs.get("num_steps", cls.DEFAULT_NUM_STEPS)
+    if context.num_steps < 1:
+      raise ValueError("num_steps must be at least 1")
     context.num_variables = kwargs.get("num_variables", cls.DEFAULT_NUM_VARIABLES)
-    context.max_degree = kwargs.get("max_degree", cls.DEFAULT_MAX_DEGREE)
     context.single_variable = kwargs.get("single_variable", cls.DEFAULT_SINGLE_VARIABLE)
     if context.single_variable:
       context.num_variables = 1
-    context.minimize = kwargs.get("minimize", cls.DEFAULT_MINIMIZE)
+    context.minimize = True
 
     # Generate function and its properties
     context.variables, context.function, context.gradient_function, context.equation = generate_function(
-      context.rng, context.num_variables, context.max_degree
+      context.rng, context.num_variables, max_degree=2, use_quadratic=True
     )
 
-    # Generate learning rate (expanded range)
-    context.learning_rate = context.rng.choice([0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5])
+    context.learning_rate = context.rng.choice(cls.LEARNING_RATES)
 
     context.starting_point = [context.rng.randint(-3, 3) for _ in range(context.num_variables)]
 
@@ -119,8 +121,11 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       context.num_steps,
       context.variables,
       context.learning_rate,
-      minimize=context.minimize,
     )
+    context.final_location = context.gradient_descent_results[-1]['next_location']
+    context.final_function_value = float(context.function.subs(
+      dict(zip(context.variables, context.final_location))
+    ))
 
     # Build answers for each step
     context.step_answers = {}
@@ -138,7 +143,25 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       # Update answer
       update_key = f"answer__update_{step}"
       context.step_answers[update_key] = ca.AnswerTypes.Vector(list(result['update']), label=f"Update at step {step}")
+
+    context.step_answers["answer__final_location"] = ca.AnswerTypes.Vector(
+      list(context.final_location), label=f"Location after step {context.num_steps}"
+    )
     return context
+
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    """Reject zero-gradient starts and any non-decreasing rounded step."""
+    results = context.gradient_descent_results
+    if not any(abs(value) > 1e-10 for value in results[0]['gradient']):
+      return False
+
+    function_values = [result['function_value'] for result in results]
+    function_values.append(context.final_function_value)
+    return all(
+      function_values[index + 1] < function_values[index] - 1e-10
+      for index in range(len(function_values) - 1)
+    )
   
   @classmethod
   def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
@@ -147,39 +170,36 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     body = ca.Section()
     answers = []
 
-    # Introduction
-    objective = "minimize" if self.minimize else "maximize"
-    
     body.add_element(
       ca.Paragraph(
         [
-          f"Use gradient descent to {objective} the function ",
+          "Use gradient descent to minimize the function ",
           ca.Equation(sp.latex(self.function), inline=True),
           " with learning rate ",
           ca.Equation(f"\\alpha = {self.learning_rate}", inline=True),
           f" and starting point {self.starting_point[0] if self.num_variables == 1 else tuple(self.starting_point)}. "
-          "Fill in the table below with your calculations."
+          "Round each table entry to four decimal places before using it in the next row."
         ]
       )
     )
 
     # Create table data - use ca.Equation for proper LaTeX rendering in headers
     headers = [
-      "n",
-      "location",
+      "t",
+      ca.Equation("x^{(t)}", inline=True),
       ca.Equation("\\nabla f", inline=True),
       ca.Equation("\\alpha \\cdot \\nabla f", inline=True)
     ]
     table_rows = []
 
-    for i in range(self.num_steps):
-      step = i + 1
-      row = {"n": str(step)}
+    for i, result in enumerate(self.gradient_descent_results):
+      step = result['step']
+      row = {"t": str(i)}
 
-      if step == 1:
+      if i == 0:
 
         # Fill in starting location for first row with default formatting
-        row["location"] = f"{format_vector(self.starting_point)}"
+        row[headers[1]] = f"{format_vector(self.starting_point)}"
         row[headers[2]] = self.step_answers[f"answer__gradient_{step}"]  # gradient column
         row[headers[3]] = self.step_answers[f"answer__update_{step}"]  # update column
         # Collect answers for this step (no location answer for step 1)
@@ -187,7 +207,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         answers.append(self.step_answers[f"answer__update_{step}"])
       else:
         # Subsequent rows - all answer fields
-        row["location"] = self.step_answers[f"answer__location_{step}"]
+        row[headers[1]] = self.step_answers[f"answer__location_{step}"]
         row[headers[2]] = self.step_answers[f"answer__gradient_{step}"]
         row[headers[3]] = self.step_answers[f"answer__update_{step}"]
         # Collect all answers for this step
@@ -196,11 +216,20 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         answers.append(self.step_answers[f"answer__update_{step}"])
       table_rows.append(row)
 
+    # The final row makes the destination of the final requested update visible.
+    table_rows.append({
+      "t": str(self.num_steps),
+      headers[1]: self.step_answers["answer__final_location"],
+      headers[2]: "—",
+      headers[3]: "—",
+    })
+    answers.append(self.step_answers["answer__final_location"])
+
     # Create the table using mixin
     gradient_table = cls.create_answer_table(
       headers=headers,
       data_rows=table_rows,
-      answer_columns=["location", headers[2], headers[3]]  # Use actual header objects
+      answer_columns=[headers[1], headers[2], headers[3]]  # Use actual header objects
     )
 
     body.add_element(gradient_table)
@@ -222,13 +251,10 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       )
     )
 
-    objective = "minimize" if self.minimize else "maximize"
-    sign = "-" if self.minimize else "+"
-
     explanation.add_element(
       ca.Paragraph(
         [
-          f"We want to {objective} the function ",
+          "We want to minimize the function ",
           ca.Equation(sp.latex(self.function), inline=True),
           ". First, we calculate the analytical gradient:"
         ]
@@ -243,11 +269,11 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     explanation.add_element(
       ca.Paragraph(
         [
-          f"Since we want to {objective}, we use the update rule: ",
-          ca.Equation(f"x_{{new}} = x_{{old}} {sign} \\alpha \\nabla f", inline=True),
+          "Since we want to minimize, we use the update rule: ",
+          ca.Equation(r"x^{(t+1)} = x^{(t)} - \alpha \nabla f(x^{(t)})", inline=True),
           f". We start at {tuple(self.starting_point)} with learning rate ",
           ca.Equation(f"\\alpha = {self.learning_rate}", inline=True),
-          "."
+          ". Round each table entry to four decimal places before continuing."
         ]
       )
     )
@@ -263,22 +289,28 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
 
     # Create filled solution table
     solution_headers = [
-      "n",
-      "location",
+      "t",
+      ca.Equation("x^{(t)}", inline=True),
       ca.Equation("\\nabla f", inline=True),
       ca.Equation("\\alpha \\cdot \\nabla f", inline=True)
     ]
 
     solution_rows = []
     for i, result in enumerate(self.gradient_descent_results):
-      step = result['step']
-      row = {"n": str(step)}
+      row = {"t": str(i)}
 
-      row["location"] = f"{format_vector(result['location'])}"
+      row[solution_headers[1]] = f"{format_vector(result['location'])}"
       row[solution_headers[2]] = f"{format_vector(result['gradient'])}"
       row[solution_headers[3]] = f"{format_vector(result['update'])}"
 
       solution_rows.append(row)
+
+    solution_rows.append({
+      "t": str(self.num_steps),
+      solution_headers[1]: format_vector(self.final_location),
+      solution_headers[2]: "—",
+      solution_headers[3]: "—",
+    })
 
     # Create solution table (non-answer table, just display)
     solution_table = self.create_answer_table(
@@ -330,10 +362,9 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       )
 
       if step < len(self.gradient_descent_results):
-        # Calculate next location for display
         current_loc = result['location']
         update = result['update']
-        next_loc = [current_loc[j] - update[j] for j in range(len(current_loc))]
+        next_loc = result['next_location']
 
         explanation.add_element(
           ca.Paragraph(
@@ -344,6 +375,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
         )
 
     function_values = [r['function_value'] for r in self.gradient_descent_results]
+    function_values.append(self.final_function_value)
     explanation.add_element(
       ca.Paragraph(
         [
