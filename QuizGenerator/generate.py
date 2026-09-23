@@ -1017,26 +1017,29 @@ def generate_typst(typst_text, remove_previous=False, name_prefix=None) -> bool:
   # Ensure output directory exists
   os.makedirs('out', exist_ok=True)
 
-  # Create temporary Typst file with optional name prefix
+  # Keep Typst source under the workspace instead of the system temp directory.
+  # Sandboxed Typst installations (notably the Ubuntu Snap package) cannot
+  # necessarily read host /tmp, while they can access the working tree.
   prefix = f"{sanitize_filename(name_prefix)}-" if name_prefix else "tmp"
-  tmp_typ = tempfile.NamedTemporaryFile('w', suffix='.typ', delete=False, prefix=prefix)
-
-  try:
-    tmp_typ.write(typst_text)
-    tmp_typ.flush()
-    tmp_typ.close()
+  output_dir = os.path.abspath('out')
+  with tempfile.TemporaryDirectory(dir=output_dir, prefix="typst-tmp-") as temp_dir:
+    with tempfile.NamedTemporaryFile(
+      'w', suffix='.typ', delete=False, prefix=prefix, dir=temp_dir
+    ) as tmp_typ:
+      tmp_typ.write(typst_text)
+      temp_typ_path = tmp_typ.name
 
     # Save debug copy
     os.makedirs(os.path.join("out", "debug"), exist_ok=True)
     debug_name = f"debug-{datetime.now().strftime('%Y%m%d-%H%M%S')}.typ"
-    shutil.copy(tmp_typ.name, os.path.join("out", "debug", debug_name))
+    shutil.copy(temp_typ_path, os.path.join("out", "debug", debug_name))
 
     # Compile with typst
-    output_pdf = os.path.join(os.getcwd(), 'out', os.path.basename(tmp_typ.name).replace('.typ', '.pdf'))
+    output_pdf = os.path.join(os.getcwd(), 'out', os.path.basename(temp_typ_path).replace('.typ', '.pdf'))
     
     # Use --root to set the filesystem root so absolute paths work correctly
     p = subprocess.Popen(
-      ['typst', 'compile', '--root', '/', tmp_typ.name, output_pdf],
+      ['typst', 'compile', '--root', '/', temp_typ_path, output_pdf],
       stdout=subprocess.PIPE,
       stderr=subprocess.PIPE
     )
@@ -1052,11 +1055,6 @@ def generate_typst(typst_text, remove_previous=False, name_prefix=None) -> bool:
       p.kill()
       p.communicate()
       return False
-
-  finally:
-    # Clean up temp file
-    if os.path.exists(tmp_typ.name):
-      os.unlink(tmp_typ.name)
   return True
 
 
