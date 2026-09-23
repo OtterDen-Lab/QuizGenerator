@@ -169,8 +169,15 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     else:
       raise ValueError(f"Unknown activation function: {function_type}")
 
-  def _forward_pass(self):
-    """Run forward pass through the network."""
+  def _forward_pass(self, *, round_values=True):
+    """Run forward pass through the network.
+
+    Args:
+      round_values: Whether to replace the computed values with their displayed
+        four-decimal approximations.  A completed-pass exercise uses those
+        displayed values as its inputs; a compute-it-yourself exercise retains
+        calculator precision until its final answers are rounded.
+    """
     # Hidden layer
     self.z1 = self.W1 @ self.X + self.b1
     self.a1 = self._apply_activation(self.z1)
@@ -179,12 +186,13 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     self.z2 = self.W2 @ self.a1 + self.b2
     self.a2 = self._apply_activation(self.z2, self.ACTIVATION_SIGMOID)  # Sigmoid output for binary classification
 
-    # Round all computed values to display precision to ensure students can reproduce calculations
-    # We display z and a values with 4 decimal places
-    self.z1 = np.round(self.z1, 4)
-    self.a1 = np.round(self.a1, 4)
-    self.z2 = np.round(self.z2, 4)
-    self.a2 = np.round(self.a2, 4)
+    if round_values:
+      # A completed-forward-pass problem treats these displayed values as the
+      # authoritative inputs to subsequent calculations.
+      self.z1 = np.round(self.z1, 4)
+      self.a1 = np.round(self.a1, 4)
+      self.z2 = np.round(self.z2, 4)
+      self.a2 = np.round(self.a2, 4)
 
     return self.a2
 
@@ -225,13 +233,21 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     # ∂L/∂w = dL/dz2 * ∂z2/∂w = dL/dz2 * a1[hidden_idx]
     return float(self.dL_dz2 * self.a1[hidden_idx])
 
+  def _hidden_activation_derivative(self, hidden_idx):
+    """Return the derivative for a hidden activation used in backpropagation."""
+    if self.activation_function == self.ACTIVATION_SIGMOID:
+      # In a completed-pass exercise, h is a supplied, rounded value.  Use it
+      # directly so the gradient is reproducible from the displayed table.
+      return self.a1[hidden_idx] * (1 - self.a1[hidden_idx])
+    return self._activation_derivative(self.z1[hidden_idx])
+
   def _compute_gradient_W1(self, hidden_idx, input_idx):
     """Compute gradient ∂L/∂W1[hidden_idx, input_idx]."""
     # dL/dz1[hidden_idx] = dL/dz2 * ∂z2/∂a1[hidden_idx] * ∂a1/∂z1[hidden_idx]
     #                     = dL/dz2 * W2[0, hidden_idx] * activation'(z1[hidden_idx])
 
     dz2_da1 = self.W2[0, hidden_idx]
-    da1_dz1 = self._activation_derivative(self.z1[hidden_idx])
+    da1_dz1 = self._hidden_activation_derivative(hidden_idx)
 
     dL_dz1 = self.dL_dz2 * dz2_da1 * da1_dz1
 
@@ -730,6 +746,22 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     return context
 
   @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    """Reject ReLU networks whose hidden layer is entirely inactive.
+
+    When every ReLU hidden unit is inactive, every weight gradient requested by
+    this exercise is zero.  Let ``Question.instantiate`` advance the seed and
+    generate an example that actually practices the chain rule instead.
+    """
+    return (
+      super().is_interesting_ctx(context)
+      and not (
+        context.activation_function == cls.ACTIVATION_RELU
+        and np.all(context.a1 == 0)
+      )
+    )
+
+  @classmethod
   def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     self = context
@@ -831,25 +863,33 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     ]))
 
     explanation.add_element(ca.Paragraph([
-      "First, compute the gradient flowing back to hidden layer:"
+      "First, compute the activation derivative and the gradient flowing back to the first hidden unit:"
     ]))
 
-    for j in range(self.num_inputs):
-      # Compute intermediate values
-      dz2_da1 = self.W2[0, 0]
-      da1_dz1 = self._activation_derivative(self.z1[0])
-      
-      grad = self._compute_gradient_W1(0, j)
+    dz2_da1 = self.W2[0, 0]
+    da1_dz1 = self._hidden_activation_derivative(0)
+    dL_dz1 = self.dL_dz2 * dz2_da1 * da1_dz1
 
-      if self.activation_function == self.ACTIVATION_SIGMOID:
-        act_deriv_str = f"\\sigma'(z_1) = h_1(1-h_1) = {self.a1[0]:.4f}(1-{self.a1[0]:.4f}) = {da1_dz1:.4f}"
-      elif self.activation_function == self.ACTIVATION_RELU:
-        act_deriv_str = f"\\text{{ReLU}}'(z_1) = \\mathbb{{1}}(z_1 > 0) = {da1_dz1:.4f}"
-      else:
-        act_deriv_str = f"1"
-
+    if self.activation_function == self.ACTIVATION_SIGMOID:
       explanation.add_element(ca.Equation(
-        f"\\frac{{\\partial L}}{{\\partial w_{{1{j+1}}}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot w_{3} \\cdot {act_deriv_str} \\cdot x_{j+1} = {self.dL_dz2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[j]:.1f} = {grad:.4f}",
+        f"\\sigma'(z_1) = h_1(1-h_1) = {self.a1[0]:.4f}(1-{self.a1[0]:.4f}) = {da1_dz1:.4f}",
+        inline=False
+      ))
+    elif self.activation_function == self.ACTIVATION_RELU:
+      explanation.add_element(ca.Equation(
+        f"\\text{{ReLU}}'(z_1) = \\mathbb{{1}}(z_1 > 0) = {da1_dz1:.4f}",
+        inline=False
+      ))
+
+    explanation.add_element(ca.Equation(
+      f"\\frac{{\\partial L}}{{\\partial z_1}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot w_3 \\cdot f'(z_1) = {self.dL_dz2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} = {dL_dz1:.4f}",
+      inline=False
+    ))
+
+    for j in range(self.num_inputs):
+      grad = self._compute_gradient_W1(0, j)
+      explanation.add_element(ca.Equation(
+        f"\\frac{{\\partial L}}{{\\partial w_{{1{j+1}}}}} = \\frac{{\\partial L}}{{\\partial z_1}} \\cdot x_{j+1} = {dL_dz1:.4f} \\cdot {self.X[j]:.1f} = {grad:.4f}",
         inline=False
       ))
 
@@ -981,11 +1021,11 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
   """
   End-to-end training step question.
 
-  Students perform a complete training iteration:
+  Students perform the requested parts of a training iteration:
   1. Forward pass → prediction
-  2. Loss calculation (MSE)
+  2. Loss calculation (binary cross-entropy)
   3. Backpropagation → gradients for specific weights
-  4. Weight update → new weight values
+  4. Weight update → new values for those weights only (not biases)
   """
 
   def __init__(self, *args, **kwargs):
@@ -1003,8 +1043,8 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     self._generate_network()
     self._select_activation_function()
 
-    # Run forward pass
-    self._forward_pass()
+    # Retain calculator precision; only final student answers are rounded.
+    self._forward_pass(round_values=False)
 
     # Generate binary target (0 or 1)
     # Choose the opposite of what the network predicts to create meaningful gradients
@@ -1013,8 +1053,6 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     else:
       self.y_target = 1
     self._compute_loss(self.y_target)
-    # Round loss to display precision (4 decimal places)
-    self.loss = round(self.loss, 4)
     self._compute_output_gradient()
 
     # Set learning rate (use small value for stability)
@@ -1024,19 +1062,25 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     self._compute_weight_updates()
     return context
 
-  def _compute_weight_updates(self):
-    """Compute new weights after gradient descent step."""
-    # Update W2
-    self.new_W2 = np.copy(self.W2)
-    for i in range(self.num_hidden):
-      grad = self._compute_gradient_W2(i)
-      self.new_W2[0, i] = self.W2[0, i] - self.learning_rate * grad
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    """Reject ReLU networks whose hidden layer is entirely inactive."""
+    return (
+      super().is_interesting_ctx(context)
+      and not (
+        context.activation_function == cls.ACTIVATION_RELU
+        and np.all(context.a1 == 0)
+      )
+    )
 
-    # Update W1 (first hidden neuron only for simplicity)
+  def _compute_weight_updates(self):
+    """Compute the requested weight-only gradient descent updates."""
+    # This exercise intentionally updates only w3 and w11.  Biases and all
+    # other weights remain unchanged so the question scope matches its answers.
+    self.new_W2 = np.copy(self.W2)
     self.new_W1 = np.copy(self.W1)
-    for j in range(self.num_inputs):
-      grad = self._compute_gradient_W1(0, j)
-      self.new_W1[0, j] = self.W1[0, j] - self.learning_rate * grad
+    self.new_W2[0, 0] = self.W2[0, 0] - self.learning_rate * self._compute_gradient_W2(0)
+    self.new_W1[0, 0] = self.W1[0, 0] - self.learning_rate * self._compute_gradient_W1(0, 0)
 
   @classmethod
   def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
@@ -1049,8 +1093,12 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     body.add_element(ca.Paragraph([
       f"Given the neural network below with {self._get_activation_name()} activation "
       f"in the hidden layer and sigmoid activation in the output layer (for binary classification), "
-      f"perform one complete training step (forward pass, loss calculation, "
-      f"backpropagation, and weight update) for the given input and target."
+      f"perform the requested parts of a training step: forward pass, binary cross-entropy loss, "
+      f"backpropagation, and updates to the specified weights only (not biases)."
+    ]))
+
+    body.add_element(ca.Paragraph([
+      "Use full calculator precision for intermediate calculations and round each submitted answer to four decimal places."
     ]))
 
     # Network diagram
@@ -1116,7 +1164,8 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     explanation = ca.Section()
 
     explanation.add_element(ca.Paragraph([
-      "This problem requires performing one complete training iteration. Let's go through each step."
+      "This problem walks through a training step for the specified weights only; biases are not updated. "
+      "The displayed decimal values are approximations—use full calculator precision until rounding each final answer to four decimal places."
     ]))
 
     # Step 1: Forward pass
@@ -1131,25 +1180,25 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ))
 
     explanation.add_element(ca.Equation(
-      f"h_1 = {self._get_activation_name()}(z_1) = {self.a1[0]:.4f}",
+      f"h_1 = {self._get_activation_name()}(z_1) \\approx {self.a1[0]:.4f}",
       inline=False
     ))
 
     # Similarly for h2 (abbreviated)
     explanation.add_element(ca.Equation(
-      f"h_2 = {self.a1[1]:.4f} \\text{{ (calculated similarly)}}",
+      f"h_2 \\approx {self.a1[1]:.4f} \\text{{ (calculated similarly)}}",
       inline=False
     ))
 
     # Output (pre-activation)
     explanation.add_element(ca.Equation(
-      f"z_{{out}} = w_3 h_1 + w_4 h_2 + b_2 = {self.W2[0,0]:.{self.param_digits}f} \\cdot {self.a1[0]:.4f} + {self.W2[0,1]:.{self.param_digits}f} \\cdot {self.a1[1]:.4f} + {self.b2[0]:.{self.param_digits}f} = {self.z2[0]:.4f}",
+      f"z_{{out}} = w_3 h_1 + w_4 h_2 + b_2 \\approx {self.W2[0,0]:.{self.param_digits}f} \\cdot {self.a1[0]:.4f} + {self.W2[0,1]:.{self.param_digits}f} \\cdot {self.a1[1]:.4f} + {self.b2[0]:.{self.param_digits}f} \\approx {self.z2[0]:.4f}",
       inline=False
     ))
 
     # Output (sigmoid activation)
     explanation.add_element(ca.Equation(
-      f"\\hat{{y}} = \\sigma(z_{{out}}) = \\frac{{1}}{{1 + e^{{-{self.z2[0]:.4f}}}}} = {self.a2[0]:.4f}",
+      f"\\hat{{y}} = \\sigma(z_{{out}}) \\approx \\frac{{1}}{{1 + e^{{-{self.z2[0]:.4f}}}}} \\approx {self.a2[0]:.4f}",
       inline=False
     ))
 
@@ -1167,12 +1216,12 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     # Then evaluate it
     if self.y_target == 1:
       explanation.add_element(ca.Equation(
-        f"L = -[1 \\cdot \\log({self.a2[0]:.4f}) + 0 \\cdot \\log(1-{self.a2[0]:.4f})] = -\\log({self.a2[0]:.4f}) = {self.loss:.4f}",
+        f"L = -\\log(\\hat{{y}}) \\approx -\\log({self.a2[0]:.4f}) \\approx {self.loss:.4f}",
         inline=False
       ))
     else:
       explanation.add_element(ca.Equation(
-        f"L = -[0 \\cdot \\log({self.a2[0]:.4f}) + 1 \\cdot \\log(1-{self.a2[0]:.4f})] = -\\log({1-self.a2[0]:.4f}) = {self.loss:.4f}",
+        f"L = -\\log(1-\\hat{{y}}) \\approx -\\log({1-self.a2[0]:.4f}) \\approx {self.loss:.4f}",
         inline=False
       ))
 
@@ -1186,19 +1235,19 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
     ]))
 
     explanation.add_element(ca.Equation(
-      f"\\frac{{\\partial L}}{{\\partial z_{{out}}}} = \\hat{{y}} - y = {self.a2[0]:.4f} - {int(self.y_target)} = {self.dL_dz2:.4f}",
+      f"\\frac{{\\partial L}}{{\\partial z_{{out}}}} = \\hat{{y}} - y \\approx {self.a2[0]:.4f} - {int(self.y_target)} \\approx {self.dL_dz2:.4f}",
       inline=False
     ))
 
     grad_w3 = self._compute_gradient_W2(0)
     explanation.add_element(ca.Equation(
-      f"\\frac{{\\partial L}}{{\\partial w_3}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot h_1 = {self.dL_dz2:.4f} \\cdot {self.a1[0]:.4f} = {grad_w3:.4f}",
+      f"\\frac{{\\partial L}}{{\\partial w_3}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot h_1 \\approx {self.dL_dz2:.4f} \\cdot {self.a1[0]:.4f} \\approx {grad_w3:.4f}",
       inline=False
     ))
 
     grad_w11 = self._compute_gradient_W1(0, 0)
     dz2_da1 = self.W2[0, 0]
-    da1_dz1 = self._activation_derivative(self.z1[0])
+    da1_dz1 = self._hidden_activation_derivative(0)
 
     if self.activation_function == self.ACTIVATION_SIGMOID:
       act_deriv_str = f"h_1(1-h_1)"
@@ -1208,7 +1257,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       act_deriv_str = f"1"
 
     explanation.add_element(ca.Equation(
-      f"\\frac{{\\partial L}}{{\\partial w_{{11}}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot w_3 \\cdot {act_deriv_str} \\cdot x_1 = {self.dL_dz2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[0]:.1f} = {grad_w11:.4f}",
+      f"\\frac{{\\partial L}}{{\\partial w_{{11}}}} = \\frac{{\\partial L}}{{\\partial z_{{out}}}} \\cdot w_3 \\cdot {act_deriv_str} \\cdot x_1 \\approx {self.dL_dz2:.4f} \\cdot {dz2_da1:.4f} \\cdot {da1_dz1:.4f} \\cdot {self.X[0]:.1f} \\approx {grad_w11:.4f}",
       inline=False
     ))
 
@@ -1219,18 +1268,22 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     new_w3 = self.new_W2[0, 0]
     explanation.add_element(ca.Equation(
-      f"w_3^{{new}} = w_3 - \\alpha \\frac{{\\partial L}}{{\\partial w_3}} = {self.W2[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w3:.4f} = {new_w3:.4f}",
+      f"w_3^{{new}} = w_3 - \\alpha \\frac{{\\partial L}}{{\\partial w_3}} \\approx {self.W2[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w3:.4f} \\approx {new_w3:.4f}",
       inline=False
     ))
 
     new_w11 = self.new_W1[0, 0]
     explanation.add_element(ca.Equation(
-      f"w_{{11}}^{{new}} = w_{{11}} - \\alpha \\frac{{\\partial L}}{{\\partial w_{{11}}}} = {self.W1[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w11:.4f} = {new_w11:.4f}",
+      f"w_{{11}}^{{new}} = w_{{11}} - \\alpha \\frac{{\\partial L}}{{\\partial w_{{11}}}} \\approx {self.W1[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w11:.4f} \\approx {new_w11:.4f}",
       inline=False
     ))
 
     explanation.add_element(ca.Paragraph([
-      "These updated weights would be used in the next training iteration."
+      "This exercise updates only ",
+      ca.Equation(r"w_3", inline=True),
+      " and ",
+      ca.Equation(r"w_{11}", inline=True),
+      "; biases and all other weights remain unchanged."
     ]))
 
     return explanation, []
