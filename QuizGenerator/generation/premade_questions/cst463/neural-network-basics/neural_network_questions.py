@@ -27,7 +27,9 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
   - Runs forward pass and stores all activations
   """
 
-  # Activation function types
+  # Activation function types.  The hidden layer is intentionally fixed to
+  # ReLU for these introductory exercises; sigmoid remains the binary output
+  # activation.
   ACTIVATION_SIGMOID = "sigmoid"
   ACTIVATION_RELU = "relu"
   ACTIVATION_LINEAR = "linear"
@@ -133,12 +135,8 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     )
 
   def _select_activation_function(self):
-    """Randomly select an activation function."""
-    activations = [
-      self.ACTIVATION_SIGMOID,
-      self.ACTIVATION_RELU
-    ]
-    self.activation_function = self.rng.choice(activations)
+    """Use ReLU in the hidden layer for all introductory MLP exercises."""
+    self.activation_function = self.ACTIVATION_RELU
 
   def _apply_activation(self, z, function_type=None):
     """Apply activation function to pre-activation values."""
@@ -334,14 +332,22 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     if include_activations and self.a1 is not None:
       for i in range(self.num_hidden):
         right_data.append([
+          ca.Equation(f"h_{{\\mathrm{{pre}},{i+1}}} = z_{i+1}", inline=True),
+          f"{self.z1[i]:.4f}"
+        ])
+        right_data.append([
           ca.Equation(f"h_{i+1}", inline=True),
           f"{self.a1[i]:.4f}"
         ])
 
-    # Output activation (if computed and requested)
+    # Binary-classifier output values (if computed and requested)
     if include_activations and self.a2 is not None:
       right_data.append([
-        ca.Equation(r"\hat{y}", inline=True),
+        ca.Equation(r"z_{out} 	ext{(logit)}", inline=True),
+        f"{self.z2[0]:.4f}"
+      ])
+      right_data.append([
+        ca.Equation(r"\hat{y} = P(y=1)", inline=True),
         f"{self.a2[0]:.4f}"
       ])
 
@@ -377,8 +383,8 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     Returns:
       BytesIO buffer containing PNG image
     """
-    # Create figure with tight layout and equal aspect ratio
-    fig = plt.figure(figsize=(8, 2.5))
+    # Create figure with space for the binary-classification output path.
+    fig = plt.figure(figsize=(10, 2.8))
     ax = fig.add_subplot(111)
     ax.set_aspect('equal', adjustable='box')  # Keep circles circular
     ax.axis('off')
@@ -498,22 +504,20 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
       circle = plt.Circle((hidden_x, y), r, facecolor='lightblue',
                          edgecolor='black', linewidth=1.5, zorder=10)
       ax.add_patch(circle)
-      ax.plot([hidden_x, hidden_x], [y - r*0.7, y + r*0.7], 'k-', linewidth=1.2, zorder=11)
-      ax.text(hidden_x - r*0.35, y, r'$\Sigma$', fontsize=11, ha='center', va='center', zorder=12)
-      ax.text(hidden_x + r*0.35, y, r'$f$', fontsize=10, ha='center', va='center', zorder=12, style='italic')
+      ax.text(hidden_x, y, f'$h_{{{i+1}}}$', fontsize=10, ha='center', va='center', zorder=12)
       if show_activations and self.a1 is not None:
         ax.text(hidden_x, y - r - 0.15, f'{self.a1[i]:.2f}', fontsize=8, ha='center', va='top')
+
+    ax.text(hidden_x, min(hidden_y) - 0.45, 'Hidden layer (ReLU)',
+            fontsize=9, ha='center', va='center', color='#12355b')
 
     # Output node
     y = output_y[0]
     circle = plt.Circle((output_x, y), r, facecolor='lightblue',
                        edgecolor='black', linewidth=1.5, zorder=10)
     ax.add_patch(circle)
-    ax.plot([output_x, output_x], [y - r*0.7, y + r*0.7], 'k-', linewidth=1.2, zorder=11)
-    ax.text(output_x - r*0.35, y, r'$\Sigma$', fontsize=11, ha='center', va='center', zorder=12)
-    ax.text(output_x + r*0.35, y, r'$f$', fontsize=10, ha='center', va='center', zorder=12, style='italic')
     label = r'$\hat{y}$' if not show_activations else f'$\\hat{{y}}$={self.a2[0]:.2f}'
-    ax.text(output_x + r + 0.15, y, label, fontsize=10, ha='left', va='center')
+    ax.text(output_x, y, label, fontsize=10, ha='center', va='center', zorder=12)
 
     # Save to buffer with minimal padding
     buffer = io.BytesIO()
@@ -529,7 +533,7 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     lines = []
     lines.append("Network Architecture:")
     lines.append("")
-    lines.append("Input Layer:     Hidden Layer:      Output Layer:")
+    lines.append("Input Layer:     Hidden Layer (ReLU):      Output:")
 
     # For 2 inputs, 2 hidden, 1 output
     if self.num_inputs == 2 and self.num_hidden == 2:
@@ -562,7 +566,8 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
         lines.append("".join(parts))
 
     lines.append("")
-    lines.append(f"Activation function: {self._get_activation_name()}")
+    lines.append("Hidden activation: ReLU")
+    lines.append("Output: yhat (sigmoid activation for binary classification)")
 
     return "\n".join(lines)
 
@@ -790,6 +795,12 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     # Activation function
     body.add_element(ca.Paragraph([
       f"**Hidden layer activation:** {self._get_activation_name()}"
+    ]))
+
+    body.add_element(ca.Paragraph([
+      "Use binary cross-entropy for the loss: ",
+      ca.Equation(r"L = -[y\log(\hat{y}) + (1-y)\log(1-\hat{y})]", inline=True),
+      "."
     ]))
 
     body.add_element(ca.Paragraph([
