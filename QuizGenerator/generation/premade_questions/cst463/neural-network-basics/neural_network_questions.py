@@ -591,8 +591,8 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     self._generate_network()
     self._select_activation_function()
 
-    # Run forward pass to get correct answers
-    self._forward_pass()
+    # Retain calculator precision until final submitted answers are rounded.
+    self._forward_pass(round_values=False)
     return context
 
   @classmethod
@@ -604,9 +604,13 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     # Question description
     body.add_element(ca.Paragraph([
-      f"Given the neural network below with {self._get_activation_name()} activation "
+      f"Given the neural network below with ReLU activation "
       f"in the hidden layer and sigmoid activation in the output layer (for binary classification), "
       f"calculate the forward pass for the given input values."
+    ]))
+
+    body.add_element(ca.Paragraph([
+      "Use full calculator precision for intermediate calculations and round each submitted answer to four decimal places."
     ]))
 
     # Network diagram
@@ -622,7 +626,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
 
     # Activation function
     body.add_element(ca.Paragraph([
-      f"**Hidden layer activation:** {self._get_activation_name()}"
+      "**Hidden layer activation:** ReLU"
     ]))
 
     for i in range(self.num_hidden):
@@ -641,7 +645,8 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     explanation = ca.Section()
 
     explanation.add_element(ca.Paragraph([
-      "To solve this problem, we need to compute the forward pass through the network."
+      "Compute the forward pass from left to right: hidden pre-activation, ReLU hidden value, output logit, then sigmoid probability. "
+      "The displayed decimals are approximations; retain calculator precision until rounding each final answer to four decimal places."
     ]))
 
     # Hidden layer calculations
@@ -650,7 +655,7 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     ]))
 
     for i in range(self.num_hidden):
-      # Build equation for z_i
+      # Build equation for the hidden pre-activation (also denoted z_i).
       terms = []
       for j in range(self.num_inputs):
         terms.append(f"({self.W1[i,j]:.{self.param_digits}f})({self.X[j]:.1f})")
@@ -660,31 +665,20 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
         z_calc += f" + {self.b1[i]:.{self.param_digits}f}"
 
       explanation.add_element(ca.Equation(
-        f"z_{i+1} = {z_calc} = {self.z1[i]:.4f}",
+        f"h_{{\\mathrm{{pre}},{i+1}}} = z_{i+1} = {z_calc} = {self.z1[i]:.4f}",
         inline=False
       ))
 
     # Hidden layer activations
     explanation.add_element(ca.Paragraph([
-      f"**Step 2: Apply {self._get_activation_name()} activation**"
+      "**Step 2: Apply ReLU activation**"
     ]))
 
     for i in range(self.num_hidden):
-      if self.activation_function == self.ACTIVATION_SIGMOID:
-        explanation.add_element(ca.Equation(
-          f"h_{i+1} = \\sigma(z_{i+1}) = \\frac{{1}}{{1 + e^{{-{self.z1[i]:.4f}}}}} = {self.a1[i]:.4f}",
-          inline=False
-        ))
-      elif self.activation_function == self.ACTIVATION_RELU:
-        explanation.add_element(ca.Equation(
-          f"h_{i+1} = \\text{{ReLU}}(z_{i+1}) = \\max(0, {self.z1[i]:.4f}) = {self.a1[i]:.4f}",
-          inline=False
-        ))
-      else:
-        explanation.add_element(ca.Equation(
-          f"h_{i+1} = z_{i+1} = {self.a1[i]:.4f}",
-          inline=False
-        ))
+      explanation.add_element(ca.Equation(
+        f"h_{i+1} = \\text{{ReLU}}(h_{{\\mathrm{{pre}},{i+1}}}) = \\max(0, {self.z1[i]:.4f}) \\approx {self.a1[i]:.4f}",
+        inline=False
+      ))
 
     # Output layer
     explanation.add_element(ca.Paragraph([
@@ -700,12 +694,12 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       z_out_calc += f" + {self.b2[0]:.{self.param_digits}f}"
 
     explanation.add_element(ca.Equation(
-      f"z_{{out}} = {z_out_calc} = {self.z2[0]:.4f}",
+      f"z_{{out}} = {z_out_calc} \\approx {self.z2[0]:.4f}",
       inline=False
     ))
 
     explanation.add_element(ca.Equation(
-      f"\\hat{{y}} = \\sigma(z_{{out}}) = \\frac{{1}}{{1 + e^{{-{self.z2[0]:.4f}}}}} = {self.a2[0]:.4f}",
+      f"\\hat{{y}} = \\sigma(z_{{out}}) \\approx \\frac{{1}}{{1 + e^{{-{self.z2[0]:.4f}}}}} \\approx {self.a2[0]:.4f}",
       inline=False
     ))
 
