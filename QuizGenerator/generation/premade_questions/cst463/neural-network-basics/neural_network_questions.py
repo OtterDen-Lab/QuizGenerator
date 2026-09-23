@@ -1110,15 +1110,24 @@ class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
     body.add_element(ca.Picture(img_data=self._generate_network_diagram(), caption="Two-logit softmax classifier"))
     body.add_element(self._generate_parameter_table())
     body.add_element(ca.Paragraph([
-      "Use cross-entropy loss: ",
-      ca.Equation(r"L = -\sum_j y_j\log(\hat{y}_j)", inline=True),
-      "."
+      "The table gives the cross-entropy loss for this completed forward pass. "
+      "You do not need to recompute the loss; use the shown predictions and target to backpropagate its gradients."
     ]))
-    answers.extend([
-      ca.AnswerTypes.Float(self._compute_gradient_W2(0, 0), label="∂L/∂w⁽²⁾₁₁"),
-      ca.AnswerTypes.Float(self._compute_gradient_W2(1, 0), label="∂L/∂w⁽²⁾₂₁"),
-      ca.AnswerTypes.Float(self._compute_gradient_W1(0, 0), label="∂L/∂w⁽¹⁾₁₁"),
-    ])
+    body.add_element(ca.Paragraph([
+      "**Calculate the gradient for every weight in the network.**"
+    ]))
+    for output_idx in range(2):
+      for hidden_idx in range(self.num_hidden):
+        answers.append(ca.AnswerTypes.Float(
+          self._compute_gradient_W2(output_idx, hidden_idx),
+          label=f"∂L/∂w⁽²⁾{output_idx+1}{hidden_idx+1}"
+        ))
+    for hidden_idx in range(self.num_hidden):
+      for input_idx in range(self.num_inputs):
+        answers.append(ca.AnswerTypes.Float(
+          self._compute_gradient_W1(hidden_idx, input_idx),
+          label=f"∂L/∂w⁽¹⁾{hidden_idx+1}{input_idx+1}"
+        ))
     body.add_element(ca.AnswerBlock(answers))
     return body, answers
 
@@ -1137,28 +1146,31 @@ class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
       inline=False
     ))
     for output_idx in range(2):
-      gradient = self._compute_gradient_W2(output_idx, 0)
+      for hidden_idx in range(self.num_hidden):
+        gradient = self._compute_gradient_W2(output_idx, hidden_idx)
+        explanation.add_element(ca.Equation(
+          f"\\frac{{\\partial L}}{{\\partial w^{{(2)}}_{{{output_idx+1},{hidden_idx+1}}}}} = \\frac{{\\partial L}}{{\\partial o_{output_idx+1}}}h_{hidden_idx+1} = {self.dL_dz2[output_idx]:.4f} \\cdot {self.a1[hidden_idx]:.4f} = {gradient:.4f}",
+          inline=False
+        ))
+
+    for hidden_idx in range(self.num_hidden):
+      dL_dh = self._compute_hidden_gradient(hidden_idx)
+      relu_derivative = self._hidden_activation_derivative(hidden_idx)
+      dL_dhpre = dL_dh * relu_derivative
       explanation.add_element(ca.Equation(
-        f"\\frac{{\\partial L}}{{\\partial w^{{(2)}}_{{{output_idx+1},1}}}} = \\frac{{\\partial L}}{{\\partial o_{output_idx+1}}}h_1 = {self.dL_dz2[output_idx]:.4f} \\cdot {self.a1[0]:.4f} = {gradient:.4f}",
+        f"\\frac{{\\partial L}}{{\\partial h_{hidden_idx+1}}} = \\sum_{{j=1}}^2 w^{{(2)}}_{{j,{hidden_idx+1}}}\\frac{{\\partial L}}{{\\partial o_j}} = {self.W2[0,hidden_idx]:.4f} \\cdot {self.dL_dz2[0]:.4f} + {self.W2[1,hidden_idx]:.4f} \\cdot {self.dL_dz2[1]:.4f} = {dL_dh:.4f}",
         inline=False
       ))
-
-    dL_dh1 = self._compute_hidden_gradient(0)
-    relu_derivative = self._hidden_activation_derivative(0)
-    dL_dhpre1 = dL_dh1 * relu_derivative
-    explanation.add_element(ca.Equation(
-      f"\\frac{{\\partial L}}{{\\partial h_1}} = \\sum_{{j=1}}^2 w^{{(2)}}_{{j,1}}\\frac{{\\partial L}}{{\\partial o_j}} = {self.W2[0,0]:.4f} \\cdot {self.dL_dz2[0]:.4f} + {self.W2[1,0]:.4f} \\cdot {self.dL_dz2[1]:.4f} = {dL_dh1:.4f}",
-      inline=False
-    ))
-    explanation.add_element(ca.Equation(
-      f"\\text{{ReLU}}'(h_{{\\mathrm{{pre}},1}}) = {relu_derivative:.0f}",
-      inline=False
-    ))
-    gradient_w11 = self._compute_gradient_W1(0, 0)
-    explanation.add_element(ca.Equation(
-      f"\\frac{{\\partial L}}{{\\partial w^{{(1)}}_{{1,1}}}} = \\frac{{\\partial L}}{{\\partial h_{{\\mathrm{{pre}},1}}}} \\cdot x_1 = {dL_dhpre1:.4f} \\cdot {self.X[0]:.1f} = {gradient_w11:.4f}",
-      inline=False
-    ))
+      explanation.add_element(ca.Equation(
+        f"\\text{{ReLU}}'(h_{{\\mathrm{{pre}},{hidden_idx+1}}}) = {relu_derivative:.0f}",
+        inline=False
+      ))
+      for input_idx in range(self.num_inputs):
+        gradient = self._compute_gradient_W1(hidden_idx, input_idx)
+        explanation.add_element(ca.Equation(
+          f"\\frac{{\\partial L}}{{\\partial w^{{(1)}}_{{{hidden_idx+1},{input_idx+1}}}}} = \\frac{{\\partial L}}{{\\partial h_{{\\mathrm{{pre}},{hidden_idx+1}}}}} \\cdot x_{input_idx+1} = {dL_dhpre:.4f} \\cdot {self.X[input_idx]:.1f} = {gradient:.4f}",
+          inline=False
+        ))
     return explanation, []
 
 
