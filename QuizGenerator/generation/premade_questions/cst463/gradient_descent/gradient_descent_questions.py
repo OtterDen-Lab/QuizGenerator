@@ -105,8 +105,13 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
     context.minimize = True
 
     # Generate function and its properties
+    context.use_coupled_quadratic = context.num_variables == 2
     context.variables, context.function, context.gradient_function, context.equation = generate_function(
-      context.rng, context.num_variables, max_degree=2, use_quadratic=True
+      context.rng,
+      context.num_variables,
+      max_degree=2,
+      use_quadratic=True,
+      use_coupled_quadratic=context.use_coupled_quadratic,
     )
 
     context.learning_rate = context.rng.choice(cls.LEARNING_RATES)
