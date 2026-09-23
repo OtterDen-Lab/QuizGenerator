@@ -3,11 +3,13 @@ from .neural_network_questions import (
   EndToEndTrainingQuestion,
   EnsembleAveragingQuestion,
   ForwardPassQuestion,
+  TwoClassSoftmaxBackpropQuestion,
 )
 
 __all__ = [
   "ForwardPassQuestion",
   "BackpropGradientQuestion",
+  "TwoClassSoftmaxBackpropQuestion",
   "EnsembleAveragingQuestion",
   "EndToEndTrainingQuestion",
 ]

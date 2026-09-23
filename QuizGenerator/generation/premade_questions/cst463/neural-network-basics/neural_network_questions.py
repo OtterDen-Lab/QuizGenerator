@@ -908,6 +908,261 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
 
 
 @QuestionRegistry.register()
+class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
+  """Backpropagation through a ReLU hidden layer and two-class softmax output."""
+
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    # This is deliberately a two-logit classifier.  Do not allow a config
+    # value to silently turn it back into the one-logit sigmoid exercise.
+    context_kwargs = dict(kwargs)
+    context_kwargs["num_outputs"] = 2
+    context = super()._build_context(rng_seed=rng_seed, **context_kwargs)
+    self = context
+
+    self._generate_network()
+    self._select_activation_function()
+    self._forward_pass()
+
+    # Choose the class other than the model's current prediction so the
+    # softmax error signal is nontrivial for both output logits.
+    self.y_target = 1 - int(np.argmax(self.a2))
+    self.y_one_hot = np.zeros(2)
+    self.y_one_hot[self.y_target] = 1
+    self._compute_loss(self.y_target)
+    self.loss = round(self.loss, 4)
+    self._compute_output_gradient()
+    return context
+
+  def _forward_pass(self, *, round_values=True):
+    """Run a ReLU-hidden, two-logit softmax forward pass."""
+    self.z1 = self.W1 @ self.X + self.b1
+    self.a1 = self._apply_activation(self.z1)
+    self.z2 = self.W2 @ self.a1 + self.b2  # two output logits
+
+    shifted_logits = self.z2 - np.max(self.z2)
+    exp_logits = np.exp(shifted_logits)
+    self.a2 = exp_logits / np.sum(exp_logits)
+
+    if round_values:
+      self.z1 = np.round(self.z1, 4)
+      self.a1 = np.round(self.a1, 4)
+      self.z2 = np.round(self.z2, 4)
+      self.a2 = np.round(self.a2, 4)
+    return self.a2
+
+  def _compute_loss(self, y_target):
+    """Compute cross-entropy loss for the selected target class."""
+    self.y_target = y_target
+    epsilon = 1e-15
+    self.loss = -np.log(np.clip(self.a2[y_target], epsilon, 1 - epsilon))
+    return self.loss
+
+  def _compute_output_gradient(self):
+    """Compute the softmax-plus-cross-entropy gradient for both logits."""
+    self.dL_dz2 = self.a2 - self.y_one_hot
+    return self.dL_dz2
+
+  def _compute_gradient_W2(self, output_idx, hidden_idx):
+    """Compute ∂L/∂W2[output_idx, hidden_idx]."""
+    return float(self.dL_dz2[output_idx] * self.a1[hidden_idx])
+
+  def _compute_hidden_gradient(self, hidden_idx):
+    """Compute ∂L/∂h[hidden_idx] by collecting both output contributions."""
+    return float(np.dot(self.W2[:, hidden_idx], self.dL_dz2))
+
+  def _compute_gradient_W1(self, hidden_idx, input_idx):
+    """Compute ∂L/∂W1[hidden_idx, input_idx]."""
+    dL_dh = self._compute_hidden_gradient(hidden_idx)
+    dL_dz1 = dL_dh * self._hidden_activation_derivative(hidden_idx)
+    return float(dL_dz1 * self.X[input_idx])
+
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    """Require a live first hidden unit and nonzero requested gradients."""
+    first_hidden_live = context.a1[0] > 0
+    requested_gradients = [
+      context._compute_gradient_W2(0, 0),
+      context._compute_gradient_W2(1, 0),
+      context._compute_gradient_W1(0, 0),
+    ]
+    return (
+      super().is_interesting_ctx(context)
+      and first_hidden_live
+      and all(abs(gradient) > 1e-10 for gradient in requested_gradients)
+    )
+
+  def _generate_parameter_table(self):
+    """Show scalar edge weights alongside the two-logit forward pass."""
+    left_data = [["Symbol", "Value"]]
+    for i in range(self.num_inputs):
+      left_data.append([ca.Equation(f"x_{i+1}", inline=True), f"{self.X[i]:.1f}"])
+    for hidden_idx in range(self.num_hidden):
+      for input_idx in range(self.num_inputs):
+        left_data.append([
+          ca.Equation(f"w^{{(1)}}_{{{hidden_idx+1},{input_idx+1}}}", inline=True),
+          f"{self.W1[hidden_idx, input_idx]:.{self.param_digits}f}"
+        ])
+    for output_idx in range(2):
+      for hidden_idx in range(self.num_hidden):
+        left_data.append([
+          ca.Equation(f"w^{{(2)}}_{{{output_idx+1},{hidden_idx+1}}}", inline=True),
+          f"{self.W2[output_idx, hidden_idx]:.{self.param_digits}f}"
+        ])
+
+    right_data = [["Symbol", "Value"]]
+    for hidden_idx in range(self.num_hidden):
+      right_data.append([
+        ca.Equation(f"b^{{(1)}}_{hidden_idx+1}", inline=True),
+        f"{self.b1[hidden_idx]:.{self.param_digits}f}"
+      ])
+    for output_idx in range(2):
+      right_data.append([
+        ca.Equation(f"b^{{(2)}}_{output_idx+1}", inline=True),
+        f"{self.b2[output_idx]:.{self.param_digits}f}"
+      ])
+    for hidden_idx in range(self.num_hidden):
+      right_data.append([
+        ca.Equation(f"h_{{\\mathrm{{pre}},{hidden_idx+1}}}", inline=True),
+        f"{self.z1[hidden_idx]:.4f}"
+      ])
+      right_data.append([
+        ca.Equation(f"h_{hidden_idx+1}", inline=True),
+        f"{self.a1[hidden_idx]:.4f}"
+      ])
+    for output_idx in range(2):
+      right_data.append([
+        ca.Equation(f"o_{output_idx+1}", inline=True),
+        f"{self.z2[output_idx]:.4f}"
+      ])
+      right_data.append([
+        ca.Equation(f"\\hat{{y}}_{output_idx+1}", inline=True),
+        f"{self.a2[output_idx]:.4f}"
+      ])
+    target_str = ", ".join(str(int(value)) for value in self.y_one_hot)
+    right_data.append([ca.Equation("y", inline=True), f"[{target_str}]"])
+    right_data.append([ca.Equation("L", inline=True), f"{self.loss:.4f}"])
+
+    table_group = ca.TableGroup()
+    table_group.add_table(ca.Table(data=left_data))
+    table_group.add_table(ca.Table(data=right_data))
+    return table_group
+
+  def _generate_network_diagram(self):
+    """Draw a two-logit network with individually labeled output edges."""
+    # Keep the image compact enough that Canvas does not downscale its labels.
+    fig = plt.figure(figsize=(8, 2.75))
+    ax = fig.add_subplot(111)
+    ax.set_aspect('equal', adjustable='box')
+    ax.axis('off')
+
+    input_x, hidden_x, output_x = 0.4, 1.65, 2.9
+    input_y = hidden_y = output_y = [1.3, 0.7]
+    radius = 0.13
+
+    for input_idx in range(self.num_inputs):
+      for hidden_idx in range(self.num_hidden):
+        ax.plot([input_x, hidden_x], [input_y[input_idx], hidden_y[hidden_idx]], 'k-', linewidth=1, alpha=0.7)
+        horizontal = input_idx == hidden_idx
+        label_t = 0.22 if horizontal else 0.72
+        label_x = input_x + 0.26 if horizontal else hidden_x - 0.42
+        label_y = input_y[input_idx] + (hidden_y[hidden_idx] - input_y[input_idx]) * label_t
+        ax.text(label_x, label_y, f'$w^{{(1)}}_{{{hidden_idx+1},{input_idx+1}}}$', fontsize=8,
+                bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none'))
+    for hidden_idx in range(self.num_hidden):
+      for output_idx in range(2):
+        ax.plot([hidden_x, output_x], [hidden_y[hidden_idx], output_y[output_idx]], 'k-', linewidth=1, alpha=0.7)
+        horizontal = hidden_idx == output_idx
+        label_t = 0.22 if horizontal else 0.72
+        label_x = hidden_x + 0.27 if horizontal else output_x - 0.48
+        label_y = hidden_y[hidden_idx] + (output_y[output_idx] - hidden_y[hidden_idx]) * label_t
+        ax.text(label_x, label_y, f'$w^{{(2)}}_{{{output_idx+1},{hidden_idx+1}}}$', fontsize=8,
+                bbox=dict(boxstyle='round,pad=0.15', facecolor='white', edgecolor='none'))
+
+    for input_idx, y in enumerate(input_y):
+      ax.add_patch(plt.Circle((input_x, y), radius, facecolor='lightgray', edgecolor='black', linewidth=1.5, zorder=10))
+      ax.text(input_x - radius - 0.12, y, f'$x_{{{input_idx+1}}}$', fontsize=9, ha='right', va='center', zorder=11)
+    for hidden_idx, y in enumerate(hidden_y):
+      ax.add_patch(plt.Circle((hidden_x, y), radius, facecolor='lightblue', edgecolor='black', linewidth=1.5, zorder=10))
+      ax.text(hidden_x, y, f'$h_{{{hidden_idx+1}}}$', fontsize=9, ha='center', va='center', zorder=11)
+    for output_idx, y in enumerate(output_y):
+      ax.add_patch(plt.Circle((output_x, y), radius, facecolor='lightblue', edgecolor='black', linewidth=1.5, zorder=10))
+      ax.text(output_x, y, f'$o_{{{output_idx+1}}}$', fontsize=9, ha='center', va='center', zorder=11)
+
+    ax.text(hidden_x, 0.25, 'Hidden layer (ReLU)', fontsize=8, ha='center', color='#12355b')
+    ax.text(output_x, 1.65, 'Output logits', fontsize=8, ha='center', color='#12355b')
+
+    buffer = io.BytesIO()
+    plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none', pad_inches=0.0)
+    plt.close(fig)
+    buffer.seek(0)
+    return buffer
+
+  @classmethod
+  def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
+    self = context
+    body = ca.Section()
+    answers = []
+    body.add_element(ca.Paragraph([
+      "Given the two-class neural network below, the hidden layer uses ReLU and the two output logits use softmax. "
+      "A completed forward pass is shown. Compute the requested individual weight gradients using backpropagation."
+    ]))
+    body.add_element(ca.Picture(img_data=self._generate_network_diagram(), caption="Two-logit softmax classifier"))
+    body.add_element(self._generate_parameter_table())
+    body.add_element(ca.Paragraph([
+      "Use cross-entropy loss: ",
+      ca.Equation(r"L = -\sum_j y_j\log(\hat{y}_j)", inline=True),
+      "."
+    ]))
+    answers.extend([
+      ca.AnswerTypes.Float(self._compute_gradient_W2(0, 0), label="∂L/∂w⁽²⁾₁₁"),
+      ca.AnswerTypes.Float(self._compute_gradient_W2(1, 0), label="∂L/∂w⁽²⁾₂₁"),
+      ca.AnswerTypes.Float(self._compute_gradient_W1(0, 0), label="∂L/∂w⁽¹⁾₁₁"),
+    ])
+    body.add_element(ca.AnswerBlock(answers))
+    return body, answers
+
+  @classmethod
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
+    self = context
+    explanation = ca.Section()
+    explanation.add_element(ca.Paragraph([
+      "Backpropagation starts with the softmax-plus-cross-entropy error vector, then moves backward one local derivative at a time."
+    ]))
+    delta_values = ", ".join(f"{value:.4f}" for value in self.dL_dz2)
+    target_values = ", ".join(str(int(value)) for value in self.y_one_hot)
+    prediction_values = ", ".join(f"{value:.4f}" for value in self.a2)
+    explanation.add_element(ca.Equation(
+      f"\\frac{{\\partial L}}{{\\partial o}} = \\hat{{y}} - y = [{prediction_values}] - [{target_values}] = [{delta_values}]",
+      inline=False
+    ))
+    for output_idx in range(2):
+      gradient = self._compute_gradient_W2(output_idx, 0)
+      explanation.add_element(ca.Equation(
+        f"\\frac{{\\partial L}}{{\\partial w^{{(2)}}_{{{output_idx+1},1}}}} = \\frac{{\\partial L}}{{\\partial o_{output_idx+1}}}h_1 = {self.dL_dz2[output_idx]:.4f} \\cdot {self.a1[0]:.4f} = {gradient:.4f}",
+        inline=False
+      ))
+
+    dL_dh1 = self._compute_hidden_gradient(0)
+    relu_derivative = self._hidden_activation_derivative(0)
+    dL_dhpre1 = dL_dh1 * relu_derivative
+    explanation.add_element(ca.Equation(
+      f"\\frac{{\\partial L}}{{\\partial h_1}} = \\sum_{{j=1}}^2 w^{{(2)}}_{{j,1}}\\frac{{\\partial L}}{{\\partial o_j}} = {self.W2[0,0]:.4f} \\cdot {self.dL_dz2[0]:.4f} + {self.W2[1,0]:.4f} \\cdot {self.dL_dz2[1]:.4f} = {dL_dh1:.4f}",
+      inline=False
+    ))
+    explanation.add_element(ca.Equation(
+      f"\\text{{ReLU}}'(h_{{\\mathrm{{pre}},1}}) = {relu_derivative:.0f}",
+      inline=False
+    ))
+    gradient_w11 = self._compute_gradient_W1(0, 0)
+    explanation.add_element(ca.Equation(
+      f"\\frac{{\\partial L}}{{\\partial w^{{(1)}}_{{1,1}}}} = \\frac{{\\partial L}}{{\\partial h_{{\\mathrm{{pre}},1}}}} \\cdot x_1 = {dL_dhpre1:.4f} \\cdot {self.X[0]:.1f} = {gradient_w11:.4f}",
+      inline=False
+    ))
+    return explanation, []
+
+
+@QuestionRegistry.register()
 class EnsembleAveragingQuestion(Question):
   """
   Question asking students to combine predictions from multiple models (ensemble).
