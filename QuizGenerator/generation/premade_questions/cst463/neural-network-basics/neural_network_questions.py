@@ -1379,7 +1379,7 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
         "Input", ca.Equation(f"({self.X[0]:.1f}, {self.X[1]:.1f})", inline=True),
         "Target", ca.Equation(f"y = {int(self.y_target)}", inline=True),
       ], [
-        "Learning rate", ca.Equation(f"\\alpha = {self.learning_rate}", inline=True),
+        "Learning rate", ca.Equation(f"\\eta = {self.learning_rate}", inline=True),
         "Hidden activation", self._get_activation_name(),
       ]],
       alignments=["left", "center", "left", "center"],
@@ -1530,13 +1530,13 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
     new_w3 = self.new_W2[0, 0]
     explanation.add_element(ca.Equation(
-      f"w_3^{{new}} = w_3 - \\alpha \\frac{{\\partial L}}{{\\partial w_3}} \\approx {self.W2[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w3:.4f} \\approx {new_w3:.4f}",
+      f"w_3^{{new}} = w_3 - \\eta \\frac{{\\partial L}}{{\\partial w_3}} \\approx {self.W2[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w3:.4f} \\approx {new_w3:.4f}",
       inline=False
     ))
 
     new_w11 = self.new_W1[0, 0]
     explanation.add_element(ca.Equation(
-      f"w_{{11}}^{{new}} = w_{{11}} - \\alpha \\frac{{\\partial L}}{{\\partial w_{{11}}}} \\approx {self.W1[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w11:.4f} \\approx {new_w11:.4f}",
+      f"w_{{11}}^{{new}} = w_{{11}} - \\eta \\frac{{\\partial L}}{{\\partial w_{{11}}}} \\approx {self.W1[0,0]:.{self.param_digits}f} - {self.learning_rate} \\cdot {grad_w11:.4f} \\approx {new_w11:.4f}",
       inline=False
     ))
 

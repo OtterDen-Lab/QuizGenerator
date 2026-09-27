@@ -336,7 +336,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           "Use gradient descent to minimize the function ",
           ca.Equation(sp.latex(self.function), inline=True),
           " with learning rate ",
-          ca.Equation(f"\\alpha = {self.learning_rate}", inline=True),
+          ca.Equation(f"\\eta = {self.learning_rate}", inline=True),
           f" and starting point {self.starting_point[0] if self.num_variables == 1 else tuple(self.starting_point)}. "
           "Round each table entry to four decimal places before using it in the next row."
         ]
@@ -348,7 +348,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       "t",
       ca.Equation("x^{(t)}", inline=True),
       ca.Equation("\\nabla f", inline=True),
-      ca.Equation("\\alpha \\cdot \\nabla f", inline=True)
+      ca.Equation("\\eta \\cdot \\nabla f", inline=True)
     ]
     table_rows = []
 
@@ -430,9 +430,9 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       ca.Paragraph(
         [
           "Since we want to minimize, we use the update rule: ",
-          ca.Equation(r"x^{(t+1)} = x^{(t)} - \alpha \nabla f(x^{(t)})", inline=True),
+          ca.Equation(r"x^{(t+1)} = x^{(t)} - \eta \nabla f(x^{(t)})", inline=True),
           f". We start at {tuple(self.starting_point)} with learning rate ",
-          ca.Equation(f"\\alpha = {self.learning_rate}", inline=True),
+          ca.Equation(f"\\eta = {self.learning_rate}", inline=True),
           ". Round each table entry to four decimal places before continuing."
         ]
       )
@@ -452,7 +452,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
       "t",
       ca.Equation("x^{(t)}", inline=True),
       ca.Equation("\\nabla f", inline=True),
-      ca.Equation("\\alpha \\cdot \\nabla f", inline=True)
+      ca.Equation("\\eta \\cdot \\nabla f", inline=True)
     ]
 
     solution_rows = []
@@ -547,7 +547,7 @@ class GradientDescentWalkthrough(GradientDescentQuestion, TableQuestionMixin, Bo
           [
             "Update: ",
             ca.Equation(
-              f"\\alpha \\cdot \\nabla f = {self.learning_rate} \\cdot {format_vector(result['gradient'])} = {format_vector(result['update'])}",
+              f"\\eta \\cdot \\nabla f = {self.learning_rate} \\cdot {format_vector(result['gradient'])} = {format_vector(result['update'])}",
               inline=True
             )
           ]

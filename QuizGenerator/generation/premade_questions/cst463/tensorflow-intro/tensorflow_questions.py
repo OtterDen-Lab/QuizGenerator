@@ -823,7 +823,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
 
     body.add_element(ca.Paragraph([
       "Learning rate: ",
-      ca.Equation(f"\\alpha = {context.learning_rate}", inline=True)
+      ca.Equation(f"\\eta = {context.learning_rate}", inline=True)
     ]))
 
     body.add_element(ca.Paragraph([
@@ -854,7 +854,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     answers.append(weights_momentum_answer)
     table_data.append([
       "Weights (momentum)",
-      ca.Equation(r"w' = w - \alpha v'", inline=True),
+      ca.Equation(r"w' = w - \eta v'", inline=True),
       weights_momentum_answer
     ])
 
@@ -863,7 +863,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       answers.append(weights_sgd_answer)
       table_data.append([
         "Weights (vanilla SGD)",
-        ca.Equation(r"w' = w - \alpha \nabla f", inline=True),
+        ca.Equation(r"w' = w - \eta \nabla f", inline=True),
         weights_sgd_answer
       ])
 
@@ -916,7 +916,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
     ]))
 
     explanation.add_element(ca.Equation(
-      f"w' = w - \\alpha v'",
+      f"w' = w - \\eta v'",
       inline=False
     ))
 
@@ -937,7 +937,7 @@ class MomentumOptimizerQuestion(Question, TableQuestionMixin, BodyTemplatesMixin
       ]))
 
       explanation.add_element(ca.Equation(
-        f"w' = w - \\alpha \\nabla f",
+        f"w' = w - \\eta \\nabla f",
         inline=False
       ))
 
