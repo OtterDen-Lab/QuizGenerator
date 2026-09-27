@@ -2512,6 +2512,12 @@ class AnswerBlock(Table):
     )
     return content
 
+  def render_typst(self, **kwargs):
+    """Render labeled answer lines inside this answer-only table."""
+    render_kwargs = dict(kwargs)
+    render_kwargs["is_answer_block"] = True
+    return super().render_typst(**render_kwargs)
+
   def render_html(self, **kwargs):
     if not kwargs.get("iframe_mode"):
       return super().render_html(**kwargs)
@@ -2955,13 +2961,20 @@ class Answer(Leaf):
 
   def render_typst(self, **kwargs):
     """Render answer blank as an underlined space in Typst."""
-    if kwargs.get("in_table"):
+    in_table = kwargs.get("in_table")
+    is_answer_block = kwargs.get("is_answer_block", False)
+    if in_table and not is_answer_block:
       blank = "#fillline(width: 100%)"
     else:
       blank_width = min(max(self.blank_length * 0.75, 3.0), 12.0)
       blank = f"#fillline(width: {blank_width}cm)"
 
-    label_part = f"{self.label}:" if self.label else ""
+    show_label = (
+      not in_table
+      or is_answer_block
+      or kwargs.get("show_answer_labels_in_table", False)
+    )
+    label_part = f"{self.label}:" if self.label and show_label else ""
     unit_part = f" {self.unit}" if self.unit else ""
 
     return f"{label_part} {blank}{unit_part}".strip()

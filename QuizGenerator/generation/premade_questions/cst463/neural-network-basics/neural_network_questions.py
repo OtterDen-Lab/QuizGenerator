@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.mixins import TableQuestionMixin
 from QuizGenerator.generation.question import Question, QuestionRegistry
 
 from ..models.matrices import MatrixQuestion
@@ -15,7 +16,7 @@ from ..models.matrices import MatrixQuestion
 log = logging.getLogger(__name__)
 
 
-class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
+class SimpleNeuralNetworkBase(MatrixQuestion, TableQuestionMixin, abc.ABC):
   """
   Base class for simple neural network questions.
 
@@ -383,8 +384,8 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
     Returns:
       BytesIO buffer containing PNG image
     """
-    # Create figure with space for the binary-classification output path.
-    fig = plt.figure(figsize=(10, 2.8))
+    # Keep the diagram compact; activation is stated in the question itself.
+    fig = plt.figure(figsize=(8, 2.2))
     ax = fig.add_subplot(111)
     ax.set_aspect('equal', adjustable='box')  # Keep circles circular
     ax.axis('off')
@@ -508,9 +509,6 @@ class SimpleNeuralNetworkBase(MatrixQuestion, abc.ABC):
       if show_activations and self.a1 is not None:
         ax.text(hidden_x, y - r - 0.15, f'{self.a1[i]:.2f}', fontsize=8, ha='center', va='top')
 
-    ax.text(hidden_x, min(hidden_y) - 0.45, 'Hidden layer (ReLU)',
-            fontsize=9, ha='center', va='center', color='#12355b')
-
     # Output node
     y = output_y[0]
     circle = plt.Circle((output_x, y), r, facecolor='lightblue',
@@ -609,25 +607,20 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
       f"calculate the forward pass for the given input values."
     ]))
 
-    body.add_element(ca.Paragraph([
+    body.add_element(ca.OnlyHtml([ca.Paragraph([
       "Use full calculator precision for intermediate calculations and round each submitted answer to four decimal places."
-    ]))
+    ])]))
 
     # Network diagram
     body.add_element(
       ca.Picture(
         img_data=self._generate_network_diagram(show_weights=True, show_activations=False),
-        caption=f"Neural network architecture"
+        caption=None
       )
     )
 
     # Network parameters table
     body.add_element(self._generate_parameter_table(include_activations=False))
-
-    # Activation function
-    body.add_element(ca.Paragraph([
-      "**Hidden layer activation:** ReLU"
-    ]))
 
     for i in range(self.num_hidden):
       answers.append(ca.AnswerTypes.Float(float(self.a1[i]), label=f"h_{i + 1}"))
@@ -779,27 +772,12 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
     body.add_element(
       ca.Picture(
         img_data=self._generate_network_diagram(show_weights=True, show_activations=False),
-        caption=f"Neural network architecture"
+        caption=None
       )
     )
 
     # Network parameters and forward pass results table
     body.add_element(self._generate_parameter_table(include_activations=True, include_training_context=True))
-
-    # Activation function
-    body.add_element(ca.Paragraph([
-      f"**Hidden layer activation:** {self._get_activation_name()}"
-    ]))
-
-    body.add_element(ca.Paragraph([
-      "Use binary cross-entropy for the loss: ",
-      ca.Equation(r"L = -[y\log(\hat{y}) + (1-y)\log(1-\hat{y})]", inline=True),
-      "."
-    ]))
-
-    body.add_element(ca.Paragraph([
-      "**Calculate the following gradients:**"
-    ]))
 
     for i in range(self.num_hidden):
       answers.append(ca.AnswerTypes.Float(
@@ -813,7 +791,28 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
         label=f"∂L/∂w_1{j + 1}"
       ))
 
-    body.add_element(ca.AnswerBlock(answers))
+    body.add_element(cls.create_answer_table(
+      headers=["Gradient", "Value"],
+      data_rows=[
+        {
+          "Gradient": ca.Equation(r"\frac{\partial L}{\partial w_3}", inline=True),
+          "Value": answers[0],
+        },
+        {
+          "Gradient": ca.Equation(r"\frac{\partial L}{\partial w_4}", inline=True),
+          "Value": answers[1],
+        },
+        {
+          "Gradient": ca.Equation(r"\frac{\partial L}{\partial w_{11}}", inline=True),
+          "Value": answers[2],
+        },
+        {
+          "Gradient": ca.Equation(r"\frac{\partial L}{\partial w_{12}}", inline=True),
+          "Value": answers[3],
+        },
+      ],
+      answer_columns=["Value"],
+    ))
 
     return body, answers
 
@@ -987,65 +986,49 @@ class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
     )
 
   def _generate_parameter_table(self):
-    """Show scalar edge weights alongside the two-logit forward pass."""
-    left_data = [["Symbol", "Value"]]
+    """Show compact, task-relevant weights and completed forward-pass values."""
+    input_hidden_data = [["Symbol", "Value"]]
     for i in range(self.num_inputs):
-      left_data.append([ca.Equation(f"x_{i+1}", inline=True), f"{self.X[i]:.1f}"])
+      input_hidden_data.append([ca.Equation(f"x_{i+1}", inline=True), f"{self.X[i]:.1f}"])
     for hidden_idx in range(self.num_hidden):
       for input_idx in range(self.num_inputs):
-        left_data.append([
+        input_hidden_data.append([
           ca.Equation(f"w^{{(1)}}_{{{hidden_idx+1},{input_idx+1}}}", inline=True),
           f"{self.W1[hidden_idx, input_idx]:.{self.param_digits}f}"
         ])
+
+    hidden_output_data = [["Symbol", "Value"]]
     for output_idx in range(2):
       for hidden_idx in range(self.num_hidden):
-        left_data.append([
+        hidden_output_data.append([
           ca.Equation(f"w^{{(2)}}_{{{output_idx+1},{hidden_idx+1}}}", inline=True),
           f"{self.W2[output_idx, hidden_idx]:.{self.param_digits}f}"
         ])
 
-    right_data = [["Symbol", "Value"]]
     for hidden_idx in range(self.num_hidden):
-      right_data.append([
-        ca.Equation(f"b^{{(1)}}_{hidden_idx+1}", inline=True),
-        f"{self.b1[hidden_idx]:.{self.param_digits}f}"
-      ])
-    for output_idx in range(2):
-      right_data.append([
-        ca.Equation(f"b^{{(2)}}_{output_idx+1}", inline=True),
-        f"{self.b2[output_idx]:.{self.param_digits}f}"
-      ])
-    for hidden_idx in range(self.num_hidden):
-      right_data.append([
-        ca.Equation(f"h_{{pre,{hidden_idx+1}}}", inline=True),
-        f"{self.z1[hidden_idx]:.4f}"
-      ])
-      right_data.append([
+      hidden_output_data.append([
         ca.Equation(f"h_{hidden_idx+1}", inline=True),
         f"{self.a1[hidden_idx]:.4f}"
       ])
+
     for output_idx in range(2):
-      right_data.append([
-        ca.Equation(f"o_{output_idx+1}", inline=True),
-        f"{self.z2[output_idx]:.4f}"
-      ])
-      right_data.append([
+      hidden_output_data.append([
         ca.Equation(f"\\hat{{y}}_{output_idx+1}", inline=True),
         f"{self.a2[output_idx]:.4f}"
       ])
     target_str = ", ".join(str(int(value)) for value in self.y_one_hot)
-    right_data.append([ca.Equation("y", inline=True), f"[{target_str}]"])
-    right_data.append([ca.Equation("L", inline=True), f"{self.loss:.4f}"])
+    hidden_output_data.append([ca.Equation("y", inline=True), f"[{target_str}]"])
+    hidden_output_data.append([ca.Equation("L", inline=True), f"{self.loss:.4f}"])
 
     table_group = ca.TableGroup()
-    table_group.add_table(ca.Table(data=left_data))
-    table_group.add_table(ca.Table(data=right_data))
+    table_group.add_table(ca.Table(data=input_hidden_data))
+    table_group.add_table(ca.Table(data=hidden_output_data))
     return table_group
 
   def _generate_network_diagram(self):
     """Draw a two-logit network with individually labeled output edges."""
     # Keep the image compact enough that Canvas does not downscale its labels.
-    fig = plt.figure(figsize=(8, 2.75))
+    fig = plt.figure(figsize=(7, 2.35))
     ax = fig.add_subplot(111)
     ax.set_aspect('equal', adjustable='box')
     ax.axis('off')
@@ -1083,9 +1066,6 @@ class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
       ax.add_patch(plt.Circle((output_x, y), radius, facecolor='lightblue', edgecolor='black', linewidth=1.5, zorder=10))
       ax.text(output_x, y, f'$o_{{{output_idx+1}}}$', fontsize=9, ha='center', va='center', zorder=11)
 
-    ax.text(hidden_x, 0.25, 'Hidden layer (ReLU)', fontsize=8, ha='center', color='#12355b')
-    ax.text(output_x, 1.65, 'Output logits', fontsize=8, ha='center', color='#12355b')
-
     buffer = io.BytesIO()
     plt.savefig(buffer, format='png', dpi=150, bbox_inches='tight', facecolor='white', edgecolor='none', pad_inches=0.0)
     plt.close(fig)
@@ -1099,17 +1079,10 @@ class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
     answers = []
     body.add_element(ca.Paragraph([
       "Given the two-class neural network below, the hidden layer uses ReLU and the two output logits use softmax. "
-      "A completed forward pass is shown. Compute the requested individual weight gradients using backpropagation."
+      "A completed forward pass is shown. Compute every individual weight gradient using backpropagation."
     ]))
-    body.add_element(ca.Picture(img_data=self._generate_network_diagram(), caption="Two-logit softmax classifier"))
+    body.add_element(ca.Picture(img_data=self._generate_network_diagram()))
     body.add_element(self._generate_parameter_table())
-    body.add_element(ca.Paragraph([
-      "The table gives the cross-entropy loss for this completed forward pass. "
-      "You do not need to recompute the loss; use the shown predictions and target to backpropagate its gradients."
-    ]))
-    body.add_element(ca.Paragraph([
-      "**Calculate the gradient for every weight in the network.**"
-    ]))
     for output_idx in range(2):
       for hidden_idx in range(self.num_hidden):
         answers.append(ca.AnswerTypes.Float(
@@ -1122,7 +1095,28 @@ class TwoClassSoftmaxBackpropQuestion(SimpleNeuralNetworkBase):
           self._compute_gradient_W1(hidden_idx, input_idx),
           label=f"∂L/∂w⁽¹⁾{hidden_idx+1}{input_idx+1}"
         ))
-    body.add_element(ca.AnswerBlock(answers))
+    body.add_element(cls.create_answer_table(
+      headers=["W² gradient", "Value 2", "W¹ gradient", "Value 1"],
+      data_rows=[
+        {"W² gradient": ca.Equation(r"\frac{\partial L}{\partial w^{(2)}_{11}}", inline=True),
+         "Value 2": answers[0],
+         "W¹ gradient": ca.Equation(r"\frac{\partial L}{\partial w^{(1)}_{11}}", inline=True),
+         "Value 1": answers[4]},
+        {"W² gradient": ca.Equation(r"\frac{\partial L}{\partial w^{(2)}_{12}}", inline=True),
+         "Value 2": answers[1],
+         "W¹ gradient": ca.Equation(r"\frac{\partial L}{\partial w^{(1)}_{12}}", inline=True),
+         "Value 1": answers[5]},
+        {"W² gradient": ca.Equation(r"\frac{\partial L}{\partial w^{(2)}_{21}}", inline=True),
+         "Value 2": answers[2],
+         "W¹ gradient": ca.Equation(r"\frac{\partial L}{\partial w^{(1)}_{21}}", inline=True),
+         "Value 1": answers[6]},
+        {"W² gradient": ca.Equation(r"\frac{\partial L}{\partial w^{(2)}_{22}}", inline=True),
+         "Value 2": answers[3],
+         "W¹ gradient": ca.Equation(r"\frac{\partial L}{\partial w^{(1)}_{22}}", inline=True),
+         "Value 1": answers[7]},
+      ],
+      answer_columns=["Value 1", "Value 2"],
+    ))
     return body, answers
 
   @classmethod
@@ -1369,9 +1363,9 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       f"backpropagation, and updates to the specified weights only (not biases)."
     ]))
 
-    body.add_element(ca.Paragraph([
+    body.add_element(ca.OnlyHtml([ca.Paragraph([
       "Use full calculator precision for intermediate calculations and round each submitted answer to four decimal places."
-    ]))
+    ])]))
 
     # Network diagram
     body.add_element(
@@ -1380,52 +1374,48 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
       )
     )
 
-    # Training parameters
-    body.add_element(ca.Paragraph([
-      "**Training parameters:**"
-    ]))
-
-    body.add_element(ca.Paragraph([
-      "Input: ",
-      ca.Equation(f"x_1 = {self.X[0]:.1f}", inline=True),
-      ", ",
-      ca.Equation(f"x_2 = {self.X[1]:.1f}", inline=True)
-    ]))
-
-    body.add_element(ca.Paragraph([
-      "Target: ",
-      ca.Equation(f"y = {int(self.y_target)}", inline=True)
-    ]))
-
-    body.add_element(ca.Paragraph([
-      "Learning rate: ",
-      ca.Equation(f"\\alpha = {self.learning_rate}", inline=True)
-    ]))
-
-    body.add_element(ca.Paragraph([
-      f"**Hidden layer activation:** {self._get_activation_name()}"
-    ]))
+    body.add_element(ca.Table(
+      data=[[
+        "Input", ca.Equation(f"({self.X[0]:.1f}, {self.X[1]:.1f})", inline=True),
+        "Target", ca.Equation(f"y = {int(self.y_target)}", inline=True),
+      ], [
+        "Learning rate", ca.Equation(f"\\alpha = {self.learning_rate}", inline=True),
+        "Hidden activation", self._get_activation_name(),
+      ]],
+      alignments=["left", "center", "left", "center"],
+    ))
 
     # Network parameters table
     body.add_element(self._generate_parameter_table(include_activations=False))
 
     answers.append(ca.AnswerTypes.Float(
       float(self.a2[0]),
-      label="1. Forward Pass - Network output ŷ"
+      label="1. ŷ"
     ))
-    answers.append(ca.AnswerTypes.Float(float(self.loss), label="2. Loss"))
+    answers.append(ca.AnswerTypes.Float(float(self.loss), label="2. L"))
     answers.append(ca.AnswerTypes.Float(
       self._compute_gradient_W2(0),
-      label="3. Gradient ∂L/∂w₃"
+      label="3. ∂L/∂w₃"
     ))
     answers.append(ca.AnswerTypes.Float(
       self._compute_gradient_W1(0, 0),
-      label="4. Gradient ∂L/∂w₁₁"
+      label="4. ∂L/∂w₁₁"
     ))
-    answers.append(ca.AnswerTypes.Float(float(self.new_W2[0, 0]), label="5. Updated w₃:"))
-    answers.append(ca.AnswerTypes.Float(float(self.new_W1[0, 0]), label="6. Updated w₁₁:"))
+    answers.append(ca.AnswerTypes.Float(float(self.new_W2[0, 0]), label="5. w₃ new"))
+    answers.append(ca.AnswerTypes.Float(float(self.new_W1[0, 0]), label="6. w₁₁ new"))
 
-    body.add_element(ca.AnswerBlock(answers))
+    body.add_element(cls.create_answer_table(
+      headers=["Item 1", "Value 1", "Item 2", "Value 2"],
+      data_rows=[
+        {"Item 1": ca.Equation(r"\hat{y}", inline=True), "Value 1": answers[0],
+         "Item 2": ca.Equation("L", inline=True), "Value 2": answers[1]},
+        {"Item 1": ca.Equation(r"\frac{\partial L}{\partial w_3}", inline=True), "Value 1": answers[2],
+         "Item 2": ca.Equation(r"\frac{\partial L}{\partial w_{11}}", inline=True), "Value 2": answers[3]},
+        {"Item 1": ca.Equation(r"w_3^{new}", inline=True), "Value 1": answers[4],
+         "Item 2": ca.Equation(r"w_{11}^{new}", inline=True), "Value 2": answers[5]},
+      ],
+      answer_columns=["Value 1", "Value 2"],
+    ))
 
     return body, answers
 

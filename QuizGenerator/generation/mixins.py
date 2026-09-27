@@ -69,13 +69,20 @@ class TableQuestionMixin:
     """
     answer_columns = answer_columns or []
     
-    def format_cell(row_data: dict[str, Any], column: str) -> Union[str, ca.Answer]:
+    def format_cell(row_data: dict[str, Any], column: str) -> Union[str, ca.Element]:
       """Format a cell based on whether it should be an answer or plain data"""
       value = row_data.get(column, "")
 
       # If this column should contain answers and the value is an Answer object
       # Answer extends ca.Leaf, so it can be used directly
       if column in answer_columns and isinstance(value, ca.Answer):
+        return value
+
+      # Preserve equations, pictures, and other content-AST elements so their
+      # renderer can target the selected output format.  Converting an
+      # Equation to str() here produces LaTeX text and bypasses Typst's math
+      # conversion.
+      if isinstance(value, ca.Element):
         return value
 
       # Otherwise return as plain data
