@@ -1,3 +1,5 @@
+import shutil
+
 import pytest
 
 import QuizGenerator.generation.contentast as ca
@@ -52,6 +54,16 @@ questions:
 def test_typst_compile_with_reserve_height(tmp_path, monkeypatch):
     if not check_typst_available():
         pytest.skip("Typst not available")
+
+    # The Snap build can report its version but cannot read pytest's host
+    # temporary directories under /tmp.  Production generation writes its
+    # Typst source inside the workspace for this reason; this isolated test
+    # intentionally changes into tmp_path, so it cannot exercise compilation
+    # with that confined binary.  CI installs Typst's standalone binary and
+    # runs this test normally.
+    typst_path = shutil.which("typst")
+    if typst_path and typst_path.startswith("/snap/"):
+        pytest.skip("Snap Typst cannot compile files from pytest temporary directories")
 
     monkeypatch.chdir(tmp_path)
     q = _ReserveHeightQuestion(name="R", points_value=1.0)
