@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import abc
 import logging
+import math
 
 import sympy as sp
 
@@ -121,7 +122,7 @@ class DerivativeQuestion(Question, abc.ABC):
       ca.OnlyLatex([
         ca.Paragraph([
           ca.Equation(
-            f"\\left. \\nabla f \\right|_{{{eval_point_str}}} = ",
+            f"\\nabla f|_{{{eval_point_str}}} = ",
             inline=True
           )
         ])
@@ -136,7 +137,7 @@ class DerivativeQuestion(Question, abc.ABC):
         ca.OnlyHtml([
           ca.Paragraph([
             ca.Equation(
-              f"\\left. {cls._format_partial_derivative(i, context.num_variables)} \\right|_{{{eval_point_str}}} = ",
+              f"{cls._format_partial_derivative(i, context.num_variables)}|_{{{eval_point_str}}} = ",
               inline=True
             ),
             answer
@@ -225,6 +226,8 @@ class DerivativeBasic(DerivativeQuestion):
 class DerivativeChain(DerivativeQuestion):
   """Chain rule derivative calculation using function composition."""
 
+  MAX_ABS_GRADIENT = 100.0
+
   @classmethod
   def _build_context(cls, *, rng_seed=None, **kwargs):
     context = super()._build_context(rng_seed=rng_seed, **kwargs)
@@ -254,6 +257,25 @@ class DerivativeChain(DerivativeQuestion):
           # If we've exhausted attempts or different error, re-raise
           raise
     return context
+
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    """Keep chain-rule arithmetic finite, nontrivial, and hand-calculable."""
+    substitutions = dict(zip(context.variables, context.evaluation_point))
+    try:
+      gradient_values = [
+        float(partial.subs(substitutions))
+        for partial in context.gradient_function
+      ]
+    except (TypeError, ValueError):
+      return False
+
+    return (
+      super().is_interesting_ctx(context)
+      and all(math.isfinite(value) for value in gradient_values)
+      and any(abs(value) > 1e-10 for value in gradient_values)
+      and all(abs(value) <= cls.MAX_ABS_GRADIENT for value in gradient_values)
+    )
 
   @staticmethod
   def _generate_composed_function(context) -> None:

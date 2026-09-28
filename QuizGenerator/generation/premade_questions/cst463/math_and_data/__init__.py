@@ -1,6 +1,7 @@
 from .matrix_questions import (
   MatrixAddition,
   MatrixMultiplication,
+  MatrixMultiplicationCompatibility,
   MatrixScalarMultiplication,
 )
 from .vector_questions import (
@@ -14,6 +15,7 @@ __all__ = [
   "MatrixAddition",
   "MatrixScalarMultiplication",
   "MatrixMultiplication",
+  "MatrixMultiplicationCompatibility",
   "VectorAddition",
   "VectorScalarMultiplication",
   "VectorDotProduct",

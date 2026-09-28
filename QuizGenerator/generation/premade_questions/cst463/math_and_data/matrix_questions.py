@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import logging
-import random
 
 import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
@@ -9,52 +8,44 @@ log = logging.getLogger(__name__)
 
 
 class MatrixMathQuestion(Question):
-    """
-    Base class for matrix mathematics questions with multipart support.
+  """Base class for configurable matrix mathematics questions."""
 
-    NOTE: This class demonstrates proper content AST usage patterns.
-    When implementing similar question types (vectors, equations, etc.),
-    follow these patterns for consistent formatting across output formats.
+  def __init__(self, *args, **kwargs):
+    kwargs["topic"] = kwargs.get("topic", Question.Topic.MATH)
+    super().__init__(*args, **kwargs)
 
-    Key patterns demonstrated:
-    - ca.Matrix for mathematical matrices
-    - ca.Equation.make_block_equation__multiline_equals for step-by-step solutions
-    - ca.OnlyHtml for Canvas-specific content
-    - ca.Answer.integer for numerical answers
-    """
-    def __init__(self, *args, **kwargs):
-        kwargs["topic"] = kwargs.get("topic", Question.Topic.MATH)
-        super().__init__(*args, **kwargs)
+  @staticmethod
+  def _generate_matrix(rng, rows, cols, min_val=1, max_val=9):
+    """Generate a matrix with random integer values."""
+    return [[rng.randint(min_val, max_val) for _ in range(cols)] for _ in range(rows)]
 
-    @staticmethod
-    def _generate_matrix(rng, rows, cols, min_val=1, max_val=9):
-        """Generate a matrix with random integer values."""
-        return [[rng.randint(min_val, max_val) for _ in range(cols)] for _ in range(rows)]
+  @classmethod
+  def _build_matrix_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    min_size = kwargs.get("min_size", cls.MIN_SIZE)
+    max_size = kwargs.get("max_size", cls.MAX_SIZE)
+    if min_size < 1 or max_size < min_size:
+      raise ValueError("min_size and max_size must describe a positive size range")
+    return context, min_size, max_size
 
-    @staticmethod
-    def _matrix_to_table(matrix, prefix=""):
-        """Convert a matrix to content AST table format."""
-        return [[f"{prefix}{matrix[i][j]}" for j in range(len(matrix[0]))] for i in range(len(matrix))]
+  @staticmethod
+  def _matrix_to_table(matrix, prefix=""):
+    """Convert a matrix to content AST table format."""
+    return [[f"{prefix}{matrix[i][j]}" for j in range(len(matrix[0]))] for i in range(len(matrix))]
 
-    @staticmethod
-    def _create_answer_table(answer_matrix):
-        """Create a table with answer blanks for matrix results.
-
-        Returns:
-            Tuple of (table, answers_list)
-        """
-        table_data = []
-        answers = []
-        for row in answer_matrix:
-            table_row = []
-            for ans in row:
-                table_row.append(ans)
-                if isinstance(ans, ca.Answer):
-                    answers.append(ans)
-            table_data.append(table_row)
-        return ca.Table(data=table_data, padding=True), answers
-
-    # Abstract methods retained for compatibility; subclasses handle build directly.
+  @staticmethod
+  def _create_answer_table(answer_matrix):
+    """Create a Canvas answer table while preserving PDF workspace."""
+    table_data = []
+    answers = []
+    for row in answer_matrix:
+      table_row = []
+      for ans in row:
+        table_row.append(ans)
+        if isinstance(ans, ca.Answer):
+          answers.append(ans)
+      table_data.append(table_row)
+    return ca.Table(data=table_data, padding=True), answers
 
 
 @QuestionRegistry.register()
@@ -65,26 +56,28 @@ class MatrixAddition(MatrixMathQuestion):
 
     @classmethod
     def _build_context(cls, *, rng_seed=None, **kwargs):
-        rng = random.Random(rng_seed)
-        num_subquestions = kwargs.get("num_subquestions", 1)
-        if num_subquestions > 1:
-            raise NotImplementedError("Multipart not supported")
+      context, min_size, max_size = cls._build_matrix_context(
+        rng_seed=rng_seed,
+        **kwargs,
+      )
+      rows = kwargs.get("rows", context.rng.randint(min_size, max_size))
+      cols = kwargs.get("cols", context.rng.randint(min_size, max_size))
+      if not min_size <= rows <= max_size or not min_size <= cols <= max_size:
+        raise ValueError("rows and cols must be within min_size and max_size")
 
-        rows = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-        cols = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-
-        matrix_a = cls._generate_matrix(rng, rows, cols)
-        matrix_b = cls._generate_matrix(rng, rows, cols)
-        result = [[matrix_a[i][j] + matrix_b[i][j] for j in range(cols)] for i in range(rows)]
-
-        return {
-            "rows": rows,
-            "cols": cols,
-            "matrix_a": matrix_a,
-            "matrix_b": matrix_b,
-            "result": result,
-            "num_subquestions": num_subquestions,
-        }
+      min_value = kwargs.get("min_value", 1)
+      max_value = kwargs.get("max_value", 9)
+      matrix_a = cls._generate_matrix(context.rng, rows, cols, min_value, max_value)
+      matrix_b = cls._generate_matrix(context.rng, rows, cols, min_value, max_value)
+      context["rows"] = rows
+      context["cols"] = cols
+      context["matrix_a"] = matrix_a
+      context["matrix_b"] = matrix_b
+      context["result"] = [
+        [matrix_a[i][j] + matrix_b[i][j] for j in range(cols)]
+        for i in range(rows)
+      ]
+      return context
 
     @classmethod
     def _build_body(cls, context):
@@ -169,25 +162,36 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
 
     @classmethod
     def _build_context(cls, *, rng_seed=None, **kwargs):
-        rng = random.Random(rng_seed)
-        num_subquestions = kwargs.get("num_subquestions", 1)
-        if num_subquestions > 1:
-            raise NotImplementedError("Multipart not supported")
+      context, min_size, max_size = cls._build_matrix_context(
+        rng_seed=rng_seed,
+        **kwargs,
+      )
+      rows = kwargs.get("rows", context.rng.randint(min_size, max_size))
+      cols = kwargs.get("cols", context.rng.randint(min_size, max_size))
+      if not min_size <= rows <= max_size or not min_size <= cols <= max_size:
+        raise ValueError("rows and cols must be within min_size and max_size")
 
-        rows = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-        cols = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-        matrix = cls._generate_matrix(rng, rows, cols)
-        scalar = cls._generate_scalar(rng, cls.MIN_SCALAR, cls.MAX_SCALAR)
-        result = [[scalar * matrix[i][j] for j in range(cols)] for i in range(rows)]
+      min_value = kwargs.get("min_value", 1)
+      max_value = kwargs.get("max_value", 9)
+      min_scalar = kwargs.get("min_scalar", cls.MIN_SCALAR)
+      max_scalar = kwargs.get("max_scalar", cls.MAX_SCALAR)
+      if min_scalar > max_scalar:
+        raise ValueError("min_scalar must not exceed max_scalar")
 
-        return {
-            "rows": rows,
-            "cols": cols,
-            "matrix": matrix,
-            "scalar": scalar,
-            "result": result,
-            "num_subquestions": num_subquestions,
-        }
+      matrix = cls._generate_matrix(context.rng, rows, cols, min_value, max_value)
+      scalar = kwargs.get(
+        "scalar",
+        cls._generate_scalar(context.rng, min_scalar, max_scalar),
+      )
+      context["rows"] = rows
+      context["cols"] = cols
+      context["matrix"] = matrix
+      context["scalar"] = scalar
+      context["result"] = [
+        [scalar * matrix[i][j] for j in range(cols)]
+        for i in range(rows)
+      ]
+      return context
 
     @classmethod
     def _build_body(cls, context):
@@ -252,160 +256,143 @@ class MatrixScalarMultiplication(MatrixMathQuestion):
 
 @QuestionRegistry.register()
 class MatrixMultiplication(MatrixMathQuestion):
+  """Compute a compatible matrix product of manageable size."""
 
-    MIN_SIZE = 2
-    MAX_SIZE = 4
-    PROBABILITY_OF_VALID = 0.875  # 7/8 chance of success, 1/8 chance of failure
+  MIN_SIZE = 2
+  MAX_SIZE = 3
 
-    @classmethod
-    def _build_context(cls, *, rng_seed=None, **kwargs):
-        rng = random.Random(rng_seed)
-        num_subquestions = kwargs.get("num_subquestions", 1)
-        if num_subquestions > 1:
-            raise NotImplementedError("Multipart not supported")
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context, min_size, max_size = cls._build_matrix_context(
+      rng_seed=rng_seed,
+      **kwargs,
+    )
+    rows_a = kwargs.get("rows_a", context.rng.randint(min_size, max_size))
+    cols_a = kwargs.get("cols_a", context.rng.randint(min_size, max_size))
+    rows_b = kwargs.get("rows_b", cols_a)
+    cols_b = kwargs.get("cols_b", context.rng.randint(min_size, max_size))
+    if cols_a != rows_b:
+      raise ValueError("MatrixMultiplication requires cols_a to equal rows_b")
+    if not all(min_size <= size <= max_size for size in (rows_a, cols_a, rows_b, cols_b)):
+      raise ValueError("matrix dimensions must be within min_size and max_size")
 
-        should_be_valid = rng.choices(
-            [True, False],
-            weights=[cls.PROBABILITY_OF_VALID, 1 - cls.PROBABILITY_OF_VALID],
-            k=1,
-        )[0]
+    min_value = kwargs.get("min_value", 1)
+    max_value = kwargs.get("max_value", 9)
+    matrix_a = cls._generate_matrix(context.rng, rows_a, cols_a, min_value, max_value)
+    matrix_b = cls._generate_matrix(context.rng, rows_b, cols_b, min_value, max_value)
+    context["rows_a"] = rows_a
+    context["cols_a"] = cols_a
+    context["rows_b"] = rows_b
+    context["cols_b"] = cols_b
+    context["matrix_a"] = matrix_a
+    context["matrix_b"] = matrix_b
+    context["result"] = [
+      [sum(matrix_a[i][k] * matrix_b[k][j] for k in range(cols_a))
+       for j in range(cols_b)]
+      for i in range(rows_a)
+    ]
+    return context
 
-        if should_be_valid:
-            rows_a = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-            cols_a = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-            rows_b = cols_a
-            cols_b = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-        else:
-            rows_a = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-            cols_a = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-            rows_b = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-            cols_b = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
-            while cols_a == rows_b:
-                rows_b = rng.randint(cls.MIN_SIZE, cls.MAX_SIZE)
+  @classmethod
+  def _build_body(cls, context):
+    body = ca.Section()
+    body.add_element(ca.Paragraph(["Compute the matrix product."]))
+    body.add_element(ca.MathExpression([
+      ca.Matrix(data=context["matrix_a"], bracket_type="b"),
+      r" \cdot ",
+      ca.Matrix(data=context["matrix_b"], bracket_type="b"),
+      " = ",
+    ]))
+    answer_matrix = [
+      [ca.AnswerTypes.Int(value) for value in row]
+      for row in context["result"]
+    ]
+    table, answers = cls._create_answer_table(answer_matrix)
+    body.add_element(ca.OnlyHtml([ca.Paragraph(["Result matrix:"]), table]))
+    return body, answers
 
-        multiplication_possible = (cols_a == rows_b)
-
-        matrix_a = cls._generate_matrix(rng, rows_a, cols_a)
-        matrix_b = cls._generate_matrix(rng, rows_b, cols_b)
-        max_dim = max(rows_a, cols_a, rows_b, cols_b)
-
-        result = None
-        result_rows = None
-        result_cols = None
-        if multiplication_possible:
-            result = [[sum(matrix_a[i][k] * matrix_b[k][j] for k in range(cols_a))
-                      for j in range(cols_b)] for i in range(rows_a)]
-            result_rows = rows_a
-            result_cols = cols_b
-
-        return {
-            "rows_a": rows_a,
-            "cols_a": cols_a,
-            "rows_b": rows_b,
-            "cols_b": cols_b,
-            "matrix_a": matrix_a,
-            "matrix_b": matrix_b,
-            "multiplication_possible": multiplication_possible,
-            "result": result,
-            "result_rows": result_rows,
-            "result_cols": result_cols,
-            "max_dim": max_dim,
-            "num_subquestions": num_subquestions,
-        }
-
-    @classmethod
-    def _build_body(cls, context):
-        body = ca.Section()
-        body.add_element(ca.Paragraph(["Calculate the following:"]))
-
-        matrix_a_elem = ca.Matrix(data=context["matrix_a"], bracket_type="b")
-        matrix_b_elem = ca.Matrix(data=context["matrix_b"], bracket_type="b")
-        body.add_element(ca.MathExpression([matrix_a_elem, r" \cdot ", matrix_b_elem, " = "]))
-
-        if context["result"] is not None:
-            rows_ans = ca.AnswerTypes.Int(context["result_rows"], label="Number of rows in result")
-            cols_ans = ca.AnswerTypes.Int(context["result_cols"], label="Number of columns in result")
-        else:
-            rows_ans = ca.AnswerTypes.String("-", label="Number of rows in result")
-            cols_ans = ca.AnswerTypes.String("-", label="Number of columns in result")
-
-        answers = [rows_ans, cols_ans]
-        body.add_element(
-            ca.OnlyHtml([
-                ca.AnswerBlock([rows_ans, cols_ans])
-            ])
+  @classmethod
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
+    explanation = ca.Section()
+    explanation.add_element(ca.Paragraph([
+      f"The {context['cols_a']} columns of the first matrix match the "
+      f"{context['rows_b']} rows of the second matrix. Each result entry is "
+      "the dot product of a row of the first matrix and a column of the second."
+    ]))
+    for row_index in range(context["rows_a"]):
+      for col_index in range(context["cols_b"]):
+        terms = " + ".join(
+          f"{context['matrix_a'][row_index][k]} \\cdot "
+          f"{context['matrix_b'][k][col_index]}"
+          for k in range(context["cols_a"])
         )
+        explanation.add_element(ca.Equation(
+          f"c_{{{row_index + 1},{col_index + 1}}} = {terms} "
+          f"= {context['result'][row_index][col_index]}",
+          inline=False,
+        ))
+    explanation.add_element(ca.Paragraph(["Final result:"]))
+    explanation.add_element(ca.Matrix(data=context["result"], bracket_type="b"))
+    return explanation, []
 
-        answer_matrix = []
-        for i in range(context["max_dim"]):
-            row = []
-            for j in range(context["max_dim"]):
-                if context["result"] is not None and i < context["result_rows"] and j < context["result_cols"]:
-                    row.append(ca.AnswerTypes.Int(context["result"][i][j]))
-                else:
-                    row.append(ca.AnswerTypes.String("-"))
-            answer_matrix.append(row)
 
-        table, table_answers = cls._create_answer_table(answer_matrix)
-        answers.extend(table_answers)
-        body.add_element(
-            ca.OnlyHtml([
-                table
-            ])
-        )
+@QuestionRegistry.register()
+class MatrixMultiplicationCompatibility(MatrixMathQuestion):
+  """Practice identifying an incompatible product before doing arithmetic."""
 
-        return body, answers
+  MIN_SIZE = 2
+  MAX_SIZE = 4
 
-    @classmethod
-    def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
-        explanation = ca.Section()
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context, min_size, max_size = cls._build_matrix_context(
+      rng_seed=rng_seed,
+      **kwargs,
+    )
+    rows_a = kwargs.get("rows_a", context.rng.randint(min_size, max_size))
+    cols_a = kwargs.get("cols_a", context.rng.randint(min_size, max_size))
+    rows_b = kwargs.get("rows_b", context.rng.randint(min_size, max_size))
+    if "rows_b" in kwargs and rows_b == cols_a:
+      raise ValueError(
+        "MatrixMultiplicationCompatibility requires cols_a to differ from rows_b"
+      )
+    while rows_b == cols_a:
+      rows_b = context.rng.randint(min_size, max_size)
+    cols_b = kwargs.get("cols_b", context.rng.randint(min_size, max_size))
+    if not all(min_size <= size <= max_size for size in (rows_a, cols_a, rows_b, cols_b)):
+      raise ValueError("matrix dimensions must be within min_size and max_size")
+    min_value = kwargs.get("min_value", 1)
+    max_value = kwargs.get("max_value", 9)
+    context["rows_a"] = rows_a
+    context["cols_a"] = cols_a
+    context["rows_b"] = rows_b
+    context["cols_b"] = cols_b
+    context["matrix_a"] = cls._generate_matrix(context.rng, rows_a, cols_a, min_value, max_value)
+    context["matrix_b"] = cls._generate_matrix(context.rng, rows_b, cols_b, min_value, max_value)
+    return context
 
-        if context["multiplication_possible"]:
-            explanation.add_element(ca.Paragraph(["Given matrices:"]))
-            matrix_a_latex = ca.Matrix.to_latex(context["matrix_a"], "b")
-            matrix_b_latex = ca.Matrix.to_latex(context["matrix_b"], "b")
-            explanation.add_element(ca.Equation(fr"A = {matrix_a_latex}, \quad B = {matrix_b_latex}"))
+  @classmethod
+  def _build_body(cls, context):
+    body = ca.Section()
+    body.add_element(ca.Paragraph([
+      "Decide whether this product is defined. Enter Yes or No, then explain "
+      "your decision."
+    ]))
+    body.add_element(ca.MathExpression([
+      ca.Matrix(data=context["matrix_a"], bracket_type="b"),
+      r" \cdot ",
+      ca.Matrix(data=context["matrix_b"], bracket_type="b"),
+    ]))
+    answer = ca.AnswerTypes.String("No", label="Is the product defined?")
+    body.add_element(ca.AnswerBlock([answer]))
+    return body, [answer]
 
-            explanation.add_element(
-                ca.Paragraph([
-                    f"Matrix multiplication is possible because the number of columns in Matrix A ({context['cols_a']}) "
-                    f"equals the number of rows in Matrix B ({context['rows_b']}). "
-                    f"The result is a {context['result_rows']}×{context['result_cols']} matrix."
-                ])
-            )
-
-            explanation.add_element(ca.Paragraph(["Step-by-step calculation:"]))
-            explanation.add_element(ca.Paragraph([
-                "Each element is calculated as the dot product of a row from Matrix A and a column from Matrix B:"
-            ]))
-
-            for i in range(min(2, context["result_rows"])):
-                for j in range(min(2, context["result_cols"])):
-                    row_a = [str(context["matrix_a"][i][k]) for k in range(context["cols_a"])]
-                    col_b = [str(context["matrix_b"][k][j]) for k in range(context["cols_a"])]
-
-                    row_latex = rf"\begin{{bmatrix}} {' & '.join(row_a)} \end{{bmatrix}}"
-                    col_entries = " \\\\ ".join(col_b)
-                    col_latex = rf"\begin{{bmatrix}} {col_entries} \end{{bmatrix}}"
-                    element_calc = " + ".join([
-                        rf"{context['matrix_a'][i][k]} \cdot {context['matrix_b'][k][j]}"
-                        for k in range(context["cols_a"])
-                    ])
-
-                    explanation.add_element(
-                        ca.Equation(
-                            rf"({i+1},{j+1}): {row_latex} \cdot {col_latex} = {element_calc} = {context['result'][i][j]}"
-                        )
-                    )
-
-            explanation.add_element(ca.Paragraph(["Final result:"]))
-            explanation.add_element(ca.Matrix(data=context["result"], bracket_type="b"))
-        else:
-            explanation.add_element(
-                ca.Paragraph([
-                    f"Matrix multiplication is not possible because the number of columns in Matrix A ({context['cols_a']}) "
-                    f"does not equal the number of rows in Matrix B ({context['rows_b']})."
-                ])
-            )
-
-        return explanation, []
+  @classmethod
+  def _build_explanation(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
+    explanation = ca.Section()
+    explanation.add_element(ca.Paragraph([
+      f"No. The first matrix has {context['cols_a']} columns, while the "
+      f"second matrix has {context['rows_b']} rows. Matrix multiplication "
+      "requires these inner dimensions to be equal."
+    ]))
+    return explanation, []

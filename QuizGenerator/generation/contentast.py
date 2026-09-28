@@ -1390,7 +1390,7 @@ class Equation(Leaf):
       # such as ``out`` and ``pre,1`` need quotes in Typst.
       if re.fullmatch(r"-?\d+(?:\.\d+)?", content) or len(content) == 1:
         return f'{prefix}({content})'
-      if re.fullmatch(r"[A-Za-z0-9_+*/().-]+", content) and any(
+      if re.fullmatch(r"[A-Za-z0-9_+*/().\-\s]+", content) and any(
           character in content for character in "+-*/()."
       ):
         return f'{prefix}({content})'
@@ -1399,6 +1399,17 @@ class Equation(Leaf):
 
     latex_str = re.sub(r'_{([^}]+)}', convert_sub_super, latex_str)
     latex_str = re.sub(r'\^{([^}]+)}', convert_sub_super, latex_str)
+
+    # SymPy writes function calls as ``f{\left(x\right)}``.  After converting
+    # nested subscripts, remove this presentation-only grouping for Typst.
+    def remove_function_grouping(match):
+      return f"{match.group(1)}({match.group(2).strip()})"
+
+    latex_str = re.sub(
+      r'([A-Za-z]+)\{\(([^{}]*)\)\}',
+      remove_function_grouping,
+      latex_str,
+    )
 
     # Convert LaTeX Greek letters to Typst syntax (remove backslash)
     greek_letters = [

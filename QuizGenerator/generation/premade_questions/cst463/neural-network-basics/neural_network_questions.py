@@ -594,6 +594,11 @@ class ForwardPassQuestion(SimpleNeuralNetworkBase):
     return context
 
   @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    """Keep at least one ReLU path active in a forward-pass exercise."""
+    return super().is_interesting_ctx(context) and np.any(context.a1 > 0)
+
+  @classmethod
   def _build_body(cls, context) -> tuple[ca.Section, list[ca.Answer]]:
     """Build question body and collect answers."""
     self = context
@@ -739,18 +744,16 @@ class BackpropGradientQuestion(SimpleNeuralNetworkBase):
 
   @classmethod
   def is_interesting_ctx(cls, context) -> bool:
-    """Reject ReLU networks whose hidden layer is entirely inactive.
-
-    When every ReLU hidden unit is inactive, every weight gradient requested by
-    this exercise is zero.  Let ``Question.instantiate`` advance the seed and
-    generate an example that actually practices the chain rule instead.
-    """
+    """Require every displayed gradient to exercise a live ReLU path."""
+    requested_gradients = [
+      *(context._compute_gradient_W2(hidden_idx)
+        for hidden_idx in range(context.num_hidden)),
+      *(context._compute_gradient_W1(0, input_idx)
+        for input_idx in range(context.num_inputs)),
+    ]
     return (
       super().is_interesting_ctx(context)
-      and not (
-        context.activation_function == cls.ACTIVATION_RELU
-        and np.all(context.a1 == 0)
-      )
+      and all(abs(gradient) > 1e-10 for gradient in requested_gradients)
     )
 
   @classmethod
@@ -1330,13 +1333,14 @@ class EndToEndTrainingQuestion(SimpleNeuralNetworkBase):
 
   @classmethod
   def is_interesting_ctx(cls, context) -> bool:
-    """Reject ReLU networks whose hidden layer is entirely inactive."""
+    """Require nonzero gradients for the two weights students update."""
+    requested_gradients = [
+      context._compute_gradient_W2(0),
+      context._compute_gradient_W1(0, 0),
+    ]
     return (
       super().is_interesting_ctx(context)
-      and not (
-        context.activation_function == cls.ACTIVATION_RELU
-        and np.all(context.a1 == 0)
-      )
+      and all(abs(gradient) > 1e-10 for gradient in requested_gradients)
     )
 
   def _compute_weight_updates(self):

@@ -2,7 +2,6 @@
 import abc
 import logging
 import math
-import random
 
 import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generation.question import Question, QuestionRegistry
@@ -42,23 +41,29 @@ class VectorMathQuestion(Question):
 
   @classmethod
   def _build_context(cls, *, rng_seed=None, **kwargs):
-    rng = random.Random(rng_seed)
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
     num_subquestions = kwargs.get("num_subquestions", 1)
     if num_subquestions > 1:
       raise NotImplementedError("Multipart not supported")
 
-    dimension = kwargs.get("dimension", rng.randint(cls.MIN_DIMENSION, cls.MAX_DIMENSION))
-    vector_a = cls._generate_vector(rng, dimension)
-    vector_b = cls._generate_vector(rng, dimension)
+    min_dimension = kwargs.get("min_dimension", cls.MIN_DIMENSION)
+    max_dimension = kwargs.get("max_dimension", cls.MAX_DIMENSION)
+    dimension = kwargs.get("dimension", context.rng.randint(min_dimension, max_dimension))
+    if not min_dimension <= dimension <= max_dimension:
+      raise ValueError("dimension must be between min_dimension and max_dimension")
+
+    min_value = kwargs.get("min_value", -10)
+    max_value = kwargs.get("max_value", 10)
+    vector_a = cls._generate_vector(context.rng, dimension, min_value, max_value)
+    vector_b = cls._generate_vector(context.rng, dimension, min_value, max_value)
     result = cls.calculate_single_result(vector_a, vector_b)
 
-    return {
-      "dimension": dimension,
-      "vector_a": vector_a,
-      "vector_b": vector_b,
-      "result": result,
-      "num_subquestions": num_subquestions,
-    }
+    context["dimension"] = dimension
+    context["vector_a"] = vector_a
+    context["vector_b"] = vector_b
+    context["result"] = result
+    context["num_subquestions"] = num_subquestions
+    return context
 
   # Abstract methods that subclasses must still implement
   @staticmethod
@@ -162,23 +167,32 @@ class VectorScalarMultiplication(VectorMathQuestion):
 
   @classmethod
   def _build_context(cls, *, rng_seed=None, **kwargs):
-    rng = random.Random(rng_seed)
+    context = super(VectorMathQuestion, cls)._build_context(
+      rng_seed=rng_seed,
+      **kwargs,
+    )
     num_subquestions = kwargs.get("num_subquestions", 1)
     if num_subquestions > 1:
       raise NotImplementedError("Multipart not supported")
 
-    dimension = kwargs.get("dimension", rng.randint(cls.MIN_DIMENSION, cls.MAX_DIMENSION))
-    vector_a = cls._generate_vector(rng, dimension)
-    scalar = cls._generate_scalar(rng)
+    min_dimension = kwargs.get("min_dimension", cls.MIN_DIMENSION)
+    max_dimension = kwargs.get("max_dimension", cls.MAX_DIMENSION)
+    dimension = kwargs.get("dimension", context.rng.randint(min_dimension, max_dimension))
+    if not min_dimension <= dimension <= max_dimension:
+      raise ValueError("dimension must be between min_dimension and max_dimension")
+
+    min_value = kwargs.get("min_value", -10)
+    max_value = kwargs.get("max_value", 10)
+    vector_a = cls._generate_vector(context.rng, dimension, min_value, max_value)
+    scalar = cls._generate_scalar(context.rng)
     result = cls.calculate_single_result(vector_a, scalar)
 
-    return {
-      "dimension": dimension,
-      "vector_a": vector_a,
-      "scalar": scalar,
-      "result": result,
-      "num_subquestions": num_subquestions,
-    }
+    context["dimension"] = dimension
+    context["vector_a"] = vector_a
+    context["scalar"] = scalar
+    context["result"] = result
+    context["num_subquestions"] = num_subquestions
+    return context
 
   @staticmethod
   def _generate_scalar(rng):

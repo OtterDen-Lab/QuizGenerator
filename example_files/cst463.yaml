@@ -40,6 +40,20 @@ questions:
 
 ---
 
+# CST463 Matrix Multiplication Compatibility Practice
+name: "(Ungraded) Matrix Multiplication Compatibility Practice"
+practice: False
+questions:
+  1:
+    MatrixMultiplicationCompatibility:
+      class: cst463.MatrixMultiplicationCompatibility
+      topic: MATH
+      spacing: 0
+      _config:
+        repeat: 5
+
+---
+
 # CST463 Vector Addition Practice
 name: "(Ungraded) Vector Addition Practice"
 practice: False
@@ -138,59 +152,6 @@ questions:
       class: cst463.DerivativeChain
       num_variables: 2
       max_degree: 2
-      topic: ML_OPTIMIZATION
-      spacing: 0
-      _config:
-        repeat: 5
-
----
-
-# CST463 Linear Loss Function Practice
-name: "(Ungraded) Linear Loss Function Practice"
-practice: False
-questions:
-  1:
-    LossQuestion_Linear:
-      class: cst463.LossQuestion_Linear
-      num_samples: 5
-      num_input_features: 2
-      num_output_vars: 1
-      vector_inputs: false
-      topic: ML_OPTIMIZATION
-      spacing: 0
-      _config:
-        repeat: 5
-
----
-
-# CST463 Logistic Loss Function Practice
-name: "(Ungraded) Logistic Loss Function Practice"
-practice: False
-questions:
-  1:
-    LossQuestion_Logistic:
-      class: cst463.LossQuestion_Logistic
-      num_samples: 5
-      num_input_features: 2
-      vector_inputs: false
-      topic: ML_OPTIMIZATION
-      spacing: 0
-      _config:
-        repeat: 5
-
----
-
-# CST463 Multiclass Logistic Loss Function Practice
-name: "(Ungraded) Multiclass Logistic Loss Function Practice"
-practice: False
-questions:
-  1:
-    LossQuestion_MulticlassLogistic:
-      class: cst463.LossQuestion_MulticlassLogistic
-      num_samples: 5
-      num_input_features: 2
-      num_classes: 3
-      vector_inputs: false
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import abc
 import logging
 import math
+import warnings
 
 import QuizGenerator.generation.contentast as ca
 from QuizGenerator.generation.mixins import BodyTemplatesMixin, TableQuestionMixin
@@ -15,13 +16,26 @@ log = logging.getLogger(__name__)
 
 
 class LossQuestion(Question, TableQuestionMixin, BodyTemplatesMixin, abc.ABC):
-  """Base class for loss function calculation questions."""
+  """Deprecated base class for legacy loss-calculation questions.
+
+  These exercises remain registered so existing YAML and QR regeneration
+  payloads continue to work, but they are not part of the active CST463
+  question set.
+  """
+
+  DEPRECATED = True
 
   DEFAULT_NUM_SAMPLES = 5
   DEFAULT_NUM_INPUT_FEATURES = 2
   DEFAULT_VECTOR_INPUTS = False
 
   def __init__(self, *args, **kwargs):
+    warnings.warn(
+      f"{type(self).__name__} is deprecated for CST463 and should not be used "
+      "in new quizzes.",
+      DeprecationWarning,
+      stacklevel=2,
+    )
     kwargs["topic"] = kwargs.get("topic", Question.Topic.ML_OPTIMIZATION)
     super().__init__(*args, **kwargs)
 

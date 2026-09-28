@@ -1,0 +1,37 @@
+
+# CST463 Optimization and Neural-Network Practice
+name: "(Ungraded) CST463 Optimization and Neural-Network Practice - $TIME"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+
+    GradientDescentWalkthrough:
+      class: cst463.GradientDescentWalkthrough
+      num_steps: 4
+      num_variables: 2
+      single_variable: false
+      topic: ML_OPTIMIZATION
+      spacing: EXTRA_PAGE
+
+    ForwardPass:
+      class: cst463.ForwardPassQuestion
+      topic: ML_OPTIMIZATION
+      spacing: EXTRA_PAGE
+
+    BackpropGradient:
+      class: cst463.BackpropGradientQuestion
+      topic: ML_OPTIMIZATION
+      spacing: EXTRA_PAGE
+
+    EndToEndTraining:
+      class: cst463.EndToEndTrainingQuestion
+      topic: ML_OPTIMIZATION
+      spacing: EXTRA_PAGE
+
+    TwoClassSoftmaxBackprop:
+      class: cst463.TwoClassSoftmaxBackpropQuestion
+      topic: ML_OPTIMIZATION
+      spacing: EXTRA_PAGE
+
