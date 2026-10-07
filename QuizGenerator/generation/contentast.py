@@ -2530,6 +2530,14 @@ class AnswerBlock(Table):
     return super().render_typst(**render_kwargs)
 
   def render_html(self, **kwargs):
+    if kwargs.get("canvas_mode"):
+      answers = [answer for row in self.data for answer in row]
+      if answers and all(
+          answer.kind == Answer.CanvasAnswerKind.MULTIPLE_ANSWER
+          for answer in answers
+      ):
+        return ""
+
     if not kwargs.get("iframe_mode"):
       return super().render_html(**kwargs)
 
@@ -2774,6 +2782,11 @@ class Answer(Leaf):
   """
 
   DEFAULT_ROUNDING_DIGITS = 4
+  # A binary floating-point calculation can land infinitesimally below a
+  # decimal rounding boundary (for example, 0.34124999999 rather than
+  # 0.34125).  When exporting a float answer, accept the adjacent rounded
+  # value if it is reachable within this small calculation-error allowance.
+  DEFAULT_ROUNDING_EPSILON = 0.00001
   DEFAULT_FLOAT_TOLERANCE = 0.01
   DEFAULT_EQUIVALENT_FRACTION_DENOMINATORS = (4, 6, 12)
 
@@ -2890,6 +2903,17 @@ class Answer(Leaf):
 
   def render_html(self, show_answers=False, can_be_numerical=False, review_mode=False, **kwargs):
     if self.pdf_only:
+      return ""
+
+    # Canvas renders multiple-choice options from the separate ``answers``
+    # payload.  Rendering this answer in the question body would otherwise
+    # expose its internal blank ID (normally a UUID) above those options.
+    # Dropdowns intentionally retain their blank ID: Canvas uses it as the
+    # placeholder that connects each dropdown to its answer choices.
+    if (
+        kwargs.get("canvas_mode")
+        and self.kind == self.CanvasAnswerKind.MULTIPLE_ANSWER
+    ):
       return ""
 
     if kwargs.get("iframe_mode"):
@@ -3098,21 +3122,30 @@ class Answer(Leaf):
       decimal_value = decimal.Decimal(value.numerator) / decimal.Decimal(value.denominator)
     else:
       decimal_value = decimal.Decimal(str(value))
-    rounded_decimal = decimal_value.quantize(q, rounding=decimal.ROUND_HALF_UP)
+    rounded_decimals = {
+      decimal_value.quantize(q, rounding=decimal.ROUND_HALF_UP),
+    }
+    if isinstance(value, (float, np.floating)):
+      epsilon = decimal.Decimal(str(Answer.DEFAULT_ROUNDING_EPSILON))
+      for adjustment in (-epsilon, epsilon):
+        rounded_decimals.add(
+          (decimal_value + adjustment).quantize(q, rounding=decimal.ROUND_HALF_UP)
+        )
 
-    # Fixed decimal form (e.g., "1.2500")
-    fixed_str = format(rounded_decimal, 'f')
-    outs.add(fixed_str)
+    for rounded_decimal in rounded_decimals:
+      # Fixed decimal form (e.g., "1.2500")
+      fixed_str = format(rounded_decimal, 'f')
+      outs.add(fixed_str)
 
-    # Trimmed decimal form (e.g., "1.25")
-    trimmed_str = fixed_str.rstrip('0').rstrip('.')
-    if trimmed_str.startswith('.'):
-      trimmed_str = '0' + trimmed_str
-    outs.add(trimmed_str)
+      # Trimmed decimal form (e.g., "1.25")
+      trimmed_str = fixed_str.rstrip('0').rstrip('.')
+      if trimmed_str.startswith('.'):
+        trimmed_str = '0' + trimmed_str
+      outs.add(trimmed_str)
 
-    # Integer form (if it's a whole number after rounding)
-    if rounded_decimal == rounded_decimal.to_integral_value():
-      outs.add(str(int(rounded_decimal)))
+      # Integer form (if it's a whole number after rounding)
+      if rounded_decimal == rounded_decimal.to_integral_value():
+        outs.add(str(int(rounded_decimal)))
 
     # Fraction form for exact rational values
     if exact_fraction is not None:

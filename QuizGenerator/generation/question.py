@@ -1274,7 +1274,8 @@ class Question(abc.ABC):
     else:
       question_html = questionAST.render(
         "html",
-        upload_func=image_upload
+        upload_func=image_upload,
+        canvas_mode=True,
       )
 
     if "explanation" in suppress_parts:

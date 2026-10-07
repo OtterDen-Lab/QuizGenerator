@@ -1,0 +1,20 @@
+name: "D2L 12.6: Momentum Check"
+description: "A short conceptual question about momentum in gradient descent."
+
+questions:
+  1:
+    "What momentum changes":
+      class: FromYaml
+      yaml_spec:
+        body:
+          - paragraph: "When we introduce momentum into gradient descent, which part of the update changes?"
+          - answer_block:
+              - answer:
+                  type: multiple_choice
+                  value: "The parameter update includes a velocity term built from past gradients."
+                  baffles:
+                    - "The loss function is replaced with a different one."
+                    - "The training data are rescaled after every batch."
+                    - "The model parameters stop being updated by gradients."
+        explanation:
+          - paragraph: "Momentum keeps a running, exponentially weighted history of gradients (a velocity) and uses it in the parameter update."

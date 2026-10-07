@@ -1,5 +1,5 @@
 # CST463 Matrix Addition Practice
-name: "(Ungraded) Matrix Addition Practice"
+name: "Matrix Addition"
 practice: False
 questions:
   1:
@@ -8,12 +8,12 @@ questions:
       topic: MATH
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Matrix Scalar Multiplication Practice
-name: "(Ungraded) Matrix Scalar Multiplication Practice"
+name: "Matrix Scalar Multiplication"
 practice: False
 questions:
   1:
@@ -22,12 +22,12 @@ questions:
       topic: MATH
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Matrix Multiplication Practice
-name: "(Ungraded) Matrix Multiplication Practice"
+name: "Matrix Multiplication"
 practice: False
 questions:
   1:
@@ -36,12 +36,12 @@ questions:
       topic: MATH
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Matrix Multiplication Compatibility Practice
-name: "(Ungraded) Matrix Multiplication Compatibility Practice"
+name: "Matrix Multiplication Compatibility"
 practice: False
 questions:
   1:
@@ -50,12 +50,12 @@ questions:
       topic: MATH
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Vector Addition Practice
-name: "(Ungraded) Vector Addition Practice"
+name: "Vector Addition"
 practice: False
 questions:
   1:
@@ -64,12 +64,12 @@ questions:
       topic: MATH
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Vector Scalar Multiplication Practice
-name: "(Ungraded) Vector Scalar Multiplication Practice"
+name: "Vector Scalar Multiplication"
 practice: False
 questions:
   1:
@@ -78,12 +78,12 @@ questions:
       topic: MATH
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Vector Dot Product Practice
-name: "(Ungraded) Vector Dot Product Practice"
+name: "Vector Dot Product"
 practice: False
 questions:
   1:
@@ -92,12 +92,12 @@ questions:
       topic: MATH
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Vector Magnitude Practice
-name: "(Ungraded) Vector Magnitude Practice"
+name: "Vector Magnitude"
 practice: False
 questions:
   1:
@@ -106,12 +106,12 @@ questions:
       topic: MATH
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Gradient Descent Walkthrough Practice
-name: "(Ungraded) Gradient Descent Walkthrough Practice"
+name: "Gradient Descent Walkthrough"
 practice: False
 questions:
   1:
@@ -123,12 +123,12 @@ questions:
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Basic Derivative Practice
-name: "(Ungraded) Basic Derivative Practice"
+name: "Basic Derivative"
 practice: False
 questions:
   1:
@@ -139,12 +139,12 @@ questions:
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Chain Rule Derivative Practice
-name: "(Ungraded) Chain Rule Derivative Practice"
+name: "Chain Rule Derivative"
 practice: False
 questions:
   1:
@@ -155,12 +155,12 @@ questions:
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Neural Network Forward Pass Practice
-name: "(Ungraded) Neural Network Forward Pass Practice"
+name: "Neural Network Forward Pass"
 practice: False
 questions:
   1:
@@ -169,12 +169,12 @@ questions:
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Neural Network Backpropagation Practice
-name: "(Ungraded) Neural Network Backpropagation Practice"
+name: "Neural Network Backpropagation"
 practice: False
 questions:
   1:
@@ -183,12 +183,12 @@ questions:
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Neural Network End-to-End Training Practice
-name: "(Ungraded) Neural Network End-to-End Training Practice"
+name: "Neural Network End-to-End Training"
 practice: False
 questions:
   1:
@@ -197,12 +197,12 @@ questions:
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
 # CST463 Two-Class Softmax Backpropagation Practice
-name: "(Ungraded) Two-Class Softmax Backpropagation Practice"
+name: "Two-Class Softmax Backpropagation"
 practice: False
 questions:
   1:
@@ -211,88 +211,18 @@ questions:
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:
-        repeat: 5
+        repeat: 1
 
 ---
 
-# CST463 CNN Weight Counting Practice
-name: "(Ungraded) CNN Weight Counting Practice"
+# CST463 Ensemble Averaging Practice
+name: "Ensemble Averaging"
 practice: False
 questions:
   1:
-    WeightCountingCNN:
-      class: cst463.WeightCounting-CNN
+    EnsembleAveraging:
+      class: cst463.EnsembleAveragingQuestion
       topic: ML_OPTIMIZATION
       spacing: 0
       _config:
-        repeat: 5
-
----
-
-# CST463 RNN Weight Counting Practice
-name: "(Ungraded) RNN Weight Counting Practice"
-practice: False
-questions:
-  1:
-    WeightCountingRNN:
-      class: cst463.WeightCounting-RNN
-      topic: ML_OPTIMIZATION
-      spacing: 0
-      _config:
-        repeat: 5
-
----
-
-# CST463 CNN Convolution Practice
-name: "(Ungraded) CNN Convolution Practice"
-practice: False
-questions:
-  1:
-    Convolution:
-      class: cst463.cnn.convolution
-      topic: ML_OPTIMIZATION
-      spacing: 0
-      _config:
-        repeat: 5
-
----
-
-# CST463 RNN Forward Pass Practice
-name: "(Ungraded) RNN Forward Pass Practice"
-practice: False
-questions:
-  1:
-    RNNForwardPass:
-      class: cst463.rnn.forward-pass
-      topic: ML_OPTIMIZATION
-      spacing: 0
-      _config:
-        repeat: 5
-
----
-
-# CST463 Attention Forward Pass Practice
-name: "(Ungraded) Attention Forward Pass Practice"
-practice: False
-questions:
-  1:
-    AttentionForwardPass:
-      class: cst463.attention.forward-pass
-      topic: ML_OPTIMIZATION
-      spacing: 0
-      _config:
-        repeat: 5
-
----
-
-# CST463 Word2Vec Skipgram Practice
-name: "(Ungraded) Word2Vec Skipgram Practice"
-practice: False
-questions:
-  1:
-    Word2VecSkipgram:
-      class: cst463.word2vec.skipgram
-      topic: ML_OPTIMIZATION
-      spacing: 0
-      _config:
-        repeat: 5
+        repeat: 1

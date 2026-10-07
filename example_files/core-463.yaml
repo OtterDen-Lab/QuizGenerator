@@ -25,13 +25,12 @@ questions:
       topic: ML_OPTIMIZATION
       spacing: EXTRA_PAGE
 
-    EndToEndTraining:
-      class: cst463.EndToEndTrainingQuestion
-      topic: ML_OPTIMIZATION
-      spacing: EXTRA_PAGE
-
     TwoClassSoftmaxBackprop:
       class: cst463.TwoClassSoftmaxBackpropQuestion
       topic: ML_OPTIMIZATION
       spacing: EXTRA_PAGE
 
+    EndToEndTraining:
+      class: cst463.EndToEndTrainingQuestion
+      topic: ML_OPTIMIZATION
+      spacing: EXTRA_PAGE
