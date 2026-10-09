@@ -2839,6 +2839,7 @@ class Answer(Leaf):
     self.variable_kind = variable_kind if variable_kind is not None else Answer.VariableKind.STR
 
     # For list values in display, show the first option (or join them with /)
+    self._display_is_explicit = display is not None
     if display is not None:
       self.display = display
     elif isinstance(value, list) and isinstance(self.variable_kind, AnswerTypes.String):
@@ -3535,7 +3536,7 @@ class AnswerTypes:
       return canvas_answers
 
     def get_display_string(self) -> str:
-      if hasattr(self, "display") and self.display is not None:
+      if getattr(self, "_display_is_explicit", False) and self.display is not None:
         return str(self.display)
       if isinstance(self.value, list):
         return " / ".join(

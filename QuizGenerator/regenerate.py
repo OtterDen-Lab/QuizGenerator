@@ -766,12 +766,12 @@ def display_answer_summary(question_data: dict[str, Any]) -> None:
     answer_objects = question_data['answer_objects']
     if isinstance(answer_objects, dict):
       for key, answer_obj in answer_objects.items():
-        print(f"  {key}: {answer_obj.value}")
+        print(f"  {key}: {_display_answer_value(answer_obj)}")
         if hasattr(answer_obj, 'tolerance') and answer_obj.tolerance:
           print(f"    (tolerance: ±{answer_obj.tolerance})")
     else:
       for i, answer_obj in enumerate(answer_objects, start=1):
-        print(f"  {i}: {answer_obj.value}")
+        print(f"  {i}: {_display_answer_value(answer_obj)}")
         if hasattr(answer_obj, 'tolerance') and answer_obj.tolerance:
           print(f"    (tolerance: ±{answer_obj.tolerance})")
   elif 'answers' in question_data:
@@ -792,6 +792,13 @@ def display_answer_summary(question_data: dict[str, Any]) -> None:
     print("HTML explanation available in result['explanation_html']")
 
   print("=" * 60)
+
+
+def _display_answer_value(answer_obj: Any) -> str:
+  """Use an answer type's normal display formatting in regeneration output."""
+  if hasattr(answer_obj, "get_display_string"):
+    return str(answer_obj.get_display_string())
+  return str(getattr(answer_obj, "value", answer_obj))
 
 
 app = typer.Typer(
