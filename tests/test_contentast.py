@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 
 import QuizGenerator.generation.contentast as ca
+from QuizGenerator.generation.review_html import render_review_html_document
 
 
 class TestText:
@@ -321,6 +322,23 @@ class TestTable:
         rendered = table.render("html")
         assert "x" in rendered
         assert "Text" in rendered
+
+    def test_standalone_html_preserves_cell_output_format(self):
+        table = ca.Table(data=[[ca.OnlyStandaloneHtml([ca.Text("Review only")])]])
+
+        assert "Review only" in table.render("standalone_html")
+        assert "Review only" not in table.render("html")
+
+
+def test_review_html_escapes_inline_mathjax_delimiters_for_javascript():
+    document = ca.Document(title="Math")
+    document.add_element(ca.Table(data=[[ca.Equation(r"x_{1}", inline=True)]]))
+
+    rendered = render_review_html_document(document)
+
+    # MathJax needs JavaScript to pass through both backslashes, rather than
+    # consuming one while parsing the delimiter strings.
+    assert "inlineMath: [['\\\\(', '\\\\)']]" in rendered
 
 
 class TestDocument:

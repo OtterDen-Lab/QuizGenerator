@@ -489,7 +489,9 @@ def render_review_html_document(
   <script>
     window.MathJax = {{
       tex: {{
-        inlineMath: [['\\(', '\\)']],
+        // JavaScript parses string escapes before MathJax sees them, so the
+        // TeX delimiters need two literal backslashes in the generated HTML.
+        inlineMath: [['\\\\(', '\\\\)']],
         displayMath: [['$$', '$$'], ['\\[', '\\]']]
       }},
       options: {{
