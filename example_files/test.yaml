@@ -23,7 +23,7 @@ questions:
 
     OneDimensionalConvolution:
       class: cst463.cnn.1d-forward-pass
-      input_channels: 2
+      input_channels: 1
       binary_filters: true
       topic: ML_OPTIMIZATION
       spacing: PAGE

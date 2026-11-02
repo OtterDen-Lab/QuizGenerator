@@ -2824,6 +2824,7 @@ class Answer(Leaf):
       pdf_only=False,
       # Rendering fields (from Answer)
       label: str = "",
+      label_math: bool = False,
       unit: str = "",
       blank_length=5,
       tolerance: float | None = None,
@@ -2855,6 +2856,7 @@ class Answer(Leaf):
 
     # Rendering fields
     self.label = label
+    self.label_math = label_math
     self.unit = unit
     self.blank_length = blank_length
 
@@ -2900,7 +2902,8 @@ class Answer(Leaf):
 
   # Rendering methods (override Leaf's defaults)
   def render_markdown(self, **kwargs):
-    return f"{self.label + (':' if len(self.label) > 0 else '')} [{self.key}] {self.unit}".strip()
+    label = f"${self.label}$" if self.label_math and self.label else self.label
+    return f"{label + (':' if len(label) > 0 else '')} [{self.key}] {self.unit}".strip()
 
   def render_html(self, show_answers=False, can_be_numerical=False, review_mode=False, **kwargs):
     if self.pdf_only:
@@ -2932,13 +2935,13 @@ class Answer(Leaf):
           accepted_answers = [str(self.value)]
 
       label = self.label.strip() if self.label else ""
-      label_text = f"{label}: " if label else ""
+      label_text = f"\\({label}\\): " if self.label_math and label else f"{label}: " if label else ""
       unit_text = f" {self.unit}" if self.unit else ""
       aria_label = label or "Answer"
       accepted_json = html.escape(json.dumps(accepted_answers), quote=True)
       return (
         "<label>"
-        f"{html.escape(label_text)}"
+        f"{label_text if self.label_math else html.escape(label_text)}"
         f"<input class=\"quizgen-answer-input\" data-accepted=\"{accepted_json}\" "
         f"data-blank-id=\"{html.escape(self.key, quote=True)}\" "
         f"aria-label=\"{html.escape(aria_label, quote=True)}\">"
@@ -2961,12 +2964,15 @@ class Answer(Leaf):
           accepted_answers = [str(self.value)]
 
       blank_width = max(18, min(80, int(self.blank_length) * 4 + 6))
-      label_text = f"{self.label}:" if self.label else ""
+      label_text = f"\\({self.label}\\):" if self.label_math and self.label else f"{self.label}:" if self.label else ""
       unit_text = f" {self.unit}" if self.unit else ""
       aria_label = self.label or "Answer"
       data_accepted = html.escape(json.dumps(accepted_answers), quote=True)
       key_attr = html.escape(self.key, quote=True)
-      label_html = f'<span class="quizgen-answer-label">{html.escape(label_text)}</span>' if label_text else ""
+      label_html = (
+        f'<span class="quizgen-answer-label">{label_text if self.label_math else html.escape(label_text)}</span>'
+        if label_text else ""
+      )
       unit_html = f'<span class="quizgen-answer-unit">{html.escape(unit_text)}</span>' if unit_text else ""
       return (
         f'<span class="quizgen-answer-field" data-blank-id="{key_attr}">'
@@ -2993,7 +2999,8 @@ class Answer(Leaf):
       return self.render_markdown(**kwargs)
 
   def render_latex(self, **kwargs):
-    return fr"{self.label + (':' if len(self.label) > 0 else '')} \answerblank{{{self.blank_length}}} {self.unit}".strip()
+    label = f"${self.label}$" if self.label_math and self.label else self.label
+    return fr"{label + (':' if len(label) > 0 else '')} \answerblank{{{self.blank_length}}} {self.unit}".strip()
 
   def render_typst(self, **kwargs):
     """Render answer blank as an underlined space in Typst."""
@@ -3010,7 +3017,10 @@ class Answer(Leaf):
       or is_answer_block
       or kwargs.get("show_answer_labels_in_table", False)
     )
-    label_part = f"{self.label}:" if self.label and show_label else ""
+    if self.label_math and self.label and show_label:
+      label_part = f"${Equation._latex_to_typst(self.label)}$:"
+    else:
+      label_part = f"{self.label}:" if self.label and show_label else ""
     unit_part = f" {self.unit}" if self.unit else ""
 
     return f"{label_part} {blank}{unit_part}".strip()

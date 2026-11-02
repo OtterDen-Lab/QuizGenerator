@@ -11,21 +11,30 @@ from QuizGenerator.generation.mixins import TableQuestionMixin
 from QuizGenerator.generation.question import Question, QuestionRegistry
 
 
-def _number(value):
-  """Format an integer or a compact decimal for an explanation."""
+def _number(value, digits=4):
+  """Format an integer or compact decimal with at most the requested places."""
   if abs(value - round(value)) < 1e-10:
     return str(int(round(value)))
-  return f"{value:.4f}"
+  return f"{value:.{digits}f}".rstrip("0").rstrip(".")
 
 
-def _inline_vector(values):
+def _inline_vector(values, digits=4):
   """Format a vector compactly without relying on matrix rendering."""
-  return "(" + ", ".join(_number(value) for value in values) + ")"
+  return "(" + ", ".join(_number(value, digits) for value in values) + ")"
 
 
 def _inline_matrix(values):
   """Format a small matrix compactly for Canvas and PDF question bodies."""
   return "[" + "; ".join(_inline_vector(row) for row in values) + "]"
+
+
+def _add_labeled_answer(section, label, answer):
+  """Add a math-rendered label followed by an answer blank."""
+  section.add_element(ca.Paragraph([
+    ca.Equation(label, inline=True),
+    ": ",
+    answer,
+  ]))
 
 
 class SequenceForwardPassQuestion(Question, TableQuestionMixin):
@@ -66,9 +75,9 @@ class Convolution1DForwardPass(SequenceForwardPassQuestion):
       raise ValueError("kernel_size cannot exceed the padded input length")
 
     inputs = np.array([
-      [context.rng.choice((0, 1)) for _ in range(input_length)]
+      [context.rng.randint(-100, 100) / 10 for _ in range(input_length)]
       for _ in range(input_channels)
-    ], dtype=int)
+    ], dtype=float)
     filter_values = (-1, 0, 1) if binary_filters else (-2, -1, 0, 1, 2)
     kernel = np.array([
       [context.rng.choice(filter_values) for _ in range(kernel_size)]
@@ -83,7 +92,7 @@ class Convolution1DForwardPass(SequenceForwardPassQuestion):
         for channel in range(input_channels)
       ) + bias
       for position in range(output_length)
-    ], dtype=int)
+    ], dtype=float)
 
     context["input_length"] = input_length
     context["kernel_size"] = kernel_size
@@ -99,61 +108,73 @@ class Convolution1DForwardPass(SequenceForwardPassQuestion):
 
   @classmethod
   def is_interesting_ctx(cls, context) -> bool:
-    return np.any(context.output != 0) and (
-      context.output.size == 1 or len(set(context.output.tolist())) > 1
+    return (
+      np.unique(context.inputs).size >= min(4, context.inputs.size)
+      and np.max(np.abs(context.inputs)) >= 2
+      and np.any(context.output != 0)
+      and (
+        context.output.size == 1 or len(set(context.output.tolist())) > 1
+      )
     )
 
   @classmethod
   def _build_body(cls, context):
     body = ca.Section()
     body.add_element(ca.Paragraph([
-      "Compute the one-dimensional convolution output. Use cross-correlation "
-      "as in the slides: do not flip the kernel."
+      "Compute the output of this one-dimensional convolution. Use "
+      "cross-correlation as in the slides, so do not flip the kernel."
     ]))
-    body.add_element(ca.Equation(
-      r"y_i = sum_c sum_a K_{c,a} x_{c, i \cdot s + a} + b",
-      inline=False,
-    ))
 
-    for channel in range(context.input_channels):
+    if context.input_channels == 1:
       body.add_element(ca.Paragraph([
-        ca.Equation(f"x_{channel + 1}", inline=True),
-        " = ",
-        _inline_vector(context.inputs[channel]),
-        "; ",
-        ca.Equation(f"K_{channel + 1}", inline=True),
-        " = ",
-        _inline_vector(context.kernel[channel]),
+        "Input sequence: ",
+        _inline_vector(context.inputs[0], digits=1),
+        ". Kernel: ",
+        _inline_vector(context.kernel[0]),
         ".",
       ]))
+    else:
+      body.add_element(ca.Paragraph([
+        "For each output position, multiply each kernel slice with its "
+        "matching input channel, then add the channel contributions."
+      ]))
+      for channel in range(context.input_channels):
+        body.add_element(ca.Paragraph([
+          f"Input channel {channel + 1}: ",
+          _inline_vector(context.inputs[channel], digits=1),
+          ". Kernel slice ",
+          f"{channel + 1}: ",
+          _inline_vector(context.kernel[channel]),
+          ".",
+        ]))
     body.add_element(ca.Paragraph([
       f"Stride: {context.stride}; padding: {context.padding}; "
       f"bias: {context.bias}."
     ]))
 
-    answers = [
-      ca.AnswerTypes.Int(value, label=f"y_{index}")
-      for index, value in enumerate(context.output)
-    ]
-    output_header = ca.Equation("y_i", inline=True)
-    rows = [
-      {"i": str(index), output_header: answer}
-      for index, answer in enumerate(answers)
-    ]
-    body.add_element(cls.create_answer_table(
-      headers=["i", output_header],
-      data_rows=rows,
-      answer_columns=[output_header],
-    ))
-    return body, answers
+    answer = ca.AnswerTypes.Vector(
+      list(context.output),
+      label="Output feature map",
+    )
+    body.add_element(ca.Paragraph([
+      "Enter the output values from left to right as one list.",
+    ]))
+    body.add_element(ca.AnswerBlock(answer))
+    return body, [answer]
 
   @classmethod
   def _build_explanation(cls, context):
     explanation = ca.Section()
     explanation.add_element(ca.Paragraph([
-      "At each position, align every kernel slice with the matching input "
-      "channel, multiply corresponding entries, then add every channel's "
-      "contribution and the bias."
+      "The filter has ",
+      str(context.kernel_size),
+      " entries, so each output value uses a consecutive window of ",
+      str(context.kernel_size),
+      " input values. For ",
+      ca.Equation("y_0", inline=True),
+      ", that window begins at the first input value. Each later output "
+      "shifts the window by the stride, then repeats the same "
+      "multiply-and-add calculation."
     ]))
     padded_inputs = np.pad(
       context.inputs,
@@ -172,6 +193,20 @@ class Convolution1DForwardPass(SequenceForwardPassQuestion):
       terms = " + ".join(f"({term})" for term in channel_terms)
       if context.include_bias:
         terms += f" + {_number(context.bias)}"
+      window_end = start + context.kernel_size - 1
+      if context.input_channels == 1:
+        window = padded_inputs[0, start:start + context.kernel_size]
+        explanation.add_element(ca.Paragraph([
+          ca.Equation(f"y_{position}", inline=True),
+          f" uses input positions {start} through {window_end}, which are ",
+          ca.Text(_inline_vector(window, digits=1), emphasis=True),
+          ".",
+        ]))
+      else:
+        explanation.add_element(ca.Paragraph([
+          ca.Equation(f"y_{position}", inline=True),
+          f" uses positions {start} through {window_end} from each input channel.",
+        ]))
       explanation.add_element(ca.Equation(
         f"y_{position} = {terms} = {_number(result)}",
         inline=False,
@@ -241,21 +276,45 @@ class MaxPoolingForwardPass(SequenceForwardPassQuestion):
       f"stride {context.stride} to this feature map."
     ]))
     body.add_element(ca.Matrix(data=context.feature_map.tolist(), bracket_type="b"))
-    answer = ca.AnswerTypes.Matrix(
-      context.output,
-      label="Pooled feature map",
-    )
     body.add_element(ca.Paragraph([
-      "Enter the resulting pooled feature map:",
+      "The pooled feature map has these entries:",
     ]))
-    body.add_element(answer)
-    return body, [answer]
+    placeholder_matrix = [
+      [rf"p_{{{row},{column}}}" for column in range(context.output.shape[1])]
+      for row in range(context.output.shape[0])
+    ]
+    body.add_element(ca.Matrix(data=placeholder_matrix, bracket_type="b"))
+    answers = [
+      ca.AnswerTypes.Int(
+        int(context.output[row, column]),
+        label="",
+      )
+      for row in range(context.output.shape[0])
+      for column in range(context.output.shape[1])
+    ]
+    for row in range(context.output.shape[0]):
+      for column in range(context.output.shape[1]):
+        answer_index = row * context.output.shape[1] + column
+        _add_labeled_answer(
+          body,
+          f"p_{{{row},{column}}}",
+          answers[answer_index],
+        )
+    return body, answers
 
   @classmethod
   def _build_explanation(cls, context):
     explanation = ca.Section()
     explanation.add_element(ca.Paragraph([
-      "Max pooling keeps the largest entry in each pooling window."
+      f"A {context.pool_size}×{context.pool_size} pooling window keeps its "
+      "largest entry. The stride says how far the window moves before "
+      "computing the next output entry: with stride ",
+      str(context.stride),
+      ", it moves ",
+      str(context.stride),
+      " cells right for the next column and ",
+      str(context.stride),
+      " cells down for the next row."
     ]))
     for row_index in range(context.output.shape[0]):
       for column_index in range(context.output.shape[1]):
@@ -265,12 +324,11 @@ class MaxPoolingForwardPass(SequenceForwardPassQuestion):
           start_row:start_row + context.pool_size,
           start_column:start_column + context.pool_size,
         ]
-        values = ", ".join(str(int(value)) for value in window.flatten())
-        explanation.add_element(ca.Equation(
-          f"p_{{{row_index},{column_index}}} = max({values}) = "
-          f"{int(context.output[row_index, column_index])}",
-          inline=False,
-        ))
+        explanation.add_element(ca.MathExpression([
+          f"p_{{{row_index},{column_index}}} = max(",
+          ca.Matrix(data=window, bracket_type="b", inline=True),
+          f") = {int(context.output[row_index, column_index])}",
+        ]))
     explanation.add_element(ca.Paragraph(["The pooled feature map is:"]))
     explanation.add_element(ca.Matrix(data=context.output.tolist(), bracket_type="b"))
     return explanation, []
@@ -281,7 +339,7 @@ class RNNStateSequenceForwardPass(SequenceForwardPassQuestion):
   """Compute every hidden state of a tanh RNN using the course notation."""
 
   DEFAULT_SEQUENCE_LENGTH = 3
-  DEFAULT_INPUT_DIM = 2
+  DEFAULT_INPUT_DIM = 1
   DEFAULT_HIDDEN_DIM = 2
   ROUND_DIGITS = 4
 
@@ -354,49 +412,37 @@ class RNNStateSequenceForwardPass(SequenceForwardPassQuestion):
     )
 
   @staticmethod
-  def _generate_rnn_diagram(sequence_length: int) -> BytesIO:
-    """Draw the unrolled recurrent cell shown in the course slides."""
+  def _generate_rnn_diagram() -> BytesIO:
+    """Draw one recurrent cell instead of an unrolled time sequence."""
     import matplotlib.pyplot as plt
 
-    figure, axis = plt.subplots(figsize=(7.2, 2.25))
+    figure, axis = plt.subplots(figsize=(5.5, 2.65))
     axis.axis("off")
-    x_positions = np.arange(sequence_length, dtype=float) * 2.25
-
-    for index, x_position in enumerate(x_positions, start=1):
-      axis.text(
-        x_position, 0, rf"$x_{index}$", ha="center", va="center",
-        fontsize=13, bbox={"boxstyle": "circle,pad=0.35", "fc": "#f5f5f5", "ec": "#555555"},
-      )
-      axis.text(
-        x_position, 1.2, rf"$h_{index}$" + "\n" + "tanh",
-        ha="center", va="center", fontsize=12,
-        bbox={"boxstyle": "round,pad=0.45", "fc": "#d8eaf7", "ec": "#3478a6"},
-      )
-      axis.annotate(
-        "", xy=(x_position, 0.91), xytext=(x_position, 0.28),
-        arrowprops={"arrowstyle": "->", "color": "#3478a6", "lw": 1.5},
-      )
-      axis.text(x_position + 0.13, 0.58, r"$W_{xh}$", fontsize=9, color="#245b80")
-      if index > 1:
-        axis.annotate(
-          "", xy=(x_position - 0.38, 1.2), xytext=(x_position - 1.87, 1.2),
-          arrowprops={"arrowstyle": "->", "color": "#9a5b18", "lw": 1.7},
-        )
-        axis.text(
-          x_position - 1.12, 1.38, r"$W_{hh}$",
-          fontsize=9, color="#7c4610", ha="center",
-        )
-
     axis.text(
-      x_positions[0] - 0.8, 1.2, r"$h_0 = 0$", fontsize=11,
-      ha="center", va="center",
+      2.7, 1.2, "RNN cell\n(tanh activation)",
+      ha="center", va="center", fontsize=11,
+      bbox={"boxstyle": "round,pad=0.6", "fc": "#d8eaf7", "ec": "#3478a6", "lw": 1.7},
     )
     axis.annotate(
-      "", xy=(x_positions[0] - 0.38, 1.2), xytext=(x_positions[0] - 0.65, 1.2),
+      "", xy=(2.05, 0.85), xytext=(0.7, 0.35),
+      arrowprops={"arrowstyle": "->", "color": "#3478a6", "lw": 1.7},
+    )
+    axis.text(0.48, 0.22, r"$x_t$", fontsize=14, ha="center", va="center")
+    axis.annotate(
+      "", xy=(2.05, 1.52), xytext=(0.7, 1.92),
       arrowprops={"arrowstyle": "->", "color": "#9a5b18", "lw": 1.7},
     )
-    axis.set_xlim(x_positions[0] - 1.15, x_positions[-1] + 1.1)
-    axis.set_ylim(-0.55, 1.85)
+    axis.text(0.42, 2.03, r"$h_{t-1}$", fontsize=14, ha="center", va="center")
+    axis.annotate(
+      "", xy=(4.8, 1.2), xytext=(3.42, 1.2),
+      arrowprops={"arrowstyle": "->", "color": "#3478a6", "lw": 1.7},
+    )
+    axis.text(5.05, 1.2, r"$h_t$", fontsize=14, ha="center", va="center")
+    axis.text(0.42, 2.42, "previous state", fontsize=9, ha="center", color="#7c4610")
+    axis.text(0.48, -0.1, "current input", fontsize=9, ha="center", color="#245b80")
+    axis.text(5.05, 0.92, "new state", fontsize=9, ha="center", color="#245b80")
+    axis.set_xlim(0, 5.5)
+    axis.set_ylim(-0.35, 2.6)
     figure.tight_layout(pad=0.15)
     image = BytesIO()
     figure.savefig(image, format="png", dpi=180, bbox_inches="tight",
@@ -409,40 +455,50 @@ class RNNStateSequenceForwardPass(SequenceForwardPassQuestion):
   def _build_body(cls, context):
     body = ca.Section()
     body.add_element(ca.Paragraph([
-      "Run this tanh RNN forward over the input sequence. Treat vectors as "
-      "columns and use full calculator precision until rounding each submitted "
-      "hidden-state component to four decimal places."
+      "Given the RNN cell below with a tanh activation function, calculate "
+      "the hidden states ",
+      ca.Equation("h_1", inline=True),
+      ", ",
+      ca.Equation("h_2", inline=True),
+      ", and ",
+      ca.Equation("h_3", inline=True),
+      ". Use full calculator precision until rounding each submitted "
+      "component to four decimal places."
     ]))
-    body.add_element(ca.Equation(
-      r"h_t = \tanh(W_{xh}x_t + W_{hh}h_{t-1} + b)",
-      inline=False,
-    ))
     body.add_element(ca.Picture(
-      img_data=cls._generate_rnn_diagram(context.sequence_length),
-      caption="Unrolled RNN: the same weights are used at every timestep.",
+      img_data=cls._generate_rnn_diagram(),
       width="100%",
     ))
-    sequence_text = "; ".join(
-      f"x_{timestep} = {_inline_vector(vector)}"
-      for timestep, vector in enumerate(context.inputs, start=1)
-    )
-    body.add_element(ca.Paragraph(["Input sequence: ", sequence_text, "."]))
+    if context.input_dim == 1:
+      body.add_element(ca.Paragraph([
+        "Input sequence: ",
+        ", ".join(_number(vector[0]) for vector in context.inputs),
+        ".",
+      ]))
+    else:
+      sequence_text = "; ".join(
+        f"x_{timestep} = {_inline_vector(vector)}"
+        for timestep, vector in enumerate(context.inputs, start=1)
+      )
+      body.add_element(ca.Paragraph(["Input sequence: ", sequence_text, "."]))
     body.add_element(ca.Paragraph([
       ca.Equation("W_{xh}", inline=True),
-      " = ",
-      _inline_matrix(context.W_xh),
-      "; ",
-      ca.Equation("W_{hh}", inline=True),
-      " = ",
-      _inline_matrix(context.W_hh),
-      ".",
+      " is:",
     ]))
+    body.add_element(ca.Matrix(data=context.W_xh, bracket_type="b"))
+    body.add_element(ca.Paragraph([
+      ca.Equation("W_{hh}", inline=True),
+      " is:",
+    ]))
+    body.add_element(ca.Matrix(data=context.W_hh, bracket_type="b"))
     body.add_element(ca.Paragraph([
       ca.Equation("b", inline=True),
-      " = ",
-      _inline_vector(context.bias),
-      ".",
+      " is:",
     ]))
+    body.add_element(ca.Matrix(
+      data=[[value] for value in context.bias],
+      bracket_type="b",
+    ))
     body.add_element(ca.Paragraph([
       "The initial hidden state is ",
       ca.Equation("h_0", inline=True),
@@ -454,49 +510,87 @@ class RNNStateSequenceForwardPass(SequenceForwardPassQuestion):
     answers = [
       ca.AnswerTypes.Vector(
         list(state),
-        label=f"h_{timestep}",
+        label="",
       )
       for timestep, state in enumerate(context.states, start=1)
     ]
-    body.add_element(ca.AnswerBlock(answers))
+    for timestep, answer in enumerate(answers, start=1):
+      _add_labeled_answer(body, f"h_{timestep}", answer)
     return body, answers
 
   @classmethod
   def _build_explanation(cls, context):
     explanation = ca.Section()
     explanation.add_element(ca.Paragraph([
-      "The same weights are used at every timestep. For each state, first "
-      "calculate the two linear contributions, add the bias, then apply tanh "
-      "component by component."
+      "At every timestep, the cell turns the current input into hidden-state "
+      "coordinates with ",
+      ca.Equation("W_{xh}x_t", inline=True),
+      ", combines that with the previous hidden state through ",
+      ca.Equation("W_{hh}h_{t-1}", inline=True),
+      ", adds the bias, and applies tanh. The resulting ",
+      ca.Equation("h_t", inline=True),
+      " is the cell's new memory, which becomes the previous state for the "
+      "next timestep."
     ]))
     for timestep, trace in enumerate(context.traces, start=1):
+      if timestep == 1:
+        reason = (
+          "At the first timestep, the previous state is h_0 = "
+          f"{_inline_vector([0] * context.hidden_dim)}, "
+          "so the recurrent contribution begins at zero."
+        )
+      else:
+        reason = (
+          f"At timestep {timestep}, use h_{timestep - 1} from the previous "
+          "step; this is how the RNN carries information forward."
+        )
       explanation.add_element(ca.Paragraph([
-        ca.Equation(f"t = {timestep}", inline=True), ":"
+        ca.Equation(f"t = {timestep}", inline=True),
+        ": ",
+        reason,
       ]))
-      for component in range(context.hidden_dim):
-        input_terms = " + ".join(
-          f"({_number(context.W_xh[component, index])})"
-          f"({_number(trace['input'][index])})"
-          for index in range(context.input_dim)
-        )
-        hidden_terms = " + ".join(
-          f"({_number(context.W_hh[component, index])})"
-          f"({_number(trace['previous'][index])})"
-          for index in range(context.hidden_dim)
-        )
-        preactivation = trace["preactivation"][component]
-        state = trace["state"][component]
-        explanation.add_element(ca.Equation(
-          f"a_{{{timestep},{component + 1}}} = {input_terms} + "
-          f"({hidden_terms}) + {_number(context.bias[component])} "
-          f"= {preactivation:.4f}",
-          inline=False,
-        ))
-        explanation.add_element(ca.Equation(
-          f"h_{{{timestep},{component + 1}}} = tanh({preactivation:.4f}) "
-          f"= {state:.4f}",
-          inline=False,
-        ))
+      explanation.add_element(ca.Paragraph([
+        "First map the current input into the hidden-state coordinates:",
+      ]))
+      explanation.add_element(ca.MathExpression([
+        f"W_{{xh}}x_{timestep} = ",
+        ca.Matrix(data=context.W_xh, bracket_type="b", inline=True),
+        r" \cdot ",
+        ca.Matrix(
+          data=[[value] for value in trace["input"]],
+          bracket_type="b",
+          inline=True,
+        ),
+        " = ",
+        _inline_vector(trace["input_contribution"]),
+      ]))
+      explanation.add_element(ca.Paragraph([
+        "Then transform the previous state, which is the memory arriving from "
+        "the preceding timestep:",
+      ]))
+      explanation.add_element(ca.MathExpression([
+        f"W_{{hh}}h_{timestep - 1} = ",
+        ca.Matrix(data=context.W_hh, bracket_type="b", inline=True),
+        r" \cdot ",
+        ca.Matrix(
+          data=[[round(value, cls.ROUND_DIGITS)] for value in trace["previous"]],
+          bracket_type="b",
+          inline=True,
+        ),
+        " = ",
+        _inline_vector(trace["hidden_contribution"]),
+      ]))
+      explanation.add_element(ca.Equation(
+        f"a_{timestep} = W_{{xh}}x_{timestep} + "
+        f"W_{{hh}}h_{timestep - 1} + b = "
+        + _inline_vector(trace["preactivation"]),
+        inline=False,
+      ))
+      explanation.add_element(ca.Equation(
+        f"h_{timestep} = tanh(a_{timestep}) = "
+        + _inline_vector(trace["state"]),
+        inline=False,
+      ))
     return explanation, []
 
 
@@ -509,6 +603,72 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
   DEFAULT_SEQUENCE_LENGTH = 3
   TOKENS = ("cat", "dog", "bird", "fish", "tree", "runs", "walks", "sleeps")
 
+  @staticmethod
+  def _generate_lookup_diagram(context) -> BytesIO:
+    """Show that a token selects one row of the embedding table."""
+    import matplotlib.pyplot as plt
+
+    selected_token = context.sequence[0]
+    selected_index = context.vocabulary.index(selected_token)
+    rows, columns = context.embeddings.shape
+    figure, axis = plt.subplots(figsize=(7.0, 0.68 * rows + 1.6))
+    axis.axis("off")
+
+    table_left = 2.0
+    cell_width = 0.8
+    row_height = 0.55
+    top = rows * row_height
+    for row, token in enumerate(context.vocabulary):
+      y = top - (row + 0.5) * row_height
+      highlight = "#f8d9a7" if row == selected_index else "white"
+      axis.add_patch(plt.Rectangle(
+        (table_left - 1.2, y - row_height / 2), 1.2, row_height,
+        facecolor=highlight, edgecolor="#666666", linewidth=0.7,
+      ))
+      axis.text(table_left - 0.6, y, token, ha="center", va="center", fontsize=10)
+      for column in range(columns):
+        axis.add_patch(plt.Rectangle(
+          (table_left + column * cell_width, y - row_height / 2),
+          cell_width, row_height, facecolor=highlight,
+          edgecolor="#666666", linewidth=0.7,
+        ))
+        axis.text(
+          table_left + (column + 0.5) * cell_width, y,
+          f"{context.embeddings[row, column]:+.1f}",
+          ha="center", va="center", fontsize=10,
+        )
+
+    selected_y = top - (selected_index + 0.5) * row_height
+    axis.text(0.2, selected_y, f"token: {selected_token}", ha="left",
+              va="center", fontsize=11, weight="bold")
+    axis.annotate(
+      "", xy=(table_left - 1.22, selected_y), xytext=(1.45, selected_y),
+      arrowprops={"arrowstyle": "->", "color": "#9a5b18", "lw": 1.7},
+    )
+    vector_x = table_left + columns * cell_width + 1.25
+    axis.text(vector_x, selected_y + 0.33, "selected embedding", ha="center",
+              va="bottom", fontsize=10, color="#245b80")
+    axis.text(vector_x, selected_y, _inline_vector(context.embeddings[selected_index]),
+              ha="center", va="center", fontsize=12, weight="bold")
+    axis.annotate(
+      "", xy=(vector_x - 0.55, selected_y), xytext=(table_left + columns * cell_width, selected_y),
+      arrowprops={"arrowstyle": "->", "color": "#245b80", "lw": 1.7},
+    )
+    axis.text(table_left - 0.6, top + 0.32, "token", ha="center", va="bottom",
+              fontsize=10, color="#555555")
+    axis.text(table_left + columns * cell_width / 2, top + 0.32,
+              "embedding table E", ha="center", va="bottom",
+              fontsize=10, color="#555555")
+    axis.set_xlim(0, vector_x + 1.2)
+    axis.set_ylim(-0.3, top + 0.75)
+    figure.tight_layout(pad=0.1)
+    image = BytesIO()
+    figure.savefig(image, format="png", dpi=180, bbox_inches="tight",
+                   facecolor="white", edgecolor="none")
+    plt.close(figure)
+    image.seek(0)
+    return image
+
   @classmethod
   def _build_context(cls, *, rng_seed=None, **kwargs):
     context = super()._build_context(rng_seed=rng_seed, **kwargs)
@@ -520,10 +680,11 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
     if embedding_dim < 1 or sequence_length < 2:
       raise ValueError("embedding_dim must be positive and sequence_length at least 2")
     vocabulary = context.rng.sample(list(cls.TOKENS), vocabulary_size)
+    embedding_values = tuple(value / 10 for value in range(-15, 16))
     embeddings = np.array([
-      [context.rng.choice((-1, 0, 1)) for _ in range(embedding_dim)]
+      [context.rng.choice(embedding_values) for _ in range(embedding_dim)]
       for _ in range(vocabulary_size)
-    ], dtype=int)
+    ], dtype=float)
     # A repeated token makes students preserve position: the same lookup may
     # appear at more than one timestep in an embedding sequence.
     first_token, second_token = context.rng.sample(vocabulary, 2)
@@ -539,14 +700,14 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
     token_to_index = {token: index for index, token in enumerate(vocabulary)}
     sequence_embeddings = np.array([
       embeddings[token_to_index[token]] for token in sequence
-    ], dtype=int)
+    ], dtype=float)
     context["vocabulary"] = vocabulary
     context["embeddings"] = embeddings
     context["sequence"] = sequence
     context["sequence_length"] = sequence_length
     context["sequence_embeddings"] = sequence_embeddings
-    if sequence_length > 1:
-      context["window_vector"] = np.concatenate(sequence_embeddings[:2])
+    context["lookup_index"] = token_to_index[sequence[0]]
+    context["input_sequence_vector"] = np.concatenate(sequence_embeddings)
     return context
 
   @classmethod
@@ -554,11 +715,12 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
     body = ca.Section()
     body.add_element(ca.Paragraph([
       "Use the embedding table to look up the vector at every position in the "
-      "sequence. Then concatenate the first two embeddings as a fixed-window "
-      "input. Each row of the table is that token's embedding."
+      "sequence. Then concatenate them to form the input ",
+      ca.Equation("u = (x_1, \\ldots, x_T)", inline=True),
+      "."
     ]))
     embedding_rows = [
-      [token, *[str(value) for value in embedding]]
+      [token, *[f"{value:+.1f}" for value in embedding]]
       for token, embedding in zip(context.vocabulary, context.embeddings)
     ]
     embedding_headers = ["Token"] + [
@@ -574,16 +736,17 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
     answers = [
       ca.AnswerTypes.Vector(
         list(embedding),
-        label=f"x_{timestep}",
+        label="",
       )
       for timestep, embedding in enumerate(context.sequence_embeddings, start=1)
     ]
-    if context.sequence_length > 1:
-      answers.append(ca.AnswerTypes.Vector(
-        list(context.window_vector),
-        label="u = (x_1, x_2)",
-      ))
-    body.add_element(ca.AnswerBlock(answers))
+    answers.append(ca.AnswerTypes.Vector(
+      list(context.input_sequence_vector),
+      label="",
+    ))
+    for timestep, answer in enumerate(answers[:-1], start=1):
+      _add_labeled_answer(body, f"x_{timestep}", answer)
+    _add_labeled_answer(body, "u", answers[-1])
     return body, answers
 
   @classmethod
@@ -593,6 +756,31 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
       "An embedding lookup selects the row associated with each token. The "
       "same token at two positions has the same embedding."
     ]))
+    explanation.add_element(ca.Paragraph([
+      "For the first position, the one-hot vector for ",
+      f"“{context.sequence[0]}”",
+      " has a 1 at that token's table row and 0 everywhere else. Multiplying "
+      "that one-hot vector by the table keeps only the selected row.",
+    ]))
+    selected_embedding_rows = []
+    for row, (token, embedding) in enumerate(
+        zip(context.vocabulary, context.embeddings)
+    ):
+      cells = [token, *[f"{value:+.1f}" for value in embedding]]
+      if row == context.lookup_index:
+        cells = [ca.Text(cell, emphasis=True) for cell in cells]
+      selected_embedding_rows.append(cells)
+    embedding_headers = ["Token"] + [
+      ca.Equation(f"e_{component + 1}", inline=True)
+      for component in range(context.embeddings.shape[1])
+    ]
+    explanation.add_element(ca.Paragraph([
+      "The selected row for the first token is bolded:",
+    ]))
+    explanation.add_element(ca.Table(
+      headers=embedding_headers,
+      data=selected_embedding_rows,
+    ))
     for timestep, (token, embedding) in enumerate(
         zip(context.sequence, context.sequence_embeddings), start=1
     ):
@@ -603,14 +791,13 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
         _inline_vector(embedding),
         ".",
       ]))
-    if context.sequence_length > 1:
-      explanation.add_element(ca.Paragraph([
-        "The fixed-window representation places the first embedding followed "
-        "by the second:",
-      ]))
-      explanation.add_element(ca.Equation(
-        "u = (x_1, x_2) = "
-        + _inline_vector(context.window_vector),
-        inline=False,
-      ))
+    explanation.add_element(ca.Paragraph([
+      "Concatenation places every embedding end to end in sequence order; it "
+      "does not add or average them:",
+    ]))
+    explanation.add_element(ca.Equation(
+      "u = (x_1, \\ldots, x_T) = "
+      + _inline_vector(context.input_sequence_vector),
+      inline=False,
+    ))
     return explanation, []
