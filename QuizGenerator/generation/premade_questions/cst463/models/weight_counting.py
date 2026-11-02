@@ -4,14 +4,6 @@ import abc
 import logging
 import random
 
-try:
-  import keras
-except ImportError as exc:
-  keras = None
-  _KERAS_IMPORT_ERROR = exc
-else:
-  _KERAS_IMPORT_ERROR = None
-
 import numpy as np
 
 import QuizGenerator.generation.contentast as ca
@@ -19,10 +11,24 @@ from QuizGenerator.generation.question import Question, QuestionRegistry
 
 log = logging.getLogger(__name__)
 
+# These legacy Keras questions are still available, but importing every
+# question module must not start TensorFlow for unrelated quiz generation.
+# Load Keras only if one of these questions is actually instantiated.
+keras = None
+_KERAS_IMPORT_ERROR = None
+
 
 class WeightCounting(Question, abc.ABC):
   @staticmethod
   def _ensure_keras():
+    global keras, _KERAS_IMPORT_ERROR
+    if keras is None and _KERAS_IMPORT_ERROR is None:
+      try:
+        import keras as loaded_keras
+      except ImportError as exc:
+        _KERAS_IMPORT_ERROR = exc
+      else:
+        keras = loaded_keras
     if keras is None:
       raise ImportError(
         "Keras is required for CST463 model questions. "

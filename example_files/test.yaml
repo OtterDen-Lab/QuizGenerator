@@ -1,0 +1,29 @@
+# CST463 CNN and sequence-model forward-pass questions
+name: "CST463 CNN and Sequence Forward Passes - $TIME"
+practice: False
+questions:
+  1:
+    _config:
+      preserve_order: true
+
+    EmbeddingLookup:
+      class: cst463.sequence.embedding-lookup
+      topic: ML_OPTIMIZATION
+      spacing: PAGE
+
+    RNNStateSequence:
+      class: cst463.rnn.state-sequence-forward-pass
+      topic: ML_OPTIMIZATION
+      spacing: PAGE
+
+    MaxPooling:
+      class: cst463.cnn.max-pooling-forward-pass
+      topic: ML_OPTIMIZATION
+      spacing: PAGE
+
+    OneDimensionalConvolution:
+      class: cst463.cnn.1d-forward-pass
+      input_channels: 2
+      binary_filters: true
+      topic: ML_OPTIMIZATION
+      spacing: PAGE

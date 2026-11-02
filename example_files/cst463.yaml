@@ -226,3 +226,61 @@ questions:
       spacing: 0
       _config:
         repeat: 1
+
+---
+
+# CST463 Embedding Lookup Practice
+name: "Embedding Lookup"
+practice: False
+questions:
+  1:
+    EmbeddingLookup:
+      class: cst463.sequence.embedding-lookup
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 1
+
+---
+
+# CST463 RNN State Sequence Forward Pass Practice
+name: "RNN State Sequence Forward Pass"
+practice: False
+questions:
+  1:
+    RNNStateSequence:
+      class: cst463.rnn.state-sequence-forward-pass
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 1
+
+---
+
+# CST463 Max Pooling Forward Pass Practice
+name: "Max Pooling Forward Pass"
+practice: False
+questions:
+  1:
+    MaxPooling:
+      class: cst463.cnn.max-pooling-forward-pass
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 1
+
+---
+
+# CST463 1D Convolution Forward Pass Practice
+name: "1D Convolution Forward Pass"
+practice: False
+questions:
+  1:
+    OneDimensionalConvolution:
+      class: cst463.cnn.1d-forward-pass
+      input_channels: 2
+      binary_filters: true
+      topic: ML_OPTIMIZATION
+      spacing: 0
+      _config:
+        repeat: 1
