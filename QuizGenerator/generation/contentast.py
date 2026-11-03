@@ -2185,6 +2185,7 @@ class Table(Container):
   
   def render_html(self, **kwargs):
     # HTML table implementation
+    cell_output_format = kwargs.pop("_table_cell_output_format", "html")
     result = ["<table border=\"1\" style=\"border-collapse: collapse; width: 100%; table-layout: auto;\">"]
     
     result.append("  <tbody>")
@@ -2200,7 +2201,10 @@ class Table(Container):
         header_kwargs = dict(kwargs)
         header_kwargs["in_table"] = True
         if isinstance(header, Element):
-          rendered_header = header.render(output_format="html", **header_kwargs)
+          rendered_header = header.render(
+            output_format=cell_output_format,
+            **header_kwargs
+          )
         else:
           rendered_header = Text(str(header)).render_html(**header_kwargs)
         result.append(
@@ -2215,7 +2219,10 @@ class Table(Container):
         cell_kwargs = dict(kwargs)
         cell_kwargs["in_table"] = True
         if isinstance(cell, Element):
-          cell = cell.render(output_format="html", **cell_kwargs)
+          cell = cell.render(
+            output_format=cell_output_format,
+            **cell_kwargs
+          )
         else:
           cell = Text(str(cell)).render_html(**cell_kwargs)
         align_attr = ""
@@ -2229,7 +2236,10 @@ class Table(Container):
     return "\n".join(result)
 
   def render_standalone_html(self, **kwargs):
-    return self.render_html(**kwargs)
+    return self.render_html(
+      _table_cell_output_format="standalone_html",
+      **kwargs
+    )
   
   def render_latex(self, **kwargs):
     # LaTeX table implementation
