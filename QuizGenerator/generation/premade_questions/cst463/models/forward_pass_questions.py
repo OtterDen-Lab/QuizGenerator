@@ -811,8 +811,15 @@ class ConvolutionOutputSizeQuestion(SequenceForwardPassQuestion):
       operation = context.rng.choice(("convolution", "transposed_convolution"))
     if operation not in ("convolution", "transposed_convolution"):
       raise ValueError("operation must be convolution or transposed_convolution")
-    height = kwargs.get("input_height", context.rng.randint(4, 10))
-    width = kwargs.get("input_width", context.rng.randint(4, 10))
+    input_size = kwargs.get("input_size")
+    height = kwargs.get(
+      "input_height",
+      input_size if input_size is not None else context.rng.randint(4, 10),
+    )
+    width = kwargs.get(
+      "input_width",
+      input_size if input_size is not None else context.rng.randint(4, 10),
+    )
     kernel = kwargs.get("kernel_size", context.rng.choice((2, 3, 4)))
     stride = kwargs.get("stride", context.rng.choice((1, 2, 3)))
     padding = kwargs.get("padding", context.rng.choice((0, 1)))
@@ -892,6 +899,16 @@ class ConvolutionOutputSizeQuestion(SequenceForwardPassQuestion):
         "For transposed convolution, each input location stamps a kernel and "
         "the stride gives the gap between stamp origins:",
       ]))
+    legend = (
+      f"Here, n is the input size ({context.height} for height and "
+      f"{context.width} for width); k is the kernel size ({context.kernel}); "
+      f"s is the stride ({context.stride})"
+    )
+    if context.operation == "convolution":
+      legend += f"; and p is the padding per side ({context.padding})."
+    else:
+      legend += "."
+    explanation.add_element(ca.Paragraph([legend]))
     explanation.add_element(ca.Equation(formula, inline=False))
     explanation.add_element(ca.Equation(f"H_{{out}} = {height_calc}", inline=False))
     explanation.add_element(ca.Equation(f"W_{{out}} = {width_calc}", inline=False))
@@ -908,25 +925,34 @@ class TransposedConvolutionForwardPass(SequenceForwardPassQuestion):
     stride = kwargs.get("stride", 1)
     if stride < 1:
       raise ValueError("stride must be positive")
+    input_size = kwargs.get("input_size", context.rng.randint(2, 5))
+    if not 2 <= input_size <= 5:
+      raise ValueError("input_size must be between 2 and 5")
     inputs = np.array([
-      [context.rng.randint(-2, 3), context.rng.randint(-2, 3)],
-      [context.rng.randint(-2, 3), context.rng.randint(-2, 3)],
+      [context.rng.randint(-2, 3) for _ in range(input_size)]
+      for _ in range(input_size)
     ], dtype=int)
     kernel = np.array([
       [context.rng.choice((-1, 0, 1)), context.rng.choice((-1, 0, 1))],
       [context.rng.choice((-1, 0, 1)), context.rng.choice((-1, 0, 1))],
     ], dtype=int)
-    output_size = (2 - 1) * stride + 2
+    output_size = (input_size - 1) * stride + 2
     output = np.zeros((output_size, output_size), dtype=int)
-    for row in range(2):
-      for column in range(2):
+    stamps = []
+    for row in range(input_size):
+      for column in range(input_size):
         start_row, start_column = row * stride, column * stride
-        output[start_row:start_row + 2, start_column:start_column + 2] += (
+        stamp = np.zeros_like(output)
+        stamp[start_row:start_row + 2, start_column:start_column + 2] = (
           inputs[row, column] * kernel
         )
+        output += stamp
+        stamps.append((row, column, stamp))
     context["inputs"] = inputs
     context["kernel"] = kernel
     context["stride"] = stride
+    context["input_size"] = input_size
+    context["stamps"] = stamps
     context["output"] = output
     return context
 
@@ -973,8 +999,8 @@ class TransposedConvolutionForwardPass(SequenceForwardPassQuestion):
       "entire kernel by that value and stamp it starting at that input "
       "location times the stride. If two stamps cover a cell, their values add."
     ]))
-    for row in range(2):
-      for column in range(2):
+    for row in range(context.input_size):
+      for column in range(context.input_size):
         explanation.add_element(ca.Paragraph([
           f"Input value {int(context.inputs[row, column])} at ({row}, {column}) "
           f"stamps its scaled kernel beginning at output position "
@@ -984,6 +1010,39 @@ class TransposedConvolutionForwardPass(SequenceForwardPassQuestion):
           data=context.inputs[row, column] * context.kernel,
           bracket_type="b",
         ))
-    explanation.add_element(ca.Paragraph(["After adding all stamps, the output is:"]))
-    explanation.add_element(ca.Matrix(data=context.output, bracket_type="b"))
+    explanation.add_element(ca.Paragraph([
+      "Now add all stamped copies element by element. The left matrix shows "
+      "every contribution at each output position; the right matrix evaluates "
+      "those sums:",
+    ]))
+    expression_matrix = []
+    for output_row in range(context.output.shape[0]):
+      expression_row = []
+      for output_column in range(context.output.shape[1]):
+        contributions = []
+        for input_row, input_column, stamp in context.stamps:
+          start_row = input_row * context.stride
+          start_column = input_column * context.stride
+          if (
+              start_row <= output_row < start_row + context.kernel.shape[0]
+              and start_column <= output_column < start_column + context.kernel.shape[1]
+          ):
+            contributions.append(int(stamp[output_row, output_column]))
+        expression_row.append(cls._format_sum(contributions))
+      expression_matrix.append(expression_row)
+    explanation.add_element(ca.MathExpression([
+      ca.Matrix(data=expression_matrix, bracket_type="b", inline=True),
+      " = ",
+      ca.Matrix(data=context.output, bracket_type="b", inline=True),
+    ]))
     return explanation, []
+
+  @staticmethod
+  def _format_sum(values):
+    """Format an additive expression without visually noisy '+ -' terms."""
+    if not values:
+      return "0"
+    expression = str(values[0])
+    for value in values[1:]:
+      expression += f" - {abs(value)}" if value < 0 else f" + {value}"
+    return expression

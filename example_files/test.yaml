@@ -50,6 +50,6 @@ questions:
 
     TransposedConvolutionForwardPass:
       class: cst463.cnn.transposed-forward-pass
-      stride: 1
+      #stride: 1
       topic: ML_OPTIMIZATION
       spacing: PAGE
