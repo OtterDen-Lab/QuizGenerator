@@ -2475,6 +2475,58 @@ class TableGroup(Container):
 
     return "\n".join(result)
 
+class SideBySide(Container):
+  """Render two arbitrary AST elements beside one another in print output."""
+
+  def __init__(self, left, right, left_label=None, right_label=None):
+    super().__init__([left, right])
+    self.left_label = left_label
+    self.right_label = right_label
+
+  def render_html(self, **kwargs):
+    # Canvas displays stacked content more reliably than a CSS grid.
+    result = []
+    for label, element in (
+        (self.left_label, self.elements[0]),
+        (self.right_label, self.elements[1]),
+    ):
+      if label:
+        result.append(f"<p><b>{html.escape(label)}</b></p>")
+      result.append(element.render(OutputFormat.HTML, **kwargs))
+    return "\n".join(result)
+
+  def render_typst(self, **kwargs):
+    cells = []
+    for label, element in (
+        (self.left_label, self.elements[0]),
+        (self.right_label, self.elements[1]),
+    ):
+      content = []
+      if label:
+        content.append(f"*{label}*")
+        content.append("#v(0.1cm)")
+      content.append(element.render(OutputFormat.TYPST, **kwargs))
+      cells.append("\n".join(content))
+    return (
+      "\n#grid(columns: 2, column-gutter: 1em, "
+      f"[{cells[0]}], [{cells[1]}])\n"
+    )
+
+  def render_latex(self, **kwargs):
+    rendered = []
+    for label, element in (
+        (self.left_label, self.elements[0]),
+        (self.right_label, self.elements[1]),
+    ):
+      title = f"\\textbf{{{label}}}\\\\\n" if label else ""
+      rendered.append(
+        "\\begin{minipage}{0.45\\textwidth}\n"
+        f"{title}{element.render(OutputFormat.LATEX, **kwargs)}\n"
+        "\\end{minipage}"
+      )
+    return "\\hfill".join(rendered)
+
+
 class AnswerBlock(Table):
   """
   Specialized table for organizing multiple answer fields with proper spacing.

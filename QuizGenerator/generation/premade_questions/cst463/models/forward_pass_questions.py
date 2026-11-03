@@ -275,15 +275,6 @@ class MaxPoolingForwardPass(SequenceForwardPassQuestion):
       f"Apply {context.pool_size}×{context.pool_size} max pooling with "
       f"stride {context.stride} to this feature map."
     ]))
-    body.add_element(ca.Matrix(data=context.feature_map.tolist(), bracket_type="b"))
-    body.add_element(ca.Paragraph([
-      "The pooled feature map has these entries:",
-    ]))
-    placeholder_matrix = [
-      [rf"p_{{{row},{column}}}" for column in range(context.output.shape[1])]
-      for row in range(context.output.shape[0])
-    ]
-    body.add_element(ca.Matrix(data=placeholder_matrix, bracket_type="b"))
     answers = [
       ca.AnswerTypes.Int(
         int(context.output[row, column]),
@@ -292,14 +283,19 @@ class MaxPoolingForwardPass(SequenceForwardPassQuestion):
       for row in range(context.output.shape[0])
       for column in range(context.output.shape[1])
     ]
-    for row in range(context.output.shape[0]):
-      for column in range(context.output.shape[1]):
-        answer_index = row * context.output.shape[1] + column
-        _add_labeled_answer(
-          body,
-          f"p_{{{row},{column}}}",
-          answers[answer_index],
-        )
+    answer_grid = [
+      answers[
+        row * context.output.shape[1]:
+        (row + 1) * context.output.shape[1]
+      ]
+      for row in range(context.output.shape[0])
+    ]
+    body.add_element(ca.SideBySide(
+      ca.Matrix(data=context.feature_map.tolist(), bracket_type="b"),
+      ca.Table(data=answer_grid),
+      left_label="Input feature map",
+      right_label="Pooled output",
+    ))
     return body, answers
 
   @classmethod
@@ -946,29 +942,27 @@ class TransposedConvolutionForwardPass(SequenceForwardPassQuestion):
       "of the kernel, then that copy is stamped into the output. Add values "
       "where stamps overlap."
     ]))
-    maps = ca.TableGroup()
-    maps.add_table(
-      ca.Table(data=context.inputs.tolist()),
-      label="Input feature map",
-    )
-    maps.add_table(
-      ca.Table(data=context.kernel.tolist()),
-      label="Kernel",
-    )
-    body.add_element(maps)
+    body.add_element(ca.Paragraph(["Kernel:"]))
+    body.add_element(ca.Matrix(data=context.kernel, bracket_type="b"))
     body.add_element(ca.Paragraph([f"Stride: {context.stride}."]))
-    placeholders = [
-      [rf"y_{{{row},{column}}}" for column in range(context.output.shape[1])]
-      for row in range(context.output.shape[0])
-    ]
-    body.add_element(ca.Paragraph(["Output map entries:"]))
-    body.add_element(ca.Matrix(data=placeholders, bracket_type="b"))
     answers = []
     for row in range(context.output.shape[0]):
       for column in range(context.output.shape[1]):
         answer = ca.AnswerTypes.Int(int(context.output[row, column]), label="")
         answers.append(answer)
-        _add_labeled_answer(body, f"y_{{{row},{column}}}", answer)
+    answer_grid = [
+      answers[
+        row * context.output.shape[1]:
+        (row + 1) * context.output.shape[1]
+      ]
+      for row in range(context.output.shape[0])
+    ]
+    body.add_element(ca.SideBySide(
+      ca.Matrix(data=context.inputs, bracket_type="b"),
+      ca.Table(data=answer_grid),
+      left_label="Input feature map",
+      right_label="Output map",
+    ))
     return body, answers
 
   @classmethod
