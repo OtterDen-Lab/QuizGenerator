@@ -3663,7 +3663,46 @@ class AnswerTypes:
       return ", ".join(
         str(self.fix_negative_zero(round(v, Answer.DEFAULT_ROUNDING_DIGITS))).rstrip('0').rstrip('.') for v in self.value
       )
-    
+
+  class CompactVector(Vector):
+    """
+    Opt-in vector answer with canonical decimal formatting only.
+
+    Unlike Vector, this deliberately does not generate every combination of
+    decimal spellings and fraction forms. It is useful when values are exact
+    decimal data already shown in the question.
+    """
+
+    @classmethod
+    def get_entry_warning(cls) -> list[str] | None:
+      return [
+        "Enter vectors as comma-separated values with a space after each "
+        "comma. Remove trailing decimal zeros (for example, enter 1.5, "
+        "not 1.5000). Parentheses are optional."
+      ]
+
+    @staticmethod
+    def _format_component(value) -> str:
+      rounded = Answer.fix_negative_zero(
+        round(float(value), Answer.DEFAULT_ROUNDING_DIGITS)
+      )
+      text = f"{rounded:.{Answer.DEFAULT_ROUNDING_DIGITS}f}".rstrip("0").rstrip(".")
+      return "0" if text in ("", "-0") else text
+
+    def get_for_canvas(self, single_answer=False) -> list[dict]:
+      canonical = ", ".join(self._format_component(value) for value in self.value)
+      return [
+        {
+          "blank_id": self.key,
+          "answer_weight": 100 if self.correct else 0,
+          "answer_text": answer_text,
+        }
+        for answer_text in (canonical, f"({canonical})")
+      ]
+
+    def get_display_string(self) -> str:
+      return ", ".join(self._format_component(value) for value in self.value)
+
   class CompoundAnswers(Answer):
     pass
     """

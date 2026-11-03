@@ -152,7 +152,7 @@ class Convolution1DForwardPass(SequenceForwardPassQuestion):
       f"bias: {context.bias}."
     ]))
 
-    answer = ca.AnswerTypes.Vector(
+    answer = ca.AnswerTypes.CompactVector(
       list(context.output),
       label="Output feature map",
     )
@@ -734,13 +734,13 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
     ]))
 
     answers = [
-      ca.AnswerTypes.Vector(
+      ca.AnswerTypes.CompactVector(
         list(embedding),
         label="",
       )
       for timestep, embedding in enumerate(context.sequence_embeddings, start=1)
     ]
-    answers.append(ca.AnswerTypes.Vector(
+    answers.append(ca.AnswerTypes.CompactVector(
       list(context.input_sequence_vector),
       label="",
     ))
@@ -800,4 +800,196 @@ class EmbeddingLookupSequenceQuestion(SequenceForwardPassQuestion):
       + _inline_vector(context.input_sequence_vector),
       inline=False,
     ))
+    return explanation, []
+
+
+@QuestionRegistry.register("cst463.cnn.output-size")
+class ConvolutionOutputSizeQuestion(SequenceForwardPassQuestion):
+  """Find a 2D convolution or transposed-convolution output shape."""
+
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    operation = kwargs.get("operation")
+    if operation is None:
+      operation = context.rng.choice(("convolution", "transposed_convolution"))
+    if operation not in ("convolution", "transposed_convolution"):
+      raise ValueError("operation must be convolution or transposed_convolution")
+    height = kwargs.get("input_height", context.rng.randint(4, 10))
+    width = kwargs.get("input_width", context.rng.randint(4, 10))
+    kernel = kwargs.get("kernel_size", context.rng.choice((2, 3, 4)))
+    stride = kwargs.get("stride", context.rng.choice((1, 2, 3)))
+    padding = kwargs.get("padding", context.rng.choice((0, 1)))
+    if operation == "convolution":
+      output_height = (height + 2 * padding - kernel) // stride + 1
+      output_width = (width + 2 * padding - kernel) // stride + 1
+      if min(output_height, output_width) < 1:
+        raise ValueError("parameters must produce a positive output size")
+    else:
+      padding = 0
+      output_height = (height - 1) * stride + kernel
+      output_width = (width - 1) * stride + kernel
+    context["operation"] = operation
+    context["height"] = height
+    context["width"] = width
+    context["kernel"] = kernel
+    context["stride"] = stride
+    context["padding"] = padding
+    context["output_height"] = output_height
+    context["output_width"] = output_width
+    return context
+
+  @classmethod
+  def _build_body(cls, context):
+    body = ca.Section()
+    operation_name = (
+      "ordinary convolution"
+      if context.operation == "convolution"
+      else "transposed convolution"
+    )
+    body.add_element(ca.Paragraph([
+      f"Find the output height and width of this {operation_name}.",
+    ]))
+    details = [
+      f"Input map: {context.height}×{context.width}.",
+      f"Kernel: {context.kernel}×{context.kernel}.",
+      f"Stride: {context.stride}.",
+    ]
+    if context.operation == "convolution":
+      details.append(f"Padding: {context.padding} on every side.")
+    body.add_element(ca.Paragraph([" ".join(details)]))
+    answer = ca.AnswerTypes.CompactVector(
+      [context.output_height, context.output_width],
+      label="Output shape (height, width)",
+    )
+    body.add_element(ca.AnswerBlock(answer))
+    return body, [answer]
+
+  @classmethod
+  def _build_explanation(cls, context):
+    explanation = ca.Section()
+    if context.operation == "convolution":
+      formula = r"\left\lfloor \frac{n + 2p - k}{s} \right\rfloor + 1"
+      height_calc = (
+        f"floor(({context.height} + 2({context.padding}) - {context.kernel})"
+        f"/{context.stride}) + 1 = {context.output_height}"
+      )
+      width_calc = (
+        f"floor(({context.width} + 2({context.padding}) - {context.kernel})"
+        f"/{context.stride}) + 1 = {context.output_width}"
+      )
+      explanation.add_element(ca.Paragraph([
+        "For ordinary convolution, apply the output-size formula separately "
+        "to the height and width:",
+      ]))
+    else:
+      formula = r"(n - 1) \cdot s + k"
+      height_calc = (
+        f"({context.height} - 1)({context.stride}) + {context.kernel}"
+        f" = {context.output_height}"
+      )
+      width_calc = (
+        f"({context.width} - 1)({context.stride}) + {context.kernel}"
+        f" = {context.output_width}"
+      )
+      explanation.add_element(ca.Paragraph([
+        "For transposed convolution, each input location stamps a kernel and "
+        "the stride gives the gap between stamp origins:",
+      ]))
+    explanation.add_element(ca.Equation(formula, inline=False))
+    explanation.add_element(ca.Equation(f"H_{{out}} = {height_calc}", inline=False))
+    explanation.add_element(ca.Equation(f"W_{{out}} = {width_calc}", inline=False))
+    return explanation, []
+
+
+@QuestionRegistry.register("cst463.cnn.transposed-forward-pass")
+class TransposedConvolutionForwardPass(SequenceForwardPassQuestion):
+  """Compute a small transposed convolution by stamping a kernel."""
+
+  @classmethod
+  def _build_context(cls, *, rng_seed=None, **kwargs):
+    context = super()._build_context(rng_seed=rng_seed, **kwargs)
+    stride = kwargs.get("stride", 1)
+    if stride < 1:
+      raise ValueError("stride must be positive")
+    inputs = np.array([
+      [context.rng.randint(-2, 3), context.rng.randint(-2, 3)],
+      [context.rng.randint(-2, 3), context.rng.randint(-2, 3)],
+    ], dtype=int)
+    kernel = np.array([
+      [context.rng.choice((-1, 0, 1)), context.rng.choice((-1, 0, 1))],
+      [context.rng.choice((-1, 0, 1)), context.rng.choice((-1, 0, 1))],
+    ], dtype=int)
+    output_size = (2 - 1) * stride + 2
+    output = np.zeros((output_size, output_size), dtype=int)
+    for row in range(2):
+      for column in range(2):
+        start_row, start_column = row * stride, column * stride
+        output[start_row:start_row + 2, start_column:start_column + 2] += (
+          inputs[row, column] * kernel
+        )
+    context["inputs"] = inputs
+    context["kernel"] = kernel
+    context["stride"] = stride
+    context["output"] = output
+    return context
+
+  @classmethod
+  def is_interesting_ctx(cls, context) -> bool:
+    return np.any(context.output != 0) and np.unique(context.output).size >= 3
+
+  @classmethod
+  def _build_body(cls, context):
+    body = ca.Section()
+    body.add_element(ca.Paragraph([
+      "Compute this transposed convolution. Each input value scales a copy "
+      "of the kernel, then that copy is stamped into the output. Add values "
+      "where stamps overlap."
+    ]))
+    maps = ca.TableGroup()
+    maps.add_table(
+      ca.Table(data=context.inputs.tolist()),
+      label="Input feature map",
+    )
+    maps.add_table(
+      ca.Table(data=context.kernel.tolist()),
+      label="Kernel",
+    )
+    body.add_element(maps)
+    body.add_element(ca.Paragraph([f"Stride: {context.stride}."]))
+    placeholders = [
+      [rf"y_{{{row},{column}}}" for column in range(context.output.shape[1])]
+      for row in range(context.output.shape[0])
+    ]
+    body.add_element(ca.Paragraph(["Output map entries:"]))
+    body.add_element(ca.Matrix(data=placeholders, bracket_type="b"))
+    answers = []
+    for row in range(context.output.shape[0]):
+      for column in range(context.output.shape[1]):
+        answer = ca.AnswerTypes.Int(int(context.output[row, column]), label="")
+        answers.append(answer)
+        _add_labeled_answer(body, f"y_{{{row},{column}}}", answer)
+    return body, answers
+
+  @classmethod
+  def _build_explanation(cls, context):
+    explanation = ca.Section()
+    explanation.add_element(ca.Paragraph([
+      "Start with an output map of zeros. For each input value, multiply the "
+      "entire kernel by that value and stamp it starting at that input "
+      "location times the stride. If two stamps cover a cell, their values add."
+    ]))
+    for row in range(2):
+      for column in range(2):
+        explanation.add_element(ca.Paragraph([
+          f"Input value {int(context.inputs[row, column])} at ({row}, {column}) "
+          f"stamps its scaled kernel beginning at output position "
+          f"({row * context.stride}, {column * context.stride}):",
+        ]))
+        explanation.add_element(ca.Matrix(
+          data=context.inputs[row, column] * context.kernel,
+          bracket_type="b",
+        ))
+    explanation.add_element(ca.Paragraph(["After adding all stamps, the output is:"]))
+    explanation.add_element(ca.Matrix(data=context.output, bracket_type="b"))
     return explanation, []
