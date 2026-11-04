@@ -290,12 +290,16 @@ class MaxPoolingForwardPass(SequenceForwardPassQuestion):
       ]
       for row in range(context.output.shape[0])
     ]
-    body.add_element(ca.SideBySide(
-      ca.Matrix(data=context.feature_map.tolist(), bracket_type="b"),
-      ca.Table(data=answer_grid),
-      left_label="Input feature map",
-      right_label="Pooled output",
+    body.add_element(ca.Matrix(
+      data=context.feature_map.tolist(),
+      bracket_type="b",
     ))
+    # A grid of Canvas inputs is useful online, while on paper it merely
+    # duplicates the matrix students should draw in their workspace.
+    body.add_element(ca.OnlyHtml([
+      ca.Paragraph(["Fill in the pooled output matrix:"]),
+      ca.Table(data=answer_grid),
+    ]))
     return body, answers
 
   @classmethod
@@ -412,33 +416,30 @@ class RNNStateSequenceForwardPass(SequenceForwardPassQuestion):
     """Draw one recurrent cell instead of an unrolled time sequence."""
     import matplotlib.pyplot as plt
 
-    figure, axis = plt.subplots(figsize=(5.5, 2.65))
+    figure, axis = plt.subplots(figsize=(3.6, 1.7))
     axis.axis("off")
     axis.text(
-      2.7, 1.2, "RNN cell\n(tanh activation)",
+      1.8, 0.75, "RNN cell\n(tanh)",
       ha="center", va="center", fontsize=11,
-      bbox={"boxstyle": "round,pad=0.6", "fc": "#d8eaf7", "ec": "#3478a6", "lw": 1.7},
+      bbox={"boxstyle": "round,pad=0.5", "fc": "#d8eaf7", "ec": "#3478a6", "lw": 1.6},
     )
     axis.annotate(
-      "", xy=(2.05, 0.85), xytext=(0.7, 0.35),
+      "", xy=(1.12, 0.75), xytext=(0.35, 0.75),
       arrowprops={"arrowstyle": "->", "color": "#3478a6", "lw": 1.7},
     )
-    axis.text(0.48, 0.22, r"$x_t$", fontsize=14, ha="center", va="center")
+    axis.text(0.17, 0.75, r"$x_t$", fontsize=13, ha="center", va="center")
     axis.annotate(
-      "", xy=(2.05, 1.52), xytext=(0.7, 1.92),
+      "", xy=(3.22, 0.75), xytext=(2.55, 0.75),
+      arrowprops={"arrowstyle": "->", "color": "#3478a6", "lw": 1.7},
+    )
+    axis.text(3.43, 0.75, r"$h_t$", fontsize=13, ha="center", va="center")
+    axis.annotate(
+      "", xy=(1.8, 1.14), xytext=(1.8, 1.65),
       arrowprops={"arrowstyle": "->", "color": "#9a5b18", "lw": 1.7},
     )
-    axis.text(0.42, 2.03, r"$h_{t-1}$", fontsize=14, ha="center", va="center")
-    axis.annotate(
-      "", xy=(4.8, 1.2), xytext=(3.42, 1.2),
-      arrowprops={"arrowstyle": "->", "color": "#3478a6", "lw": 1.7},
-    )
-    axis.text(5.05, 1.2, r"$h_t$", fontsize=14, ha="center", va="center")
-    axis.text(0.42, 2.42, "previous state", fontsize=9, ha="center", color="#7c4610")
-    axis.text(0.48, -0.1, "current input", fontsize=9, ha="center", color="#245b80")
-    axis.text(5.05, 0.92, "new state", fontsize=9, ha="center", color="#245b80")
-    axis.set_xlim(0, 5.5)
-    axis.set_ylim(-0.35, 2.6)
+    axis.text(1.8, 1.78, r"$h_{t-1}$", fontsize=13, ha="center", color="#7c4610")
+    axis.set_xlim(-0.1, 3.7)
+    axis.set_ylim(0.1, 2.0)
     figure.tight_layout(pad=0.15)
     image = BytesIO()
     figure.savefig(image, format="png", dpi=180, bbox_inches="tight",
@@ -463,7 +464,7 @@ class RNNStateSequenceForwardPass(SequenceForwardPassQuestion):
     ]))
     body.add_element(ca.Picture(
       img_data=cls._generate_rnn_diagram(),
-      width="100%",
+      width="45%",
     ))
     if context.input_dim == 1:
       body.add_element(ca.Paragraph([
@@ -477,31 +478,33 @@ class RNNStateSequenceForwardPass(SequenceForwardPassQuestion):
         for timestep, vector in enumerate(context.inputs, start=1)
       )
       body.add_element(ca.Paragraph(["Input sequence: ", sequence_text, "."]))
-    body.add_element(ca.Paragraph([
-      ca.Equation("W_{xh}", inline=True),
-      " is:",
-    ]))
-    body.add_element(ca.Matrix(data=context.W_xh, bracket_type="b"))
-    body.add_element(ca.Paragraph([
-      ca.Equation("W_{hh}", inline=True),
-      " is:",
-    ]))
-    body.add_element(ca.Matrix(data=context.W_hh, bracket_type="b"))
-    body.add_element(ca.Paragraph([
-      ca.Equation("b", inline=True),
-      " is:",
-    ]))
-    body.add_element(ca.Matrix(
-      data=[[value] for value in context.bias],
-      bracket_type="b",
+    body.add_element(ca.Table(
+      headers=["Parameter", "Value"],
+      data=[
+        [
+          ca.Equation("W_{xh}", inline=True),
+          ca.MathExpression([
+            ca.Matrix(data=context.W_xh, bracket_type="b", inline=True),
+          ], inline=True),
+        ],
+        [
+          ca.Equation("W_{hh}", inline=True),
+          ca.MathExpression([
+            ca.Matrix(data=context.W_hh, bracket_type="b", inline=True),
+          ], inline=True),
+        ],
+        [
+          ca.Equation("b", inline=True),
+          ca.MathExpression([
+            ca.Matrix(
+              data=[[value] for value in context.bias],
+              bracket_type="b",
+              inline=True,
+            ),
+          ], inline=True),
+        ],
+      ],
     ))
-    body.add_element(ca.Paragraph([
-      "The initial hidden state is ",
-      ca.Equation("h_0", inline=True),
-      " = ",
-      _inline_vector([0] * context.hidden_dim),
-      ".",
-    ]))
 
     answers = [
       ca.AnswerTypes.Vector(
@@ -854,13 +857,13 @@ class ConvolutionOutputSizeQuestion(SequenceForwardPassQuestion):
       f"Find the output height and width of this {operation_name}.",
     ]))
     details = [
-      f"Input map: {context.height}×{context.width}.",
-      f"Kernel: {context.kernel}×{context.kernel}.",
-      f"Stride: {context.stride}.",
+      ["Input map", f"{context.height}×{context.width}"],
+      ["Kernel", f"{context.kernel}×{context.kernel}"],
+      ["Stride", context.stride],
     ]
     if context.operation == "convolution":
-      details.append(f"Padding: {context.padding} on every side.")
-    body.add_element(ca.Paragraph([" ".join(details)]))
+      details.append(["Padding", f"{context.padding} on every side"])
+    body.add_element(ca.Table(headers=["Parameter", "Value"], data=details))
     answer = ca.AnswerTypes.CompactVector(
       [context.output_height, context.output_width],
       label="Output shape (height, width)",
