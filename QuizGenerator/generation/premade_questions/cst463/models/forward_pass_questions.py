@@ -88,7 +88,7 @@ class Convolution1DForwardPass(SequenceForwardPassQuestion):
     output_length = (padded_length - kernel_size) // stride + 1
     output = np.array([
       sum(
-        int(np.dot(kernel[channel], padded_inputs[channel, position * stride:position * stride + kernel_size]))
+        np.dot(kernel[channel], padded_inputs[channel, position * stride:position * stride + kernel_size])
         for channel in range(input_channels)
       ) + bias
       for position in range(output_length)

@@ -8,33 +8,33 @@ questions:
       class: cst463.sequence.embedding-lookup
       topic: ML_OPTIMIZATION
       spacing: PAGE
-# ---
+---
 
-# name: "RNNStateSequence - $TIME"
-# practice: False
-# questions:
-#   1:
+name: "RNNStateSequence - $TIME"
+practice: False
+questions:
+  1:
     RNNStateSequence:
       class: cst463.rnn.state-sequence-forward-pass
       topic: ML_OPTIMIZATION
       spacing: PAGE
-# ---
+---
 
-# name: "MaxPooling - $TIME"
-# practice: False
-# questions:
-#   1:
+name: "MaxPooling - $TIME"
+practice: False
+questions:
+  1:
 
     MaxPooling:
       class: cst463.cnn.max-pooling-forward-pass
       topic: ML_OPTIMIZATION
       spacing: PAGE
-# ---
+---
 
-# name: "OneDimensionalConvolution - $TIME"
-# practice: False
-# questions:
-#   1:
+name: "OneDimensionalConvolution - $TIME"
+practice: False
+questions:
+  1:
 
     OneDimensionalConvolution:
       class: cst463.cnn.1d-forward-pass
@@ -42,11 +42,23 @@ questions:
       binary_filters: true
       topic: ML_OPTIMIZATION
       spacing: PAGE
+---
+
+name: "ConvolutionOutputSize - $TIME"
+practice: False
+questions:
+  1:
 
     ConvolutionOutputSize:
       class: cst463.cnn.output-size
       topic: ML_OPTIMIZATION
       spacing: PAGE
+---
+
+name: "TransposedConvolutionForwardPass - $TIME"
+practice: False
+questions:
+  1:
 
     TransposedConvolutionForwardPass:
       class: cst463.cnn.transposed-forward-pass
