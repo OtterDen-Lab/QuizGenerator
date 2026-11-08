@@ -1614,7 +1614,7 @@ wheels = [
 
 [[package]]
 name = "quizgenerator"
-version = "0.31.6"
+version = "0.31.7"
 source = { editable = "." }
 default-groups = "all"
 dependencies = [
