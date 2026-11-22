@@ -639,7 +639,7 @@ class Document(Container):
           message: "Question '" + question_name + "' requires " + repr(needed) + ", but its allocation provides " + repr(height))
         question_num.step()
         block(width: 100%, height: height, above: 0pt, below: 0pt,
-          breakable: false, inset: inset, stroke: 0.5pt)[
+          breakable: false, inset: inset, stroke: (top: 1pt))[
             #context [#metadata((name: question_name, number: question_num.get().first(), height: height, position: here().position())) <question-allocation>]
             #prompt
           ]

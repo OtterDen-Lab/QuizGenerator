@@ -171,7 +171,7 @@ questions:
 
 These settings belong to each question and may also be placed inside its `kwargs`.
 Question groups use the settings on their selected member questions.
-Allocations use the page height minus its top and bottom margins. Boxes include their borders and padding, with no additional gap. A box that does not fit in the remaining space starts on the next page. Input order is preserved, including across point-value groups; `--optimize-space` is accepted as a deprecated no-op.
+Allocations use the page height minus its top and bottom margins. Allocations include padding and a horizontal line above each question, with no side or bottom borders or additional gap. A question that does not fit in the remaining space starts on the next page. Input order is preserved, including across point-value groups; `--optimize-space` is accepted as a deprecated no-op.
 
 The title and name line reserve space above the first question. That space is deducted from the allocation area on every page, keeping box heights consistent while allowing a full set of questions on page one. Additional custom instructions are not yet included in this reservation.
 
