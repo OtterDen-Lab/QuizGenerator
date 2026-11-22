@@ -34,7 +34,7 @@ def test_canvas_upload_preserves_yaml_order_when_enabled():
     assert names == ["A", "B"]
 
 
-def test_canvas_upload_defaults_to_point_order():
+def test_canvas_upload_defaults_to_input_order():
     q1 = FromText(name="A", points_value=1.0, text="A")
     q2 = FromText(name="B", points_value=10.0, text="B")
     quiz = Quiz("Test", [q1, q2], practice=False, preserve_yaml_order=False)
@@ -49,4 +49,4 @@ def test_canvas_upload_defaults_to_point_order():
     )
 
     names = [call.kwargs["group_name"] for call in canvas_course.create_question.call_args_list]
-    assert names == ["B", "A"]
+    assert names == ["A", "B"]

@@ -184,8 +184,8 @@ questions:
         # Despite high points on second, should stay in YAML order
         assert [q.name for q in ordered] == ["First (low points)", "Second (high points)"]
 
-    def test_question_order_points_reorders(self):
-        """question_order: points should reorder by point value."""
+    def test_legacy_question_order_points_preserves_input(self):
+        """Legacy ordering settings no longer change input order."""
         yaml_text = """
 name: "Points Order Quiz"
 question_order: points
@@ -204,8 +204,8 @@ questions:
         quiz = Quiz.from_yaml(_write_tmp_yaml(yaml_text))[0]
         ordered = quiz.get_ordered_questions()
 
-        # Should reorder by points (high first)
-        assert ordered[0].points_value >= ordered[1].points_value
+        # Preserve input order despite the legacy option.
+        assert [q.points_value for q in ordered] == [1, 100]
 
     def test_question_order_aliases(self):
         """question_order should accept aliases: given, preserve, value, score."""
@@ -442,8 +442,8 @@ questions:
 
         # Override at call time
         ordered_by_points = quiz.get_ordered_questions(preserve_yaml_order=False)
-        # Should now order by points (high first)
-        assert ordered_by_points[0].points_value >= ordered_by_points[1].points_value
+        # Legacy overrides also retain input order.
+        assert [q.name for q in ordered_by_points] == ["First", "Second"]
 
     def test_quiz_iteration_uses_ordered_questions(self):
         """Iterating over quiz should use get_ordered_questions."""

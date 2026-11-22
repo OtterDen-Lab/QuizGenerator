@@ -7,10 +7,10 @@ This guide documents the minimal YAML schema used by `quizgen`.
 - `name` (string): Quiz title.
 - `description` (string, optional): Rendered in Canvas as HTML.
 - `practice` (bool, optional): Marks Canvas quizzes as practice.
-- `sort order` (list of strings, optional): Topic ordering for PDF/Canvas.
+- `sort order` (list of strings, optional): Topic ordering for descriptive reports; questions retain input order.
 - `custom_modules` (list of strings, optional): Python modules to import.
 - `questions` (mapping or list): Required. Point values mapped to question blocks, or an ordered list of questions.
-- `question_order` (string, optional): Ordering mode. `yaml` preserves YAML order, `points` groups by point value.
+- `question_order` (string, optional): Deprecated compatibility setting. Questions always retain input order.
 
 ## Practice Generation (CLI)
 
@@ -47,7 +47,9 @@ List format: each item is a question entry with `name` and `points`. This preser
 - `kwargs` (mapping, optional): Question-specific parameters.
 - `topic` (string, optional): Topic name (e.g., `memory`, `concurrency`).
 - `tags` (string or list of strings, optional): Metadata tags used for filtering/reporting (e.g., `cst334`, `memory`, `practice`).
-- `spacing` (number or preset, optional): Vertical space after question.
+- `questions_per_page` (positive integer, optional): Per-question allocation of the printable page height, including prompt and answer space. `2` allocates half a page; `3` allocates one third. Requires Typst.
+- `extra_pages` (nonnegative integer, default `0`): Blank answer pages immediately after this question. The following question starts on a fresh page. Requires Typst.
+- `spacing` (number or preset, optional): Legacy vertical space after question; cannot be combined with `questions_per_page`.
   Presets: `NONE`, `SHORT`, `MEDIUM`, `LONG`, `PAGE`, `EXTRA_PAGE`.
 - `seed_group` (string, optional): Questions with the same `seed_group` share one RNG seed per generated PDF.
 - `num_subquestions` (int, optional): Used for multipart questions.
@@ -146,3 +148,33 @@ questions:
     kwargs:
       text: "Explain paging and segmentation."
 ```
+
+### Fixed page allocations
+
+```yaml
+name: Allocated quiz
+questions:
+  - name: Short response
+    points: 4
+    class: FromText
+    questions_per_page: 3
+    kwargs:
+      text: Explain your answer.
+  - name: Extended response
+    points: 8
+    class: FromText
+    questions_per_page: 2
+    extra_pages: 1
+    kwargs:
+      text: Show your derivation.
+```
+
+These settings belong to each question and may also be placed inside its `kwargs`.
+Question groups use the settings on their selected member questions.
+Allocations use the page height minus its top and bottom margins. Boxes include their borders and padding, with no additional gap. A box that does not fit in the remaining space starts on the next page. Input order is preserved, including across point-value groups; `--optimize-space` is accepted as a deprecated no-op.
+
+The title and name line reserve space above the first question. That space is deducted from the allocation area on every page, keeping box heights consistent while allowing a full set of questions on page one. Additional custom instructions are not yet included in this reservation.
+
+Typst measures the prompt, QR code, and PDF aids during a layout preflight before writing the final PDF. Content that exceeds its allocation fails with the question name and required/available heights. Increase that question's allocation or shorten its content. Legacy `spacing` questions retain their existing sizing behavior and can coexist with allocated questions.
+
+Run allocation checks with `python -m unittest discover -s tests -p test_page_allocations.py` (Typst enables the rendering checks).

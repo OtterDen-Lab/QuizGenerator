@@ -283,7 +283,7 @@ It can change pagination and ordering, so use with care on finalized exams.
 ### Layout Optimization
 
 By default, questions keep their YAML order (or point-value ordering for mapping format).
-Use `--optimize-space` to reorder questions to reduce PDF page count. This also affects Canvas order.
+Questions retain input order in PDF and Canvas output. Use per-question `questions_per_page` allocations for predictable Typst layouts; `--optimize-space` is a deprecated no-op.
 
 ### Deterministic Generation
 

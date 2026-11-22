@@ -85,7 +85,7 @@ questions:
 To reduce PDF page count by reordering questions, use:
 
 ```bash
-quizgen generate --yaml example_files/example_exam_safe.yaml --num-pdfs 1 --optimize-space
+quizgen generate --yaml example_files/example_exam_safe.yaml --num-pdfs 1
 ```
 
 This affects both PDF and Canvas order.

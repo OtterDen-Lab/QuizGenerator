@@ -58,6 +58,8 @@ class QuestionInstance:
     spacing: float
     topic: "Question.Topic"
     flags: RegenerationFlags
+    questions_per_page: int | None = None
+    extra_pages: int = 0
 
 
 @dataclasses.dataclass
@@ -812,6 +814,15 @@ class Question(abc.ABC):
     self.seed_group = kwargs.pop("seed_group", None)
     self.points_value = points_value
     self.topic = topic
+    self.questions_per_page = kwargs.get("questions_per_page")
+    self.extra_pages = kwargs.get("extra_pages", 0)
+    if self.questions_per_page is not None:
+      if type(self.questions_per_page) is not int or self.questions_per_page < 1:
+        raise ValueError(f"Question '{name}': questions_per_page must be a positive integer")
+      if "spacing" in kwargs:
+        raise ValueError(f"Question '{name}': specify either spacing or questions_per_page")
+    if type(self.extra_pages) is not int or self.extra_pages < 0:
+      raise ValueError(f"Question '{name}': extra_pages must be a nonnegative integer")
     self.spacing = parse_spacing(kwargs.get("spacing", 0))
     self.show_pdf_aids = bool(kwargs.get("show_pdf_aids", True))
     self.answer_kind = ca.Answer.CanvasAnswerKind.BLANK
@@ -831,7 +842,7 @@ class Question(abc.ABC):
     # Track question-specific configuration parameters (excluding framework parameters)
     # These may be included in legacy QR regeneration payloads.
     framework_params = {
-      'name', 'points_value', 'topic', 'spacing', 'num_subquestions',
+      'name', 'points_value', 'topic', 'spacing', 'questions_per_page', 'extra_pages', 'num_subquestions',
       'rng_seed_offset', 'rng_seed', 'class', 'kwargs', 'kind',
       'question_id', 'seed_group', 'tags', 'show_pdf_aids'
     }
@@ -933,6 +944,8 @@ class Question(abc.ABC):
         can_be_numerical=can_be_numerical,
         value=self.points_value,
         spacing=self.spacing,
+        questions_per_page=self.questions_per_page,
+        extra_pages=self.extra_pages,
         topic=self.topic,
         flags=RegenerationFlags(
           question_class_name=self._get_registered_name(),
@@ -1199,6 +1212,9 @@ class Question(abc.ABC):
       explanation=instance.explanation,
       value=instance.value,
       spacing=instance.spacing,
+      questions_per_page=instance.questions_per_page,
+      extra_pages=instance.extra_pages,
+      name=self.name,
       topic=instance.topic,
       can_be_numerical=instance.can_be_numerical,
       show_pdf_aids=self.show_pdf_aids

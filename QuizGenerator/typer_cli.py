@@ -183,7 +183,7 @@ def generate_command(
         1.1, "--layout-safety-factor", min=0.1, help="Safety multiplier for heights."
     ),
     optimize_space: bool = typer.Option(
-        False, "--optimize-space", help="Optimize question ordering."
+        False, "--optimize-space", help="Deprecated; questions always retain input order."
     ),
     embed_images_typst: bool = typer.Option(
         True,

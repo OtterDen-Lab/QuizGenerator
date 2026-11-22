@@ -529,7 +529,7 @@ questions:
 class TestQuizMethods:
     """Tests for Quiz instance methods."""
 
-    def test_quiz_iteration_sorts_by_points(self, temp_yaml_file):
+    def test_quiz_iteration_preserves_input_order(self, temp_yaml_file):
         yaml_content = """
 name: "Multi-Point Quiz"
 questions:
@@ -552,10 +552,10 @@ questions:
         path = temp_yaml_file(yaml_content)
         quiz = Quiz.from_yaml(path)[0]
 
-        # Iteration should yield highest points first
+        # Iteration retains the mapping insertion order
         questions_list = list(quiz)
         point_values = [q.points_value for q in questions_list]
-        assert point_values == sorted(point_values, reverse=True)
+        assert point_values == [1, 10, 5]
 
     def test_get_quiz_returns_document(self, temp_yaml_file):
         yaml_content = """

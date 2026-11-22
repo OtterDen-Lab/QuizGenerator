@@ -612,8 +612,40 @@ class Document(Container):
 
   // Question counter and command
   #let question_num = counter("question")
+  #let first-page-inset = state("first-page-inset", 0pt)
 
-  #let question(points, content, spacing: 3cm, qr_code: none, reserve_height: none, pdf_aid: none) = {
+  #let question(points, content, spacing: 3cm, qr_code: none, reserve_height: none, pdf_aid: none,
+    questions_per_page: none, extra_pages: 0, question_name: "") = {
+    if questions_per_page != none {
+      context {
+        let margins = page.margin
+        let top = if type(margins) == dictionary { margins.at("top", default: margins.at("y", default: margins.at("rest", default: 0pt))) } else { margins }
+        let bottom = if type(margins) == dictionary { margins.at("bottom", default: margins.at("y", default: margins.at("rest", default: 0pt))) } else { margins }
+        let left = if type(margins) == dictionary { margins.at("left", default: margins.at("x", default: margins.at("rest", default: 0pt))) } else { margins }
+        let right = if type(margins) == dictionary { margins.at("right", default: margins.at("x", default: margins.at("rest", default: 0pt))) } else { margins }
+        let width = page.width - left - right
+        let header-height = first-page-inset.get()
+        let height = (page.height - top - bottom - header-height) / questions_per_page
+        let prompt = [
+          *Question #context question_num.display():* (#points #if points == 1 [point] else [points])
+          #grid(columns: (1fr, auto), gutter: 1em)[#content][
+            #if qr_code != none { image(qr_code, width: 2cm, format: "svg") }
+          ]
+          #if pdf_aid != none { pdf_aid }
+        ]
+        let inset = 6pt
+        let needed = measure(block(width: width, inset: inset, prompt)).height
+        assert(needed <= height,
+          message: "Question '" + question_name + "' requires " + repr(needed) + ", but its allocation provides " + repr(height))
+        question_num.step()
+        block(width: 100%, height: height, above: 0pt, below: 0pt,
+          breakable: false, inset: inset, stroke: 0.5pt)[
+            #context [#metadata((name: question_name, number: question_num.get().first(), height: height, position: here().position())) <question-allocation>]
+            #prompt
+          ]
+      }
+    } else {
+
     let body = block(breakable: false)[
       #line(length: 100%, stroke: 1pt)
       #v(0cm)
@@ -698,6 +730,14 @@ class Document(Container):
       } else if spacing >= 99cm {
         pagebreak(weak: true)
       }
+    }
+    if extra_pages > 0 {
+      pagebreak(weak: true)
+      for _ in range(extra_pages) {
+        box()
+        pagebreak()
+      }
+    }
   }
 
   // Fill-in line for inline answer blanks (tables, etc.)
@@ -768,6 +808,11 @@ class Document(Container):
     typst += f"  [Name: #fillline(width: 5cm)]\n"
     typst += f")\n"
     typst += f"#v(0.5cm)\n"
+    # Record the space consumed by the title before allocating first-page boxes.
+    typst += ('#context { let margins = page.margin; '
+              'let top = if type(margins) == dictionary { '
+              'margins.at("top", default: margins.at("y", default: margins.at("rest", default: 0pt))) '
+              '} else { margins }; first-page-inset.update(here().position().y - top) }\n')
 
     # Render all elements
     typst += "".join(element.render(OutputFormat.TYPST, **kwargs) for element in self.elements)
@@ -820,6 +865,8 @@ class Question(Container):
     self.value = value
     self.interest = interest
     self.spacing = spacing
+    self.questions_per_page = kwargs.get("questions_per_page")
+    self.extra_pages = kwargs.get("extra_pages", 0)
     self.topic = topic  # todo: remove this bs.
     self.question_number = question_number  # For QR code generation
     
@@ -835,6 +882,9 @@ class Question(Container):
     if output_format == "typst":
       return self.render_typst(**kwargs)
     
+    if output_format == "latex" and (self.questions_per_page is not None or self.extra_pages):
+      raise ValueError("questions_per_page and extra_pages require the Typst renderer")
+
     # Generate content from all elements
     content = self.body.render(output_format, **updated_kwargs)
     
@@ -995,6 +1045,11 @@ class Question(Container):
       f"{int(self.value)}",
       f"spacing: {self.spacing}cm",
     ]
+    if self.questions_per_page is not None:
+      params.append(f"questions_per_page: {self.questions_per_page}")
+    if self.extra_pages:
+      params.append(f"extra_pages: {self.extra_pages}")
+    params.append(f"question_name: {json.dumps(self.name or str(self.question_number))}")
     if qr_param:
       params.append(qr_param)
     if reserve_param:

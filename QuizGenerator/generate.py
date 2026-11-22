@@ -1034,6 +1034,20 @@ def generate_typst(typst_text, remove_previous=False, name_prefix=None) -> bool:
     debug_name = f"debug-{datetime.now().strftime('%Y%m%d-%H%M%S')}.typ"
     shutil.copy(temp_typ_path, os.path.join("out", "debug", debug_name))
 
+    # Query performs layout and allocation assertions before writing a PDF.
+    if re.search(r"questions_per_page:\s*[0-9]+", typst_text):
+      try:
+        preflight = subprocess.run(
+          ['typst', 'eval', 'query(<question-allocation>)', '--root', '/', '--in', temp_typ_path],
+          capture_output=True, text=True, timeout=30,
+        )
+      except subprocess.TimeoutExpired:
+        log.error("Typst allocation preflight timed out")
+        return False
+      if preflight.returncode:
+        log.error("Typst allocation preflight failed: %s", preflight.stderr)
+        return False
+
     # Compile with typst
     output_pdf = os.path.join(os.getcwd(), 'out', os.path.basename(temp_typ_path).replace('.typ', '.pdf'))
     

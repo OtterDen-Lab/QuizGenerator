@@ -41,7 +41,7 @@ Your PDF is written to `out/`.
 To reorder questions and reduce page count:
 
 ```bash
-quizgen generate --yaml my_quiz.yaml --num-pdfs 1 --optimize-space
+quizgen generate --yaml my_quiz.yaml --num-pdfs 1
 ```
 
 This also changes Canvas order if you upload.

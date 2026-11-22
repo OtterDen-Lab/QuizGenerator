@@ -156,7 +156,7 @@ questions:
 
 ## Ordering Note
 
-If you want to preserve the exact question order you wrote in YAML, prefer the list-style `questions` format and set `question_order: yaml`. You can also enable `--optimize-space` to reorder questions for tighter PDF layout (this affects Canvas order too).
+Questions retain their YAML input order. Use per-question `questions_per_page` allocations for predictable Typst layouts. `--optimize-space` is a deprecated no-op.
 
 ---
 
